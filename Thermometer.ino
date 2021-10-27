@@ -1,3 +1,5 @@
+#include "time.h"
+
 #include "Adafruit_ThinkInk.h"
 
 #define EPD_DC    17 // D10
@@ -107,7 +109,7 @@ void initialize_display()
   Serial.println("Done");
 }
 
-void update_display(uint32_t battery_mv, float temp)
+void update_display(uint32_t battery_mv, float temp, const struct tm *timeinfo)
 {
   display_refresh_count++; // Help get a sense of frequency of refreshes
 
@@ -115,12 +117,22 @@ void update_display(uint32_t battery_mv, float temp)
 
   Serial.println("Display text");
   display.clearBuffer();
+
   display.setTextSize(3);
   display.setCursor(0, 0);
   display.setTextColor(EPD_BLACK);
   display.printf("%.1f C\n", temp);
+
+  char formatted_time[256];
+  strftime(formatted_time, 256, "%F %T", timeinfo);
+  Serial.printf("now: %s\n", formatted_time);
+  display.setTextSize(2);
+  display.printf("%s\n", formatted_time);
+  
   display.setTextColor(EPD_RED);
   display.printf("bat %d mV\n", battery_mv);
+
+
 
   display.setTextSize(1);
   display.setTextColor(EPD_BLACK);
@@ -164,7 +176,12 @@ void setup()
   }
   else
   {
-    update_display(battery_mv, temp);
+    time_t now;
+    struct tm timeinfo;
+    time(&now);
+    gmtime_r(&now, &timeinfo);
+
+    update_display(battery_mv, temp, &timeinfo);
 
     // Persist state change
     previous_temp = temp;
