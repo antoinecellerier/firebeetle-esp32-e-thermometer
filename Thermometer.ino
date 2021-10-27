@@ -7,6 +7,8 @@
 #include "WiFi.h"
 #endif
 
+#include "FastLED.h"
+
 #include "Adafruit_ThinkInk.h"
 
 #define EPD_DC    17 // D10
@@ -77,6 +79,28 @@ uint32_t read_battery_level()
   uint32_t battery_mv = analogReadMilliVolts(34) * 2;
   Serial.printf("Battery level: %d mV\n", battery_mv);
   return battery_mv;
+}
+
+#define NUM_LEDS 1
+CRGB leds[NUM_LEDS];
+
+void initialize_status_led()
+{
+  FastLED.addLeds<NEOPIXEL, 5/*data pin*/>(leds, NUM_LEDS);
+  FastLED.setBrightness(128);
+}
+
+void set_status_led(CRGB color)
+{
+  // Looks like Red is a greenish tint
+  // Green and Blue both show up correct
+  leds[0] = color;
+  FastLED.show();
+}
+
+void clear_status_led()
+{
+  FastLED.clear(true);
 }
 
 void initialize_sensors()
@@ -170,7 +194,9 @@ void on_first_boot()
     return;
   }
 
+  // Connect to WiFi
   Serial.printf("Connecting to WiFi\n");
+  set_status_led(CRGB::Blue);
 
   WiFi.begin(my_wifi_ssid, my_wifi_password);
   while (!WiFi.isConnected())
@@ -180,20 +206,25 @@ void on_first_boot()
   }
   Serial.printf("Connected to WiFi\n");
 
+  // Synchronize time
+  Serial.printf("Synchronizing time\n");
+  set_status_led(CRGB::Green);
   // Example TZ formats are available at https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
   configTzTime(my_tz, "pool.ntp.org");
   struct tm t;
-  getLocalTime(&t); // Wait for time to have synced
+  getLocalTime(&t, 30000U /* max wait time in ms */); // Wait for time to have synced
 
   // TODO: double check that this effectively completely shuts off all wireless current consumption
   WiFi.disconnect(true, true);
 #endif
 }
 
+
 // TODO: trigger display clear once a day
 void setup()
 {
   setup_serial();
+
 
   boot_count++;
   Serial.printf("Boot count: %d\n", boot_count);
@@ -204,7 +235,9 @@ void setup()
   // TODO: rather than run this only once, run daily/weekly
   if (boot_count == 1)
   {
+    initialize_status_led();
     on_first_boot();
+    clear_status_led(); // TODO: double check that this stops drawing power
   }
 
   uint32_t battery_mv = read_battery_level();
