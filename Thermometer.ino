@@ -1,4 +1,11 @@
+// See local-secrets-example.h for a sample file if local-secrets.h is missing
+#include "local-secrets.h"
+
 #include "time.h"
+
+#ifndef DISBALE_WIFI
+#include "WiFi.h"
+#endif
 
 #include "Adafruit_ThinkInk.h"
 
@@ -23,6 +30,7 @@ RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int display_refresh_count = 0;
 RTC_DATA_ATTR float previous_temp = -1;
 RTC_DATA_ATTR int previous_boot_count = -1;
+
 
 void setup_serial()
 {
@@ -132,8 +140,6 @@ void update_display(uint32_t battery_mv, float temp, const struct tm *timeinfo)
   display.setTextColor(EPD_RED);
   display.printf("bat %d mV\n", battery_mv);
 
-
-
   display.setTextSize(1);
   display.setTextColor(EPD_BLACK);
   display.printf("seq %d (was %d). refresh %d\n", boot_count, previous_boot_count, display_refresh_count);
@@ -153,6 +159,37 @@ void update_display(uint32_t battery_mv, float temp, const struct tm *timeinfo)
   Serial.println("Done updating display and powering down");
 }
 
+void on_first_boot()
+{
+#ifdef DISABLE_WIFI
+  Serial.printf("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.\n");
+#else
+  if (my_wifi_ssid == NULL || *my_wifi_ssid == 0)
+  {
+    Serial.printf("Missing WiFi SSID. Will assume network connectivity isn't possible. See local-secrets.h to fix.\n");
+    return;
+  }
+
+  Serial.printf("Connecting to WiFi\n");
+
+  WiFi.begin(my_wifi_ssid, my_wifi_password);
+  while (!WiFi.isConnected())
+  {
+    delay(100);
+    Serial.printf("Waiting for WiFi\n");
+  }
+  Serial.printf("Connected to WiFi\n");
+
+  // Example TZ formats are available at https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
+  configTzTime(my_tz, "pool.ntp.org");
+  struct tm t;
+  getLocalTime(&t); // Wait for time to have synced
+
+  // TODO: double check that this effectively completely shuts off all wireless current consumption
+  WiFi.disconnect(true, true);
+#endif
+}
+
 // TODO: trigger display clear once a day
 void setup()
 {
@@ -163,6 +200,12 @@ void setup()
   Serial.printf("Wakeup caused by %d\n", (int)esp_sleep_get_wakeup_cause());
 
   handle_permanent_shutdown();
+
+  // TODO: rather than run this only once, run daily/weekly
+  if (boot_count == 1)
+  {
+    on_first_boot();
+  }
 
   uint32_t battery_mv = read_battery_level();
 
@@ -179,7 +222,7 @@ void setup()
     time_t now;
     struct tm timeinfo;
     time(&now);
-    gmtime_r(&now, &timeinfo);
+    localtime_r(&now, &timeinfo);
 
     update_display(battery_mv, temp, &timeinfo);
 

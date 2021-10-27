@@ -196,6 +196,7 @@
                 "/home/antoine/.arduino15/packages/esp32/hardware/esp32/2.0.1-RC1/tools/sdk/esp32/include/fb_gfx/include",
                 "/home/antoine/.arduino15/packages/esp32/hardware/esp32/2.0.1-RC1/cores/esp32",
                 "/home/antoine/.arduino15/packages/esp32/hardware/esp32/2.0.1-RC1/variants/firebeetle32",
+                "/home/antoine/.arduino15/packages/esp32/hardware/esp32/2.0.1-RC1/libraries/WiFi/src",
                 "/home/antoine/Arduino/libraries/Adafruit_EPD/src",
                 "/home/antoine/.arduino15/packages/esp32/hardware/esp32/2.0.1-RC1/libraries/SPI/src",
                 "/home/antoine/Arduino/libraries/Adafruit_GFX_Library",
