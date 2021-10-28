@@ -17,12 +17,12 @@
 #define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
 
-ThinkInk_154_Tricolor_Z90 display(EPD_DC, EPD_RESET, EPD_CS, -1/*SRAM_CS*/, EPD_BUSY);
+ThinkInk_154_Tricolor_Z90 display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
 
 #include "OneWire.h"
 #include "DallasTemperature.h"
 
-// Don't use pin 12 for one wire as it resets the board if high on boot
+// Don't use pin 12 / D13 for one wire as it resets the board if high on boot
 #define ONE_WIRE   4 // D12
 
 OneWire oneWire(ONE_WIRE);
