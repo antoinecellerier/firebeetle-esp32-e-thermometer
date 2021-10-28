@@ -252,6 +252,8 @@ void setup()
   }
   else
   {
+    setenv("TZ", my_tz, 1);
+    tzset();
     time_t now;
     struct tm timeinfo;
     time(&now);
