@@ -67,21 +67,10 @@ void clear_display()
   Serial.println("Done");
 }
 
-void handle_permanent_shutdown()
-{
-  uint16_t pin27 = touchRead(27);
-  Serial.printf("Touch read 27: %d\n", pin27);
-  if (pin27 == 0)
-  {
-    // If button is pressed, powerdown
-    clear_display();
-    for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
-      esp_sleep_pd_config((esp_sleep_pd_domain_t)domain, ESP_PD_OPTION_OFF);
-    Serial.println("Shutting down until reset. All sleep pd domains have been shutdown.");
-    esp_deep_sleep_start();
-  }
-}
-
+// https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
+// https://www.best-microcontroller-projects.com/tp4056.html
+const uint32_t low_battery_mv = 3200;
+const uint32_t no_battery_mv = 3000; // Controller stops delivering current at 2.9V
 uint32_t read_battery_level()
 {
   // https://dfimg.dfrobot.com/nobody/wiki/fd28d987619c16281bdc4f40990e5a1c.PDF => looks like 1M/1M divider == x2 ratio
@@ -146,8 +135,45 @@ void initialize_display()
   Serial.println("Initializing display");
   display.begin(THINKINK_TRICOLOR);
   display.cp437(true);
+  display.clearBuffer();
   Serial.println("Done");
 }
+
+
+void handle_permanent_shutdown(uint32_t battery_mv)
+{
+  uint16_t pin27 = touchRead(27);
+  Serial.printf("Touch read 27: %d\n", pin27);
+  if (pin27 == 0 || battery_mv < no_battery_mv)
+  {
+    // If button is pressed or battery is dead, powerdown
+    if (battery_mv < no_battery_mv)
+    {
+      initialize_display();
+      display.setTextSize(3);
+      display.setCursor(0, 0);
+      display.setTextColor(EPD_RED);
+      display.printf("\n\n"
+                     "   EMPTY\n"
+                     "  BATTERY\n"
+                     " RECHARGE!\n"
+                     "\n");
+      display.setTextSize(2);
+      display.setTextColor(EPD_BLACK);
+      display.printf("   bat %d mV", battery_mv);
+      display.display();
+    }
+    else
+    {
+      clear_display();
+    }
+    for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
+      esp_sleep_pd_config((esp_sleep_pd_domain_t)domain, ESP_PD_OPTION_OFF);
+    Serial.println("Shutting down until reset. All sleep pd domains have been shutdown.");
+    esp_deep_sleep_start();
+  }
+}
+
 
 void update_display(uint32_t battery_mv, float temp, const struct tm *nowtm)
 {
@@ -156,8 +182,6 @@ void update_display(uint32_t battery_mv, float temp, const struct tm *nowtm)
   initialize_display();
 
   Serial.println("Display text");
-  display.clearBuffer();
-
   display.setTextSize(3);
   display.setCursor(0, 0);
   display.setTextColor(EPD_BLACK);
@@ -169,8 +193,9 @@ void update_display(uint32_t battery_mv, float temp, const struct tm *nowtm)
   display.setTextSize(2);
   display.printf("%s\n", formatted_time);
   
-  display.setTextColor(EPD_RED);
-  display.printf("bat %d mV\n", battery_mv);
+  if (battery_mv < low_battery_mv)
+    display.setTextColor(EPD_RED);
+  display.printf("%s %d mV\n", battery_mv < low_battery_mv ? "LOW BAT" : "bat", battery_mv);
 
   display.setTextSize(1);
   display.setTextColor(EPD_BLACK);
@@ -281,12 +306,13 @@ void setup()
 {
   setup_serial();
 
-
   boot_count++;
   Serial.printf("Boot count: %d\n", boot_count);
   Serial.printf("Wakeup caused by %d\n", (int)esp_sleep_get_wakeup_cause());
 
-  handle_permanent_shutdown();
+  uint32_t battery_mv = read_battery_level();
+
+  handle_permanent_shutdown(battery_mv);
 
   // TODO: rather than run this only once, run daily/weekly
   if (boot_count == 1)
@@ -295,8 +321,6 @@ void setup()
     on_first_boot();
     clear_status_led(); // TODO: double check that this stops drawing power
   }
-
-  uint32_t battery_mv = read_battery_level();
 
   initialize_sensors();
 
