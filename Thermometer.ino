@@ -30,6 +30,10 @@ DallasTemperature sensors(&oneWire);
 
 RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int display_refresh_count = 0;
+
+RTC_DATA_ATTR time_t first_boot_time = 0;
+RTC_DATA_ATTR time_t next_clear_time = 0;
+
 RTC_DATA_ATTR float previous_temp = -1;
 RTC_DATA_ATTR int previous_boot_count = -1;
 
@@ -54,6 +58,15 @@ void start_deep_sleep()
   Serial.println("oy!!");
 }
 
+void clear_display()
+{
+  display.begin(THINKINK_TRICOLOR);
+  Serial.println("Clearing display");
+  display.clearDisplay();
+  display.powerDown();
+  Serial.println("Done");
+}
+
 void handle_permanent_shutdown()
 {
   uint16_t pin27 = touchRead(27);
@@ -61,11 +74,7 @@ void handle_permanent_shutdown()
   if (pin27 == 0)
   {
     // If button is pressed, powerdown
-    display.begin(THINKINK_TRICOLOR);
-    Serial.println("Clearing display");
-    display.clearDisplay();
-    display.powerDown();
-    Serial.println("Done");
+    clear_display();
     for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
       esp_sleep_pd_config((esp_sleep_pd_domain_t)domain, ESP_PD_OPTION_OFF);
     Serial.println("Shutting down until reset. All sleep pd domains have been shutdown.");
@@ -135,13 +144,12 @@ float read_temperature()
 void initialize_display()
 {
   Serial.println("Initializing display");
-  //display.begin(THINKINK_MONO);
   display.begin(THINKINK_TRICOLOR);
   display.cp437(true);
   Serial.println("Done");
 }
 
-void update_display(uint32_t battery_mv, float temp, const struct tm *timeinfo)
+void update_display(uint32_t battery_mv, float temp, const struct tm *nowtm)
 {
   display_refresh_count++; // Help get a sense of frequency of refreshes
 
@@ -156,7 +164,7 @@ void update_display(uint32_t battery_mv, float temp, const struct tm *timeinfo)
   display.printf("%.1f C\n", temp);
 
   char formatted_time[256];
-  strftime(formatted_time, 256, "%F %T", timeinfo);
+  strftime(formatted_time, 256, "%F %T", nowtm);
   Serial.printf("now: %s\n", formatted_time);
   display.setTextSize(2);
   display.printf("%s\n", formatted_time);
@@ -167,6 +175,14 @@ void update_display(uint32_t battery_mv, float temp, const struct tm *timeinfo)
   display.setTextSize(1);
   display.setTextColor(EPD_BLACK);
   display.printf("seq %d (was %d). refresh %d\n", boot_count, previous_boot_count, display_refresh_count);
+  // TODO: Maybe don't format this every time we render?
+  struct tm tm;
+  localtime_r(&first_boot_time, &tm);
+  strftime(formatted_time, 256, "%F %T", &tm);
+  display.printf("first boot %s\n", formatted_time);
+  localtime_r(&next_clear_time, &tm);
+  strftime(formatted_time, 256, "%F %T", &tm);
+  display.printf("next clear %s\n", formatted_time);
 
   // Seems like partial display updates are broken.
   // See https://github.com/ZinggJM/GxEPD for possible alternative lib which doesn't seem to support 1.54" partial updates
@@ -187,6 +203,8 @@ void on_first_boot()
 {
 #ifdef DISABLE_WIFI
   Serial.printf("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.\n");
+  set_status_led(CRGB::Yellow);
+  delay(100);
 #else
   if (my_wifi_ssid == NULL || *my_wifi_ssid == 0)
   {
@@ -213,12 +231,50 @@ void on_first_boot()
   configTzTime(my_tz, "pool.ntp.org");
   struct tm t;
   getLocalTime(&t, 30000U /* max wait time in ms */); // Wait for time to have synced
+  first_boot_time = mktime(&t);
 
   // TODO: double check that this effectively completely shuts off all wireless current consumption
   WiFi.disconnect(true, true);
 #endif
 }
 
+bool periodic_display_clear(const time_t now, struct tm nowtm)
+{
+  const time_t one_day = 86400;
+
+  // Trigger screen clear daily
+  if (next_clear_time == 0)
+  {
+    if (now < one_day)
+    {
+      // We don't seem to have a synchronized clock, clear screen periodically from first boot
+      next_clear_time = now + one_day;
+    }
+    else
+    {
+      // We have a synchronzied clock, clear screen periodically when it's likely to be least disruptive
+      // Let's pick the next time it's 04h00
+      time_t offset = 0;
+      if (4 <= nowtm.tm_hour)
+      {
+        offset = one_day;
+      }
+      nowtm.tm_hour = 4;
+      nowtm.tm_min = 0;
+      nowtm.tm_sec = 0;
+      next_clear_time = mktime(&nowtm) + offset;
+    }
+  }
+
+  if (now < next_clear_time)
+  {
+    return false;
+  }
+
+  clear_display();
+  next_clear_time += one_day; // Schedule next clear in a day
+  return true;
+}
 
 // TODO: trigger display clear once a day
 void setup()
@@ -246,20 +302,22 @@ void setup()
 
   float temp = read_temperature();
 
-  if (abs(temp - previous_temp) < 0.1) // TODO: check rounded up temp as that's what really matters for the display
+  setenv("TZ", my_tz, 1);
+  tzset();
+  time_t now;
+  struct tm nowtm;
+  time(&now);
+  localtime_r(&now, &nowtm);
+
+  Serial.printf("now: %d. next clear time: %d. first boot time: %d\n", now, next_clear_time, first_boot_time);
+  if (!periodic_display_clear(now, nowtm) &&
+      abs(temp - previous_temp) < 0.1) // TODO: check rounded up temp as that's what really matters for the display
   {
     Serial.printf("temperature hasn't changed significantly, no need to refresh display\n");
   }
   else
   {
-    setenv("TZ", my_tz, 1);
-    tzset();
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-    localtime_r(&now, &timeinfo);
-
-    update_display(battery_mv, temp, &timeinfo);
+    update_display(battery_mv, temp, &nowtm);
 
     // Persist state change
     previous_temp = temp;
