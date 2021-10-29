@@ -41,11 +41,13 @@ RTC_DATA_ATTR int previous_boot_count = -1;
 
 void setup_serial()
 {
+#ifndef DISABLE_SERIAL
   Serial.begin(115200);
   while (!Serial)
   {
     delay(10);
   }
+#endif
 }
 
 void start_deep_sleep()
