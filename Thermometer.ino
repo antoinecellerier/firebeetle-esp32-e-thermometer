@@ -33,6 +33,7 @@ RTC_DATA_ATTR int display_refresh_count = 0;
 
 RTC_DATA_ATTR time_t first_boot_time = 0;
 RTC_DATA_ATTR time_t next_clear_time = 0;
+const time_t one_day = 86400;
 
 RTC_DATA_ATTR float previous_temp = -1;
 RTC_DATA_ATTR int previous_boot_count = -1;
@@ -139,6 +140,27 @@ void initialize_display()
   Serial.println("Done");
 }
 
+void display_stats(time_t now, const struct tm *nowtm)
+{
+  char formatted_time[256];
+
+  display.setTextSize(1);
+  display.setTextColor(EPD_BLACK);
+  display.printf("seq %d (was %d). refresh %d\n", boot_count, previous_boot_count, display_refresh_count);
+  // TODO: Maybe don't format this every time we render?
+  struct tm tm;
+  localtime_r(&first_boot_time, &tm);
+  strftime(formatted_time, 256, "%F %T", &tm);
+  display.printf("first boot %s\n", formatted_time);
+  strftime(formatted_time, 256, "%F %T", nowtm);
+  display.printf("last refresh %s\n", formatted_time);
+  localtime_r(&next_clear_time, &tm);
+  strftime(formatted_time, 256, "%F %T", &tm);
+  display.printf("next clear %s\n", formatted_time);
+
+  time_t uptime = now-first_boot_time;
+  display.printf("up ~%d days (%d s)", uptime/one_day, uptime);
+}
 
 void handle_permanent_shutdown(uint32_t battery_mv)
 {
@@ -160,7 +182,13 @@ void handle_permanent_shutdown(uint32_t battery_mv)
                      "\n");
       display.setTextSize(2);
       display.setTextColor(EPD_BLACK);
-      display.printf("   bat %d mV", battery_mv);
+      display.printf("   bat %d mV\n", battery_mv);
+
+      time_t now;
+      struct tm nowtm;
+      get_time(&now, &nowtm);
+      display_stats(now, &nowtm);
+
       display.display();
     }
     else
@@ -175,7 +203,7 @@ void handle_permanent_shutdown(uint32_t battery_mv)
 }
 
 
-void update_display(uint32_t battery_mv, float temp, const struct tm *nowtm)
+void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm *nowtm)
 {
   display_refresh_count++; // Help get a sense of frequency of refreshes
 
@@ -187,27 +215,12 @@ void update_display(uint32_t battery_mv, float temp, const struct tm *nowtm)
   display.setTextColor(EPD_BLACK);
   display.printf("%.1f C\n", temp);
 
-  char formatted_time[256];
-  strftime(formatted_time, 256, "%F %T", nowtm);
-  Serial.printf("now: %s\n", formatted_time);
   display.setTextSize(2);
-  display.printf("%s\n", formatted_time);
-  
   if (battery_mv < low_battery_mv)
     display.setTextColor(EPD_RED);
   display.printf("%s %d mV\n", battery_mv < low_battery_mv ? "LOW BAT" : "bat", battery_mv);
 
-  display.setTextSize(1);
-  display.setTextColor(EPD_BLACK);
-  display.printf("seq %d (was %d). refresh %d\n", boot_count, previous_boot_count, display_refresh_count);
-  // TODO: Maybe don't format this every time we render?
-  struct tm tm;
-  localtime_r(&first_boot_time, &tm);
-  strftime(formatted_time, 256, "%F %T", &tm);
-  display.printf("first boot %s\n", formatted_time);
-  localtime_r(&next_clear_time, &tm);
-  strftime(formatted_time, 256, "%F %T", &tm);
-  display.printf("next clear %s\n", formatted_time);
+  display_stats(now, nowtm);
 
   // Seems like partial display updates are broken.
   // See https://github.com/ZinggJM/GxEPD for possible alternative lib which doesn't seem to support 1.54" partial updates
@@ -265,8 +278,6 @@ void on_first_boot()
 
 bool periodic_display_clear(const time_t now, struct tm nowtm)
 {
-  const time_t one_day = 86400;
-
   // Trigger screen clear daily
   if (next_clear_time == 0)
   {
@@ -301,6 +312,14 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
   return true;
 }
 
+void get_time(time_t *now, struct tm *nowtm)
+{
+  setenv("TZ", my_tz, 1);
+  tzset();
+  time(now);
+  localtime_r(now, nowtm);
+}
+
 // TODO: trigger display clear once a day
 void setup()
 {
@@ -326,12 +345,9 @@ void setup()
 
   float temp = read_temperature();
 
-  setenv("TZ", my_tz, 1);
-  tzset();
   time_t now;
   struct tm nowtm;
-  time(&now);
-  localtime_r(&now, &nowtm);
+  get_time(&now, &nowtm);
 
   Serial.printf("now: %d. next clear time: %d. first boot time: %d\n", now, next_clear_time, first_boot_time);
   if (!periodic_display_clear(now, nowtm) &&
@@ -341,7 +357,7 @@ void setup()
   }
   else
   {
-    update_display(battery_mv, temp, &nowtm);
+    update_display(battery_mv, temp, now, &nowtm);
 
     // Persist state change
     previous_temp = temp;
