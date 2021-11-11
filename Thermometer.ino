@@ -171,7 +171,11 @@ void handle_permanent_shutdown(uint32_t battery_mv)
   if (pin27 == 0 || battery_mv < no_battery_mv)
   {
     // If button is pressed or battery is dead, powerdown
-    if (battery_mv < no_battery_mv)
+    if (pin27 == 0)
+    {
+      clear_display();
+    }
+    else //  battery_mv < no_battery_mv
     {
       initialize_display();
       display.setTextSize(3);
@@ -193,10 +197,7 @@ void handle_permanent_shutdown(uint32_t battery_mv)
 
       display.display();
     }
-    else
-    {
-      clear_display();
-    }
+
     for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
       esp_sleep_pd_config((esp_sleep_pd_domain_t)domain, ESP_PD_OPTION_OFF);
     Serial.println("Shutting down until reset. All sleep pd domains have been shutdown.");
