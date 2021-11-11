@@ -16,15 +16,23 @@
 
 #include "FastLED.h"
 
-#include "Adafruit_ThinkInk.h"
-
 #define EPD_DC    17 // D10
 #define EPD_CS     2 // D9
 #define EPD_BUSY  13 // D7
 #define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
 
+#define USE_GXEPD
+#ifdef USE_GXEPD
+#include "GxEPD2_3C.h"
+GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+#define EPD_BLACK GxEPD_BLACK
+#define EPD_RED GxEPD_RED
+#define EPD_WHITE GxEPD_WHITE
+#else
+#include "Adafruit_ThinkInk.h"
 ThinkInk_154_Tricolor_Z90 display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+#endif
 
 #include "OneWire.h"
 #include "DallasTemperature.h"
@@ -73,10 +81,16 @@ void start_deep_sleep()
 
 void clear_display()
 {
+#ifdef USE_GXEPD
+  display.init(0 /* disable serial debug output */);
+  display.clearScreen();
+  display.hibernate();
+#else
   display.begin(THINKINK_TRICOLOR);
   LOGI("Clearing display");
   display.clearDisplay();
   display.powerDown();
+#endif
   LOGI("Done");
 }
 
@@ -152,9 +166,17 @@ float read_temperature()
 void initialize_display()
 {
   LOGI("Initializing display");
+#ifdef USE_GXEPD
+  display.init(0 /* disable serial debug output */,
+               boot_count == 1 /* allow partial updates directly after power-up for non first runs */);
+  display.cp437(true);
+  display.setRotation(2);
+  display.fillScreen(GxEPD_WHITE);
+#else
   display.begin(THINKINK_TRICOLOR);
   display.cp437(true);
   display.clearBuffer();
+#endif
   LOGI("Done");
 }
 
@@ -241,19 +263,26 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
 
   display_stats(now, nowtm);
 
-  // Seems like partial display updates are broken.
-  // See https://github.com/ZinggJM/GxEPD2 for possible alternative lib which doesn't seem to support 1.54" partial updates
-  //if (boot_count > 1)
-  //{
-  //  // TODO: Figure out how to determine proper partial update region
-  //  display.displayPartial(0, 0, 190, 190);
-  //}
-  //else
+#if 0
+#ifdef USE_GXEPD
+  if (boot_count > 1)
+  {
+    // TODO Partial display works ... figure out if they're worth using
+    // TODO: Figure out how to determine proper partial update region
+    display.displayWindow(50, 50, 150, 150);
+  }
+  else
+#endif
+#endif
   {
     // TODO: There might be an opportunity to light sleep while the display updates
     display.display();
   }
+#ifdef USE_GXEPD
+  display.hibernate();
+#else
   display.powerDown();
+#endif
   LOGI("Done updating display and powering down");
 }
 
