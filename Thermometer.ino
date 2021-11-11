@@ -225,7 +225,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
   display_stats(now, nowtm);
 
   // Seems like partial display updates are broken.
-  // See https://github.com/ZinggJM/GxEPD for possible alternative lib which doesn't seem to support 1.54" partial updates
+  // See https://github.com/ZinggJM/GxEPD2 for possible alternative lib which doesn't seem to support 1.54" partial updates
   //if (boot_count > 1)
   //{
   //  // TODO: Figure out how to determine proper partial update region
