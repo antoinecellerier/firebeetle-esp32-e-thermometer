@@ -130,6 +130,8 @@ void initialize_sensors()
     LOGI("Parasitic power is: %d", (int)parasite);
   }
   sensors.setResolution(12);
+  // Set to non blocking to allow going to light sleep while we wait for temperature conversion in order to save power
+  sensors.setWaitForConversion(false);
 
   LOGI("Done");
 }
@@ -138,6 +140,10 @@ float read_temperature()
 {
   LOGI("Getting temperature");
   sensors.requestTemperatures();
+  esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
+  LOGI("going to light sleep");
+  esp_light_sleep_start();
+  LOGI("back from light sleep");
   float temp = sensors.getTempCByIndex(0);
   LOGI("temp: %f °C", temp);
   return temp;
@@ -244,6 +250,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
   //}
   //else
   {
+    // TODO: There might be an opportunity to light sleep while the display updates
     display.display();
   }
   display.powerDown();
