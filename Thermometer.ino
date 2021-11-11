@@ -1,6 +1,13 @@
 // See local-secrets-example.h for a sample file if local-secrets.h is missing
 #include "local-secrets.h"
 
+// TODO: Figure out how to get proper logging facilities working (probably after switching to platformio)
+#ifndef DISABLE_SERIAL
+#define LOGI(...) { Serial.printf(__VA_ARGS__); Serial.print("\n"); }
+#else
+#define LOGI(...)
+#endif
+
 #include "time.h"
 
 #ifndef DISBALE_WIFI
@@ -38,7 +45,6 @@ const time_t one_day = 86400;
 RTC_DATA_ATTR float previous_temp = -1;
 RTC_DATA_ATTR int previous_boot_count = -1;
 
-
 void setup_serial()
 {
 #ifndef DISABLE_SERIAL
@@ -47,6 +53,11 @@ void setup_serial()
   {
     delay(10);
   }
+  Serial.printf("Logging to serial\n");
+  LOGI("Logging to log facilities - info");
+#else
+  // TODO: update our own logging levels when using JTAG debugging
+  esp_log_level_set("*", ESP_LOG_ERROR);
 #endif
 }
 
@@ -55,19 +66,18 @@ void start_deep_sleep()
   // Go to sleep
   esp_sleep_enable_timer_wakeup(5*1000000);
   esp_sleep_enable_gpio_switch(true);
-  Serial.println("Sleeping for 5 seconds");
+  LOGI("Sleeping for 5 seconds");
   Serial.flush();
   esp_deep_sleep_start();
-  Serial.println("oy!!");
 }
 
 void clear_display()
 {
   display.begin(THINKINK_TRICOLOR);
-  Serial.println("Clearing display");
+  LOGI("Clearing display");
   display.clearDisplay();
   display.powerDown();
-  Serial.println("Done");
+  LOGI("Done");
 }
 
 // https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
@@ -78,7 +88,7 @@ uint32_t read_battery_level()
 {
   // https://dfimg.dfrobot.com/nobody/wiki/fd28d987619c16281bdc4f40990e5a1c.PDF => looks like 1M/1M divider == x2 ratio
   uint32_t battery_mv = analogReadMilliVolts(34) * 2;
-  Serial.printf("Battery level: %d mV\n", battery_mv);
+  LOGI("Battery level: %d mV", battery_mv);
   return battery_mv;
 }
 
@@ -106,40 +116,40 @@ void clear_status_led()
 
 void initialize_sensors()
 {
-  Serial.println("Setting up sensors");
+  LOGI("Setting up sensors");
   sensors.begin();
   bool parasite = sensors.isParasitePowerMode();
-  Serial.printf("Parasitic power is: %d\n", (int)parasite);
+  LOGI("Parasitic power is: %d", (int)parasite);
   while (!parasite)
   {
     // Looks like parasite power detection is unreliable. Waiting a bit and trying again seems to fix it.
     delay(10);
-    Serial.printf("Attempting to reinitialize to fix parasite power mode detection\n");
+    LOGI("Attempting to reinitialize to fix parasite power mode detection");
     sensors.begin();
     parasite = sensors.isParasitePowerMode();
-    Serial.printf("Parasitic power is: %d\n", (int)parasite);
+    LOGI("Parasitic power is: %d", (int)parasite);
   }
   sensors.setResolution(12);
 
-  Serial.println("Done");
+  LOGI("Done");
 }
 
 float read_temperature()
 {
-  Serial.println("Getting temperature");
+  LOGI("Getting temperature");
   sensors.requestTemperatures();
   float temp = sensors.getTempCByIndex(0);
-  Serial.printf("temp: %f °C\n", temp);
+  LOGI("temp: %f °C", temp);
   return temp;
 }
 
 void initialize_display()
 {
-  Serial.println("Initializing display");
+  LOGI("Initializing display");
   display.begin(THINKINK_TRICOLOR);
   display.cp437(true);
   display.clearBuffer();
-  Serial.println("Done");
+  LOGI("Done");
 }
 
 void display_stats(time_t now, const struct tm *nowtm)
@@ -167,7 +177,7 @@ void display_stats(time_t now, const struct tm *nowtm)
 void handle_permanent_shutdown(uint32_t battery_mv)
 {
   uint16_t pin27 = touchRead(27);
-  Serial.printf("Touch read 27: %d\n", pin27);
+  LOGI("Touch read 27: %d", pin27);
   if (pin27 == 0 || battery_mv < no_battery_mv)
   {
     // If button is pressed or battery is dead, powerdown
@@ -200,7 +210,7 @@ void handle_permanent_shutdown(uint32_t battery_mv)
 
     for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
       esp_sleep_pd_config((esp_sleep_pd_domain_t)domain, ESP_PD_OPTION_OFF);
-    Serial.println("Shutting down until reset. All sleep pd domains have been shutdown.");
+    LOGI("Shutting down until reset. All sleep pd domains have been shutdown.");
     esp_deep_sleep_start();
   }
 }
@@ -212,7 +222,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
 
   initialize_display();
 
-  Serial.println("Display text");
+  LOGI("Display text");
   display.setTextSize(3);
   display.setCursor(0, 0);
   display.setTextColor(EPD_BLACK);
@@ -237,36 +247,36 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
     display.display();
   }
   display.powerDown();
-  Serial.println("Done updating display and powering down");
+  LOGI("Done updating display and powering down");
 }
 
 void on_first_boot()
 {
 #ifdef DISABLE_WIFI
-  Serial.printf("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.\n");
+  LOGI("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.");
   set_status_led(CRGB::Yellow);
   delay(100);
 #else
   if (my_wifi_ssid == NULL || *my_wifi_ssid == 0)
   {
-    Serial.printf("Missing WiFi SSID. Will assume network connectivity isn't possible. See local-secrets.h to fix.\n");
+    LOGI("Missing WiFi SSID. Will assume network connectivity isn't possible. See local-secrets.h to fix.");
     return;
   }
 
   // Connect to WiFi
-  Serial.printf("Connecting to WiFi\n");
+  LOGI("Connecting to WiFi");
   set_status_led(CRGB::Blue);
 
   WiFi.begin(my_wifi_ssid, my_wifi_password);
   while (!WiFi.isConnected())
   {
     delay(100);
-    Serial.printf("Waiting for WiFi\n");
+    LOGI("Waiting for WiFi");
   }
-  Serial.printf("Connected to WiFi\n");
+  LOGI("Connected to WiFi");
 
   // Synchronize time
-  Serial.printf("Synchronizing time\n");
+  LOGI("Synchronizing time");
   set_status_led(CRGB::Green);
   // Example TZ formats are available at https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
   configTzTime(my_tz, "pool.ntp.org");
@@ -329,8 +339,8 @@ void setup()
   setup_serial();
 
   boot_count++;
-  Serial.printf("Boot count: %d\n", boot_count);
-  Serial.printf("Wakeup caused by %d\n", (int)esp_sleep_get_wakeup_cause());
+  LOGI("Boot count: %d", boot_count);
+  LOGI("Wakeup caused by %d", (int)esp_sleep_get_wakeup_cause());
 
   uint32_t battery_mv = read_battery_level();
 
@@ -352,11 +362,11 @@ void setup()
   struct tm nowtm;
   get_time(&now, &nowtm);
 
-  Serial.printf("now: %d. next clear time: %d. first boot time: %d\n", now, next_clear_time, first_boot_time);
+  LOGI("now: %d. next clear time: %d. first boot time: %d", now, next_clear_time, first_boot_time);
   if (!periodic_display_clear(now, nowtm) &&
       abs(temp - previous_temp) < 0.1) // TODO: check rounded up temp as that's what really matters for the display
   {
-    Serial.printf("temperature hasn't changed significantly, no need to refresh display\n");
+    LOGI("temperature hasn't changed significantly, no need to refresh display");
   }
   else
   {
