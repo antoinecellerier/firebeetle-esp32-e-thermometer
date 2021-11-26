@@ -8,7 +8,10 @@
 #define LOGI(...)
 #endif
 
+// needed for setenv and tzset :-/
+#undef __STRICT_ANSI__
 #include "time.h"
+#include "stdlib.h"
 
 #ifndef DISBALE_WIFI
 #include "WiFi.h"
@@ -73,7 +76,7 @@ void start_deep_sleep()
 {
   // Go to sleep
   esp_sleep_enable_timer_wakeup(5*1000000);
-  esp_sleep_enable_gpio_switch(true);
+  // FIXME esp_sleep_enable_gpio_switch(true);
   LOGI("Sleeping for 5 seconds");
   Serial.flush();
   esp_deep_sleep_start();
@@ -92,6 +95,14 @@ void clear_display()
   display.powerDown();
 #endif
   LOGI("Done");
+}
+
+void get_time(time_t *now, struct tm *nowtm)
+{
+  setenv("TZ", my_tz, 1);
+  tzset();
+  time(now);
+  localtime_r(now, nowtm);
 }
 
 // https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
@@ -145,7 +156,7 @@ void initialize_sensors()
   }
   sensors.setResolution(12);
   // Set to non blocking to allow going to light sleep while we wait for temperature conversion in order to save power
-  sensors.setWaitForConversion(false);
+  // FIXME sensors.setWaitForConversion(false);
 
   LOGI("Done");
 }
@@ -154,10 +165,10 @@ float read_temperature()
 {
   LOGI("Getting temperature");
   sensors.requestTemperatures();
-  esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
-  LOGI("going to light sleep");
-  esp_light_sleep_start();
-  LOGI("back from light sleep");
+  // FIXME esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
+  // FIXME LOGI("going to light sleep");
+  // FIXME esp_light_sleep_start();
+  // FIXME LOGI("back from light sleep");
   float temp = sensors.getTempCByIndex(0);
   LOGI("temp: %f °C", temp);
   return temp;
@@ -254,7 +265,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
   display.setTextSize(3);
   display.setCursor(0, 0);
   display.setTextColor(EPD_BLACK);
-  display.printf("%.1f C\n", temp);
+  display.printf("%.1f C PIO\n", temp);
 
   display.setTextSize(2);
   if (battery_mv < low_battery_mv)
@@ -359,14 +370,6 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
   clear_display();
   next_clear_time += one_day; // Schedule next clear in a day
   return true;
-}
-
-void get_time(time_t *now, struct tm *nowtm)
-{
-  setenv("TZ", my_tz, 1);
-  tzset();
-  time(now);
-  localtime_r(now, nowtm);
 }
 
 // TODO: trigger display clear once a day
