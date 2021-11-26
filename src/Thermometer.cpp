@@ -22,19 +22,38 @@
 #define EPD_DC    17 // D10
 #define EPD_CS     2 // D9
 #define EPD_BUSY  13 // D7
-#define SRAM_CS   14 // D6
+//#define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
+
+//#define USE_154_Z90 // Tri-Color 200x200 1.54" with 15s full refresh
+//#define USE_154_M09 // Bi-Color 200x200 1.54" with partial updates and 0.83s full refresh
+#define USE_213_M21 // Bi-Color 212x104 2.13" DES with 3s full refresh
 
 #define USE_GXEPD
 #ifdef USE_GXEPD
-#include "GxEPD2_3C.h"
-GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-#define EPD_BLACK GxEPD_BLACK
-#define EPD_RED GxEPD_RED
-#define EPD_WHITE GxEPD_WHITE
+  #if defined(USE_154_Z90)
+    #include "GxEPD2_3C.h"
+    GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+    #define EPD_RED GxEPD_RED
+  #else
+    #include "GxEPD2_BW.h"
+    #if defined(USE_154_M09)
+      GxEPD2_BW<GxEPD2_154_M09, GxEPD2_154_M09::HEIGHT> display(GxEPD2_154_M09(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+    #elif defined(USE_213_M21)
+      GxEPD2_BW<GxEPD2_213_M21, GxEPD2_213_M21::HEIGHT> display(GxEPD2_213_M21(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+    #else
+      #error Unknown screen type
+    #endif
+    #define EPD_RED GxEPD_BLACK
+  #endif
+  #define EPD_BLACK GxEPD_BLACK
+  #define EPD_WHITE GxEPD_WHITE
 #else
-#include "Adafruit_ThinkInk.h"
-ThinkInk_154_Tricolor_Z90 display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+  #ifndef USE_154_Z90
+    #error Unknown screen type
+  #endif
+  #include "Adafruit_ThinkInk.h"
+  ThinkInk_154_Tricolor_Z90 display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
 #endif
 
 #include "OneWire.h"
@@ -181,7 +200,11 @@ void initialize_display()
   display.init(0 /* disable serial debug output */,
                boot_count == 1 /* allow partial updates directly after power-up for non first runs */);
   display.cp437(true);
+  #ifdef USE_213_M21
+  display.setRotation(1);
+  #else
   display.setRotation(2);
+  #endif
   display.fillScreen(GxEPD_WHITE);
 #else
   display.begin(THINKINK_TRICOLOR);
