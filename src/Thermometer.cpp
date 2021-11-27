@@ -21,7 +21,7 @@
 
 #define EPD_DC    17 // D10
 #define EPD_CS     2 // D9
-#define EPD_BUSY  13 // D7
+#define EPD_BUSY  26 // D3
 //#define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
 
