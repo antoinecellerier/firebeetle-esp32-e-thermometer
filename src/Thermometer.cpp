@@ -19,8 +19,25 @@
 
 #include "FastLED.h"
 
+// Used for JTAG. Avoid for other purposes if possible
+// Firebeetle Pin | JTAG PIN
+//            12  |  TDI
+//            13  |  TCK
+//            14  |  TMS
+//            15  |  TDO
+// JTAG init and deep sleep don't seem to play well together
+// openocd errors when trying to init JTAG during deep sleep:
+//   Error: JTAG scan chain interrogation failed: all ones
+//   Error: Check JTAG interface, timings, target power, etc.
+//   Error: Trying to use configured scan chain anyway...
+//   Error: esp32.cpu0: IR capture error; saw 0x1f not 0x01
+// when that error is hit you might need to kill the openocd process even if debugging is stopped in VS code
+// Repro cmd
+// ~/.platformio/packages/tool-openocd-esp32/bin/openocd -s ~/.platformio/packages/tool-openocd-esp32 -c "gdb_port pipe; tcl_port disabled; telnet_port disabled" -s ~/.platformio/packages/tool-openocd-esp32/share/openocd/scripts -f interface/ftdi/esp32_devkitj_v1.cfg -f board/esp-wroom-32.cfg -c "adapter_khz 5000"
+
+
 #define EPD_DC    17 // D10
-#define EPD_CS     2 // D9
+#define EPD_CS     0 // D5
 #define EPD_BUSY  26 // D3
 //#define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
