@@ -35,8 +35,8 @@
 // Repro cmd
 // ~/.platformio/packages/tool-openocd-esp32/bin/openocd -s ~/.platformio/packages/tool-openocd-esp32 -c "gdb_port pipe; tcl_port disabled; telnet_port disabled" -s ~/.platformio/packages/tool-openocd-esp32/share/openocd/scripts -f interface/ftdi/esp32_devkitj_v1.cfg -f board/esp-wroom-32.cfg -c "adapter_khz 5000"
 
-
-#define EPD_DC    17 // D10
+// 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board to simplify wiring
+#define EPD_DC     2 // D9
 #define EPD_CS     0 // D5
 #define EPD_BUSY  26 // D3
 //#define SRAM_CS   14 // D6
@@ -153,26 +153,34 @@ uint32_t read_battery_level()
   return battery_mv;
 }
 
+#ifndef DISABLE_LEDS
 #define NUM_LEDS 1
 CRGB leds[NUM_LEDS];
+#endif
 
 void initialize_status_led()
 {
+#ifndef DISABLE_LEDS
   FastLED.addLeds<NEOPIXEL, 5/*data pin*/>(leds, NUM_LEDS);
   FastLED.setBrightness(128);
+#endif
 }
 
 void set_status_led(CRGB color)
 {
+#ifndef DISABLE_LEDS
   // Looks like Red is a greenish tint
   // Green and Blue both show up correct
   leds[0] = color;
   FastLED.show();
+#endif
 }
 
 void clear_status_led()
 {
+#ifndef DISABLE_LEDS
   FastLED.clear(true);
+#endif
 }
 
 void initialize_sensors()
@@ -181,7 +189,7 @@ void initialize_sensors()
   sensors.begin();
   bool parasite = sensors.isParasitePowerMode();
   LOGI("Parasitic power is: %d", (int)parasite);
-  while (!parasite)
+  for (int count = 0; !parasite && count < 100; count++)
   {
     // Looks like parasite power detection is unreliable. Waiting a bit and trying again seems to fix it.
     delay(10);
@@ -303,9 +311,9 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
 
   LOGI("Display text");
   display.setTextSize(3);
-  display.setCursor(0, 0);
+  display.setCursor(10, 10);
   display.setTextColor(EPD_BLACK);
-  display.printf("%.1f C PIO\n", temp);
+  display.printf("%.1f C\n", temp);
 
   display.setTextSize(2);
   if (battery_mv < low_battery_mv)
@@ -412,7 +420,6 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
   return true;
 }
 
-// TODO: trigger display clear once a day
 void setup()
 {
   setup_serial();

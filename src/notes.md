@@ -38,3 +38,17 @@ First priority: save on wake-up time/energy consumption
 Other TODOs:
 - Use ESP-IDF logging facilities https://thingpulse.com/esp32-logging/
 - Use PROGMEM https://www.e-tinkers.com/2020/05/do-you-know-arduino-progmem-demystified/
+
+
+# Current measurement first soldered prototype Nov 30 2021
+
+https://wiki.dfrobot.com/FireBeetle_Board_ESP32_E_SKU_DFR0654 see "Low Power Pad"
+Measurements with UT61E+
+Powered at 4V on VCC
+Typical powered consumption: ~ 45 mA
+With Low Power Pad not cut: ~ 490 µA
+With Low Power Pad cut: ~ 71 µA / Sometimes ~125 µA ?!?
+With setup calling pinMode(2, OUTPUT or 0) and going directly to sleep and all components connected ~ 66 µA
+With setup directly going to deep sleep and all components connected ~ 27 µA in deep sleep
+With setup directly going to deep sleep and all components connected except DS18B20-PAR's data ping ~ 25 µA deep sleep
+Board with no connections other than VCC & GND consumes ~ 14 µA in deep sleep
