@@ -3,7 +3,7 @@
 
 // TODO: Figure out how to get proper logging facilities working (probably after switching to platformio)
 #ifndef DISABLE_SERIAL
-#define LOGI(...) { Serial.printf(__VA_ARGS__); Serial.print("\n"); }
+#define LOGI(str, ...) Serial.printf(str "\n", ##__VA_ARGS__)
 #else
 #define LOGI(...)
 #endif
@@ -210,8 +210,11 @@ void initialize_sensors()
     LOGI("Parasitic power is: %d", (int)parasite);
   }
   sensors.setResolution(12);
+  #define SLEEP_DURING_TEMPERATURE_READ
+  #ifdef SLEEP_DURING_TEMPERATURE_READ
   // Set to non blocking to allow going to light sleep while we wait for temperature conversion in order to save power
-  // FIXME sensors.setWaitForConversion(false);
+  sensors.setWaitForConversion(false);
+  #endif
 #endif
 
 #ifdef USE_BMP390L
@@ -237,10 +240,15 @@ float read_temperature()
   float temp;
 #ifdef USE_DS18B20_PAR
   sensors.requestTemperatures();
-  esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
+  #ifdef SLEEP_DURING_TEMPERATURE_READ
   LOGI("going to light sleep");
+  esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
+  // If the GPIO domain isn't kept on, the sensor returns an error (most likely isn't powered on during sleep)
+  esp_sleep_pd_config(esp_sleep_pd_domain_t::ESP_PD_DOMAIN_RTC_PERIPH, esp_sleep_pd_option_t::ESP_PD_OPTION_ON);
   esp_light_sleep_start();
+  esp_sleep_pd_config(esp_sleep_pd_domain_t::ESP_PD_DOMAIN_RTC_PERIPH, esp_sleep_pd_option_t::ESP_PD_OPTION_AUTO);
   LOGI("back from light sleep");
+  #endif
   temp = sensors.getTempCByIndex(0);
 #endif
 #ifdef USE_BMP390L

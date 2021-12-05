@@ -43,12 +43,33 @@ Other TODOs:
 # Current measurement first soldered prototype Nov 30 2021
 
 https://wiki.dfrobot.com/FireBeetle_Board_ESP32_E_SKU_DFR0654 see "Low Power Pad"
+
 Measurements with UT61E+
+
 Powered at 4V on VCC
+
 Typical powered consumption: ~ 45 mA
+
 With Low Power Pad not cut: ~ 490 µA
+
 With Low Power Pad cut: ~ 71 µA / Sometimes ~125 µA ?!? / and the following day ~39 µA ?!?!?
+
 With setup calling pinMode(2, OUTPUT or 0) and going directly to sleep and all components connected ~ 66 µA
+
 With setup directly going to deep sleep and all components connected ~ 27 µA in deep sleep
+
 With setup directly going to deep sleep and all components connected except DS18B20-PAR's data ping ~ 25 µA deep sleep
+
 Board with no connections other than VCC & GND consumes ~ 14 µA in deep sleep
+
+# Current measurement impact of light sleep during DS18B20 temp measurment
+
+Measurements with UT61E+. The sampling and value refresh rates are a bit slow (a few 100 ms each).
+
+DS18B20 temperature measurement last ~750ms
+
+DS18B20 with normal delay during measurement:
+![normal delay during measurement](thermometer-normal.jpg)
+
+DS18B20 with light sleep during measurement:
+![light sleep during measurement](thermometer-with-light-sleep.jpg)
