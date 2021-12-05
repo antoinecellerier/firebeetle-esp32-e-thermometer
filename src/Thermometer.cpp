@@ -77,14 +77,25 @@
 
 #endif
 
-#include "OneWire.h"
-#include "DallasTemperature.h"
+//#define USE_DS18B20_PAR
+#define USE_BMP390L
 
-// Don't use pin 12 / D13 for one wire as it resets the board if high on boot
-#define ONE_WIRE   4 // D12
+#if defined(USE_DS18B20_PAR)
+  #include "OneWire.h"
+  #include "DallasTemperature.h"
 
-OneWire oneWire(ONE_WIRE);
-DallasTemperature sensors(&oneWire);
+  // Don't use pin 12 / D13 for one wire as it resets the board if high on boot
+  #define ONE_WIRE   4 // D12
+
+  OneWire oneWire(ONE_WIRE);
+  DallasTemperature sensors(&oneWire);
+#elif defined(USE_BMP390L)
+  #include "DFRobot_BMP3XX.h"
+  TwoWire twoWire(0);
+  DFRobot_BMP390L_I2C sensor(&twoWire);
+#else
+# error Unknown sensor type
+#endif
 
 RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int display_refresh_count = 0;
@@ -192,6 +203,7 @@ void clear_status_led()
 void initialize_sensors()
 {
   LOGI("Setting up sensors");
+#ifdef USE_DS18B20_PAR
   sensors.begin();
   bool parasite = sensors.isParasitePowerMode();
   LOGI("Parasitic power is: %d", (int)parasite);
@@ -207,6 +219,11 @@ void initialize_sensors()
   sensors.setResolution(12);
   // Set to non blocking to allow going to light sleep while we wait for temperature conversion in order to save power
   // FIXME sensors.setWaitForConversion(false);
+#endif
+
+#ifdef USE_BMP390L
+  sensor.begin();
+#endif
 
   LOGI("Done");
 }
@@ -214,12 +231,18 @@ void initialize_sensors()
 float read_temperature()
 {
   LOGI("Getting temperature");
+  float temp;
+#ifdef USE_DS18B20_PAR
   sensors.requestTemperatures();
   esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
   LOGI("going to light sleep");
   esp_light_sleep_start();
   LOGI("back from light sleep");
-  float temp = sensors.getTempCByIndex(0);
+  temp = sensors.getTempCByIndex(0);
+#endif
+#ifdef USE_BMP390L
+  temp = sensor.readTempC();
+#endif
   LOGI("temp: %f °C", temp);
   return temp;
 }
