@@ -12,14 +12,18 @@ A low power FireBeetle ESP32-E based thermometer with an Adafruit ThinkInk 1.54"
 - ESP32 getting started https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html
 - ESP32 power consumption https://diyi0t.com/reduce-the-esp32-power-consumption/
 
-## Temperature sensor
-- DS18B20-PAR datasheet https://datasheets.maximintegrated.com/en/ds/DS18B20-PAR.pdf
+## Temperature sensor (multiple options)
+- DS18B20-PAR OneWire interface
+  - datasheet https://datasheets.maximintegrated.com/en/ds/DS18B20-PAR.pdf
+- BMP390L I2C interface:
+  - datasheet https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp390-ds002.pdf
+  - breakout board https://wiki.dfrobot.com/Fermion_BMP390L_Digital_Barometric_Pressure_Sensor_SKU_SEN0423
 
 ## Display (multiple options)
 - Adafruit 1.54" Tri-Color eInk / ePaper 200x200 Display with SRAM - SSD1681 Driver
 https://www.adafruit.com/product/4868
 https://learn.adafruit.com/adafruit-1-54-eink-display-breakouts?view=all
-uses Good Display GDEH0154Z90
+  - uses Good Display GDEH0154Z90
 - Good Display GDEW0154M09 black and white, 200x200, 1.54" fast full refresh
 - Good Display GDEW0213M21 black and white, 212x104, 2.13" DES screen
 

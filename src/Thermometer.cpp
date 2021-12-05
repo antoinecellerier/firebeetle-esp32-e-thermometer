@@ -216,6 +216,16 @@ void initialize_sensors()
 
 #ifdef USE_BMP390L
   sensor.begin();
+  // resolution when using ultra low precision & forced sampling:
+  // temperature 0.0050 °C
+  // pressure 2.64 Pa
+  // 4µA IDD
+  // measurment time ~5ms
+  // CASE_SAMPLING_MODE(eUltraLowPrecision, ePressEN | eTempEN | eForcedMode, ePressOSRMode1 | eTempOSRMode1, BMP3XX_ODR_0P01_HZ, BMP3XX_IIR_CONFIG_COEF_0)
+  sensor.setSamplingMode(sensor.eUltraLowPrecision);
+  #ifdef CURRENT_ALTITUDE_M
+  sensor.calibratedAbsoluteDifference(CURRENT_ALTITUDE_M);
+  #endif
 #endif
 
   LOGI("Done");
