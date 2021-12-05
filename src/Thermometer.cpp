@@ -44,10 +44,6 @@
 
 #ifndef DISABLE_DISPLAY
 
-//#define USE_154_Z90 // Tri-Color 200x200 1.54" with 15s full refresh
-//#define USE_154_M09 // Bi-Color 200x200 1.54" with partial updates and 0.83s full refresh
-#define USE_213_M21 // Bi-Color 212x104 2.13" DES with 3s full refresh
-
 #define USE_GXEPD
 #ifdef USE_GXEPD
   #if defined(USE_154_Z90)
@@ -76,9 +72,6 @@
 #endif
 
 #endif
-
-//#define USE_DS18B20_PAR
-#define USE_BMP390L
 
 #if defined(USE_DS18B20_PAR)
   #include "OneWire.h"

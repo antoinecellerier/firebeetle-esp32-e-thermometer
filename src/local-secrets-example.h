@@ -18,3 +18,12 @@ const char *my_tz = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // Uncomment to disable display
 // #define DISABLE_DISPLAY
+
+// Select active display
+//#define USE_154_Z90 // Tri-Color 200x200 1.54" with 15s full refresh
+//#define USE_154_M09 // Bi-Color 200x200 1.54" with partial updates and 0.83s full refresh
+#define USE_213_M21 // Bi-Color 212x104 2.13" DES with 3s full refresh
+
+// Select active sensor
+//#define USE_DS18B20_PAR
+#define USE_BMP390L
