@@ -1,4 +1,10 @@
-A low power FireBeetle ESP32-E based thermometer with an Adafruit ThinkInk 1.54" ePaper display
+A low power FireBeetle ESP32-E based thermometer with an ePaper display
+
+![Assembled first prototype](docs/first-prototype.jpg)
+
+See [docs/wiring.md](docs/wiring.md) for wiring information.
+
+See [docs/notes.md](docs/notes.md) for notes on current consumption.
 
 # Hardware
 
