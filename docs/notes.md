@@ -64,12 +64,17 @@ Board with no connections other than VCC & GND consumes ~ 14 µA in deep sleep
 
 # Current measurement impact of light sleep during DS18B20 temp measurment
 
-Measurements with UT61E+. The sampling and value refresh rates are a bit slow (a few 100 ms each).
+Measurements with UT61E+. The sampling and value refresh rates are a bit slow (a few 100 ms each). Values are in mA.
+
+Wifi was disabled.
 
 DS18B20 temperature measurement last ~750ms
 
 DS18B20 with normal delay during measurement:
-![normal delay during measurement](thermometer-normal.jpg)
+![DS18B20 normal delay during measurement](thermometer-normal.jpg)
 
 DS18B20 with light sleep during measurement:
-![light sleep during measurement](thermometer-with-light-sleep.jpg)
+![DS18B20 light sleep during measurement](thermometer-with-light-sleep.jpg)
+
+BMP390L during measurement (no display):
+![BMP390L temperature measurement](thermometer-bmp390l.jpg)
