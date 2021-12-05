@@ -42,6 +42,8 @@
 //#define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
 
+#ifndef DISABLE_DISPLAY
+
 //#define USE_154_Z90 // Tri-Color 200x200 1.54" with 15s full refresh
 //#define USE_154_M09 // Bi-Color 200x200 1.54" with partial updates and 0.83s full refresh
 #define USE_213_M21 // Bi-Color 212x104 2.13" DES with 3s full refresh
@@ -71,6 +73,8 @@
   #endif
   #include "Adafruit_ThinkInk.h"
   ThinkInk_154_Tricolor_Z90 display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+#endif
+
 #endif
 
 #include "OneWire.h"
@@ -120,6 +124,7 @@ void start_deep_sleep()
 
 void clear_display()
 {
+#ifndef DISABLE_DISPLAY
 #ifdef USE_GXEPD
   display.init(0 /* disable serial debug output */);
   display.clearScreen();
@@ -131,6 +136,7 @@ void clear_display()
   display.powerDown();
 #endif
   LOGI("Done");
+#endif
 }
 
 void get_time(time_t *now, struct tm *nowtm)
@@ -220,6 +226,7 @@ float read_temperature()
 
 void initialize_display()
 {
+#ifndef DISABLE_DISPLAY
   LOGI("Initializing display");
 #ifdef USE_GXEPD
   display.init(0 /* disable serial debug output */,
@@ -237,8 +244,12 @@ void initialize_display()
   display.clearBuffer();
 #endif
   LOGI("Done");
+#else
+  LOGI("Display has been disabled at build time with DISABLE_DISPLAY. See local-secrets.h to fix.");
+#endif
 }
 
+#ifndef DISABLE_DISPLAY
 void display_stats(time_t now, const struct tm *nowtm)
 {
   char formatted_time[256];
@@ -260,6 +271,7 @@ void display_stats(time_t now, const struct tm *nowtm)
   time_t uptime = now-first_boot_time;
   display.printf("up ~%d days (%d s)", uptime/one_day, uptime);
 }
+#endif
 
 void handle_permanent_shutdown(uint32_t battery_mv)
 {
@@ -275,6 +287,7 @@ void handle_permanent_shutdown(uint32_t battery_mv)
     else //  battery_mv < no_battery_mv
     {
       initialize_display();
+      #ifndef DISABLE_DISPLAY
       display.setTextSize(3);
       display.setCursor(0, 0);
       display.setTextColor(EPD_RED);
@@ -293,6 +306,7 @@ void handle_permanent_shutdown(uint32_t battery_mv)
       display_stats(now, &nowtm);
 
       display.display();
+      #endif
     }
 
     for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
@@ -308,7 +322,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
   display_refresh_count++; // Help get a sense of frequency of refreshes
 
   initialize_display();
-
+#ifndef DISABLE_DISPLAY
   LOGI("Display text");
   display.setTextSize(3);
   display.setCursor(10, 10);
@@ -343,6 +357,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
   display.powerDown();
 #endif
   LOGI("Done updating display and powering down");
+#endif
 }
 
 void on_first_boot()

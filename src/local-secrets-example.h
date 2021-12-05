@@ -15,3 +15,6 @@ const char *my_tz = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // Uncomment to disable onboard leds
 // #define DISABLE_LEDS
+
+// Uncomment to disable display
+// #define DISABLE_DISPLAY
