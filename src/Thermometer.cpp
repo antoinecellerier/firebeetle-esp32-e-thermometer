@@ -1,12 +1,4 @@
-// See local-secrets-example.h for a sample file if local-secrets.h is missing
-#include "local-secrets.h"
-
-// TODO: Figure out how to get proper logging facilities working (probably after switching to platformio)
-#ifndef DISABLE_SERIAL
-#define LOGI(str, ...) Serial.printf(str "\n", ##__VA_ARGS__)
-#else
-#define LOGI(...)
-#endif
+#include "common.h"
 
 // needed for setenv and tzset :-/
 #undef __STRICT_ANSI__
@@ -74,18 +66,11 @@
 #endif
 
 #if defined(USE_DS18B20_PAR)
-  #include "OneWire.h"
-  #include "DallasTemperature.h"
-
-  // Don't use pin 12 / D13 for one wire as it resets the board if high on boot
-  #define ONE_WIRE   4 // D12
-
-  OneWire oneWire(ONE_WIRE);
-  DallasTemperature sensors(&oneWire);
+  #include "sensors/DS18B20Sensor.hpp"
+  DS18B20Sensor sensor;
 #elif defined(USE_BMP390L)
-  #include "DFRobot_BMP3XX.h"
-  TwoWire twoWire(0);
-  DFRobot_BMP390L_I2C sensor(&twoWire);
+  #include "sensors/BMP390LSensor.hpp"
+  BMP390LSensor sensor;
 #else
 # error Unknown sensor type
 #endif
@@ -147,7 +132,7 @@ void clear_display()
 
 void get_time(time_t *now, struct tm *nowtm)
 {
-  setenv("TZ", my_tz, 1);
+  setenv("TZ", MY_TZ, 1);
   tzset();
   time(now);
   localtime_r(now, nowtm);
@@ -195,67 +180,10 @@ void clear_status_led()
 #endif
 }
 
-void initialize_sensors()
-{
-  LOGI("Setting up sensors");
-#ifdef USE_DS18B20_PAR
-  sensors.begin();
-  bool parasite = sensors.isParasitePowerMode();
-  LOGI("Parasitic power is: %d", (int)parasite);
-  for (int count = 0; !parasite && count < 100; count++)
-  {
-    // Looks like parasite power detection is unreliable. Waiting a bit and trying again seems to fix it.
-    delay(10);
-    LOGI("Attempting to reinitialize to fix parasite power mode detection");
-    sensors.begin();
-    parasite = sensors.isParasitePowerMode();
-    LOGI("Parasitic power is: %d", (int)parasite);
-  }
-  sensors.setResolution(12);
-  #define SLEEP_DURING_TEMPERATURE_READ
-  #ifdef SLEEP_DURING_TEMPERATURE_READ
-  // Set to non blocking to allow going to light sleep while we wait for temperature conversion in order to save power
-  sensors.setWaitForConversion(false);
-  #endif
-#endif
-
-#ifdef USE_BMP390L
-  sensor.begin();
-  // resolution when using ultra low precision & forced sampling:
-  // temperature 0.0050 °C
-  // pressure 2.64 Pa
-  // 4µA IDD
-  // measurment time ~5ms
-  // CASE_SAMPLING_MODE(eUltraLowPrecision, ePressEN | eTempEN | eForcedMode, ePressOSRMode1 | eTempOSRMode1, BMP3XX_ODR_0P01_HZ, BMP3XX_IIR_CONFIG_COEF_0)
-  sensor.setSamplingMode(sensor.eUltraLowPrecision);
-  #ifdef CURRENT_ALTITUDE_M
-  sensor.calibratedAbsoluteDifference(CURRENT_ALTITUDE_M);
-  #endif
-#endif
-
-  LOGI("Done");
-}
-
 float read_temperature()
 {
   LOGI("Getting temperature");
-  float temp;
-#ifdef USE_DS18B20_PAR
-  sensors.requestTemperatures();
-  #ifdef SLEEP_DURING_TEMPERATURE_READ
-  LOGI("going to light sleep");
-  esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
-  // If the GPIO domain isn't kept on, the sensor returns an error (most likely isn't powered on during sleep)
-  esp_sleep_pd_config(esp_sleep_pd_domain_t::ESP_PD_DOMAIN_RTC_PERIPH, esp_sleep_pd_option_t::ESP_PD_OPTION_ON);
-  esp_light_sleep_start();
-  esp_sleep_pd_config(esp_sleep_pd_domain_t::ESP_PD_DOMAIN_RTC_PERIPH, esp_sleep_pd_option_t::ESP_PD_OPTION_AUTO);
-  LOGI("back from light sleep");
-  #endif
-  temp = sensors.getTempCByIndex(0);
-#endif
-#ifdef USE_BMP390L
-  temp = sensor.readTempC();
-#endif
+  float temp = sensor.GetTemperatureC();
   LOGI("temp: %f °C", temp);
   return temp;
 }
@@ -415,7 +343,10 @@ void on_first_boot()
   set_status_led(CRGB::Yellow);
   delay(100);
 #else
-  if (my_wifi_ssid == NULL || *my_wifi_ssid == 0)
+  #if !(defined(MY_WIFI_SSID) && defined(MY_WIFI_PASSWORD))
+    #error "MY_WIFI_SSID and/or MY_WIFI_PASSWORD are not defined. See local-secrets.h to fix."
+  #endif
+  if (*MY_WIFI_SSID == 0)
   {
     LOGI("Missing WiFi SSID. Will assume network connectivity isn't possible. See local-secrets.h to fix.");
     return;
@@ -425,7 +356,7 @@ void on_first_boot()
   LOGI("Connecting to WiFi");
   set_status_led(CRGB::Blue);
 
-  WiFi.begin(my_wifi_ssid, my_wifi_password);
+  WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
   while (!WiFi.isConnected())
   {
     delay(100);
@@ -437,7 +368,7 @@ void on_first_boot()
   LOGI("Synchronizing time");
   set_status_led(CRGB::Green);
   // Example TZ formats are available at https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
-  configTzTime(my_tz, "pool.ntp.org");
+  configTzTime(MY_TZ, "pool.ntp.org");
   struct tm t;
   getLocalTime(&t, 30000U /* max wait time in ms */); // Wait for time to have synced
   first_boot_time = mktime(&t);
@@ -511,8 +442,6 @@ void setup()
     on_first_boot();
     clear_status_led(); // TODO: double check that this stops drawing power
   }
-
-  initialize_sensors();
 
   float temp = read_temperature();
 
