@@ -100,6 +100,8 @@ const time_t one_day = 86400;
 RTC_DATA_ATTR float previous_temp = -1;
 RTC_DATA_ATTR int previous_boot_count = -1;
 
+RTC_DATA_ATTR uint32_t max_battery_mv = 0;
+
 void setup_serial()
 {
 #ifndef DISABLE_SERIAL
@@ -303,7 +305,8 @@ void display_stats(time_t now, const struct tm *nowtm)
   display.printf("next clear %s\n", formatted_time);
 
   time_t uptime = now-first_boot_time;
-  display.printf("up ~%d days (%d s)", uptime/one_day, uptime);
+  display.printf("up ~%d days (%d s)\n", uptime/one_day, uptime);
+  display.printf("max battery %d mV", max_battery_mv);
 }
 #endif
 
@@ -322,14 +325,23 @@ void handle_permanent_shutdown(uint32_t battery_mv)
     {
       initialize_display();
       #ifndef DISABLE_DISPLAY
-      display.setTextSize(3);
       display.setCursor(0, 0);
       display.setTextColor(EPD_RED);
-      display.printf("\n\n"
-                     "   EMPTY\n"
-                     "  BATTERY\n"
-                     " RECHARGE!\n"
-                     "\n");
+      if (display.height() < 200)
+      {
+        display.setTextSize(2);
+        display.printf("  EMPTY BATTERY\n"
+                       "    RECHARGE!\n");
+      }
+      else
+      {
+        display.setTextSize(3);
+        display.printf("\n\n"
+                      "   EMPTY\n"
+                      "  BATTERY\n"
+                      " RECHARGE!\n"
+                      "\n");
+      }
       display.setTextSize(2);
       display.setTextColor(EPD_BLACK);
       display.printf("   bat %d mV\n", battery_mv);
@@ -367,6 +379,8 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
   if (battery_mv < low_battery_mv)
     display.setTextColor(EPD_RED);
   display.printf("%s %d mV\n", battery_mv < low_battery_mv ? "LOW BAT" : "bat", battery_mv);
+  if (max_battery_mv < battery_mv)
+    max_battery_mv = battery_mv;
 
   display_stats(now, nowtm);
 
