@@ -209,10 +209,10 @@ float read_temperature()
 {
   LOGI("Getting temperature");
   sensors.requestTemperatures();
-  // FIXME esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
-  // FIXME LOGI("going to light sleep");
-  // FIXME esp_light_sleep_start();
-  // FIXME LOGI("back from light sleep");
+  esp_sleep_enable_timer_wakeup(sensors.millisToWaitForConversion(sensors.getResolution()) * 1000);
+  LOGI("going to light sleep");
+  esp_light_sleep_start();
+  LOGI("back from light sleep");
   float temp = sensors.getTempCByIndex(0);
   LOGI("temp: %f °C", temp);
   return temp;
@@ -422,9 +422,18 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
 
 void setup()
 {
+
   setup_serial();
 
   boot_count++;
+  if (boot_count != 1)
+  {
+    // Reducing CPU frequency to 80 MHz to save power (as none of this CPU bound)
+    setCpuFrequencyMhz(80);
+  }
+  LOGI("CPU frequency: %d", getCpuFrequencyMhz());
+  LOGI("Xtal frequency: %d", getXtalFrequencyMhz());
+
   LOGI("Boot count: %d", boot_count);
   LOGI("Wakeup caused by %d", (int)esp_sleep_get_wakeup_cause());
 

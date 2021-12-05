@@ -47,7 +47,7 @@ Measurements with UT61E+
 Powered at 4V on VCC
 Typical powered consumption: ~ 45 mA
 With Low Power Pad not cut: ~ 490 µA
-With Low Power Pad cut: ~ 71 µA / Sometimes ~125 µA ?!?
+With Low Power Pad cut: ~ 71 µA / Sometimes ~125 µA ?!? / and the following day ~39 µA ?!?!?
 With setup calling pinMode(2, OUTPUT or 0) and going directly to sleep and all components connected ~ 66 µA
 With setup directly going to deep sleep and all components connected ~ 27 µA in deep sleep
 With setup directly going to deep sleep and all components connected except DS18B20-PAR's data ping ~ 25 µA deep sleep
