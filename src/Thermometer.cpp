@@ -87,6 +87,8 @@ RTC_DATA_ATTR int previous_boot_count = -1;
 
 RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
+RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
+
 void setup_serial()
 {
 #ifndef DISABLE_SERIAL
@@ -234,7 +236,7 @@ void display_stats(time_t now, const struct tm *nowtm)
 
   time_t uptime = now-first_boot_time;
   display.printf("up ~%d days (%d s)\n", uptime/one_day, uptime);
-  display.printf("max battery %d mV", max_battery_mv);
+  display.printf("max battery %d mV. bad pin 27 %d", max_battery_mv, bad_pin27_count);
 }
 #endif
 
@@ -247,7 +249,28 @@ void handle_permanent_shutdown(uint32_t battery_mv)
     // If button is pressed or battery is dead, powerdown
     if (pin27 == 0)
     {
+      // Looks like we might be getting extremely rare spurious reads of 0
+      // Double check after a delay ...
+      delay(1000);
+      pin27 = touchRead(27);
+      LOGI("Touch read 27 confirmation: %d", pin27);
+      if (pin27 != 0)
+      {
+        bad_pin27_count++;
+        return;
+      }
+
       clear_display();
+
+      // ... and add somethign on screen for diagnostics purposes in case the delay isn't sufficient
+      // TODO remove this later
+      initialize_display();
+      display.setCursor(0, 0);
+      display.setTextColor(EPD_BLACK);
+      display.setTextSize(1);
+      display.printf("Read pin27 == 0");
+      display.display();
+      display.hibernate();
     }
     else //  battery_mv < no_battery_mv
     {
@@ -280,6 +303,8 @@ void handle_permanent_shutdown(uint32_t battery_mv)
       display_stats(now, &nowtm);
 
       display.display();
+
+      display.hibernate();
       #endif
     }
 
