@@ -78,3 +78,58 @@ DS18B20 with light sleep during measurement:
 
 BMP390L during measurement (no display):
 ![BMP390L temperature measurement](thermometer-bmp390l.jpg)
+
+# ULP coprocessor power measurements (March 2026)
+
+Setup: FireBeetle ESP32-E with BMP390L sensor and ePaper display connected.
+Measured with Nordic PPK2 on VCC. Low Power Pad cut.
+Board: dfrobot_firebeetle2_esp32e, PlatformIO + Arduino framework.
+
+## Test conditions
+
+All measurements are 1-minute averages in steady state (excluding initial boot spike).
+
+| Config | Sleep interval | ULP period | CPU wakes? | Avg current | Notes |
+|--------|---------------|------------|------------|-------------|-------|
+| Bare sleep (no init, straight to sleep) | N/A | N/A | Never | ~510 µA | No serial, sensor, or display init |
+| No ULP (indefinite deep sleep) | N/A | N/A | Never | ~560 µA | Normal boot, sensor+display init, then sleep |
+| ULP test (counter, no wake) | 5s ULP timer | 5s | Never | ~560 µA | ULP runs every 5s, increments counter, halts |
+| ULP test (counter, no I2C) | 5s ULP timer | 5s | Every 15s (3 cycles) | — | Functional test only, not measured in steady state |
+| **ULP bit-bang I2C (production)** | **5s** | **5s** | **On ≥0.1°C change** | **~562 µA** | **HULP bit-bang I2C, delta threshold=20** |
+
+**Key findings:**
+- ULP bit-bang I2C with full BMP390L temp reading: ~562 µA average deep sleep
+- ULP overhead is negligible (~0 µA difference with/without ULP running)
+- The ~535 µA above bare-board baseline (562 vs 27 µA) is dominated by `RTC_PERIPH` power domain being forced ON — required for ULP GPIO access during bit-bang I2C
+- Hardware RTC I2C peripheral could not be made to work (BUS_BUSY stuck, see docs/rtc-i2c-research.md)
+- Sensor+display init adds ~50 µA vs bare sleep (560 vs 510 µA)
+- TODO: investigate if RTC_PERIPH can be set to AUTO or if alternative approaches reduce the ~535 µA overhead
+
+## Reference values (from earlier measurements)
+
+- Bare board deep sleep (no connections): ~14 µA
+- All components connected, setup goes straight to sleep: ~27 µA
+- Previous long-run average (wake every 60s, display refresh): ~12.6 mA
+
+## ULP bit-bang I2C implementation notes
+
+- Uses HULP library (`hulp_i2cbb.h`) for ULP GPIO bit-bang at ~150 kHz
+- BMP390L protocol: write PWR_CTRL for forced mode → 7ms delay → read 3 temp bytes
+- Delta comparison on DATA_1 (middle byte), threshold=20 (~0.1°C per count)
+- Compensation done on main CPU after wake using calibration data cached in RTC memory
+- `hulp_peripherals_on()` sets `ESP_PD_DOMAIN_RTC_PERIPH = ESP_PD_OPTION_ON` — this is the main power cost
+
+## Debug GPIO pins
+
+- D10/GPIO17 → PPK2 D0: HIGH while main CPU is active
+- D11/GPIO16 → PPK2 D1: HIGH during display refresh
+- D13/GPIO12 → PPK2 D2: HIGH while ULP executing (requires `PPK2_DEBUG_ULP_GPIO` flag + RTC periph power)
+
+Note: `PPK2_DEBUG_ULP_GPIO` forces RTC peripherals on during deep sleep, which increases sleep current. Keep disabled for accurate measurements.
+
+## Observations
+
+- ULP GPIO debug (D13) initially didn't show signal — fixed by removing `rtc_gpio_hold_en()` which was blocking ULP register writes
+- The 562 µA with ULP bit-bang I2C is ~20x better than old wake-every-cycle (~12.6 mA) but ~20x above bare deep sleep floor (~27 µA)
+- The dominant cost is `RTC_PERIPH` power domain, not the ULP execution itself
+- Next investigation: try `ESP_PD_OPTION_AUTO` for RTC_PERIPH, or explore hardware approaches (power gating, different I2C method)

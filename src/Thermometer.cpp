@@ -11,6 +11,15 @@
 
 #include "FastLED.h"
 
+#ifdef USE_BMP390L
+#include "UlpProgram.h"
+#include "BMP390LCompensation.h"
+#endif
+
+#ifdef PPK2_DEBUG_ULP_GPIO
+#include "driver/rtc_io.h"
+#endif
+
 // Used for JTAG. Avoid for other purposes if possible
 // Firebeetle Pin | JTAG PIN
 //            12  |  TDI
@@ -29,7 +38,7 @@
 
 // 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board to simplify wiring
 #define EPD_DC     2 // D9
-#define EPD_CS     0 // D5
+#define EPD_CS    14 // D6 (was D5/GPIO0, moved to free GPIO0 for RTC I2C SDA)
 #define EPD_BUSY  26 // D3
 //#define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
@@ -89,6 +98,12 @@ RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
 RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 
+#ifdef USE_BMP390L
+// ULP state persisted across deep sleep
+RTC_DATA_ATTR bool ulp_running = false;
+RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
+#endif
+
 void setup_serial()
 {
 #ifndef DISABLE_SERIAL
@@ -107,11 +122,23 @@ void setup_serial()
 
 void start_deep_sleep()
 {
-  // Go to sleep
-  esp_sleep_enable_timer_wakeup(5*1000000);
-  // FIXME esp_sleep_enable_gpio_switch(true);
-  LOGI("Sleeping for 5 seconds");
+#ifdef USE_BMP390L
+  if (ulp_running)
+  {
+    // ULP is polling the sensor — it will wake us when temperature changes
+    esp_sleep_enable_ulp_wakeup();
+    // Timer safety net for periodic housekeeping (display clear, etc.)
+    esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 60 * 1000000ULL);
+    LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", SLEEP_INTERVAL_S);
+  }
+  else
+#endif
+  {
+    esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 1000000ULL);
+    LOGI("Sleeping for %d seconds", SLEEP_INTERVAL_S);
+  }
   Serial.flush();
+  PPK2_CPU_ACTIVE_LOW();
   esp_deep_sleep_start();
 }
 
@@ -236,7 +263,14 @@ void display_stats(time_t now, const struct tm *nowtm)
 
   time_t uptime = now-first_boot_time;
   display.printf("up ~%d days (%d s)\n", uptime/one_day, uptime);
-  display.printf("max battery %d mV. bad pin 27 %d", max_battery_mv, bad_pin27_count);
+  display.printf("max bat %d mV. bad27 %d\n", max_battery_mv, bad_pin27_count);
+
+#ifdef USE_BMP390L
+  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  const char *cause_str = cause == ESP_SLEEP_WAKEUP_ULP ? "ULP" :
+                          cause == ESP_SLEEP_WAKEUP_TIMER ? "TMR" : "?";
+  display.printf("wake:%s ulp:%s", cause_str, ulp_running ? "ON" : "OFF");
+#endif
 }
 #endif
 
@@ -320,6 +354,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
 {
   display_refresh_count++; // Help get a sense of frequency of refreshes
 
+  PPK2_DISPLAY_HIGH();
   initialize_display();
 #ifndef DISABLE_DISPLAY
   LOGI("Display text");
@@ -357,6 +392,7 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
 #else
   display.powerDown();
 #endif
+  PPK2_DISPLAY_LOW();
   LOGI("Done updating display and powering down");
 #endif
 }
@@ -403,6 +439,79 @@ void on_first_boot()
 #endif
 }
 
+#ifdef USE_BMP390L
+void initialize_ulp()
+{
+#ifdef ULP_TEST_NO_I2C
+  LOGI("Initialising ULP coprocessor (TEST MODE: counter only, no I2C)");
+#else
+  LOGI("Initialising ULP coprocessor for BMP390L polling");
+
+  // Only read calibration on first boot — it's stored in RTC memory and survives deep sleep
+  if (bmp390l_calib.parT1 == 0.0f)
+  {
+    if (!bmp390l_read_calibration(sensor.GetWire(), &bmp390l_calib))
+    {
+      LOGI("ERROR: Failed to read BMP390L calibration data. ULP will not start.");
+      return;
+    }
+    LOGI("BMP390L calibration: parT1=%.2f parT2=%.10f parT3=%.15f",
+         bmp390l_calib.parT1, bmp390l_calib.parT2, bmp390l_calib.parT3);
+  }
+  else
+  {
+    LOGI("BMP390L calibration loaded from RTC memory");
+  }
+
+  // Release digital I2C before switching pins to ULP bit-bang
+  sensor.GetWire().end();
+  delay(10);
+
+  // I2C bus recovery: 9 SCL clocks + STOP condition.
+  // Wire.end() may leave a slave holding SDA low.
+  pinMode(I2C_SCL_PIN, OUTPUT);
+  pinMode(I2C_SDA_PIN, INPUT_PULLUP);
+  for (int i = 0; i < 9; i++)
+  {
+    digitalWrite(I2C_SCL_PIN, LOW);
+    delayMicroseconds(5);
+    digitalWrite(I2C_SCL_PIN, HIGH);
+    delayMicroseconds(5);
+    if (digitalRead(I2C_SDA_PIN))
+      break;
+  }
+  // Generate STOP condition (SDA low→high while SCL high)
+  pinMode(I2C_SDA_PIN, OUTPUT);
+  digitalWrite(I2C_SDA_PIN, LOW);
+  delayMicroseconds(5);
+  digitalWrite(I2C_SCL_PIN, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(I2C_SDA_PIN, HIGH);
+  delayMicroseconds(5);
+
+  // Configure GPIO pins for HULP bit-bang I2C (bypasses hardware RTC I2C peripheral)
+  ulp_configure_i2c_bitbang();
+#endif
+
+#ifdef PPK2_DEBUG_ULP_GPIO
+  // Configure D13/GPIO12 as RTC GPIO output so the ULP can toggle it
+  rtc_gpio_init(GPIO_NUM_12);
+  rtc_gpio_set_direction(GPIO_NUM_12, RTC_GPIO_MODE_OUTPUT_ONLY);
+  rtc_gpio_set_level(GPIO_NUM_12, 0);
+  // RTC peripherals must stay powered during deep sleep for ULP GPIO access
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+#endif
+
+  // Build and load ULP program into RTC slow memory
+  ulp_build_and_load_program();
+
+  // Start ULP
+  ulp_start(0);
+  ulp_running = true;
+  LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
+}
+#endif
+
 bool periodic_display_clear(const time_t now, struct tm nowtm)
 {
   // Trigger screen clear daily
@@ -444,6 +553,12 @@ void setup()
 
   setup_serial();
 
+#ifdef PPK2_DEBUG
+  pinMode(PPK2_PIN_CPU_ACTIVE, OUTPUT);
+  pinMode(PPK2_PIN_DISPLAY, OUTPUT);
+#endif
+  PPK2_CPU_ACTIVE_HIGH();
+
   boot_count++;
   if (boot_count != 1)
   {
@@ -454,11 +569,60 @@ void setup()
   LOGI("Xtal frequency: %d", getXtalFrequencyMhz());
 
   LOGI("Boot count: %d", boot_count);
-  LOGI("Wakeup caused by %d", (int)esp_sleep_get_wakeup_cause());
+  esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+  LOGI("Wakeup caused by %d", (int)wakeup_cause);
 
   uint32_t battery_mv = read_battery_level();
 
   handle_permanent_shutdown(battery_mv);
+
+#ifdef USE_BMP390L
+  // --- ULP wakeup path ---
+  if (wakeup_cause == ESP_SLEEP_WAKEUP_ULP && ulp_running)
+  {
+    uint16_t wake_reason = ulp_read_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON);
+    uint16_t samples = ulp_read_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT);
+    ulp_write_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON, 0);
+    ulp_write_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT, 0);
+
+    uint16_t raw_0 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_0);
+    uint16_t raw_1 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_1);
+    uint16_t raw_2 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_2);
+
+    LOGI("ULP wake (reason=%d): raw temp=%02x %02x %02x, samples=%d",
+         wake_reason, raw_2, raw_1, raw_0, samples);
+
+    if (wake_reason == 2)
+    {
+      LOGI("ULP I2C error, falling back to normal boot path");
+    }
+    else
+    {
+      float temp = bmp390l_compensate_temperature(&bmp390l_calib,
+                                                   (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
+      LOGI("ULP compensated temp: %.2f °C", temp);
+
+      time_t now;
+      struct tm nowtm;
+      get_time(&now, &nowtm);
+
+      LOGI("now: %d. next clear time: %d. first boot time: %d", now, next_clear_time, first_boot_time);
+      periodic_display_clear(now, nowtm);
+
+      update_display(battery_mv, temp, now, &nowtm);
+      previous_temp = temp;
+      previous_boot_count = boot_count;
+
+      // Reinitialize ULP with fresh program before sleeping
+      initialize_ulp();
+
+      start_deep_sleep();
+      return; // never reached
+    }
+  }
+#endif
+
+  // --- Normal boot path (first boot or timer wakeup) ---
 
   // TODO: rather than run this only once, run daily/weekly
   if (boot_count == 1)
@@ -488,6 +652,12 @@ void setup()
     previous_temp = temp;
     previous_boot_count = boot_count;
   }
+
+#ifdef USE_BMP390L
+  // (Re)initialize ULP every normal boot to ensure latest program is loaded
+  // This handles both first boot and post-reflash scenarios
+  initialize_ulp();
+#endif
 
   start_deep_sleep();
 }

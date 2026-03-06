@@ -12,6 +12,7 @@ void BMP390LSensor::Initialize()
     if (_isInitialized)
         return;
 
+    _twoWire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
     _sensor.begin();
     // resolution when using ultra low precision & forced sampling:
     // temperature 0.0050 °C

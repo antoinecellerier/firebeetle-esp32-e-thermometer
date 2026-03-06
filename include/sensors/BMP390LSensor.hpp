@@ -9,6 +9,7 @@ class BMP390LSensor : public Sensor
         BMP390LSensor();
 
         float GetTemperatureC();
+        TwoWire& GetWire() { return _twoWire; }
 
     private:
         void Initialize();

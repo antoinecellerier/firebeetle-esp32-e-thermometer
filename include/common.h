@@ -9,3 +9,35 @@
 #else
 #define LOGI(...)
 #endif
+
+// RTC I2C pins — BMP390L must be wired to these for ULP access
+#define I2C_SDA_PIN 0  // GPIO0 (D5) — RTC I2C SDA
+#define I2C_SCL_PIN 4  // GPIO4 (D12) — RTC I2C SCL
+// Keep low (5s) for development/testing, increase to 60s for production
+#ifndef SLEEP_INTERVAL_S
+#define SLEEP_INTERVAL_S 5
+#endif
+
+// PPK2 debug pins — wire to PPK2 digital channels for power trace correlation
+// D10/GPIO17 → PPK2 D0: HIGH while main CPU is awake
+// D11/GPIO16 → PPK2 D1: HIGH during display refresh
+// D13/GPIO12 → PPK2 D2: HIGH while ULP is executing (RTC GPIO, toggled by ULP itself)
+//   ⚠ PPK2_DEBUG_ULP_GPIO requires RTC peripherals to stay powered during deep sleep,
+//     which increases sleep current. Enable separately only when needed.
+#ifdef PPK2_DEBUG
+#define PPK2_PIN_CPU_ACTIVE 17
+#define PPK2_PIN_DISPLAY    16
+#define PPK2_CPU_ACTIVE_HIGH() digitalWrite(PPK2_PIN_CPU_ACTIVE, HIGH)
+#define PPK2_CPU_ACTIVE_LOW()  digitalWrite(PPK2_PIN_CPU_ACTIVE, LOW)
+#define PPK2_DISPLAY_HIGH()    digitalWrite(PPK2_PIN_DISPLAY, HIGH)
+#define PPK2_DISPLAY_LOW()     digitalWrite(PPK2_PIN_DISPLAY, LOW)
+#else
+#define PPK2_CPU_ACTIVE_HIGH()
+#define PPK2_CPU_ACTIVE_LOW()
+#define PPK2_DISPLAY_HIGH()
+#define PPK2_DISPLAY_LOW()
+#endif
+
+#ifdef PPK2_DEBUG_ULP_GPIO
+#define PPK2_PIN_ULP_ACTIVE 12
+#endif

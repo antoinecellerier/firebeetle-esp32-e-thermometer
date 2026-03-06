@@ -16,7 +16,7 @@
 | GND   | GND       |
 | MOSI  | SDI       |
 | SCK   | SCK       |
-| 0/D5  | CS        |
+| 14/D6 | CS        |
 | 2/D9  | D/C       |
 | 25/D2 | RES       |
 | 26/D3 | BUSY      |
@@ -29,15 +29,20 @@
 
 ![Assembled first prototype](first-prototype.jpg)
 
-# BMP390L minimal setup
+# BMP390L + ePaper setup (ULP-capable)
 
 - Firebeetle ESP32-E
 - Sensor:
   - Fermion: BMP390L Digital Barometric Pressure Sensor (Breakout)
+- Display:
+  - DESPI-C02 + GDEW0213M21 (or 1.54" Z90c tricolor)
 
-| ESP32 | BPM390L breakout board |
-|-------|------------------------|
-| 3V3   | 3V3                    |
-| GND   | GND                    |
-| SCL   | SCL                    |
-| SDA   | SDA                    |
+BMP390L is wired to GPIO0/GPIO4 (RTC I2C pins) so the ULP coprocessor
+can read the sensor during deep sleep.
+
+| ESP32   | BMP390L breakout |
+|---------|------------------|
+| 3V3     | 3V3              |
+| GND     | GND              |
+| 0/D5    | SDA              |
+| 4/D12   | SCL              |
