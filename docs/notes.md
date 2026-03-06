@@ -124,13 +124,20 @@ capacitors leak current even after the display controller is put into deep sleep
 1. **Power-gate the DESPI-C02** with a P-channel MOSFET (e.g., Si2301, AO3401) on its 3.3V line,
    controlled by a GPIO + 10kΩ pull-up. GPIO HIGH = off (sleep), GPIO LOW = on (refresh).
    FireBeetle ESP32-E has no built-in controllable 3.3V output, so this requires an external MOSFET.
-2. **Switch to Adafruit 1.54" eInk breakout** (ThinkInk) — has a built-in Enable pin on its LDO
-   regulator. Wire Enable to a GPIO: LOW = board fully powered down (display + SRAM + microSD),
-   HIGH = powered. No external MOSFET needed. Shutdown current should be sub-10 µA.
-   Schematic: https://learn.adafruit.com/adafruit-eink-display-breakouts/downloads
-   Note: uses SPI SRAM + microSD (more components when active, but irrelevant when power-gated).
-3. **Replace the DESPI-C02** with direct panel wiring using the panel's spec capacitors
-4. **Use a different adapter board** with better sleep characteristics
+2. **Replace the DESPI-C02** with direct panel wiring using the panel's spec capacitors
+3. **Use a different adapter board** with better sleep characteristics
+
+### Adafruit 1.54" eInk breakout — tested and rejected
+
+The Adafruit 1.54" Tri-Color eInk breakout (ThinkInk, product #3625) was tested as an alternative.
+Despite having an onboard LDO with an Enable pin, it performed **much worse**:
+
+- **With EN floating (default):** ~3 mA average, 21 mA spikes — display controller in active state
+- **With EN tied directly to GND:** ~5.5 mA average, 20 mA spikes — still drawing heavily
+- Current likely back-feeds through SPI pin ESD diodes and/or microSD + SRAM components
+- The board's additional components (SPI SRAM, microSD socket) create parasitic current paths
+  that bypass the LDO even when disabled
+- **Conclusion:** Adafruit board is ~10x worse than DESPI-C02 for deep sleep. Not suitable.
 
 ## Reference values (from earlier measurements)
 
