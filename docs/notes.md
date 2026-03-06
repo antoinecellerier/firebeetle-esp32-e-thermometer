@@ -100,10 +100,37 @@ All measurements are 1-minute averages in steady state (excluding initial boot s
 **Key findings:**
 - ULP bit-bang I2C with full BMP390L temp reading: ~562 µA average deep sleep
 - ULP overhead is negligible (~0 µA difference with/without ULP running)
-- The ~535 µA above bare-board baseline (562 vs 27 µA) is dominated by `RTC_PERIPH` power domain being forced ON — required for ULP GPIO access during bit-bang I2C
+- **With EPD VCC disconnected: ~28 µA** — essentially bare-board baseline
+- **The DESPI-C02 ePaper adapter board draws ~534 µA quiescent** — this is the dominant power consumer
+- ULP + RTC_PERIPH + BMP390L adds only ~1 µA above the 27 µA bare-board baseline
 - Hardware RTC I2C peripheral could not be made to work (BUS_BUSY stuck, see docs/rtc-i2c-research.md)
-- Sensor+display init adds ~50 µA vs bare sleep (560 vs 510 µA)
-- TODO: investigate if RTC_PERIPH can be set to AUTO or if alternative approaches reduce the ~535 µA overhead
+- GPIO pin isolation (hold RST LOW, float SPI) does not reduce the DESPI-C02 draw — it's a hardware issue
+
+## DESPI-C02 quiescent current (known hardware issue)
+
+The ~534 µA overhead is a known issue with the DESPI-C02 adapter board. The board's boost converter
+capacitors leak current even after the display controller is put into deep sleep (command 0x07).
+
+- **Confirmed by other users**: https://github.com/ZinggJM/GxEPD2/discussions/142
+  (same symptoms: ~500 µA in deep sleep, drops to ~50 µA when removing DESPI-C02 3.3V)
+- **DESPI-C02 manual §4.6**: "The high current in deep sleep mode may be due to the larger
+  capacitance in the boost part."
+- **PPK2 trace** shows ~10ms oscillating spikes to 4-5 mA — characteristic of a boost converter
+  periodically charging even in standby.
+- **Software mitigations tested and ineffective**: holding RST LOW via gpio_hold_en,
+  floating SPI/CS/DC pins, calling SPI.end() — none reduced the current.
+
+### Possible fixes (all hardware)
+1. **Power-gate the DESPI-C02** with a P-channel MOSFET (e.g., Si2301, AO3401) on its 3.3V line,
+   controlled by a GPIO + 10kΩ pull-up. GPIO HIGH = off (sleep), GPIO LOW = on (refresh).
+   FireBeetle ESP32-E has no built-in controllable 3.3V output, so this requires an external MOSFET.
+2. **Switch to Adafruit 1.54" eInk breakout** (ThinkInk) — has a built-in Enable pin on its LDO
+   regulator. Wire Enable to a GPIO: LOW = board fully powered down (display + SRAM + microSD),
+   HIGH = powered. No external MOSFET needed. Shutdown current should be sub-10 µA.
+   Schematic: https://learn.adafruit.com/adafruit-eink-display-breakouts/downloads
+   Note: uses SPI SRAM + microSD (more components when active, but irrelevant when power-gated).
+3. **Replace the DESPI-C02** with direct panel wiring using the panel's spec capacitors
+4. **Use a different adapter board** with better sleep characteristics
 
 ## Reference values (from earlier measurements)
 
@@ -117,7 +144,7 @@ All measurements are 1-minute averages in steady state (excluding initial boot s
 - BMP390L protocol: write PWR_CTRL for forced mode → 7ms delay → read 3 temp bytes
 - Delta comparison on DATA_1 (middle byte), threshold=20 (~0.1°C per count)
 - Compensation done on main CPU after wake using calibration data cached in RTC memory
-- `hulp_peripherals_on()` sets `ESP_PD_DOMAIN_RTC_PERIPH = ESP_PD_OPTION_ON` — this is the main power cost
+- `hulp_peripherals_on()` sets `ESP_PD_DOMAIN_RTC_PERIPH = ESP_PD_OPTION_ON` — adds negligible current (~1 µA)
 
 ## Debug GPIO pins
 
@@ -131,5 +158,6 @@ Note: `PPK2_DEBUG_ULP_GPIO` forces RTC peripherals on during deep sleep, which i
 
 - ULP GPIO debug (D13) initially didn't show signal — fixed by removing `rtc_gpio_hold_en()` which was blocking ULP register writes
 - The 562 µA with ULP bit-bang I2C is ~20x better than old wake-every-cycle (~12.6 mA) but ~20x above bare deep sleep floor (~27 µA)
-- The dominant cost is `RTC_PERIPH` power domain, not the ULP execution itself
-- Next investigation: try `ESP_PD_OPTION_AUTO` for RTC_PERIPH, or explore hardware approaches (power gating, different I2C method)
+- The dominant cost is the DESPI-C02 ePaper adapter board (~534 µA quiescent, known hardware issue — see section above)
+- With EPD disconnected, total sleep current is ~28 µA (ULP + BMP390L + RTC_PERIPH ≈ 1 µA overhead)
+- Fix requires hardware: power-gate DESPI-C02 with MOSFET, replace adapter, or wire panel directly
