@@ -14,9 +14,9 @@
 // Forced mode: temp_en=1, press_en=1, mode=forced (0b01) → 0x13
 #define BMP390L_FORCED_MODE  0x13
 
-// I2C pin definitions (GPIO numbers, HULP converts internally)
-#define I2C_BB_SCL  GPIO_NUM_4
-#define I2C_BB_SDA  GPIO_NUM_0
+// I2C pin definitions — derived from common.h (HULP needs gpio_num_t)
+#define I2C_BB_SCL  ((gpio_num_t)I2C_SCL_PIN)
+#define I2C_BB_SDA  ((gpio_num_t)I2C_SDA_PIN)
 
 
 // Configure GPIO pins for bit-bang I2C (no hardware RTC I2C peripheral).

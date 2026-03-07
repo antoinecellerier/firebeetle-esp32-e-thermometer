@@ -5,7 +5,7 @@
 #include "time.h"
 #include "stdlib.h"
 
-#ifndef DISBALE_WIFI
+#ifndef DISABLE_WIFI
 #include "WiFi.h"
 #endif
 
@@ -40,7 +40,6 @@
 #define EPD_DC     2 // D9
 #define EPD_CS    14 // D6 (was D5/GPIO0, moved to free GPIO0 for RTC I2C SDA)
 #define EPD_BUSY  26 // D3
-//#define SRAM_CS   14 // D6
 #define EPD_RESET 25 // D2
 
 #ifndef DISABLE_DISPLAY
