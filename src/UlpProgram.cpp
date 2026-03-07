@@ -32,7 +32,7 @@ void ulp_configure_i2c_bitbang()
 // so RTC_GPIO15 is at bit 14 + 15 = 29.
 #define RTC_GPIO15_OUT_BIT 29
 
-size_t ulp_build_and_load_program()
+void ulp_build_and_load_program()
 {
   enum {
     LABEL_DATA_AREA = 1,
@@ -247,14 +247,11 @@ size_t ulp_build_and_load_program()
   // Zero the data area at fixed ULP_DATA_BASE address
   for (int i = 0; i < ULP_VAR_COUNT; i++)
     RTC_SLOW_MEM[ULP_DATA_BASE + i] = 0;
-
-  return ULP_DATA_BASE;
 }
 
 
-void ulp_start(size_t data_offset)
+void ulp_start()
 {
-  (void)data_offset;
   ulp_set_wakeup_period(0, ULP_WAKEUP_PERIOD_US);
   ESP_ERROR_CHECK(ulp_run(0));
 }

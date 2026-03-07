@@ -42,11 +42,11 @@ enum ulp_var_offset {
   ULP_VAR_COUNT             // total number of variables
 };
 
-// Initialise RTC I2C, build/load ULP program, and configure wakeup period.
-// Must be called once from the main CPU before starting the ULP.
+// Initialise I2C, build/load ULP program, and start ULP with configured wakeup period.
+// Must be called once from the main CPU before entering deep sleep.
 void ulp_configure_i2c_bitbang();
-size_t ulp_build_and_load_program();
-void ulp_start(size_t data_offset);
+void ulp_build_and_load_program();
+void ulp_start();
 
 // Read/write ULP variables in RTC slow memory.
 uint16_t ulp_read_var(size_t data_offset, enum ulp_var_offset var);

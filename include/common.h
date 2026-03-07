@@ -13,10 +13,15 @@
 // RTC I2C pins — BMP390L must be wired to these for ULP access
 #define I2C_SDA_PIN 0  // GPIO0 (D5) — RTC I2C SDA
 #define I2C_SCL_PIN 4  // GPIO4 (D12) — RTC I2C SCL
-// Keep low (5s) for development/testing, increase to 60s for production
+// ULP polling interval and non-ULP sleep interval.
+// Keep low (5s) for development/testing, increase to 60s for production.
 #ifndef SLEEP_INTERVAL_S
 #define SLEEP_INTERVAL_S 5
 #endif
+
+// Timer safety net when ULP is running: main CPU wakes periodically for
+// housekeeping (daily display clear, battery check) even if temperature is stable.
+#define ULP_SAFETY_NET_US (3600ULL * 1000000ULL)  // 1 hour
 
 // PPK2 debug pins — wire to PPK2 digital channels for power trace correlation
 // D10/GPIO17 → PPK2 D0: HIGH while main CPU is awake

@@ -44,32 +44,22 @@
 
 #ifndef DISABLE_DISPLAY
 
-#define USE_GXEPD
-#ifdef USE_GXEPD
-  #if defined(USE_154_Z90)
-    #include "GxEPD2_3C.h"
-    GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-    #define EPD_RED GxEPD_RED
-  #else
-    #include "GxEPD2_BW.h"
-    #if defined(USE_154_M09)
-      GxEPD2_BW<GxEPD2_154_M09, GxEPD2_154_M09::HEIGHT> display(GxEPD2_154_M09(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-    #elif defined(USE_213_M21)
-      GxEPD2_BW<GxEPD2_213_M21, GxEPD2_213_M21::HEIGHT> display(GxEPD2_213_M21(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-    #else
-      #error Unknown screen type
-    #endif
-    #define EPD_RED GxEPD_BLACK
-  #endif
-  #define EPD_BLACK GxEPD_BLACK
-  #define EPD_WHITE GxEPD_WHITE
+#include "GxEPD2_BW.h"
+#if defined(USE_154_Z90)
+  #include "GxEPD2_3C.h"
+  GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  #define EPD_RED GxEPD_RED
+#elif defined(USE_154_M09)
+  GxEPD2_BW<GxEPD2_154_M09, GxEPD2_154_M09::HEIGHT> display(GxEPD2_154_M09(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  #define EPD_RED GxEPD_BLACK
+#elif defined(USE_213_M21)
+  GxEPD2_BW<GxEPD2_213_M21, GxEPD2_213_M21::HEIGHT> display(GxEPD2_213_M21(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  #define EPD_RED GxEPD_BLACK
 #else
-  #ifndef USE_154_Z90
-    #error Unknown screen type
-  #endif
-  #include "Adafruit_ThinkInk.h"
-  ThinkInk_154_Tricolor_Z90 display(EPD_DC, EPD_RESET, EPD_CS, SRAM_CS, EPD_BUSY);
+  #error Unknown screen type
 #endif
+#define EPD_BLACK GxEPD_BLACK
+#define EPD_WHITE GxEPD_WHITE
 
 #endif
 
@@ -126,9 +116,9 @@ void start_deep_sleep()
   {
     // ULP is polling the sensor — it will wake us when temperature changes
     esp_sleep_enable_ulp_wakeup();
-    // Timer safety net for periodic housekeeping (display clear, etc.)
-    esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 60 * 1000000ULL);
-    LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", SLEEP_INTERVAL_S);
+    // Timer safety net for periodic housekeeping (display clear, battery check)
+    esp_sleep_enable_timer_wakeup(ULP_SAFETY_NET_US);
+    LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", (int)(ULP_SAFETY_NET_US / 60000000ULL));
   }
   else
 #endif
@@ -144,16 +134,9 @@ void start_deep_sleep()
 void clear_display()
 {
 #ifndef DISABLE_DISPLAY
-#ifdef USE_GXEPD
   display.init(0 /* disable serial debug output */);
   display.clearScreen();
   display.hibernate();
-#else
-  display.begin(THINKINK_TRICOLOR);
-  LOGI("Clearing display");
-  display.clearDisplay();
-  display.powerDown();
-#endif
   LOGI("Done");
 #endif
 }
@@ -220,7 +203,6 @@ void initialize_display()
 {
 #ifndef DISABLE_DISPLAY
   LOGI("Initializing display");
-#ifdef USE_GXEPD
   display.init(0 /* disable serial debug output */,
                boot_count == 1 /* allow partial updates directly after power-up for non first runs */);
   display.cp437(true);
@@ -230,11 +212,6 @@ void initialize_display()
   display.setRotation(2);
   #endif
   display.fillScreen(GxEPD_WHITE);
-#else
-  display.begin(THINKINK_TRICOLOR);
-  display.cp437(true);
-  display.clearBuffer();
-#endif
   LOGI("Done");
 #else
   LOGI("Display has been disabled at build time with DISABLE_DISPLAY. See local-secrets.h to fix.");
@@ -371,26 +348,9 @@ void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm
 
   display_stats(now, nowtm);
 
-#if 0
-#ifdef USE_GXEPD
-  if (boot_count > 1)
-  {
-    // TODO Partial display works ... figure out if they're worth using
-    // TODO: Figure out how to determine proper partial update region
-    display.displayWindow(50, 50, 150, 150);
-  }
-  else
-#endif
-#endif
-  {
-    // TODO: There might be an opportunity to light sleep while the display updates
-    display.display();
-  }
-#ifdef USE_GXEPD
+  // TODO: There might be an opportunity to light sleep while the display updates
+  display.display();
   display.hibernate();
-#else
-  display.powerDown();
-#endif
   PPK2_DISPLAY_LOW();
   LOGI("Done updating display and powering down");
 #endif
@@ -501,11 +461,9 @@ void initialize_ulp()
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
 #endif
 
-  // Build and load ULP program into RTC slow memory
+  // Build and load ULP program into RTC slow memory, then start
   ulp_build_and_load_program();
-
-  // Start ULP
-  ulp_start(0);
+  ulp_start();
   ulp_running = true;
   LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
 }
