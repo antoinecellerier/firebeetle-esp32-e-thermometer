@@ -69,6 +69,9 @@
 #elif defined(USE_BMP390L)
   #include "sensors/BMP390LSensor.hpp"
   BMP390LSensor sensor;
+#elif defined(USE_DUMMY_SENSOR)
+  #include "sensors/DummySensor.hpp"
+  DummySensor sensor;
 #else
 # error Unknown sensor type
 #endif
@@ -90,7 +93,9 @@ RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 #ifdef USE_BMP390L
 // ULP state persisted across deep sleep
 RTC_DATA_ATTR bool ulp_running = false;
+#ifndef NO_ULP
 RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
+#endif
 #endif
 
 void setup_serial()
@@ -112,6 +117,7 @@ void setup_serial()
 void start_deep_sleep()
 {
 #ifdef USE_BMP390L
+#ifndef NO_ULP
   if (ulp_running)
   {
     // ULP is polling the sensor — it will wake us when temperature changes
@@ -121,6 +127,7 @@ void start_deep_sleep()
     LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", (int)(ULP_SAFETY_NET_US / 60000000ULL));
   }
   else
+#endif
 #endif
   {
     esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 1000000ULL);
@@ -149,14 +156,33 @@ void get_time(time_t *now, struct tm *nowtm)
   localtime_r(now, nowtm);
 }
 
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
 // https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
 // https://www.best-microcontroller-projects.com/tp4056.html
 const uint32_t low_battery_mv = 3200;
 const uint32_t no_battery_mv = 3000; // Controller stops delivering current at 2.9V
+#elif defined(ARDUINO_XIAO_ESP32C6)
+const uint32_t low_battery_mv = 3200;
+const uint32_t no_battery_mv = 3000; // Controller stops delivering current at 2.9V
+#else
+  #error "Unknown board type"
+#endif
+
 uint32_t read_battery_level()
 {
+  #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
   // https://dfimg.dfrobot.com/nobody/wiki/fd28d987619c16281bdc4f40990e5a1c.PDF => looks like 1M/1M divider == x2 ratio
-  uint32_t battery_mv = analogReadMilliVolts(34) * 2;
+  #define VOLTAGE_PIN 34
+  // 34 = A2
+  #elif defined(ARDUINO_XIAO_ESP32C6)
+  // https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/#reading-battery-voltage
+  // Requires wiring A0 to VBAT see https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/#check-the-battery-voltage
+  #define VOLTAGE_PIN A0
+  return 4321; // TODO: remove this once proper circuit has been soldered
+  #else
+  #error "Unknown board type"
+  #endif
+  uint32_t battery_mv = analogReadMilliVolts(VOLTAGE_PIN) * 2;
   LOGI("Battery level: %d mV", battery_mv);
   return battery_mv;
 }
@@ -250,6 +276,14 @@ void display_stats(time_t now, const struct tm *nowtm)
 }
 #endif
 
+#ifndef SOC_TOUCH_SENSOR_SUPPORTED
+uint16_t touchRead(uint8_t /*pin*/)
+{
+  // FIXME: We should have an alternate shutdown method
+  return 1; // Touch isn't supported, so always return non-zero
+}
+#endif
+
 void handle_permanent_shutdown(uint32_t battery_mv)
 {
   uint16_t pin27 = touchRead(27);
@@ -275,12 +309,14 @@ void handle_permanent_shutdown(uint32_t battery_mv)
       // ... and add somethign on screen for diagnostics purposes in case the delay isn't sufficient
       // TODO remove this later
       initialize_display();
+      #ifndef DISABLE_DISPLAY
       display.setCursor(0, 0);
       display.setTextColor(EPD_BLACK);
       display.setTextSize(1);
       display.printf("Read pin27 == 0");
       display.display();
       display.hibernate();
+      #endif
     }
     else //  battery_mv < no_battery_mv
     {
@@ -399,6 +435,7 @@ void on_first_boot()
 }
 
 #ifdef USE_BMP390L
+#ifndef NO_ULP
 void initialize_ulp()
 {
 #ifdef ULP_TEST_NO_I2C
@@ -468,6 +505,7 @@ void initialize_ulp()
   LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
 }
 #endif
+#endif
 
 bool periodic_display_clear(const time_t now, struct tm nowtm)
 {
@@ -525,13 +563,16 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   }
 
 #ifdef USE_BMP390L
+#ifndef NO_ULP
   initialize_ulp();
+#endif
 #endif
 
   start_deep_sleep();
 }
 
 #ifdef USE_BMP390L
+#ifndef NO_ULP
 // Returns true if ULP provided a valid temperature (stored in *temp_out).
 // Returns false on ULP I2C error — caller should fall through to normal sensor read.
 bool try_read_ulp_temperature(float *temp_out)
@@ -559,6 +600,7 @@ bool try_read_ulp_temperature(float *temp_out)
   LOGI("ULP compensated temp: %.2f °C", *temp_out);
   return true;
 }
+#endif
 #endif
 
 void setup()
@@ -590,6 +632,7 @@ void setup()
   handle_permanent_shutdown(battery_mv);
 
 #ifdef USE_BMP390L
+#ifndef NO_ULP
   if (wakeup_cause == ESP_SLEEP_WAKEUP_ULP && ulp_running)
   {
     float temp;
@@ -600,6 +643,7 @@ void setup()
     }
     // ULP I2C error — fall through to normal sensor read
   }
+#endif
 #endif
 
   // TODO: rather than run this only once, run daily/weekly

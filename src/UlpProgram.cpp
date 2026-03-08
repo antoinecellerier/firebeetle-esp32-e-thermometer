@@ -1,5 +1,7 @@
 #include "UlpProgram.h"
 
+#ifndef NO_ULP
+
 #include "esp32/ulp.h"
 #include "hulp.h"
 #include "hulp_i2cbb.h"
@@ -266,3 +268,5 @@ void ulp_write_var(size_t data_offset, enum ulp_var_offset var, uint16_t value)
 {
   RTC_SLOW_MEM[data_offset + var] = value;
 }
+
+#endif

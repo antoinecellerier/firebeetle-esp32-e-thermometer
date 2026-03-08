@@ -9,9 +9,11 @@
 //
 // I2C pins: GPIO0=SDA, GPIO4=SCL (bit-bang via HULP; EPD_CS moved to GPIO14/D6)
 
+#include "common.h"
+
+#ifndef NO_ULP
 #include <stdint.h>
 #include <stddef.h>
-#include "common.h"
 
 // ULP wakeup period in microseconds
 #define ULP_WAKEUP_PERIOD_US (SLEEP_INTERVAL_S * 1000000ULL)
@@ -51,3 +53,5 @@ void ulp_start();
 // Read/write ULP variables in RTC slow memory.
 uint16_t ulp_read_var(size_t data_offset, enum ulp_var_offset var);
 void ulp_write_var(size_t data_offset, enum ulp_var_offset var, uint16_t value);
+
+#endif

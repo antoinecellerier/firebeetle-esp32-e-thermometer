@@ -27,5 +27,9 @@
 // Select active sensor
 //#define USE_DS18B20_PAR
 #define USE_BMP390L
+//#define USE_DUMMY_SENSOR
 // Uncomment to provide current altitude in meters for better calibration of BMP390L chip
 //#define CURRENT_ALTITUDE_M 8849 /* example value for top of Everest */
+
+// Disable ULP code
+// #define NO_ULP
