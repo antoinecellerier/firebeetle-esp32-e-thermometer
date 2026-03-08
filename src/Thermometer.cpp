@@ -224,7 +224,7 @@ void display_stats(time_t now, const struct tm *nowtm)
   char formatted_time[256];
 
   display.setTextSize(1);
-  display.setTextColor(EPD_BLACK);
+  display.setTextColor(EPD_RED);
   display.printf("seq %d (was %d). refresh %d\n", boot_count, previous_boot_count, display_refresh_count);
   // TODO: Maybe don't format this every time we render?
   struct tm tm;
