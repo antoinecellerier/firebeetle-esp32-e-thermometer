@@ -16,7 +16,7 @@
 // ULP polling interval and non-ULP sleep interval.
 // Keep low (5s) for development/testing, increase to 60s for production.
 #ifndef SLEEP_INTERVAL_S
-#define SLEEP_INTERVAL_S 5
+#define SLEEP_INTERVAL_S 60
 #endif
 
 // Timer safety net when ULP is running: main CPU wakes periodically for
