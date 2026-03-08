@@ -505,6 +505,62 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
   return true;
 }
 
+void refresh_and_sleep(uint32_t battery_mv, float temp)
+{
+  time_t now;
+  struct tm nowtm;
+  get_time(&now, &nowtm);
+
+  LOGI("now: %d. next clear time: %d. first boot time: %d", now, next_clear_time, first_boot_time);
+  if (!periodic_display_clear(now, nowtm) &&
+      abs(temp - previous_temp) < 0.1) // TODO: check rounded up temp as that's what really matters for the display
+  {
+    LOGI("temperature hasn't changed significantly, no need to refresh display");
+  }
+  else
+  {
+    update_display(battery_mv, temp, now, &nowtm);
+    previous_temp = temp;
+    previous_boot_count = boot_count;
+  }
+
+#ifdef USE_BMP390L
+  initialize_ulp();
+#endif
+
+  start_deep_sleep();
+}
+
+#ifdef USE_BMP390L
+// Returns true if ULP provided a valid temperature (stored in *temp_out).
+// Returns false on ULP I2C error — caller should fall through to normal sensor read.
+bool try_read_ulp_temperature(float *temp_out)
+{
+  uint16_t wake_reason = ulp_read_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON);
+  uint16_t samples = ulp_read_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT);
+  ulp_write_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON, 0);
+  ulp_write_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT, 0);
+
+  uint16_t raw_0 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_0);
+  uint16_t raw_1 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_1);
+  uint16_t raw_2 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_2);
+
+  LOGI("ULP wake (reason=%d): raw temp=%02x %02x %02x, samples=%d",
+       wake_reason, raw_2, raw_1, raw_0, samples);
+
+  if (wake_reason == 2)
+  {
+    LOGI("ULP I2C error, falling back to normal boot path");
+    return false;
+  }
+
+  *temp_out = bmp390l_compensate_temperature(&bmp390l_calib,
+                                              (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
+  LOGI("ULP compensated temp: %.2f °C", *temp_out);
+  return true;
+}
+#endif
+
 void setup()
 {
 
@@ -534,52 +590,17 @@ void setup()
   handle_permanent_shutdown(battery_mv);
 
 #ifdef USE_BMP390L
-  // --- ULP wakeup path ---
   if (wakeup_cause == ESP_SLEEP_WAKEUP_ULP && ulp_running)
   {
-    uint16_t wake_reason = ulp_read_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON);
-    uint16_t samples = ulp_read_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT);
-    ulp_write_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON, 0);
-    ulp_write_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT, 0);
-
-    uint16_t raw_0 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_0);
-    uint16_t raw_1 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_1);
-    uint16_t raw_2 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_2);
-
-    LOGI("ULP wake (reason=%d): raw temp=%02x %02x %02x, samples=%d",
-         wake_reason, raw_2, raw_1, raw_0, samples);
-
-    if (wake_reason == 2)
+    float temp;
+    if (try_read_ulp_temperature(&temp))
     {
-      LOGI("ULP I2C error, falling back to normal boot path");
-    }
-    else
-    {
-      float temp = bmp390l_compensate_temperature(&bmp390l_calib,
-                                                   (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
-      LOGI("ULP compensated temp: %.2f °C", temp);
-
-      time_t now;
-      struct tm nowtm;
-      get_time(&now, &nowtm);
-
-      LOGI("now: %d. next clear time: %d. first boot time: %d", now, next_clear_time, first_boot_time);
-      periodic_display_clear(now, nowtm);
-
-      update_display(battery_mv, temp, now, &nowtm);
-      previous_temp = temp;
-      previous_boot_count = boot_count;
-
-      // Reinitialize ULP with fresh program before sleeping
-      initialize_ulp();
-
-      start_deep_sleep();
+      refresh_and_sleep(battery_mv, temp);
       return; // never reached
     }
+    // ULP I2C error — fall through to normal sensor read
   }
 #endif
-
-  // --- Normal boot path (first boot or timer wakeup) ---
 
   // TODO: rather than run this only once, run daily/weekly
   if (boot_count == 1)
@@ -590,33 +611,7 @@ void setup()
   }
 
   float temp = read_temperature();
-
-  time_t now;
-  struct tm nowtm;
-  get_time(&now, &nowtm);
-
-  LOGI("now: %d. next clear time: %d. first boot time: %d", now, next_clear_time, first_boot_time);
-  if (!periodic_display_clear(now, nowtm) &&
-      abs(temp - previous_temp) < 0.1) // TODO: check rounded up temp as that's what really matters for the display
-  {
-    LOGI("temperature hasn't changed significantly, no need to refresh display");
-  }
-  else
-  {
-    update_display(battery_mv, temp, now, &nowtm);
-
-    // Persist state change
-    previous_temp = temp;
-    previous_boot_count = boot_count;
-  }
-
-#ifdef USE_BMP390L
-  // (Re)initialize ULP every normal boot to ensure latest program is loaded
-  // This handles both first boot and post-reflash scenarios
-  initialize_ulp();
-#endif
-
-  start_deep_sleep();
+  refresh_and_sleep(battery_mv, temp);
 }
 
 void loop()

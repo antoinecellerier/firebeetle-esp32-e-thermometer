@@ -32,5 +32,13 @@ float BMP390LSensor::GetTemperatureC()
 {
     Initialize();
 
+    // BMP390L forced mode: the sensor takes one measurement then returns to
+    // sleep.  Initialize() configures the sampling parameters (OSR, ODR, IIR)
+    // once; here we just re-trigger a conversion so the data registers contain
+    // a fresh reading.  Without this, readTempC() can return 0.0 °C from
+    // stale/empty registers.
+    _sensor.setPWRMode(DFRobot_BMP3XX::ePressEN | DFRobot_BMP3XX::eTempEN |
+                       DFRobot_BMP3XX::eForcedMode);
+
     return _sensor.readTempC();
 }
