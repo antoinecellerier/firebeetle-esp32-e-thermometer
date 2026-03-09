@@ -9,7 +9,9 @@
 #include "WiFi.h"
 #endif
 
-#include "FastLED.h"
+#ifndef DISABLE_LEDS
+#include "Adafruit_NeoPixel.h"
+#endif
 #include "Display.h"
 
 // Used for JTAG. Avoid for other purposes if possible
@@ -140,32 +142,37 @@ uint32_t read_battery_level()
 }
 
 #ifndef DISABLE_LEDS
-#define NUM_LEDS 1
-CRGB leds[NUM_LEDS];
+Adafruit_NeoPixel status_led(1, 5 /*data pin*/, NEO_GRB + NEO_KHZ800);
 #endif
+
+static uint32_t rgb(uint8_t r, uint8_t g, uint8_t b)
+{
+  return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+}
 
 void initialize_status_led()
 {
 #ifndef DISABLE_LEDS
-  FastLED.addLeds<NEOPIXEL, 5/*data pin*/>(leds, NUM_LEDS);
-  FastLED.setBrightness(128);
+  status_led.begin();
+  status_led.setBrightness(128);
 #endif
 }
 
-void set_status_led(CRGB color)
+void set_status_led(uint32_t color)
 {
 #ifndef DISABLE_LEDS
   // Looks like Red is a greenish tint
   // Green and Blue both show up correct
-  leds[0] = color;
-  FastLED.show();
+  status_led.setPixelColor(0, color);
+  status_led.show();
 #endif
 }
 
 void clear_status_led()
 {
 #ifndef DISABLE_LEDS
-  FastLED.clear(true);
+  status_led.clear();
+  status_led.show();
 #endif
 }
 
@@ -177,13 +184,11 @@ float read_temperature()
   return temp;
 }
 
-#ifndef SOC_TOUCH_SENSOR_SUPPORTED
-uint16_t touchRead(uint8_t pin)
+uint16_t buttonRead(uint8_t pin)
 {
   pinMode(pin, INPUT_PULLUP);
   return digitalRead(pin); // return 0 when pressed
 }
-#endif
 
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
 #define SHUTDOWN_BUTTON_PIN 27
@@ -195,8 +200,8 @@ uint16_t touchRead(uint8_t pin)
 
 void handle_permanent_shutdown(uint32_t battery_mv)
 {
-  uint16_t pin27 = touchRead(SHUTDOWN_BUTTON_PIN);
-  LOGI("Touch read %d: %d", SHUTDOWN_BUTTON_PIN, pin27);
+  uint16_t pin27 = buttonRead(SHUTDOWN_BUTTON_PIN);
+  LOGI("Button read %d: %d", SHUTDOWN_BUTTON_PIN, pin27);
   if (pin27 == 0 || battery_mv < no_battery_mv)
   {
     // If button is pressed or battery is dead, powerdown
@@ -205,8 +210,8 @@ void handle_permanent_shutdown(uint32_t battery_mv)
       // Looks like we might be getting extremely rare spurious reads of 0
       // Double check after a delay ...
       delay(1000);
-      pin27 = touchRead(SHUTDOWN_BUTTON_PIN);
-      LOGI("Touch read %d confirmation: %d", SHUTDOWN_BUTTON_PIN, pin27);
+      pin27 = buttonRead(SHUTDOWN_BUTTON_PIN);
+      LOGI("Button read %d confirmation: %d", SHUTDOWN_BUTTON_PIN, pin27);
       if (pin27 != 0)
       {
         bad_pin27_count++;
@@ -238,7 +243,7 @@ void on_first_boot()
 {
 #ifdef DISABLE_WIFI
   LOGI("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.");
-  set_status_led(CRGB::Yellow);
+  set_status_led(rgb(255, 255, 0));
   delay(100);
 #else
   #if !(defined(MY_WIFI_SSID) && defined(MY_WIFI_PASSWORD))
@@ -252,7 +257,7 @@ void on_first_boot()
 
   // Connect to WiFi
   LOGI("Connecting to WiFi");
-  set_status_led(CRGB::Blue);
+  set_status_led(rgb(0, 0, 255));
 
   WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
   while (!WiFi.isConnected())
@@ -264,7 +269,7 @@ void on_first_boot()
 
   // Synchronize time
   LOGI("Synchronizing time");
-  set_status_led(CRGB::Green);
+  set_status_led(rgb(0, 255, 0));
   // Example TZ formats are available at https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
   configTzTime(MY_TZ, "pool.ntp.org");
   struct tm t;
