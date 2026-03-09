@@ -10,9 +10,18 @@
 #define LOGI(...)
 #endif
 
-// RTC I2C pins — BMP390L must be wired to these for ULP access
+// I2C pins — BMP390L must be wired to these
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
+// RTC I2C pins for ULP bit-bang I2C (HULP)
 #define I2C_SDA_PIN 0  // GPIO0 (D5) — RTC I2C SDA
 #define I2C_SCL_PIN 4  // GPIO4 (D12) — RTC I2C SCL
+#elif defined(ARDUINO_XIAO_ESP32C6)
+// LP I2C pins (hardware LP I2C peripheral, fixed by silicon)
+#define I2C_SDA_PIN 6  // GPIO6 — LP I2C SDA
+#define I2C_SCL_PIN 7  // GPIO7 — LP I2C SCL
+#else
+#error "Unknown board type — define I2C pins"
+#endif
 // ULP polling interval and non-ULP sleep interval.
 // Keep low (5s) for development/testing, increase to 60s for production.
 #ifndef SLEEP_INTERVAL_S

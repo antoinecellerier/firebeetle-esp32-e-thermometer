@@ -3,17 +3,28 @@
 
 #include "DFRobot_BMP3XX.h"
 
-#ifndef NO_ULP
-#include "UlpProgram.h"
+#ifdef HAS_ULP_SUPPORT
 #include "BMP390LCompensation.h"
+RTC_DATA_ATTR bool ulp_running = false;
+RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
+#endif
+
+// --- ULP FSM path (ESP32 original, HULP bit-bang I2C) ---
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
+#include "UlpProgram.h"
 
 #ifdef PPK2_DEBUG_ULP_GPIO
 #include "driver/rtc_io.h"
 #endif
-
-RTC_DATA_ATTR bool ulp_running = false;
-RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
 #endif
+
+// --- LP core path (ESP32-C6, hardware LP I2C) ---
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+#include "LpCoreProgram.h"
+#include "generated/lp_core_main.h"
+#include "generated/lp_core_main_bin.h"
+#endif
+
 
 BMP390LSensor::BMP390LSensor()
 :_twoWire(0), _sensor(&_twoWire)
@@ -57,16 +68,22 @@ float BMP390LSensor::GetTemperatureC()
 
 bool BMP390LSensor::SupportsUlp()
 {
-#ifndef NO_ULP
+#ifdef HAS_ULP_SUPPORT
     return true;
 #else
     return false;
 #endif
 }
 
+// ============================================================
+// InitializeUlp — two implementations, selected at compile time
+// ============================================================
+
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
+// --- ESP32 ULP FSM path (HULP bit-bang I2C) ---
+
 void BMP390LSensor::InitializeUlp()
 {
-#ifndef NO_ULP
 #ifdef ULP_TEST_NO_I2C
     LOGI("Initialising ULP coprocessor (TEST MODE: counter only, no I2C)");
 #else
@@ -134,12 +151,65 @@ void BMP390LSensor::InitializeUlp()
     ulp_start();
     ulp_running = true;
     LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
-#endif
 }
+
+#elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+// --- ESP32-C6 LP core path (hardware LP I2C) ---
+
+void BMP390LSensor::InitializeUlp()
+{
+    LOGI("Initialising LP core for BMP390L polling");
+
+    // Read calibration on first boot — stored in RTC memory, survives deep sleep
+    if (bmp390l_calib.parT1 == 0.0f)
+    {
+        Initialize(); // ensure I2C is up
+        if (!bmp390l_read_calibration(_twoWire, &bmp390l_calib))
+        {
+            LOGI("ERROR: Failed to read BMP390L calibration data. LP core will not start.");
+            return;
+        }
+        LOGI("BMP390L calibration: parT1=%.2f parT2=%.10f parT3=%.15f",
+             bmp390l_calib.parT1, bmp390l_calib.parT2, bmp390l_calib.parT3);
+    }
+    else
+    {
+        LOGI("BMP390L calibration loaded from RTC memory");
+    }
+
+    // Release digital I2C — LP I2C will take over the pins
+    _twoWire.end();
+    _isInitialized = false;
+    delay(10);
+
+    // Configure LP I2C hardware peripheral (GPIO6=SDA, GPIO7=SCL)
+    lp_core_i2c_setup();
+
+    // Load and start the LP core binary
+    uint64_t wakeup_us = (uint64_t)SLEEP_INTERVAL_S * 1000000ULL;
+    lp_core_load_binary(lp_core_main_bin, lp_core_main_bin_length);
+    lp_core_start(wakeup_us);
+
+    ulp_running = true;
+    LOGI("LP core started with %d µs wakeup period", (int)wakeup_us);
+}
+
+#else
+// --- No ULP support ---
+
+void BMP390LSensor::InitializeUlp() {}
+
+#endif
+
+// ============================================================
+// ReadUlpTemperature — two implementations
+// ============================================================
+
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
+// --- ESP32 ULP FSM path ---
 
 bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
 {
-#ifndef NO_ULP
     uint16_t wake_reason = ulp_read_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON);
     uint16_t samples = ulp_read_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT);
     ulp_write_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON, 0);
@@ -162,7 +232,46 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
                                                 (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
     LOGI("ULP compensated temp: %.2f °C", *temp_out);
     return true;
-#else
-    return false;
-#endif
 }
+
+#elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+// --- ESP32-C6 LP core path ---
+
+bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
+{
+    // Read shared variables from LP core (via generated symbol addresses)
+    uint32_t reason = ulp_wake_reason;
+    uint32_t samples = ulp_sample_count;
+
+    // Clear for next cycle
+    ulp_wake_reason = 0;
+    ulp_sample_count = 0;
+
+    uint32_t raw_0 = ulp_temp_raw_0;
+    uint32_t raw_1 = ulp_temp_raw_1;
+    uint32_t raw_2 = ulp_temp_raw_2;
+
+    LOGI("LP core wake (reason=%d): raw temp=%02x %02x %02x, samples=%d",
+         (int)reason, (int)raw_2, (int)raw_1, (int)raw_0, (int)samples);
+
+    if (reason == 2)
+    {
+        LOGI("LP core I2C error, falling back to normal boot path");
+        return false;
+    }
+
+    *temp_out = bmp390l_compensate_temperature(&bmp390l_calib,
+                                                (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
+    LOGI("LP core compensated temp: %.2f °C", *temp_out);
+    return true;
+}
+
+#else
+// --- No ULP support ---
+
+bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
+{
+    return false;
+}
+
+#endif

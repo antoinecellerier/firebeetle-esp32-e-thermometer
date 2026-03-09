@@ -1,6 +1,6 @@
 #include "UlpProgram.h"
 
-#ifndef NO_ULP
+#if !defined(NO_ULP) && defined(SOC_ULP_FSM_SUPPORTED)
 
 #include "esp32/ulp.h"
 #include "hulp.h"

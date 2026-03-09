@@ -3,7 +3,11 @@
 
 #include "DFRobot_BMP3XX.h"
 
-#ifndef NO_ULP
+#include "soc/soc_caps.h"
+
+// ULP/LP core support: include compensation for raw ADC → °C conversion
+#if (!defined(NO_ULP)) && (defined(SOC_ULP_FSM_SUPPORTED) || (defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED))
+#define HAS_ULP_SUPPORT 1
 #include "BMP390LCompensation.h"
 #endif
 

@@ -10,8 +10,9 @@
 // I2C pins: GPIO0=SDA, GPIO4=SCL (bit-bang via HULP; EPD_CS moved to GPIO14/D6)
 
 #include "common.h"
+#include "soc/soc_caps.h"
 
-#ifndef NO_ULP
+#if !defined(NO_ULP) && defined(SOC_ULP_FSM_SUPPORTED)
 #include <stdint.h>
 #include <stddef.h>
 
