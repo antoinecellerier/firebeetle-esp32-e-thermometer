@@ -9,9 +9,6 @@
 #include "WiFi.h"
 #endif
 
-#ifndef DISABLE_LEDS
-#include "Adafruit_NeoPixel.h"
-#endif
 #include "Display.h"
 
 // Used for JTAG. Avoid for other purposes if possible
@@ -40,7 +37,7 @@
   #include "sensors/DummySensor.hpp"
   DummySensor sensor;
 #else
-# error Unknown sensor type
+  #error "Unknown sensor type"
 #endif
 
 RTC_DATA_ATTR int boot_count = 0;
@@ -142,7 +139,14 @@ uint32_t read_battery_level()
 }
 
 #ifndef DISABLE_LEDS
-Adafruit_NeoPixel status_led(1, 5 /*data pin*/, NEO_GRB + NEO_KHZ800);
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
+  #include "Adafruit_NeoPixel.h"
+  Adafruit_NeoPixel status_led(1, 5 /*data pin*/, NEO_GRB + NEO_KHZ800);
+#elif defined(ARDUINO_XIAO_ESP32C6)
+  #define STATUS_LED_PIN LED_BUILTIN // GPIO 15, yellow, active-high
+#else
+  #error "Unknown board type"
+#endif
 #endif
 
 static uint32_t rgb(uint8_t r, uint8_t g, uint8_t b)
@@ -153,26 +157,46 @@ static uint32_t rgb(uint8_t r, uint8_t g, uint8_t b)
 void initialize_status_led()
 {
 #ifndef DISABLE_LEDS
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
   status_led.begin();
   status_led.setBrightness(128);
+#elif defined(ARDUINO_XIAO_ESP32C6)
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
+#else
+  #error "Unknown board type"
+#endif
 #endif
 }
 
 void set_status_led(uint32_t color)
 {
 #ifndef DISABLE_LEDS
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
   // Looks like Red is a greenish tint
   // Green and Blue both show up correct
   status_led.setPixelColor(0, color);
   status_led.show();
+#elif defined(ARDUINO_XIAO_ESP32C6)
+  // Single-color yellow LED
+  digitalWrite(STATUS_LED_PIN, color != 0 ? HIGH : LOW);
+#else
+  #error "Unknown board type"
+#endif
 #endif
 }
 
 void clear_status_led()
 {
 #ifndef DISABLE_LEDS
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
   status_led.clear();
   status_led.show();
+#elif defined(ARDUINO_XIAO_ESP32C6)
+  digitalWrite(STATUS_LED_PIN, LOW);
+#else
+  #error "Unknown board type"
+#endif
 #endif
 }
 
