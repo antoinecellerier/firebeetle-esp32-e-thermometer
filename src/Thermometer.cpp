@@ -11,15 +11,6 @@
 
 #include "FastLED.h"
 
-#ifdef USE_BMP390L
-#include "UlpProgram.h"
-#include "BMP390LCompensation.h"
-#endif
-
-#ifdef PPK2_DEBUG_ULP_GPIO
-#include "driver/rtc_io.h"
-#endif
-
 // Used for JTAG. Avoid for other purposes if possible
 // Firebeetle Pin | JTAG PIN
 //            12  |  TDI
@@ -90,13 +81,6 @@ RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
 RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 
-#ifdef USE_BMP390L
-// ULP state persisted across deep sleep
-RTC_DATA_ATTR bool ulp_running = false;
-#ifndef NO_ULP
-RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
-#endif
-#endif
 
 void setup_serial()
 {
@@ -116,9 +100,7 @@ void setup_serial()
 
 void start_deep_sleep()
 {
-#ifdef USE_BMP390L
-#ifndef NO_ULP
-  if (ulp_running)
+  if (sensor.SupportsUlp())
   {
     // ULP is polling the sensor — it will wake us when temperature changes
     esp_sleep_enable_ulp_wakeup();
@@ -127,8 +109,6 @@ void start_deep_sleep()
     LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", (int)(ULP_SAFETY_NET_US / 60000000ULL));
   }
   else
-#endif
-#endif
   {
     esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 1000000ULL);
     LOGI("Sleeping for %d seconds", SLEEP_INTERVAL_S);
@@ -267,12 +247,13 @@ void display_stats(time_t now, const struct tm *nowtm)
   display.printf("up ~%d days (%d s)\n", uptime/one_day, uptime);
   display.printf("max bat %d mV. bad27 %d\n", max_battery_mv, bad_pin27_count);
 
-#ifdef USE_BMP390L
-  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-  const char *cause_str = cause == ESP_SLEEP_WAKEUP_ULP ? "ULP" :
-                          cause == ESP_SLEEP_WAKEUP_TIMER ? "TMR" : "?";
-  display.printf("wake:%s ulp:%s", cause_str, ulp_running ? "ON" : "OFF");
-#endif
+  if (sensor.SupportsUlp())
+  {
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    const char *cause_str = cause == ESP_SLEEP_WAKEUP_ULP ? "ULP" :
+                            cause == ESP_SLEEP_WAKEUP_TIMER ? "TMR" : "?";
+    display.printf("wake:%s ulp:ON", cause_str);
+  }
 }
 #endif
 
@@ -434,78 +415,6 @@ void on_first_boot()
 #endif
 }
 
-#ifdef USE_BMP390L
-#ifndef NO_ULP
-void initialize_ulp()
-{
-#ifdef ULP_TEST_NO_I2C
-  LOGI("Initialising ULP coprocessor (TEST MODE: counter only, no I2C)");
-#else
-  LOGI("Initialising ULP coprocessor for BMP390L polling");
-
-  // Only read calibration on first boot — it's stored in RTC memory and survives deep sleep
-  if (bmp390l_calib.parT1 == 0.0f)
-  {
-    if (!bmp390l_read_calibration(sensor.GetWire(), &bmp390l_calib))
-    {
-      LOGI("ERROR: Failed to read BMP390L calibration data. ULP will not start.");
-      return;
-    }
-    LOGI("BMP390L calibration: parT1=%.2f parT2=%.10f parT3=%.15f",
-         bmp390l_calib.parT1, bmp390l_calib.parT2, bmp390l_calib.parT3);
-  }
-  else
-  {
-    LOGI("BMP390L calibration loaded from RTC memory");
-  }
-
-  // Release digital I2C before switching pins to ULP bit-bang
-  sensor.GetWire().end();
-  delay(10);
-
-  // I2C bus recovery: 9 SCL clocks + STOP condition.
-  // Wire.end() may leave a slave holding SDA low.
-  pinMode(I2C_SCL_PIN, OUTPUT);
-  pinMode(I2C_SDA_PIN, INPUT_PULLUP);
-  for (int i = 0; i < 9; i++)
-  {
-    digitalWrite(I2C_SCL_PIN, LOW);
-    delayMicroseconds(5);
-    digitalWrite(I2C_SCL_PIN, HIGH);
-    delayMicroseconds(5);
-    if (digitalRead(I2C_SDA_PIN))
-      break;
-  }
-  // Generate STOP condition (SDA low→high while SCL high)
-  pinMode(I2C_SDA_PIN, OUTPUT);
-  digitalWrite(I2C_SDA_PIN, LOW);
-  delayMicroseconds(5);
-  digitalWrite(I2C_SCL_PIN, HIGH);
-  delayMicroseconds(5);
-  digitalWrite(I2C_SDA_PIN, HIGH);
-  delayMicroseconds(5);
-
-  // Configure GPIO pins for HULP bit-bang I2C (bypasses hardware RTC I2C peripheral)
-  ulp_configure_i2c_bitbang();
-#endif
-
-#ifdef PPK2_DEBUG_ULP_GPIO
-  // Configure D13/GPIO12 as RTC GPIO output so the ULP can toggle it
-  rtc_gpio_init(GPIO_NUM_12);
-  rtc_gpio_set_direction(GPIO_NUM_12, RTC_GPIO_MODE_OUTPUT_ONLY);
-  rtc_gpio_set_level(GPIO_NUM_12, 0);
-  // RTC peripherals must stay powered during deep sleep for ULP GPIO access
-  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
-#endif
-
-  // Build and load ULP program into RTC slow memory, then start
-  ulp_build_and_load_program();
-  ulp_start();
-  ulp_running = true;
-  LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
-}
-#endif
-#endif
 
 bool periodic_display_clear(const time_t now, struct tm nowtm)
 {
@@ -562,46 +471,12 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
     previous_boot_count = boot_count;
   }
 
-#ifdef USE_BMP390L
-#ifndef NO_ULP
-  initialize_ulp();
-#endif
-#endif
+  if (sensor.SupportsUlp())
+    sensor.InitializeUlp();
 
   start_deep_sleep();
 }
 
-#ifdef USE_BMP390L
-#ifndef NO_ULP
-// Returns true if ULP provided a valid temperature (stored in *temp_out).
-// Returns false on ULP I2C error — caller should fall through to normal sensor read.
-bool try_read_ulp_temperature(float *temp_out)
-{
-  uint16_t wake_reason = ulp_read_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON);
-  uint16_t samples = ulp_read_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT);
-  ulp_write_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON, 0);
-  ulp_write_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT, 0);
-
-  uint16_t raw_0 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_0);
-  uint16_t raw_1 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_1);
-  uint16_t raw_2 = ulp_read_var(ULP_DATA_BASE, ULP_VAR_TEMP_2);
-
-  LOGI("ULP wake (reason=%d): raw temp=%02x %02x %02x, samples=%d",
-       wake_reason, raw_2, raw_1, raw_0, samples);
-
-  if (wake_reason == 2)
-  {
-    LOGI("ULP I2C error, falling back to normal boot path");
-    return false;
-  }
-
-  *temp_out = bmp390l_compensate_temperature(&bmp390l_calib,
-                                              (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
-  LOGI("ULP compensated temp: %.2f °C", *temp_out);
-  return true;
-}
-#endif
-#endif
 
 void setup()
 {
@@ -631,20 +506,16 @@ void setup()
 
   handle_permanent_shutdown(battery_mv);
 
-#ifdef USE_BMP390L
-#ifndef NO_ULP
-  if (wakeup_cause == ESP_SLEEP_WAKEUP_ULP && ulp_running)
+  if (wakeup_cause == ESP_SLEEP_WAKEUP_ULP && sensor.SupportsUlp())
   {
     float temp;
-    if (try_read_ulp_temperature(&temp))
+    if (sensor.ReadUlpTemperature(&temp))
     {
       refresh_and_sleep(battery_mv, temp);
       return; // never reached
     }
     // ULP I2C error — fall through to normal sensor read
   }
-#endif
-#endif
 
   // TODO: rather than run this only once, run daily/weekly
   if (boot_count == 1)
