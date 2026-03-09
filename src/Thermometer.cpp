@@ -10,6 +10,7 @@
 #endif
 
 #include "FastLED.h"
+#include "Display.h"
 
 // Used for JTAG. Avoid for other purposes if possible
 // Firebeetle Pin | JTAG PIN
@@ -26,33 +27,6 @@
 // when that error is hit you might need to kill the openocd process even if debugging is stopped in VS code
 // Repro cmd
 // ~/.platformio/packages/tool-openocd-esp32/bin/openocd -s ~/.platformio/packages/tool-openocd-esp32 -c "gdb_port pipe; tcl_port disabled; telnet_port disabled" -s ~/.platformio/packages/tool-openocd-esp32/share/openocd/scripts -f interface/ftdi/esp32_devkitj_v1.cfg -f board/esp-wroom-32.cfg -c "adapter_khz 5000"
-
-// 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board to simplify wiring
-#define EPD_DC     2 // D9
-#define EPD_CS    14 // D6 (was D5/GPIO0, moved to free GPIO0 for RTC I2C SDA)
-#define EPD_BUSY  26 // D3
-#define EPD_RESET 25 // D2
-
-#ifndef DISABLE_DISPLAY
-
-#include "GxEPD2_BW.h"
-#if defined(USE_154_Z90)
-  #include "GxEPD2_3C.h"
-  GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_RED
-#elif defined(USE_154_M09)
-  GxEPD2_BW<GxEPD2_154_M09, GxEPD2_154_M09::HEIGHT> display(GxEPD2_154_M09(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_BLACK
-#elif defined(USE_213_M21)
-  GxEPD2_BW<GxEPD2_213_M21, GxEPD2_213_M21::HEIGHT> display(GxEPD2_213_M21(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_BLACK
-#else
-  #error Unknown screen type
-#endif
-#define EPD_BLACK GxEPD_BLACK
-#define EPD_WHITE GxEPD_WHITE
-
-#endif
 
 #if defined(USE_DS18B20_PAR)
   #include "sensors/DS18B20Sensor.hpp"
@@ -81,6 +55,14 @@ RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
 RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 
+DisplayStats make_display_stats()
+{
+  return {
+    boot_count, previous_boot_count, display_refresh_count,
+    first_boot_time, next_clear_time, max_battery_mv, bad_pin27_count,
+    sensor.SupportsUlp()
+  };
+}
 
 void setup_serial()
 {
@@ -116,16 +98,6 @@ void start_deep_sleep()
   Serial.flush();
   PPK2_CPU_ACTIVE_LOW();
   esp_deep_sleep_start();
-}
-
-void clear_display()
-{
-#ifndef DISABLE_DISPLAY
-  display.init(0 /* disable serial debug output */);
-  display.clearScreen();
-  display.hibernate();
-  LOGI("Done");
-#endif
 }
 
 void get_time(time_t *now, struct tm *nowtm)
@@ -205,58 +177,6 @@ float read_temperature()
   return temp;
 }
 
-void initialize_display()
-{
-#ifndef DISABLE_DISPLAY
-  LOGI("Initializing display");
-  display.init(0 /* disable serial debug output */,
-               boot_count == 1 /* allow partial updates directly after power-up for non first runs */);
-  display.cp437(true);
-  #ifdef USE_213_M21
-  display.setRotation(1);
-  #else
-  display.setRotation(2);
-  #endif
-  display.fillScreen(GxEPD_WHITE);
-  LOGI("Done");
-#else
-  LOGI("Display has been disabled at build time with DISABLE_DISPLAY. See local-secrets.h to fix.");
-#endif
-}
-
-#ifndef DISABLE_DISPLAY
-void display_stats(time_t now, const struct tm *nowtm)
-{
-  char formatted_time[256];
-
-  display.setTextSize(1);
-  display.setTextColor(EPD_RED);
-  display.printf("seq %d (was %d). refresh %d\n", boot_count, previous_boot_count, display_refresh_count);
-  // TODO: Maybe don't format this every time we render?
-  struct tm tm;
-  localtime_r(&first_boot_time, &tm);
-  strftime(formatted_time, 256, "%F %T", &tm);
-  display.printf("first boot %s\n", formatted_time);
-  strftime(formatted_time, 256, "%F %T", nowtm);
-  display.printf("last refresh %s\n", formatted_time);
-  localtime_r(&next_clear_time, &tm);
-  strftime(formatted_time, 256, "%F %T", &tm);
-  display.printf("next clear %s\n", formatted_time);
-
-  time_t uptime = now-first_boot_time;
-  display.printf("up ~%d days (%d s)\n", uptime/one_day, uptime);
-  display.printf("max bat %d mV. bad27 %d\n", max_battery_mv, bad_pin27_count);
-
-  if (sensor.SupportsUlp())
-  {
-    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-    const char *cause_str = cause == ESP_SLEEP_WAKEUP_ULP ? "ULP" :
-                            cause == ESP_SLEEP_WAKEUP_TIMER ? "TMR" : "?";
-    display.printf("wake:%s ulp:ON", cause_str);
-  }
-}
-#endif
-
 #ifndef SOC_TOUCH_SENSOR_SUPPORTED
 uint16_t touchRead(uint8_t /*pin*/)
 {
@@ -285,54 +205,18 @@ void handle_permanent_shutdown(uint32_t battery_mv)
         return;
       }
 
-      clear_display();
+      display_clear();
 
       // ... and add somethign on screen for diagnostics purposes in case the delay isn't sufficient
       // TODO remove this later
-      initialize_display();
-      #ifndef DISABLE_DISPLAY
-      display.setCursor(0, 0);
-      display.setTextColor(EPD_BLACK);
-      display.setTextSize(1);
-      display.printf("Read pin27 == 0");
-      display.display();
-      display.hibernate();
-      #endif
+      display_show_pin27_diagnostic(boot_count);
     }
     else //  battery_mv < no_battery_mv
     {
-      initialize_display();
-      #ifndef DISABLE_DISPLAY
-      display.setCursor(0, 0);
-      display.setTextColor(EPD_RED);
-      if (display.height() < 200)
-      {
-        display.setTextSize(2);
-        display.printf("  EMPTY BATTERY\n"
-                       "    RECHARGE!\n");
-      }
-      else
-      {
-        display.setTextSize(3);
-        display.printf("\n\n"
-                      "   EMPTY\n"
-                      "  BATTERY\n"
-                      " RECHARGE!\n"
-                      "\n");
-      }
-      display.setTextSize(2);
-      display.setTextColor(EPD_BLACK);
-      display.printf("   bat %d mV\n", battery_mv);
-
       time_t now;
       struct tm nowtm;
       get_time(&now, &nowtm);
-      display_stats(now, &nowtm);
-
-      display.display();
-
-      display.hibernate();
-      #endif
+      display_show_empty_battery(battery_mv, now, &nowtm, make_display_stats());
     }
 
     for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
@@ -340,37 +224,6 @@ void handle_permanent_shutdown(uint32_t battery_mv)
     LOGI("Shutting down until reset. All sleep pd domains have been shutdown.");
     esp_deep_sleep_start();
   }
-}
-
-
-void update_display(uint32_t battery_mv, float temp, time_t now, const struct tm *nowtm)
-{
-  display_refresh_count++; // Help get a sense of frequency of refreshes
-
-  PPK2_DISPLAY_HIGH();
-  initialize_display();
-#ifndef DISABLE_DISPLAY
-  LOGI("Display text");
-  display.setTextSize(3);
-  display.setCursor(10, 10);
-  display.setTextColor(EPD_BLACK);
-  display.printf("%.1f C\n", temp);
-
-  display.setTextSize(2);
-  if (battery_mv < low_battery_mv)
-    display.setTextColor(EPD_RED);
-  display.printf("%s %d mV\n", battery_mv < low_battery_mv ? "LOW BAT" : "bat", battery_mv);
-  if (max_battery_mv < battery_mv)
-    max_battery_mv = battery_mv;
-
-  display_stats(now, nowtm);
-
-  // TODO: There might be an opportunity to light sleep while the display updates
-  display.display();
-  display.hibernate();
-  PPK2_DISPLAY_LOW();
-  LOGI("Done updating display and powering down");
-#endif
 }
 
 void on_first_boot()
@@ -447,7 +300,7 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
     return false;
   }
 
-  clear_display();
+  display_clear();
   next_clear_time += one_day; // Schedule next clear in a day
   return true;
 }
@@ -466,7 +319,15 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   }
   else
   {
-    update_display(battery_mv, temp, now, &nowtm);
+    display_refresh_count++;
+    if (max_battery_mv < battery_mv)
+      max_battery_mv = battery_mv;
+
+    PPK2_DISPLAY_HIGH();
+    display_show_temperature(temp, battery_mv, battery_mv < low_battery_mv,
+                             now, &nowtm, make_display_stats());
+    PPK2_DISPLAY_LOW();
+
     previous_temp = temp;
     previous_boot_count = boot_count;
   }
