@@ -178,17 +178,25 @@ float read_temperature()
 }
 
 #ifndef SOC_TOUCH_SENSOR_SUPPORTED
-uint16_t touchRead(uint8_t /*pin*/)
+uint16_t touchRead(uint8_t pin)
 {
-  // FIXME: We should have an alternate shutdown method
-  return 1; // Touch isn't supported, so always return non-zero
+  pinMode(pin, INPUT_PULLUP);
+  return digitalRead(pin); // return 0 when pressed
 }
+#endif
+
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
+#define SHUTDOWN_BUTTON_PIN 27
+#elif defined(ARDUINO_XIAO_ESP32C6)
+#define SHUTDOWN_BUTTON_PIN 9
+#else
+  #error "Unknown board type"
 #endif
 
 void handle_permanent_shutdown(uint32_t battery_mv)
 {
-  uint16_t pin27 = touchRead(27);
-  LOGI("Touch read 27: %d", pin27);
+  uint16_t pin27 = touchRead(SHUTDOWN_BUTTON_PIN);
+  LOGI("Touch read %d: %d", SHUTDOWN_BUTTON_PIN, pin27);
   if (pin27 == 0 || battery_mv < no_battery_mv)
   {
     // If button is pressed or battery is dead, powerdown
@@ -197,8 +205,8 @@ void handle_permanent_shutdown(uint32_t battery_mv)
       // Looks like we might be getting extremely rare spurious reads of 0
       // Double check after a delay ...
       delay(1000);
-      pin27 = touchRead(27);
-      LOGI("Touch read 27 confirmation: %d", pin27);
+      pin27 = touchRead(SHUTDOWN_BUTTON_PIN);
+      LOGI("Touch read %d confirmation: %d", SHUTDOWN_BUTTON_PIN, pin27);
       if (pin27 != 0)
       {
         bad_pin27_count++;
