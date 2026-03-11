@@ -168,3 +168,32 @@ Note: `PPK2_DEBUG_ULP_GPIO` forces RTC peripherals on during deep sleep, which i
 - The dominant cost is the DESPI-C02 ePaper adapter board (~534 µA quiescent, known hardware issue — see section above)
 - With EPD disconnected, total sleep current is ~28 µA (ULP + BMP390L + RTC_PERIPH ≈ 1 µA overhead)
 - Fix requires hardware: power-gate DESPI-C02 with MOSFET, replace adapter, or wire panel directly
+
+# XIAO ESP32C6 power measurements (March 2026)
+
+Setup: Seeed XIAO ESP32C6, bare board (no peripherals connected).
+Measured with Nordic PPK2 on 3.3V pin (bypassing onboard LDO). Source voltage 3320 mV.
+Board: seeed_xiao_esp32c6, PlatformIO + pioarduino (Arduino Core 3.x / ESP-IDF 5.x).
+
+## Critical finding: ARDUINO_USB_CDC_ON_BOOT
+
+The XIAO ESP32C6 board definition sets `ARDUINO_USB_CDC_ON_BOOT=1` by default, which keeps
+the ESP32-C6's built-in USB Serial/JTAG controller active during deep sleep. This draws ~20 mA
+constantly, completely masking deep sleep savings.
+
+**Fix:** Add to platformio.ini env:
+```ini
+build_unflags = -DARDUINO_USB_CDC_ON_BOOT=1
+build_flags = ... -DARDUINO_USB_CDC_ON_BOOT=0
+```
+
+Note: `-UARDUINO_USB_CDC_ON_BOOT` in build_flags alone doesn't work — PlatformIO's board
+`extra_flags` are applied separately. Must use `build_unflags` to remove the board flag.
+
+## Test results
+
+| Config | Sleep interval | Avg current (steady state) | Deep sleep floor | Notes |
+|--------|---------------|---------------------------|-----------------|-------|
+| USB CDC ON (default board config) | 5s | ~20.65 mA | ~20 mA | USB Serial/JTAG stays active — unusable |
+| USB CDC OFF, no WiFi, no LEDs, no display | 5s | ~415 µA | ~14 µA | Bare minimum config, DummySensor |
+| USB CDC OFF, WiFi on first boot, no display | 5s | ~428 µA | ~16 µA | WiFi.disconnect(true,true) fully powers down radio |

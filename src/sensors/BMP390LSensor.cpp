@@ -19,10 +19,12 @@ RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
 #endif
 
 // --- LP core path (ESP32-C6, hardware LP I2C) ---
-#if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+// Only include LP core binary/symbols when BMP390L is the active sensor,
+// otherwise DummySensor provides its own LP core binary.
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP390L)
 #include "LpCoreProgram.h"
-#include "generated/lp_core_main.h"
-#include "generated/lp_core_main_bin.h"
+#include "lp_core_main.h"
+#include "lp_core_main_bin.h"
 #endif
 
 
@@ -153,7 +155,7 @@ void BMP390LSensor::InitializeUlp()
     LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
 }
 
-#elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+#elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP390L)
 // --- ESP32-C6 LP core path (hardware LP I2C) ---
 
 void BMP390LSensor::InitializeUlp()
@@ -234,7 +236,7 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
     return true;
 }
 
-#elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+#elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP390L)
 // --- ESP32-C6 LP core path ---
 
 bool BMP390LSensor::ReadUlpTemperature(float *temp_out)

@@ -1,9 +1,17 @@
 """
 PlatformIO pre-build script for compiling the ESP32-C6 LP core binary.
 
-Uses the RISC-V toolchain from PlatformIO packages and ESP-IDF LP core
-sources (auto-downloaded on first build) to compile the LP core program.
+Uses the RISC-V toolchain and ESP-IDF sources from PlatformIO packages
+to compile the LP core program. No local copies of ESP-IDF sources needed.
+
 Headers come from pioarduino's framework-arduinoespressif32-libs package.
+LP core framework sources come from the framework-espidf package.
+
+Also patches the main firmware linker script (memory.ld) to reserve LP SRAM
+for the LP core binary. pioarduino's prebuilt memory.ld has lp_ram_seg starting
+at 0x50000000 despite CONFIG_ULP_COPROC_RESERVE_MEM=8192 in sdkconfig — this
+is a pioarduino bug. Without the patch, .rtc.text lands at 0x50000000 and PMP
+marks it RX-only, causing a Store access fault when loading the LP core binary.
 
 Generates C headers for embedding the binary and accessing shared variables.
 """
@@ -23,12 +31,15 @@ else:
 
     PROJ_DIR = Path(env["PROJECT_DIR"])
     ULP_DIR = PROJ_DIR / "ulp"
-    IDF_DIR = ULP_DIR / "idf"
     BUILD_DIR = PROJ_DIR / ".pio" / "lp_core_build"
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    GEN_DIR = BUILD_DIR / "generated"
+    GEN_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Find toolchain from PlatformIO packages
-    TOOLCHAIN_DIR = Path.home() / ".platformio" / "packages" / "toolchain-riscv32-esp"
+    # --- PlatformIO package paths ---
+
+    PACKAGES_DIR = Path.home() / ".platformio" / "packages"
+    TOOLCHAIN_DIR = PACKAGES_DIR / "toolchain-riscv32-esp"
     GCC = TOOLCHAIN_DIR / "bin" / "riscv32-esp-elf-gcc"
     OBJCOPY = TOOLCHAIN_DIR / "bin" / "riscv32-esp-elf-objcopy"
     READELF = TOOLCHAIN_DIR / "bin" / "riscv32-esp-elf-readelf"
@@ -37,110 +48,23 @@ else:
         print(f"ERROR: RISC-V toolchain not found at {GCC}")
         env.Exit(1)
 
-    # pioarduino framework headers (already installed by PlatformIO)
-    FW_LIBS = Path.home() / ".platformio" / "packages" / "framework-arduinoespressif32-libs" / "esp32c6" / "include"
+    # pioarduino framework headers
+    FW_LIBS = PACKAGES_DIR / "framework-arduinoespressif32-libs" / "esp32c6" / "include"
     if not FW_LIBS.exists():
         print(f"ERROR: pioarduino framework-libs not found at {FW_LIBS}")
         env.Exit(1)
 
-    # --- ESP-IDF source download ---
-    # Auto-detect ESP-IDF version from pioarduino's framework headers.
-    def detect_idf_version():
-        ver_header = FW_LIBS / "esp_common" / "include" / "esp_idf_version.h"
-        if not ver_header.exists():
-            print(f"ERROR: Cannot detect ESP-IDF version: {ver_header} not found")
-            env.Exit(1)
-        import re
-        text = ver_header.read_text()
-        major = re.search(r"ESP_IDF_VERSION_MAJOR\s+(\d+)", text)
-        minor = re.search(r"ESP_IDF_VERSION_MINOR\s+(\d+)", text)
-        patch = re.search(r"ESP_IDF_VERSION_PATCH\s+(\d+)", text)
-        if not (major and minor and patch):
-            print("ERROR: Cannot parse ESP-IDF version from header")
-            env.Exit(1)
-        return f"v{major.group(1)}.{minor.group(1)}.{patch.group(1)}"
-
-    IDF_TAG = detect_idf_version()
-    IDF_RAW_BASE = f"https://raw.githubusercontent.com/espressif/esp-idf/{IDF_TAG}"
-
-    # Files to download from ESP-IDF (paths relative to components/)
-    IDF_FILES = [
-        # LP core framework sources
-        "ulp/lp_core/lp_core/start.S",
-        "ulp/lp_core/lp_core/vector.S",
-        "ulp/lp_core/lp_core/port/esp32c6/vector_table.S",
-        "ulp/lp_core/lp_core/lp_core_startup.c",
-        "ulp/lp_core/lp_core/lp_core_utils.c",
-        "ulp/lp_core/lp_core/lp_core_i2c.c",
-        "ulp/lp_core/lp_core/lp_core_interrupt.c",
-        "ulp/lp_core/lp_core/lp_core_panic.c",
-        "ulp/lp_core/lp_core/lp_core_print.c",
-        "ulp/lp_core/lp_core/lp_core_uart.c",
-        "ulp/lp_core/lp_core/lp_core_ubsan.c",
-        "ulp/lp_core/lp_core/lp_core_spi.c",
-        # LP core headers (not in pioarduino since ULP is disabled)
-        "ulp/lp_core/lp_core/include/ulp_lp_core_gpio.h",
-        "ulp/lp_core/lp_core/include/ulp_lp_core_i2c.h",
-        "ulp/lp_core/lp_core/include/ulp_lp_core_interrupts.h",
-        "ulp/lp_core/lp_core/include/ulp_lp_core_print.h",
-        "ulp/lp_core/lp_core/include/ulp_lp_core_spi.h",
-        "ulp/lp_core/lp_core/include/ulp_lp_core_touch.h",
-        "ulp/lp_core/lp_core/include/ulp_lp_core_uart.h",
-        "ulp/lp_core/lp_core/include/ulp_lp_core_utils.h",
-        # Shared memory sources and headers
-        "ulp/lp_core/shared/ulp_lp_core_memory_shared.c",
-        "ulp/lp_core/shared/ulp_lp_core_lp_timer_shared.c",
-        "ulp/lp_core/shared/ulp_lp_core_lp_uart_shared.c",
-        "ulp/lp_core/shared/ulp_lp_core_critical_section_shared.c",
-        "ulp/lp_core/shared/ulp_lp_core_lp_adc_shared.c",
-        "ulp/lp_core/shared/ulp_lp_core_lp_vad_shared.c",
-        "ulp/lp_core/shared/include/ulp_lp_core_critical_section_shared.h",
-        "ulp/lp_core/shared/include/ulp_lp_core_lp_adc_shared.h",
-        "ulp/lp_core/shared/include/ulp_lp_core_lp_timer_shared.h",
-        "ulp/lp_core/shared/include/ulp_lp_core_lp_uart_shared.h",
-        "ulp/lp_core/shared/include/ulp_lp_core_lp_vad_shared.h",
-        "ulp/lp_core/shared/include/ulp_lp_core_memory_shared.h",
-        # UART HAL (dependency of LP core UART/print)
-        "hal/uart_hal_iram.c",
-        "hal/uart_hal.c",
-        # Linker scripts
-        "ulp/ld/lp_core_riscv.ld",
-        "soc/esp32c6/ld/esp32c6.peripherals.ld",
-        # ld.common (included by lp_core_riscv.ld)
-        "esp_system/ld/ld.common",
-        # Symbol generator
-        "ulp/esp32ulp_mapgen.py",
-    ]
-
-    def download_idf_sources():
-        """Download required ESP-IDF files from GitHub."""
-        import urllib.request
-        import urllib.error
-
-        marker = IDF_DIR / ".idf_tag"
-        if marker.exists() and marker.read_text().strip() == IDF_TAG:
-            return  # Already downloaded for this version
-
-        print(f"Downloading ESP-IDF {IDF_TAG} LP core sources...")
-        for rel_path in IDF_FILES:
-            url = f"{IDF_RAW_BASE}/components/{rel_path}"
-            dest = IDF_DIR / rel_path
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                urllib.request.urlretrieve(url, str(dest))
-            except urllib.error.HTTPError as e:
-                print(f"  ERROR: Failed to download {rel_path}: {e}")
-                env.Exit(1)
-
-        marker.write_text(IDF_TAG + "\n")
-        print(f"  Downloaded {len(IDF_FILES)} files")
-
-    download_idf_sources()
+    # ESP-IDF sources (installed by pioarduino's hybrid build dependency)
+    IDF_COMPONENTS = PACKAGES_DIR / "framework-espidf" / "components"
+    if not IDF_COMPONENTS.exists():
+        print(f"ERROR: ESP-IDF framework not found at {IDF_COMPONENTS}")
+        print("  Install it with: pio pkg install -g -p espressif32 -t framework-espidf")
+        env.Exit(1)
 
     # --- Path definitions ---
 
-    LP_CORE_DIR = IDF_DIR / "ulp" / "lp_core" / "lp_core"
-    LP_SHARED_DIR = IDF_DIR / "ulp" / "lp_core" / "shared"
+    LP_CORE_DIR = IDF_COMPONENTS / "ulp" / "lp_core" / "lp_core"
+    LP_SHARED_DIR = IDF_COMPONENTS / "ulp" / "lp_core" / "shared"
 
     # Output files
     LP_ELF = BUILD_DIR / "lp_core_main.elf"
@@ -149,8 +73,6 @@ else:
     LP_MAP = BUILD_DIR / "lp_core_main.map"
     LP_LD_PROCESSED = BUILD_DIR / "lp_core_riscv.ld"
     LP_MAPGEN_LD = BUILD_DIR / "lp_core_main.ld"
-    GEN_DIR = PROJ_DIR / "include" / "generated"
-    GEN_DIR.mkdir(parents=True, exist_ok=True)
     LP_HEADER = GEN_DIR / "lp_core_main.h"
     LP_BIN_HEADER = GEN_DIR / "lp_core_main_bin.h"
 
@@ -159,7 +81,7 @@ else:
     # --- Source files ---
 
     APP_SOURCES = [
-        ULP_DIR / "lp_core_bmp390l.c",
+        ULP_DIR / "lp_core_main.c",
     ]
 
     IDF_SOURCES = [
@@ -175,8 +97,8 @@ else:
         LP_CORE_DIR / "lp_core_uart.c",
         LP_CORE_DIR / "lp_core_ubsan.c",
         LP_CORE_DIR / "lp_core_spi.c",
-        IDF_DIR / "hal" / "uart_hal_iram.c",
-        IDF_DIR / "hal" / "uart_hal.c",
+        IDF_COMPONENTS / "hal" / "uart_hal_iram.c",
+        IDF_COMPONENTS / "hal" / "uart_hal.c",
         LP_SHARED_DIR / "ulp_lp_core_memory_shared.c",
         LP_SHARED_DIR / "ulp_lp_core_lp_timer_shared.c",
         LP_SHARED_DIR / "ulp_lp_core_lp_uart_shared.c",
@@ -188,18 +110,16 @@ else:
     ALL_SOURCES = APP_SOURCES + IDF_SOURCES
 
     # --- Include directories ---
-    # LP core-specific headers (downloaded, not in pioarduino)
+
     INCLUDES = [
+        # Project ULP sources (for sdkconfig.h and app headers)
         ULP_DIR,
+        # LP core headers from ESP-IDF
         LP_CORE_DIR / "include",
         LP_SHARED_DIR / "include",
-    ]
-
-    # ld.common is in the downloaded IDF sources
-    INCLUDES.append(IDF_DIR / "esp_system" / "ld")
-
-    # All other headers come from pioarduino's framework-libs
-    FW_INCLUDES = [
+        # ld.common (included by lp_core_riscv.ld)
+        IDF_COMPONENTS / "esp_system" / "ld",
+        # pioarduino framework headers
         FW_LIBS / "riscv" / "include",
         FW_LIBS / "soc" / "esp32c6" / "include",
         FW_LIBS / "soc" / "esp32c6" / "register",
@@ -218,16 +138,16 @@ else:
         FW_LIBS / "esp_hw_support" / "include" / "soc" / "esp32c6",
         FW_LIBS / "esp_hw_support" / "port" / "esp32c6",
         FW_LIBS / "esp_hw_support" / "port" / "esp32c6" / "include",
-        # Note: newlib/platform_include is intentionally NOT included here.
+        # Note: newlib/platform_include intentionally excluded —
         # pioarduino's newlib wrapper conflicts with LP core bare-metal compilation.
         FW_LIBS / "log" / "include",
         FW_LIBS / "esp_timer" / "include",
         FW_LIBS / "esp_driver_uart" / "include",
         FW_LIBS / "heap" / "include",
     ]
-    INCLUDES.extend(FW_INCLUDES)
 
     # --- Compiler flags ---
+
     CFLAGS = [
         "-include", str(SDKCONFIG_H),
         "-Os", "-ggdb",
@@ -255,9 +175,9 @@ else:
         "--specs=nosys.specs",
     ]
 
-    # Linker scripts
-    LP_LD_TEMPLATE = IDF_DIR / "ulp" / "ld" / "lp_core_riscv.ld"
-    PERIPHERALS_LD = IDF_DIR / "soc" / "esp32c6" / "ld" / "esp32c6.peripherals.ld"
+    # Linker scripts (from ESP-IDF)
+    LP_LD_TEMPLATE = IDF_COMPONENTS / "ulp" / "ld" / "lp_core_riscv.ld"
+    PERIPHERALS_LD = IDF_COMPONENTS / "soc" / "esp32c6" / "ld" / "esp32c6.peripherals.ld"
 
     # --- Helper functions ---
 
@@ -338,7 +258,7 @@ else:
             env.Exit(1)
         LP_SYM.write_text(result.stdout)
 
-        mapgen = IDF_DIR / "ulp" / "esp32ulp_mapgen.py"
+        mapgen = IDF_COMPONENTS / "ulp" / "esp32ulp_mapgen.py"
         mapgen_output = BUILD_DIR / "lp_core_main"
         cmd = [
             sys.executable, str(mapgen),
@@ -358,8 +278,8 @@ else:
     def generate_binary_header():
         bin_data = LP_BIN.read_bytes()
         lines = [
-            "// Auto-generated LP core binary for ESP32-C6 BMP390L reader.",
-            "// Do not edit — regenerated by scripts/build_lp_core.py",
+            "// Auto-generated LP core binary — do not edit.",
+            "// Regenerated by scripts/build_lp_core.py",
             "#pragma once",
             "#include <stdint.h>",
             "",
@@ -409,5 +329,40 @@ else:
 
         print("LP core binary built successfully")
 
-    # Add the mapgen linker script to the main firmware link
+    # --- Patch main firmware memory.ld to reserve LP SRAM ---
+    #
+    # pioarduino bug: prebuilt memory.ld has lp_ram_seg starting at 0x50000000
+    # despite CONFIG_ULP_COPROC_RESERVE_MEM=8192. We patch it to start at
+    # 0x50000000 + 8192 so PMP marks the first 8KB as RW (for LP core binary)
+    # instead of RX (for .rtc.text).
+
+    import re
+
+    LP_RESERVE = 8192
+    FW_LD_DIR = PACKAGES_DIR / "framework-arduinoespressif32-libs" / "esp32c6" / "ld"
+    PATCHED_LD_DIR = BUILD_DIR / "ld"
+    PATCHED_LD_DIR.mkdir(parents=True, exist_ok=True)
+
+    memory_ld_src = FW_LD_DIR / "memory.ld"
+    memory_ld_dst = PATCHED_LD_DIR / "memory.ld"
+
+    if memory_ld_src.exists():
+        text = memory_ld_src.read_text()
+        # Patch: lp_ram_seg(RW) : org = 0x50000000, len = ...
+        # →      lp_ram_seg(RW) : org = 0x50000000 + 8192, len = ... - 8192
+        patched = re.sub(
+            r'(lp_ram_seg\(RW\)\s*:\s*org\s*=\s*0x50000000)\s*,\s*len\s*=\s*([^\n]+)',
+            rf'\1 + {LP_RESERVE}, len = \2 - {LP_RESERVE}',
+            text,
+        )
+        if patched != text:
+            memory_ld_dst.write_text(patched)
+            # Prepend our ld/ dir so it's found before the framework's
+            env.Prepend(LIBPATH=[str(PATCHED_LD_DIR)])
+            print(f"Patched memory.ld: lp_ram_seg starts at 0x50000000 + {LP_RESERVE}")
+        else:
+            print("WARNING: Could not patch memory.ld — LP SRAM may not be writable")
+
+    # Add generated headers to include path and mapgen linker script to link
+    env.Append(CPPPATH=[str(GEN_DIR)])
     env.Append(LINKFLAGS=["-T", str(LP_MAPGEN_LD)])

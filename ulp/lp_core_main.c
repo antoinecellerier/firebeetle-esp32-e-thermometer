@@ -1,32 +1,64 @@
-// LP core program for BMP390L temperature polling on ESP32-C6
+// LP core program for ESP32-C6
 //
-// Runs on the LP RISC-V core during deep sleep. Periodically:
-//   1. Triggers a BMP390L forced-mode measurement via LP I2C
-//   2. Reads 3 raw temperature bytes
-//   3. Compares DATA_1 with previous reading
-//   4. Wakes main CPU if delta exceeds threshold
+// Two modes selected at compile time:
+//   LP_CORE_IDLE — power measurement: no I2C, wakes main CPU every N loops
+//   Default      — BMP390L temperature polling via LP I2C
 //
-// LP I2C pins: GPIO6=SDA, GPIO7=SCL (hardware LP I2C peripheral)
+// LP core main() returns after each iteration. The LP core startup code
+// re-arms the LP timer and halts. This matches the official ESP-IDF
+// lp_adc example pattern (ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER).
+
+// Toggle for testing without BMP390L hardware
+#define LP_CORE_IDLE
 
 #include <stdint.h>
-#include "ulp_lp_core_i2c.h"
 #include "ulp_lp_core_utils.h"
 
-#define BMP390L_I2C_ADDR     0x77
-#define BMP390L_REG_PWR_CTRL 0x1B
-#define BMP390L_REG_TEMP_0   0x07   // temperature DATA_0 (bits [7:0])
-#define BMP390L_FORCED_MODE  0x13   // temp_en=1, press_en=1, mode=forced
-
-#define LP_I2C_TIMEOUT_CYCLES  5000
-#define TEMP_DELTA_THRESHOLD   20   // ~0.1°C (each DATA_1 count ≈ 0.005°C)
-
-// Shared variables — accessible from main CPU via generated ulp_ prefixed symbols
+// Shared variables — accessible from main CPU via ulp_ prefixed symbols
 volatile uint32_t temp_raw_0 = 0;
 volatile uint32_t temp_raw_1 = 0;
 volatile uint32_t temp_raw_2 = 0;
 volatile uint32_t prev_temp_msb = 0;
 volatile uint32_t wake_reason = 0;    // 0=none, 1=temp change, 2=I2C error
 volatile uint32_t sample_count = 0;
+
+#ifdef LP_CORE_IDLE
+
+// ---- Idle mode: simulate BMP390L pattern without hardware ----
+
+#define WAKE_EVERY 6
+
+int main(void)
+{
+    sample_count++;
+
+    // Simulate sensor read time (~7ms like BMP390L)
+    ulp_lp_core_delay_us(7000);
+
+    // Wake main CPU every N loops
+    if ((sample_count % WAKE_EVERY) == 0) {
+        // Alternate fake temperature to trigger delta detection
+        temp_raw_1 = (sample_count / WAKE_EVERY) & 1 ? 0x80 : 0x60;
+        wake_reason = 1;
+        ulp_lp_core_wakeup_main_processor();
+    }
+
+    return 0;
+}
+
+#else
+
+// ---- BMP390L mode: real I2C temperature polling ----
+
+#include "ulp_lp_core_i2c.h"
+
+#define BMP390L_I2C_ADDR     0x77
+#define BMP390L_REG_PWR_CTRL 0x1B
+#define BMP390L_REG_TEMP_0   0x07
+#define BMP390L_FORCED_MODE  0x13
+
+#define LP_I2C_TIMEOUT_CYCLES  5000
+#define TEMP_DELTA_THRESHOLD   20   // ~0.1°C (each DATA_1 count ≈ 0.005°C)
 
 int main(void)
 {
@@ -74,6 +106,7 @@ int main(void)
         ulp_lp_core_wakeup_main_processor();
     }
 
-    // Return from main() → startup code re-arms LP timer → LP core halts
     return 0;
 }
+
+#endif

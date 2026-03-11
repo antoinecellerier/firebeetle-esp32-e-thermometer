@@ -27,7 +27,7 @@ void lp_core_i2c_setup();
 void lp_core_load_binary(const uint8_t *bin, size_t size);
 
 // Configure and start the LP core with LP timer wakeup.
-// wakeup_period_us: interval between LP core wake-ups.
+// LP core main() returns after each iteration; LP timer re-arms automatically.
 void lp_core_start(uint64_t wakeup_period_us);
 
 // Stop the LP core.

@@ -1,11 +1,17 @@
 // LP core loader for ESP32-C6.
 //
-// Reimplements ulp_lp_core_load_binary(), ulp_lp_core_run(), and
-// lp_core_i2c_master_init() using available LL/HAL inline functions,
-// since the pioarduino Arduino libs don't include the ULP component.
+// Reimplements ulp_lp_core_load_binary() and ulp_lp_core_run() using
+// available LL/HAL inline functions, since the pioarduino Arduino libs
+// don't include the ULP component.
+//
+// Pattern matches the official ESP-IDF lp_adc example:
+// - LP core main() returns after each iteration
+// - LP core startup code re-arms LP timer and halts
+// - LP timer periodically wakes LP core
+// - LP core explicitly calls wakeup_main_processor() when needed
 //
 // Reference: esp-idf/components/ulp/lp_core/lp_core.c
-//            esp-idf/components/ulp/lp_core/lp_core_i2c.c
+//            esp-idf/examples/system/ulp/lp_core/lp_adc/
 
 #include "LpCoreProgram.h"
 
@@ -22,11 +28,11 @@
 #include "esp_private/periph_ctrl.h"
 #include "esp_private/esp_clk_tree_common.h"
 
-// LP timer LL for setting wakeup alarm
+// LP timer — for setting first wakeup and calculating ticks
+#include "hal/lp_timer_ll.h"
 #include "hal/lp_timer_hal.h"
 #include "hal/clk_tree_ll.h"
 
-// RTC_CLK_CAL_FRACT from soc/rtc.h — used for LP timer tick calculation
 #ifndef RTC_CLK_CAL_FRACT
 #define RTC_CLK_CAL_FRACT 19
 #endif
@@ -110,6 +116,12 @@ void lp_core_load_binary(const uint8_t *bin, size_t size)
     // Stop LP core if running
     lp_core_stop();
 
+    // Enable LP core bus clock so LP SRAM at 0x50000000 is accessible
+    PERIPH_RCC_ATOMIC() {
+        lp_core_ll_reset_register();
+        lp_core_ll_enable_bus_clock(true);
+    }
+
     // C6 without LP ROM: binary goes to RTC_SLOW_MEM (0x50000000)
     uint32_t *base = (uint32_t *)SOC_RTC_DRAM_LOW;
 
@@ -118,24 +130,28 @@ void lp_core_load_binary(const uint8_t *bin, size_t size)
     memcpy(base, bin, size);
 }
 
-// ---------- LP core start/stop ----------
+// ---------- LP timer helpers ----------
 
-// Calculate LP timer ticks from microseconds
 static uint64_t lp_timer_calculate_ticks(uint64_t us)
 {
     return (us * (1ULL << RTC_CLK_CAL_FRACT)) / clk_ll_rtc_slow_load_cal();
 }
 
-// Set the LP timer wakeup alarm
+// Set LP timer alarm for LP core wakeup (target 1, LP interrupt path).
+// Uses lp_timer_ll_clear_lp_alarm_intr_status (LP interrupt), not
+// lp_timer_ll_clear_alarm_intr_status (HP interrupt).
 static void lp_timer_set_wakeup(uint64_t us)
 {
-    // Read current LP timer count
-    lp_timer_hal_set_alarm_target(1, lp_timer_hal_get_cycle_count() + lp_timer_calculate_ticks(us));
+    uint64_t target = lp_timer_hal_get_cycle_count() + lp_timer_calculate_ticks(us);
+    lp_timer_ll_clear_lp_alarm_intr_status(&LP_TIMER);
+    lp_timer_ll_set_alarm_target(&LP_TIMER, 1, target);
+    lp_timer_ll_set_target_enable(&LP_TIMER, 1, true);
 }
+
+// ---------- LP core start/stop ----------
 
 void lp_core_start(uint64_t wakeup_period_us)
 {
-    // Reset LP core (C6 has no-op for these, but call for correctness)
     PERIPH_RCC_ATOMIC() {
         lp_core_ll_reset_register();
         lp_core_ll_enable_bus_clock(true);
@@ -145,27 +161,21 @@ void lp_core_start(uint64_t wakeup_period_us)
     lp_core_ll_stall_at_sleep_request(true);
     lp_core_ll_rst_at_sleep_enable(true);
 
+    // Disable debug module to save power during sleep
+    lp_core_ll_debug_module_enable(false);
+
     // Set wake-up source: LP timer
     lp_core_ll_set_wakeup_source(LP_CORE_LL_WAKEUP_SOURCE_LP_TIMER);
 
-    // Enable debug module (JTAG)
-    lp_core_ll_debug_module_enable(true);
-
-    // Write sleep duration to shared memory area so the LP core startup
-    // code can re-arm the timer after each main() return.
-    // Shared memory is at the end of the LP SRAM reservation.
+    // Write sleep duration to shared memory so LP core startup code
+    // can re-arm the timer after each main() return.
     uint32_t *base = (uint32_t *)SOC_RTC_DRAM_LOW;
     uint64_t *shared_mem = (uint64_t *)(base + (LP_CORE_RESERVE_MEM - LP_CORE_SHARED_MEM) / sizeof(uint32_t));
-    shared_mem[0] = wakeup_period_us;                    // sleep_duration_us
+    shared_mem[0] = wakeup_period_us;                           // sleep_duration_us
     shared_mem[1] = lp_timer_calculate_ticks(wakeup_period_us); // sleep_duration_ticks
 
     // Set first wakeup alarm
     lp_timer_set_wakeup(wakeup_period_us);
-
-    // Trigger the first LP core wakeup via HP CPU trigger
-    lp_core_ll_set_wakeup_source(
-        LP_CORE_LL_WAKEUP_SOURCE_LP_TIMER | LP_CORE_LL_WAKEUP_SOURCE_HP_CPU);
-    lp_core_ll_hp_wake_lp();
 }
 
 void lp_core_stop()

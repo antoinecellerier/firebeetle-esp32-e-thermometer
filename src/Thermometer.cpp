@@ -5,6 +5,8 @@
 #include "time.h"
 #include "stdlib.h"
 
+#include "Arduino.h"
+#include "esp_sleep.h"
 #ifndef DISABLE_WIFI
 #include "WiFi.h"
 #endif
@@ -85,9 +87,7 @@ void start_deep_sleep()
   {
     // ULP is polling the sensor — it will wake us when temperature changes
     esp_sleep_enable_ulp_wakeup();
-    // Timer safety net for periodic housekeeping (display clear, battery check)
-    esp_sleep_enable_timer_wakeup(ULP_SAFETY_NET_US);
-    LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", (int)(ULP_SAFETY_NET_US / 60000000ULL));
+    LOGI("Sleeping with ULP wakeup only");
   }
   else
   {
@@ -302,6 +302,7 @@ void on_first_boot()
 
   // TODO: double check that this effectively completely shuts off all wireless current consumption
   WiFi.disconnect(true, true);
+  LOGI("WiFi disconnected");
 #endif
 }
 
@@ -378,7 +379,6 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 
 void setup()
 {
-
   setup_serial();
 
 #ifdef PPK2_DEBUG
