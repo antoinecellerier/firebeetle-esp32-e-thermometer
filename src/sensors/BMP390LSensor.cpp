@@ -5,7 +5,6 @@
 
 #ifdef HAS_ULP_SUPPORT
 #include "BMP390LCompensation.h"
-RTC_DATA_ATTR bool ulp_running = false;
 RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
 #endif
 
@@ -22,9 +21,12 @@ RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
 // Only include LP core binary/symbols when BMP390L is the active sensor,
 // otherwise DummySensor provides its own LP core binary.
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP390L)
-#include "LpCoreProgram.h"
-#include "lp_core_main.h"
-#include "lp_core_main_bin.h"
+#include "ulp_lp_core.h"
+#include "lp_core_i2c.h"
+#include "ulp_main.h"
+
+extern const uint8_t ulp_main_bin_start[] asm("_binary_ulp_main_bin_start");
+extern const uint8_t ulp_main_bin_end[]   asm("_binary_ulp_main_bin_end");
 #endif
 
 
@@ -151,7 +153,6 @@ void BMP390LSensor::InitializeUlp()
     // Build and load ULP program into RTC slow memory, then start
     ulp_build_and_load_program();
     ulp_start();
-    ulp_running = true;
     LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
 }
 
@@ -185,14 +186,19 @@ void BMP390LSensor::InitializeUlp()
     delay(10);
 
     // Configure LP I2C hardware peripheral (GPIO6=SDA, GPIO7=SCL)
-    lp_core_i2c_setup();
+    lp_core_i2c_cfg_t i2c_cfg = LP_CORE_I2C_DEFAULT_CONFIG();
+    ESP_ERROR_CHECK(lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg));
 
     // Load and start the LP core binary
     uint64_t wakeup_us = (uint64_t)SLEEP_INTERVAL_S * 1000000ULL;
-    lp_core_load_binary(lp_core_main_bin, lp_core_main_bin_length);
-    lp_core_start(wakeup_us);
+    ESP_ERROR_CHECK(ulp_lp_core_load_binary(ulp_main_bin_start,
+                                            (ulp_main_bin_end - ulp_main_bin_start)));
+    ulp_lp_core_cfg_t cfg = {
+        .wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
+        .lp_timer_sleep_duration_us = (uint32_t)wakeup_us,
+    };
+    ESP_ERROR_CHECK(ulp_lp_core_run(&cfg));
 
-    ulp_running = true;
     LOGI("LP core started with %d µs wakeup period", (int)wakeup_us);
 }
 

@@ -197,3 +197,26 @@ Note: `-UARDUINO_USB_CDC_ON_BOOT` in build_flags alone doesn't work — Platform
 | USB CDC ON (default board config) | 5s | ~20.65 mA | ~20 mA | USB Serial/JTAG stays active — unusable |
 | USB CDC OFF, no WiFi, no LEDs, no display | 5s | ~415 µA | ~14 µA | Bare minimum config, DummySensor |
 | USB CDC OFF, WiFi on first boot, no display | 5s | ~428 µA | ~16 µA | WiFi.disconnect(true,true) fully powers down radio |
+
+## LP Core ULP (LP_CORE_IDLE mode, March 2026)
+
+Setup: Bare XIAO ESP32C6, no BMP390L connected. USB CDC OFF. LP core running in idle mode
+(no I2C, simulates sensor timing with 7ms delay). LP timer wakeup source. PPK2 at 3320 mV.
+
+| Config | LP timer interval | WAKE_EVERY | HP wakes every | Deep sleep floor | Notes |
+|--------|------------------|------------|----------------|-----------------|-------|
+| LP_CORE_IDLE | 5s | 6 | 30s | ~15 µA | LP spikes ~1mA, HP spikes 20-50mA |
+
+**Key findings:**
+- 15 µA deep sleep baseline — LP core timer + shared memory adds negligible overhead
+- LP core wakeup spikes: ~1 mA (7ms simulated sensor read time)
+- HP (main CPU) wakeup spikes: 20-50 mA (DummySensor, no WiFi, no display)
+- 1-minute average: ~90 µA (dominated by HP wakeups every 30s)
+- In production with BMP390L I2C mode + 60s LP timer, HP wakes only on ≥0.1°C temp change
+
+### Pending: BMP390L mode testing
+- Awaiting soldering station to connect BMP390L to C6 board
+- Switch `ulp/lp_core_main.c` from `#define LP_CORE_IDLE` to BMP390L I2C mode
+- Verify LP I2C reads work (GPIO6=SDA, GPIO7=SCL, LP_I2C_NUM_0)
+- Measure LP core power with real I2C transactions vs idle delay
+- Tune TEMP_DELTA_THRESHOLD (currently 20 ≈ 0.1°C) and SLEEP_INTERVAL_S (60s for production)

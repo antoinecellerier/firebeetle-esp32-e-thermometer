@@ -2,9 +2,11 @@
 #include "Arduino.h"
 
 #if !defined(NO_ULP) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
-#include "LpCoreProgram.h"
-#include "lp_core_main.h"
-#include "lp_core_main_bin.h"
+#include "ulp_lp_core.h"
+#include "ulp_main.h"
+
+extern const uint8_t ulp_main_bin_start[] asm("_binary_ulp_main_bin_start");
+extern const uint8_t ulp_main_bin_end[]   asm("_binary_ulp_main_bin_end");
 #endif
 
 DummySensor::DummySensor()
@@ -25,8 +27,14 @@ bool DummySensor::SupportsUlp()
 void DummySensor::InitializeUlp()
 {
     LOGI("Starting LP core (idle mode, no I2C)");
-    lp_core_load_binary(lp_core_main_bin, lp_core_main_bin_length);
-    lp_core_start((uint64_t)SLEEP_INTERVAL_S * 1000000ULL);
+    uint32_t wakeup_us = (uint32_t)SLEEP_INTERVAL_S * 1000000U;
+    ESP_ERROR_CHECK(ulp_lp_core_load_binary(ulp_main_bin_start,
+                                            (ulp_main_bin_end - ulp_main_bin_start)));
+    ulp_lp_core_cfg_t cfg = {
+        .wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
+        .lp_timer_sleep_duration_us = wakeup_us,
+    };
+    ESP_ERROR_CHECK(ulp_lp_core_run(&cfg));
 }
 
 bool DummySensor::ReadUlpTemperature(float *temp_out)

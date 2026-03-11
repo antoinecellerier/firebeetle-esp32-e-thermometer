@@ -6,4 +6,5 @@
 .vscode/settings.json
 core
 .dummy/
-sdkconfig.defaults
+sdkconfig.*
+managed_components/
