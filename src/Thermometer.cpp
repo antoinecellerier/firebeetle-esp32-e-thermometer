@@ -7,6 +7,7 @@
 
 #include "Arduino.h"
 #include "esp_sleep.h"
+#include <math.h>
 #ifndef DISABLE_WIFI
 #include "WiFi.h"
 #endif
@@ -42,6 +43,11 @@
   #error "Unknown sensor type"
 #endif
 
+// Magic value to detect stale RTC memory after firmware change.
+// Increment this whenever the RTC_DATA_ATTR layout changes.
+#define RTC_LAYOUT_VERSION 0xDA020001
+RTC_DATA_ATTR uint32_t rtc_layout_version = 0;
+
 RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int display_refresh_count = 0;
 
@@ -56,12 +62,118 @@ RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
 RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 
+// Temperature history for 24h sparkline
+RTC_DATA_ATTR TempReading temp_history[TEMP_HISTORY_SIZE];
+RTC_DATA_ATTR uint8_t temp_history_count = 0;
+RTC_DATA_ATTR uint8_t temp_history_idx = 0;
+
+// Min/max temperature since boot
+RTC_DATA_ATTR float min_temp_since_boot = 999.0f;
+RTC_DATA_ATTR float max_temp_since_boot = -999.0f;
+
+// Daily summaries for 30-day range chart
+RTC_DATA_ATTR DailySummary daily_history[DAILY_HISTORY_SIZE];
+RTC_DATA_ATTR uint8_t daily_history_count = 0;
+RTC_DATA_ATTR uint8_t daily_history_idx = 0;
+RTC_DATA_ATTR uint8_t current_day = 0;
+RTC_DATA_ATTR int16_t current_day_min_x10 = 9990;
+RTC_DATA_ATTR int16_t current_day_max_x10 = -9990;
+
+static void append_temp_history(time_t now, float temp)
+{
+  temp_history[temp_history_idx] = { now, (int16_t)(temp * 10) };
+  temp_history_idx = (temp_history_idx + 1) % TEMP_HISTORY_SIZE;
+  if (temp_history_count < TEMP_HISTORY_SIZE)
+    temp_history_count++;
+}
+
+static void update_daily_history(const struct tm *nowtm, float temp)
+{
+  int16_t temp_x10 = (int16_t)(temp * 10);
+  uint8_t day = nowtm->tm_mday;
+
+  if (current_day != 0 && current_day != day)
+  {
+    // Day changed — save the completed day's summary.
+    // Derive the month from today's date: if today is the 1st, the completed
+    // day was in the previous month. This is correct for single-day transitions;
+    // multi-day skips across month boundaries would tag with the wrong month,
+    // but that can't happen in practice (ULP_SAFETY_NET_US wakes every hour).
+    uint8_t completed_month = nowtm->tm_mon + 1;
+    if (day == 1)
+      completed_month = (completed_month == 1) ? 12 : completed_month - 1;
+
+    daily_history[daily_history_idx] = {
+      current_day_min_x10, current_day_max_x10,
+      current_day, completed_month
+    };
+    daily_history_idx = (daily_history_idx + 1) % DAILY_HISTORY_SIZE;
+    if (daily_history_count < DAILY_HISTORY_SIZE)
+      daily_history_count++;
+
+    // Reset accumulators for new day
+    current_day_min_x10 = 9990;
+    current_day_max_x10 = -9990;
+  }
+
+  current_day = day;
+  if (temp_x10 < current_day_min_x10)
+    current_day_min_x10 = temp_x10;
+  if (temp_x10 > current_day_max_x10)
+    current_day_max_x10 = temp_x10;
+}
+
+static void update_temp_extremes(float temp)
+{
+  if (temp < min_temp_since_boot)
+    min_temp_since_boot = temp;
+  if (temp > max_temp_since_boot)
+    max_temp_since_boot = temp;
+}
+
+#ifdef MOCK_DISPLAY_DATA
+#include "MockData.h"
+
+static void fill_mock_data(time_t now)
+{
+  mock_fill_sparkline(now, temp_history, &temp_history_count, &temp_history_idx);
+  mock_fill_daily(now, daily_history, &daily_history_count, &daily_history_idx);
+
+  min_temp_since_boot = 18.5f;
+  max_temp_since_boot = 22.8f;
+  previous_temp = 22.1f;
+
+  struct tm today_tm;
+  localtime_r(&now, &today_tm);
+  current_day = today_tm.tm_mday;
+  current_day_min_x10 = 195;  // 19.5°C
+  current_day_max_x10 = 223;  // 22.3°C
+}
+#endif
+
 DisplayStats make_display_stats()
 {
+  // Compute circular buffer start index (oldest entry)
+  uint8_t history_start = (temp_history_count < TEMP_HISTORY_SIZE)
+    ? 0
+    : temp_history_idx;
+  uint8_t daily_start = (daily_history_count < DAILY_HISTORY_SIZE)
+    ? 0
+    : daily_history_idx;
+
+  // Map ESP-IDF wake cause to a portable int for display
+  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  int wake = (cause == ESP_SLEEP_WAKEUP_ULP) ? 1 :
+             (cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 : 0;
+
   return {
     boot_count, previous_boot_count, display_refresh_count,
     first_boot_time, next_clear_time, max_battery_mv, bad_pin27_count,
-    sensor.SupportsUlp()
+    sensor.SupportsUlp(), wake,
+    previous_temp, min_temp_since_boot, max_temp_since_boot,
+    temp_history, temp_history_count, history_start,
+    daily_history, daily_history_count, daily_start,
+    current_day_min_x10, current_day_max_x10, current_day
   };
 }
 
@@ -349,9 +461,19 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   struct tm nowtm;
   get_time(&now, &nowtm);
 
-  LOGI("now: %d. next clear time: %d. first boot time: %d", now, next_clear_time, first_boot_time);
-  if (!periodic_display_clear(now, nowtm) &&
-      abs(temp - previous_temp) < 0.1) // TODO: check rounded up temp as that's what really matters for the display
+  update_temp_extremes(temp);
+  update_daily_history(&nowtm, temp);
+
+  LOGI("now: %ld. next clear time: %ld. first boot time: %ld. prev_temp: %.1f",
+       (long)now, (long)next_clear_time, (long)first_boot_time, previous_temp);
+#ifdef MOCK_DISPLAY_DATA
+  // Override sensor reading to match mock data range so it doesn't
+  // distort the chart Y-axis (DummySensor returns a constant 12.3°C)
+  temp = 22.3f;
+#endif
+  bool should_refresh = periodic_display_clear(now, nowtm) ||
+                         fabsf(temp - previous_temp) >= 0.1f;
+  if (!should_refresh)
   {
     LOGI("temperature hasn't changed significantly, no need to refresh display");
   }
@@ -360,6 +482,8 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
     display_refresh_count++;
     if (max_battery_mv < battery_mv)
       max_battery_mv = battery_mv;
+
+    append_temp_history(now, temp);
 
     PPK2_DISPLAY_HIGH();
     display_show_temperature(temp, battery_mv, battery_mv < low_battery_mv,
@@ -386,6 +510,30 @@ void setup()
   pinMode(PPK2_PIN_DISPLAY, OUTPUT);
 #endif
   PPK2_CPU_ACTIVE_HIGH();
+
+  // Detect stale RTC memory from a different firmware version
+  if (rtc_layout_version != RTC_LAYOUT_VERSION)
+  {
+    LOGI("RTC layout version mismatch — resetting all RTC state");
+    boot_count = 0;
+    display_refresh_count = 0;
+    first_boot_time = 0;
+    next_clear_time = 0;
+    previous_temp = -1;
+    previous_boot_count = -1;
+    max_battery_mv = 0;
+    bad_pin27_count = 0;
+    temp_history_count = 0;
+    temp_history_idx = 0;
+    min_temp_since_boot = 999.0f;
+    max_temp_since_boot = -999.0f;
+    daily_history_count = 0;
+    daily_history_idx = 0;
+    current_day = 0;
+    current_day_min_x10 = 9990;
+    current_day_max_x10 = -9990;
+    rtc_layout_version = RTC_LAYOUT_VERSION;
+  }
 
   boot_count++;
   if (boot_count != 1)
@@ -422,6 +570,20 @@ void setup()
     on_first_boot();
     clear_status_led(); // TODO: double check that this stops drawing power
   }
+
+#ifdef MOCK_DISPLAY_DATA
+  // Fill mock data if history is empty (handles both first boot and stale RTC
+  // memory after firmware upload without power-cycle)
+  if (temp_history_count == 0)
+  {
+    time_t mock_now;
+    struct tm mock_nowtm;
+    get_time(&mock_now, &mock_nowtm);
+    fill_mock_data(mock_now);
+    // Force display refresh by invalidating previous_temp
+    previous_temp = -999;
+  }
+#endif
 
   float temp = read_temperature();
   refresh_and_sleep(battery_mv, temp);
