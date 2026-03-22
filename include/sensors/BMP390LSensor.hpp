@@ -1,5 +1,6 @@
 #pragma once
 #include "Sensor.hpp"
+#include "local-secrets.h"
 
 #include "DFRobot_BMP3XX.h"
 

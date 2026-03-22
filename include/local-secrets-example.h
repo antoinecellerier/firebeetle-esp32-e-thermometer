@@ -23,6 +23,9 @@
 //#define USE_154_Z90 // Tri-Color 200x200 1.54" with 15s full refresh
 //#define USE_154_M09 // Bi-Color 200x200 1.54" with partial updates and 0.83s full refresh
 #define USE_213_M21 // Bi-Color 212x104 2.13" DES with 3s full refresh
+//#define USE_290_I6FD  // Bi-Color 296x128 2.9" flexible (GDEW029I6FD, UC8151D) with partial updates
+//#define USE_154_GDEY  // Bi-Color 200x200 1.54" flexible (GDEM0154I61 via GDEY0154D67 compat driver, SSD1681)
+//#define USE_576_T81   // Bi-Color 920x680 5.76" HD (GDEH0576T81, SSD2677) with partial updates
 
 // Select active sensor
 //#define USE_DS18B20_PAR

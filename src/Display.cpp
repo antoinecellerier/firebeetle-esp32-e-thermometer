@@ -20,11 +20,28 @@
 #elif defined(USE_213_M21)
   GxEPD2_BW<GxEPD2_213_M21, GxEPD2_213_M21::HEIGHT> display(GxEPD2_213_M21(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
   #define EPD_RED GxEPD_BLACK
+#elif defined(USE_290_I6FD)
+  GxEPD2_BW<GxEPD2_290_I6FD, GxEPD2_290_I6FD::HEIGHT> display(GxEPD2_290_I6FD(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  #define EPD_RED GxEPD_BLACK
+#elif defined(USE_154_GDEY)
+  GxEPD2_BW<GxEPD2_154_GDEY0154D67, GxEPD2_154_GDEY0154D67::HEIGHT> display(GxEPD2_154_GDEY0154D67(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  #define EPD_RED GxEPD_BLACK
+#elif defined(USE_576_T81)
+  // Heap-allocate: the 78KB buffer won't fit in static BSS alongside other globals,
+  // but there's plenty of heap. Paged rendering doesn't work (SSD2677 requires full-screen writes).
+  static auto& display = *new GxEPD2_BW<GxEPD2_576_GDEH0576T81, GxEPD2_576_GDEH0576T81::HEIGHT>(GxEPD2_576_GDEH0576T81(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  #define EPD_RED GxEPD_BLACK
 #else
   #error Unknown screen type
 #endif
 #define EPD_BLACK GxEPD_BLACK
 #define EPD_WHITE GxEPD_WHITE
+
+#ifdef USE_576_T81
+  #define TEXT_SCALE 6
+#else
+  #define TEXT_SCALE 1
+#endif
 
 static const time_t one_day = 86400;
 
@@ -34,8 +51,10 @@ static void init_for_render(int boot_count)
   display.init(0 /* disable serial debug output */,
                boot_count == 1 /* allow partial updates directly after power-up for non first runs */);
   display.cp437(true);
-  #ifdef USE_213_M21
+  #if defined(USE_213_M21) || defined(USE_290_I6FD)
   display.setRotation(1);
+  #elif defined(USE_576_T81)
+  display.setRotation(0);
   #else
   display.setRotation(2);
   #endif
@@ -46,7 +65,7 @@ static void render_stats(time_t now, const struct tm *nowtm, const DisplayStats 
 {
   char formatted_time[256];
 
-  display.setTextSize(1);
+  display.setTextSize(1 * TEXT_SCALE);
   display.setTextColor(EPD_RED);
   display.printf("seq %d (was %d). refresh %d\n", stats.boot_count, stats.previous_boot_count, stats.display_refresh_count);
   // TODO: Maybe don't format this every time we render?
@@ -94,12 +113,12 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
   init_for_render(stats.boot_count);
 
   LOGI("Display text");
-  display.setTextSize(3);
-  display.setCursor(10, 10);
+  display.setTextSize(3 * TEXT_SCALE);
+  display.setCursor(10 * TEXT_SCALE, 10 * TEXT_SCALE);
   display.setTextColor(EPD_BLACK);
   display.printf("%.1f C\n", temp);
 
-  display.setTextSize(2);
+  display.setTextSize(2 * TEXT_SCALE);
   if (low_battery)
     display.setTextColor(EPD_RED);
   display.printf("%s %d mV\n", low_battery ? "LOW BAT" : "bat", battery_mv);
@@ -136,20 +155,20 @@ void display_show_empty_battery(uint32_t battery_mv, time_t now,
   display.setTextColor(EPD_RED);
   if (display.height() < 200)
   {
-    display.setTextSize(2);
+    display.setTextSize(2 * TEXT_SCALE);
     display.printf("  EMPTY BATTERY\n"
                    "    RECHARGE!\n");
   }
   else
   {
-    display.setTextSize(3);
+    display.setTextSize(3 * TEXT_SCALE);
     display.printf("\n\n"
                   "   EMPTY\n"
                   "  BATTERY\n"
                   " RECHARGE!\n"
                   "\n");
   }
-  display.setTextSize(2);
+  display.setTextSize(2 * TEXT_SCALE);
   display.setTextColor(EPD_BLACK);
   display.printf("   bat %d mV\n", battery_mv);
 
