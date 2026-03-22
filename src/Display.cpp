@@ -100,7 +100,6 @@ void display_show_pin27_diagnostic(int boot_count)
 }
 
 void display_show_empty_battery(uint32_t battery_mv, time_t now,
-                                const struct tm *nowtm,
                                 const DisplayStats &stats)
 {
 #ifndef DISABLE_DISPLAY

@@ -1,5 +1,4 @@
 #include "DisplayRenderer.h"
-#include "icons.h"
 
 #include <math.h>
 #include "Adafruit_GFX.h"
@@ -53,24 +52,6 @@ static void draw_battery_icon(Adafruit_GFX &gfx, int16_t x, int16_t y,
   int16_t fill_w = (int16_t)((w - 4) * fill);
   if (fill_w > 0)
     gfx.fillRect(x + 2, y + 2, fill_w, h - 4, color);
-}
-
-// Draw a 1-bit bitmap with optional integer scaling (for trend arrows).
-static void draw_scaled_bitmap(Adafruit_GFX &gfx, int16_t x, int16_t y,
-                                const uint8_t *bitmap,
-                                int16_t bw, int16_t bh,
-                                uint8_t scale, uint16_t color)
-{
-  int16_t bytes_per_row = (bw + 7) / 8;
-  for (int16_t j = 0; j < bh; j++)
-    for (int16_t i = 0; i < bw; i++)
-      if (pgm_read_byte(&bitmap[j * bytes_per_row + i / 8]) & (0x80 >> (i & 7)))
-      {
-        if (scale <= 1)
-          gfx.drawPixel(x + i, y + j, color);
-        else
-          gfx.fillRect(x + i * scale, y + j * scale, scale, scale, color);
-      }
 }
 
 // --- Layout computation ---
@@ -127,7 +108,7 @@ Layout compute_layout(int16_t w, int16_t h)
   {
     // Stacked: temp, sparkline, monthly, info, footer (200x200, 920x680)
     bool large_display = (h >= 400);
-    int16_t footer_h = large_display ? 24 : 12;
+    int16_t footer_h = large_display ? 30 : 12;
     int16_t info_h = large_display ? 30 : 22;
     int16_t remaining = h - footer_h - info_h;
 
@@ -170,7 +151,7 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
   char temp_str[16];
   snprintf(temp_str, sizeof(temp_str), "%.1f", temp);
 
-  // Measure digits in the big font
+  // Measure digits and "C" suffix (same font for consistent sizing)
   gfx.setFont(L.big_font);
   gfx.setTextSize(1);
   gfx.setTextColor(EPD_BLACK);
@@ -179,27 +160,18 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
   uint16_t tbw, tbh;
   gfx.getTextBounds(temp_str, 0, 0, &tbx, &tby, &tbw, &tbh);
 
-  // "C" suffix uses the same font as the digits for consistent sizing
-  gfx.setFont(L.big_font);
   int16_t cx, cy; uint16_t cw, ch;
   gfx.getTextBounds("C", 0, 0, &cx, &cy, &cw, &ch);
-  int16_t suffix_w = 12 + cw; // space + "C"
+  int16_t suffix_w = 12 + cw; // gap + "C"
 
-  // Center digits + suffix horizontally
-  gfx.setFont(L.big_font);
-  gfx.setTextSize(1);
+  // Center temperature + suffix horizontally and vertically in zone
   int16_t text_x = z.x + (z.w - (int16_t)(tbw + suffix_w)) / 2 - tbx;
-
-  // Center temperature vertically in zone
   int16_t baseline_y = z.y + (z.h + tbh) / 2;
 
   gfx.setCursor(text_x, baseline_y);
   gfx.print(temp_str);
 
-  // "C" suffix in FreeSansBold24pt (proportionate complement to large digits)
   int16_t after_x = gfx.getCursorX();
-  gfx.setFont(L.big_font);
-  gfx.setTextSize(1);
   gfx.setCursor(after_x + 12, baseline_y);
   gfx.print("C");
 }
@@ -287,7 +259,8 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
       int16_t lx, ly; uint16_t lw, lh;
       snprintf(label, sizeof(label), "%d", deg);
       gfx.getTextBounds(label, 0, 0, &lx, &ly, &lw, &lh);
-      gfx.setCursor(zone.x + label_w - lw - 3 - lx, gy + lh / 2);
+      int16_t label_gap = large ? 12 : 3;
+      gfx.setCursor(zone.x + label_w - lw - label_gap - lx, gy + lh / 2);
       gfx.print(label);
     }
   }
@@ -544,7 +517,8 @@ void render_monthly_bars(Adafruit_GFX &gfx, const Rect &zone,
       int16_t lx, ly; uint16_t lw, lh;
       snprintf(label, sizeof(label), "%d", deg);
       gfx.getTextBounds(label, 0, 0, &lx, &ly, &lw, &lh);
-      gfx.setCursor(zone.x + label_w - lw - 3 - lx, gy + lh / 2);
+      int16_t label_gap = large ? 12 : 3;
+      gfx.setCursor(zone.x + label_w - lw - label_gap - lx, gy + lh / 2);
       gfx.print(label);
     }
   }
@@ -634,7 +608,7 @@ void render_info(Adafruit_GFX &gfx, int16_t x, int16_t y, int16_t w,
   int16_t bat_h = bat_w / 2;
 
   // Measure text to compute vertical centering within the info zone
-  const GFXfont *info_font = compact ? &Org_01 : &FreeSans9pt7b;
+  const GFXfont *info_font = compact ? &Org_01 : (large ? &FreeSans12pt7b : &FreeSans9pt7b);
   gfx.setFont(info_font);
   gfx.setTextSize(1);
 
@@ -660,7 +634,7 @@ void render_info(Adafruit_GFX &gfx, int16_t x, int16_t y, int16_t w,
   int16_t text_baseline = mid_y + text_h / 2;
 
   gfx.setTextColor(bat_color);
-  gfx.setCursor(bat_x + bat_w + 6, text_baseline);
+  gfx.setCursor(bat_x + bat_w + (large ? 12 : 6), text_baseline);
   gfx.print(bat_str);
 
   // Time, right-aligned, same baseline
@@ -679,7 +653,7 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
   draw_hline(gfx, zone.x, zone.y, zone.w, EPD_BLACK);
 
   bool large = (zone.w >= 600);
-  gfx.setFont(large ? &FreeSans9pt7b : &Org_01);
+  gfx.setFont(large ? &FreeSans12pt7b : &Org_01);
   gfx.setTextSize(1);
   gfx.setTextColor(EPD_BLACK);
 
@@ -695,7 +669,7 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
     "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
   };
   char boot_date[12] = "";
-  if (stats.first_boot_time > 86400)
+  if (stats.ntp_synced)
   {
     struct tm bt;
     localtime_r(&stats.first_boot_time, &bt);
@@ -704,7 +678,9 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
   }
 
   // Center text vertically in the footer zone
-  int16_t footer_text_y = zone.y + (large ? zone.h / 2 + 5 : 8);
+  int16_t fx, fy; uint16_t fw, fh;
+  gfx.getTextBounds("M", 0, 0, &fx, &fy, &fw, &fh);
+  int16_t footer_text_y = zone.y + zone.h / 2 + (-fy) / 2;
 
   // Compact uptime: skip "0h", show hours only when non-zero
   char uptime_str[12];
@@ -725,6 +701,45 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
     gfx.printf(" %s", boot_date);
 }
 
+// --- Status indicators (top-left corner of temp zone) ---
+
+static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
+                                       const DisplayStats &stats)
+{
+  // Only render when there's an issue — no clutter when things are normal
+  if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok)
+    return;
+
+  bool large = (L.dh >= 400 || L.dw >= 600);
+  gfx.setFont(large ? &FreeSans12pt7b : &Org_01);
+  gfx.setTextSize(1);
+  gfx.setTextColor(EPD_BLACK);
+
+  int16_t x = L.temp.x + 4;
+  int16_t y = L.temp.y + (large ? 16 : 8);
+  int16_t line_h = large ? 18 : 9;
+
+  if (!stats.wifi_ok)
+  {
+    gfx.setCursor(x, y);
+    gfx.print("! NO WIFI");
+    y += line_h;
+  }
+  else if (!stats.ntp_synced)
+  {
+    // WiFi connected but NTP failed — different root cause
+    gfx.setCursor(x, y);
+    gfx.print("! NO NTP");
+    y += line_h;
+  }
+
+  if (!stats.sensor_ok)
+  {
+    gfx.setCursor(x, y);
+    gfx.print("! SENSOR");
+  }
+}
+
 // --- Full dashboard render ---
 
 void render_dashboard(Adafruit_GFX &gfx, int16_t w, int16_t h,
@@ -735,6 +750,7 @@ void render_dashboard(Adafruit_GFX &gfx, int16_t w, int16_t h,
   Layout L = compute_layout(w, h);
 
   render_temperature(gfx, L, temp, stats);
+  render_status_indicators(gfx, L, stats);
   render_sparkline(gfx, L.spark, stats, now);
   render_monthly_bars(gfx, L.month, stats);
 
@@ -806,9 +822,8 @@ void render_empty_battery(Adafruit_GFX &gfx, int16_t w, int16_t h,
     int16_t line_h = ascent + 5;
 
     // Stack from top: center the 3-line warning block vertically
-    int16_t warn_h = ascent + line_h * 2; // first line ascent + 2 gaps
-    int16_t bat_h = 14; // space for voltage line
-    int16_t total_h = warn_h + bat_h;
+    int16_t warn_h = ascent + line_h * 2;
+    int16_t total_h = warn_h;
     int16_t y_start = max((int16_t)2, (int16_t)((avail_h - total_h) / 2));
     int16_t y1 = y_start + ascent; // first baseline
 

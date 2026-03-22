@@ -79,6 +79,11 @@ RTC_DATA_ATTR uint8_t current_day = 0;
 RTC_DATA_ATTR int16_t current_day_min_x10 = 9990;
 RTC_DATA_ATTR int16_t current_day_max_x10 = -9990;
 
+// Status flags for display error indicators
+RTC_DATA_ATTR bool wifi_ok = false;
+RTC_DATA_ATTR bool ntp_synced = false;
+RTC_DATA_ATTR bool last_sensor_ok = true;
+
 static void append_temp_history(time_t now, float temp)
 {
   temp_history[temp_history_idx] = { now, (int16_t)(temp * 10) };
@@ -169,7 +174,7 @@ DisplayStats make_display_stats()
   return {
     boot_count, previous_boot_count, display_refresh_count,
     first_boot_time, next_clear_time, max_battery_mv, bad_pin27_count,
-    sensor.SupportsUlp(), wake,
+    sensor.SupportsUlp(), wake, wifi_ok, ntp_synced, last_sensor_ok,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     temp_history, temp_history_count, history_start,
     daily_history, daily_history_count, daily_start,
@@ -365,7 +370,7 @@ void handle_permanent_shutdown(uint32_t battery_mv)
       time_t now;
       struct tm nowtm;
       get_time(&now, &nowtm);
-      display_show_empty_battery(battery_mv, now, &nowtm, make_display_stats());
+      display_show_empty_battery(battery_mv, now, make_display_stats());
     }
 
     for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
@@ -379,6 +384,8 @@ void on_first_boot()
 {
 #ifdef DISABLE_WIFI
   LOGI("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.");
+  // Not an error — suppress "! NO WIFI" indicator on display
+  wifi_ok = true;
   set_status_led(rgb(255, 255, 0));
   delay(100);
 #else
@@ -391,28 +398,41 @@ void on_first_boot()
     return;
   }
 
-  // Connect to WiFi
+  // Connect to WiFi with timeout (avoids hanging forever if network is down)
   LOGI("Connecting to WiFi");
   set_status_led(rgb(0, 0, 255));
 
   WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
+  unsigned long wifi_start = millis();
+  const unsigned long WIFI_TIMEOUT_MS = 15000;
   while (!WiFi.isConnected())
   {
+    if (millis() - wifi_start > WIFI_TIMEOUT_MS)
+    {
+      LOGI("WiFi connection timed out after %lu ms", WIFI_TIMEOUT_MS);
+      WiFi.disconnect(true, true);
+      // wifi_ok stays false, ntp_synced stays false
+      return;
+    }
     delay(100);
     LOGI("Waiting for WiFi");
   }
   LOGI("Connected to WiFi");
+  wifi_ok = true;
 
-  // Synchronize time
+  // Synchronize time via NTP
   LOGI("Synchronizing time");
   set_status_led(rgb(0, 255, 0));
-  // Example TZ formats are available at https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
   configTzTime(MY_TZ, "pool.ntp.org");
   struct tm t;
-  getLocalTime(&t, 30000U /* max wait time in ms */); // Wait for time to have synced
+  getLocalTime(&t, 30000U /* max wait time in ms */);
   first_boot_time = mktime(&t);
 
-  // TODO: double check that this effectively completely shuts off all wireless current consumption
+  // Verify sync succeeded (time should be well past epoch)
+  ntp_synced = (first_boot_time > 86400 * 365);
+  if (!ntp_synced)
+    LOGI("NTP sync failed — time is unreliable");
+
   WiFi.disconnect(true, true);
   LOGI("WiFi disconnected");
 #endif
@@ -532,6 +552,9 @@ void setup()
     current_day = 0;
     current_day_min_x10 = 9990;
     current_day_max_x10 = -9990;
+    wifi_ok = false;
+    ntp_synced = false;
+    last_sensor_ok = true;
     rtc_layout_version = RTC_LAYOUT_VERSION;
   }
 
@@ -557,9 +580,12 @@ void setup()
     float temp;
     if (sensor.ReadUlpTemperature(&temp))
     {
+      last_sensor_ok = true;
       refresh_and_sleep(battery_mv, temp);
       return; // never reached
     }
+    // ULP I2C error — fall through to normal sensor read
+    last_sensor_ok = false;
     // ULP I2C error — fall through to normal sensor read
   }
 

@@ -31,7 +31,10 @@ struct DisplayStats {
   uint32_t max_battery_mv;
   uint32_t bad_pin27_count;
   bool ulp_supported;
-  int wake_cause;  // 0=unknown, 1=ULP, 2=timer, 3=other (for footer debug)
+  int wake_cause;      // 0=unknown, 1=ULP, 2=timer (for footer debug)
+  bool wifi_ok;        // true if WiFi connected on first boot
+  bool ntp_synced;     // true if NTP time sync succeeded
+  bool sensor_ok;      // false if last sensor read had an error/fallback
 
   // Temperature context
   float previous_temp;
@@ -65,5 +68,4 @@ void display_show_pin27_diagnostic(int boot_count);
 
 // Show empty battery warning with stats before permanent shutdown.
 void display_show_empty_battery(uint32_t battery_mv, time_t now,
-                                const struct tm *nowtm,
                                 const DisplayStats &stats);

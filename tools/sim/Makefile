@@ -18,7 +18,7 @@ TARGET := render_display
 all: $(TARGET)
 
 $(TARGET): sim_main.cpp $(PROJECT_ROOT)/src/DisplayRenderer.cpp \
-           $(wildcard $(PROJECT_ROOT)/include/*.h) stubs/Arduino.h
+           $(wildcard $(PROJECT_ROOT)/include/*.h) $(wildcard stubs/*.h)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ \
 		sim_main.cpp \
 		$(PROJECT_ROOT)/src/DisplayRenderer.cpp \

@@ -131,7 +131,7 @@ Font selection is based on display dimensions:
 - Adaptive gridline step: same logic as sparkline
 - Y labels suppressed near bottom edge to avoid overlap with X-axis date labels
 - X-axis date labels every 7th day in "Mar 7" format (month abbreviation + day number)
-- Date labels shown only when chart_h > 50 and total_pts > 7
+- Date labels shown only when chart_h > 20 and total_pts > 7
 
 ### Info Bar
 - Battery icon with proportional fill level (3000-4200mV range, nub on right end)
@@ -146,12 +146,12 @@ Font selection is based on display dimensions:
 ### Footer
 - Separated from content by 1px horizontal line
 - Unified format across all display sizes:
-  `#N rN Nd w:X V.VV DateN`
+  `#N rN Nd w:X mxV.VV DateN'YY`
   - `#N` -- boot count
   - `rN` -- display refresh count
   - `Nd` or `NdMh` -- uptime in days (hours appended only when non-zero)
   - `w:X` -- wake cause (ULP, TMR, or ?)
-  - `V.VV` -- max battery voltage ever seen (as `%.1fV`)
+  - `mxV.VV` -- max battery voltage ever seen (as `mx%.1fV`)
   - `b27:N` -- bad pin27 count (omitted when zero)
   - `DateN'YY` -- first boot date as "MonDD'YY" (e.g. "Mar10'25"), omitted if NTP not yet synced
 - FreeSans9pt on large displays (w >= 600), Org_01 on small

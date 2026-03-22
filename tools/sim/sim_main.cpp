@@ -103,7 +103,28 @@ int main(int argc, char **argv)
                       now, &nowtm, stats);
     save_and_convert(cfg.name, "_lowbat", canvas);
 
-    // Scenario 3: Empty battery shutdown screen
+    // Scenario 3: WiFi failure + sensor error
+    canvas.fillScreen(0xFFFF);
+    DisplayStats err_stats = stats;
+    err_stats.wifi_ok = false;
+    err_stats.ntp_synced = false;
+    err_stats.sensor_ok = false;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, err_stats);
+    save_and_convert(cfg.name, "_nowifi", canvas);
+
+    // Scenario 4: WiFi connected but NTP failed
+    canvas.fillScreen(0xFFFF);
+    err_stats.wifi_ok = true;
+    err_stats.ntp_synced = false;
+    err_stats.sensor_ok = true;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, err_stats);
+    save_and_convert(cfg.name, "_nontp", canvas);
+
+    // Scenario 5: Empty battery shutdown screen
     canvas.fillScreen(0xFFFF);
     render_empty_battery(canvas, cfg.w, cfg.h,
                           2950, now, stats);
