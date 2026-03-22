@@ -4,7 +4,6 @@ GFX_LIB := $(PROJECT_ROOT)/.pio/libdeps/dfrobot_firebeetle2_esp32e_debug/Adafrui
 CXX := g++
 CXXFLAGS := -std=c++17 -O2 -Wall -Wno-unused-parameter -DARDUINO=200
 
-# Include paths: stubs first (to override Arduino.h), then project headers, then GFX lib
 INCLUDES := \
 	-I$(CURDIR)/stubs \
 	-I$(PROJECT_ROOT)/include \
@@ -12,13 +11,21 @@ INCLUDES := \
 	-I"$(GFX_LIB)/Fonts"
 
 TARGET := render_display
+FONT_SCRIPT := $(PROJECT_ROOT)/scripts/generate_font.py
+FONT_STAMP := $(PROJECT_ROOT)/include/generated/.stamp
 
-.PHONY: all clean render
+.PHONY: all clean render screenshots
 
 all: $(TARGET)
 
-$(TARGET): sim_main.cpp $(PROJECT_ROOT)/src/DisplayRenderer.cpp \
-           $(wildcard $(PROJECT_ROOT)/include/*.h) $(wildcard stubs/*.h)
+# Generate fonts only when the script changes or stamp is missing
+$(FONT_STAMP): $(FONT_SCRIPT)
+	python3 $(FONT_SCRIPT) --all
+	touch $@
+
+$(TARGET): $(FONT_STAMP) sim_main.cpp $(PROJECT_ROOT)/src/DisplayRenderer.cpp \
+           $(wildcard $(PROJECT_ROOT)/include/*.h) $(wildcard $(PROJECT_ROOT)/include/generated/*.h) \
+           $(wildcard stubs/*.h)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ \
 		sim_main.cpp \
 		$(PROJECT_ROOT)/src/DisplayRenderer.cpp \
@@ -31,4 +38,4 @@ screenshots: $(TARGET)
 	cd $(PROJECT_ROOT) && tools/sim/$(TARGET)
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(FONT_STAMP)

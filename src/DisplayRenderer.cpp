@@ -2,9 +2,13 @@
 
 #include <math.h>
 #include "Adafruit_GFX.h"
+// Temperature font: generated at build time based on display resolution.
+// The TEMP_FONT macro is defined in generated/font_config.h.
+#include "generated/font_config.h"
+// Fallback fonts from Adafruit GFX library (used for secondary elements
+// and on displays where the optimal size matches a library font)
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
-#include "FreeSansBold80pt7b.h"
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/Org_01.h>
@@ -64,15 +68,10 @@ Layout compute_layout(int16_t w, int16_t h)
   // Threshold 1.5: 296x128 (2.31) and 212x104 (2.04) are landscape,
   // 920x680 (1.35) and 200x200 (1.0) use stacked portrait.
   L.landscape = (w > h * 15 / 10);
-  // Font selection by display size:
-  //   96pt (native ~140px digits) — large displays (920x680)
-  //   24pt (native ~35px digits)  — medium displays (296x128, 200x200)
-  //   18pt (native ~26px digits)  — small displays (212x104)
-  // All rendered at setTextSize(1) — no scaling, no aliasing.
-  if (min(w, h) >= 400)
-    L.big_font = &FreeSansBold80pt7b;
-  else
-    L.big_font = &FreeSansBold24pt7b;
+  // Temperature font: computed at build time by scripts/generate_font.py
+  // based on display resolution. get_temp_font() is defined in
+  // generated/font_config.h and returns the optimal font for any display size.
+  L.big_font = get_temp_font(w, h);
 
   if (L.landscape)
   {
@@ -101,8 +100,8 @@ Layout compute_layout(int16_t w, int16_t h)
     L.info  = {0, 0, 0, 0};  // info embedded in temp zone bottom
     L.foot  = {0, content_h, w, footer_h};
 
-    if (content_h < 100)
-      L.big_font = &FreeSansBold18pt7b;
+    // No font downgrade needed — the build-time font generator already
+    // computed the optimal size for this display's resolution.
   }
   else
   {
@@ -786,9 +785,9 @@ void render_empty_battery(Adafruit_GFX &gfx, int16_t w, int16_t h,
 
   if (large)
   {
-    // Big display: use 24pt at 2x for maximum impact
-    gfx.setFont(&FreeSansBold24pt7b);
-    gfx.setTextSize(2);
+    // Big display: use the build-time generated alert font (no aliased scaling)
+    gfx.setFont(get_alert_font(w, h));
+    gfx.setTextSize(1);
     int16_t line_gap = 70;
     int16_t y1 = avail_h / 5;
 
@@ -800,14 +799,6 @@ void render_empty_battery(Adafruit_GFX &gfx, int16_t w, int16_t h,
       gfx.setCursor((w - tbw) / 2 - tbx, y1 + i * line_gap);
       gfx.print(lines[i]);
     }
-
-    gfx.setFont(&FreeSans9pt7b);
-    gfx.setTextSize(1);
-    char bat_str[24];
-    snprintf(bat_str, sizeof(bat_str), "bat %dmV", (int)battery_mv);
-    gfx.getTextBounds(bat_str, 0, 0, &tbx, &tby, &tbw, &tbh);
-    gfx.setCursor((w - tbw) / 2 - tbx, y1 + 3 * line_gap);
-    gfx.print(bat_str);
   }
   else
   {

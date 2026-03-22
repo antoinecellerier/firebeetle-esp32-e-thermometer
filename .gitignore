@@ -8,3 +8,4 @@ core
 .dummy/
 sdkconfig.*
 managed_components/
+include/generated/
