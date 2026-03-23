@@ -123,8 +123,14 @@ Font selection is based on display dimensions:
 - X-axis labels at 6-hour wall-clock marks (0h, 6h, 12h, 18h), shown only when chart_h > 30
 
 ### 30-Day Monthly Chart
-- Three Catmull-Rom spline curves on large zones (chart_h >= 60): max (solid), avg (dotted every 6th pixel), min (solid)
-- Single avg spline on small zones (chart_h < 60)
+- Two rendering paths based on display width:
+  - **Large displays** (chart_w >= 400, e.g. 920x680): hourly resolution showing all 720 HourlyEntry
+    points as three Catmull-Rom splines — avg (solid thick), max (arc-length dotted), min (arc-length dotted).
+    Daily temperature cycles and transient events are visible.
+  - **Small displays** (chart_w < 400): daily summaries derived from hourly data at render time.
+    Three splines — avg (solid thick), max (arc-length dotted), min (arc-length dotted) on large zones
+    (chart_h >= 60); single avg spline on small zones.
+- Arc-length dotted lines use `draw_spline_dotted` (~2px spacing) for envelope (min/max) curves
 - Thick lines (2px) on large zones (chart_h >= 80)
 - Skipped entirely if zone height < 20px
 - Y range: overall min/max with 0.5-degree padding, 1 degree C minimum span
@@ -164,8 +170,9 @@ Defined in `include/MockData.h` (shared between device and simulator):
 - **24h sparkline**: Piecewise linear indoor profile (20 control points) with
   variable reading density -- clustered during morning warmup and evening cooldown,
   sparse during stable daytime periods. Small deterministic noise added.
-- **30-day daily**: Gradual spring warming (+0.08 degrees C/day) with a cold snap
-  (days 12-16), weekend warmth bump, realistic ~3 degree C daily ranges.
+- **30-day hourly**: 720 HourlyEntry values generated from a gradual spring warming
+  profile (+0.08 degrees C/day) with a cold snap (days 12-16), weekend warmth bump,
+  realistic ~3 degree C daily ranges. Includes in-progress hour accumulator.
 - **DisplayStats**: Pre-filled with boot_count=847, refresh_count=203, 12-day uptime,
   ULP wake cause, 4200mV max battery.
 
@@ -173,7 +180,7 @@ Defined in `include/MockData.h` (shared between device and simulator):
 
 ```
 include/
-  Display.h            -- TempReading, DailySummary, DisplayStats structs
+  Display.h            -- TempReading, HourlyEntry, DisplayStats structs
   DisplayRenderer.h    -- Layout/Rect structs, render function declarations
   MockData.h           -- Shared mock data generation (device + simulator)
 
@@ -204,22 +211,26 @@ Sizes depend on `sizeof(time_t)` -- 4 bytes on ESP32 (Xtensa), 8 bytes on ESP32-
 - ESP32: 4 + 2 + 2 pad = 8 bytes
 - ESP32-C6: 8 + 2 + 6 pad = 16 bytes
 
-**DailySummary** = `int16_t` + `int16_t` + `uint8_t` + `uint8_t` = 6 bytes (both platforms).
+**HourlyEntry** = 3 x `int16_t` = 6 bytes (both platforms).
 
 **BMP390LCalib** = 3 x `float` = 12 bytes.
 
 | Data | ESP32 (32-bit time_t) | ESP32-C6 (64-bit time_t) |
 |---|---|---|
 | temp_history[96] (TempReading) | 768 bytes | 1536 bytes |
-| daily_history[31] (DailySummary) | 186 bytes | 186 bytes |
+| hourly_history[720] (HourlyEntry) | 4320 bytes | 4320 bytes |
 | bmp390l_calib (BMP390LCalib) | 12 bytes | 12 bytes |
 | Scalars: boot_count, display_refresh_count, previous_boot_count (3x int) | 12 bytes | 12 bytes |
 | first_boot_time, next_clear_time (2x time_t) | 8 bytes | 16 bytes |
 | previous_temp, min_temp_since_boot, max_temp_since_boot (3x float) | 12 bytes | 12 bytes |
 | max_battery_mv, bad_pin27_count (2x uint32_t) | 8 bytes | 8 bytes |
-| temp_history_count, temp_history_idx, daily_history_count, daily_history_idx, current_day (5x uint8_t) | 5 bytes | 5 bytes |
-| current_day_min_x10, current_day_max_x10 (2x int16_t) | 4 bytes | 4 bytes |
+| temp_history_count, temp_history_idx (2x uint8_t) | 2 bytes | 2 bytes |
+| hourly_history_count, hourly_history_idx (2x uint16_t) | 4 bytes | 4 bytes |
+| hourly_latest_time (time_t) | 4 bytes | 8 bytes |
+| Hour accumulator: current_hour_start (time_t), sum_x10 (int32_t), sample_count (uint16_t), min_x10/max_x10 (2x int16_t) | 16 bytes | 20 bytes |
+| Status flags: wifi_ok, ntp_synced, last_sensor_ok (3x bool) | 3 bytes | 3 bytes |
 | rtc_layout_version (uint32_t) | 4 bytes | 4 bytes |
-| **Total** | **~1019 bytes** | **~1795 bytes** |
+| **Total** | **~5173 bytes** | **~5957 bytes** |
 
-Well within the 8KB RTC slow memory limit.
+Well within the 8KB RTC slow memory limit, though significantly larger than the previous
+daily-summary design due to hourly_history[720] (4320 bytes).
