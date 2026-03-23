@@ -34,8 +34,8 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
 void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
                        const DisplayStats &stats, time_t now);
 
-void render_monthly_bars(Adafruit_GFX &gfx, const Rect &zone,
-                          const DisplayStats &stats);
+void render_monthly_chart(Adafruit_GFX &gfx, const Rect &zone,
+                           const DisplayStats &stats, time_t now);
 
 void render_info(Adafruit_GFX &gfx, int16_t x, int16_t y, int16_t w,
                   uint32_t battery_mv, bool low_battery,

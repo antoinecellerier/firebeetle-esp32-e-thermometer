@@ -9,16 +9,24 @@ struct TempReading {
   int16_t temp_x10;  // temperature * 10, e.g. 223 = 22.3°C
 };
 
-// Min/max temperature summary for a single day, for the 30-day range chart.
-struct DailySummary {
-  int16_t min_x10;
-  int16_t max_x10;
-  uint8_t day;    // day of month (1-31)
-  uint8_t month;  // month (1-12)
+// Finalized hourly temperature entry for the 30-day chart.
+// Each entry summarizes all temperature readings within one clock hour.
+// Min/max capture transient events (window opens, sun/shadow, wind) while
+// avg tracks the underlying trend. On large displays this enables a continuous
+// temperature curve with a volatility envelope showing daily cycles over 30 days.
+// On small displays, daily min/max/avg are derived from these entries at render time.
+struct HourlyEntry {
+  int16_t min_x10;  // minimum temperature × 10 during this hour
+  int16_t max_x10;  // maximum temperature × 10 during this hour
+  int16_t avg_x10;  // average temperature × 10 (from accumulated readings)
 };
 
 #define TEMP_HISTORY_SIZE 96
-#define DAILY_HISTORY_SIZE 31
+#define HOURLY_HISTORY_SIZE 720  // 30 days × 24 hours/day
+
+// Sentinel value for hours with no readings (e.g., gap after device restart).
+// Check with: entry.min_x10 == HOURLY_NO_DATA
+#define HOURLY_NO_DATA ((int16_t)0x8000)
 
 // Data needed by the display — passed by value/pointer to avoid
 // coupling the display module to Thermometer's RTC globals.
@@ -46,13 +54,20 @@ struct DisplayStats {
   uint8_t history_count;  // number of valid entries (0..TEMP_HISTORY_SIZE)
   uint8_t history_start;  // index of oldest entry in circular buffer
 
-  // 30-day daily summary (circular buffer)
-  const DailySummary *daily_history;
-  uint8_t daily_count;    // number of valid entries (0..DAILY_HISTORY_SIZE)
-  uint8_t daily_start;    // index of oldest entry in circular buffer
-  int16_t today_min_x10;  // in-progress current day min
-  int16_t today_max_x10;  // in-progress current day max
-  uint8_t today_day;      // current day of month
+  // 30-day hourly history (circular buffer, one entry per clock hour).
+  // Each entry's wall-clock time is derived from hourly_latest_time:
+  // entry at position i (0=oldest, hourly_count-1=newest) corresponds to
+  // hourly_latest_time - (hourly_count - 1 - i) * 3600.
+  // Sentinel entries (min_x10 == HOURLY_NO_DATA) mark hours without readings.
+  const HourlyEntry *hourly_history;
+  uint16_t hourly_count;       // valid entries (0..HOURLY_HISTORY_SIZE)
+  uint16_t hourly_start;       // index of oldest entry in circular buffer
+  time_t hourly_latest_time;   // wall-clock start-of-hour of the newest finalized entry
+
+  // In-progress current hour (not yet finalized into hourly_history).
+  // Displayed as the rightmost data point on the monthly chart.
+  HourlyEntry current_hour_entry;
+  bool has_current_hour;       // true if accumulator has at least one reading
 };
 
 // Clear the e-paper to white and hibernate.

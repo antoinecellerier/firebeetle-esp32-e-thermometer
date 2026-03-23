@@ -45,7 +45,7 @@
 
 // Magic value to detect stale RTC memory after firmware change.
 // Increment this whenever the RTC_DATA_ATTR layout changes.
-#define RTC_LAYOUT_VERSION 0xDA020001
+#define RTC_LAYOUT_VERSION 0xDA020002
 RTC_DATA_ATTR uint32_t rtc_layout_version = 0;
 
 RTC_DATA_ATTR int boot_count = 0;
@@ -71,13 +71,24 @@ RTC_DATA_ATTR uint8_t temp_history_idx = 0;
 RTC_DATA_ATTR float min_temp_since_boot = 999.0f;
 RTC_DATA_ATTR float max_temp_since_boot = -999.0f;
 
-// Daily summaries for 30-day range chart
-RTC_DATA_ATTR DailySummary daily_history[DAILY_HISTORY_SIZE];
-RTC_DATA_ATTR uint8_t daily_history_count = 0;
-RTC_DATA_ATTR uint8_t daily_history_idx = 0;
-RTC_DATA_ATTR uint8_t current_day = 0;
-RTC_DATA_ATTR int16_t current_day_min_x10 = 9990;
-RTC_DATA_ATTR int16_t current_day_max_x10 = -9990;
+// Hourly temperature history for 30-day chart (circular buffer in RTC memory).
+// Each entry summarizes one clock hour: min/max capture transient events
+// (window opens, sun/shadow, wind), avg tracks the underlying trend.
+// Populated on every main CPU wake (delta-triggered + hourly safety-net).
+// Total RTC usage: 720 × 6 bytes = 4320 bytes.
+RTC_DATA_ATTR HourlyEntry hourly_history[HOURLY_HISTORY_SIZE];
+RTC_DATA_ATTR uint16_t hourly_history_count = 0;
+RTC_DATA_ATTR uint16_t hourly_history_idx = 0;
+RTC_DATA_ATTR time_t hourly_latest_time = 0;
+
+// In-progress hour accumulator. Temperature readings are accumulated here
+// on every wake until the clock hour changes, at which point the entry is
+// finalized (avg = sum/count) and appended to hourly_history.
+RTC_DATA_ATTR time_t current_hour_start = 0;     // start-of-hour time, 0 = uninitialized
+RTC_DATA_ATTR int32_t  current_hour_sum_x10 = 0;
+RTC_DATA_ATTR uint16_t current_hour_sample_count = 0;
+RTC_DATA_ATTR int16_t  current_hour_min_x10 = 9990;
+RTC_DATA_ATTR int16_t  current_hour_max_x10 = -9990;
 
 // Status flags for display error indicators
 RTC_DATA_ATTR bool wifi_ok = false;
@@ -92,40 +103,76 @@ static void append_temp_history(time_t now, float temp)
     temp_history_count++;
 }
 
-static void update_daily_history(const struct tm *nowtm, float temp)
+// Update the hourly history buffer with a new temperature reading.
+// Called on every main CPU wake (both delta-triggered and safety-net timer).
+// When the clock hour changes, the accumulated entry is finalized and appended
+// to the circular buffer. Any skipped hours (shouldn't happen normally since
+// the safety net wakes every hour) are filled with sentinel entries.
+static void update_hourly_history(time_t now, const struct tm *nowtm, float temp)
 {
   int16_t temp_x10 = (int16_t)(temp * 10);
-  uint8_t day = nowtm->tm_mday;
 
-  if (current_day != 0 && current_day != day)
+  // Compute wall-clock start-of-hour for current local time
+  struct tm hour_tm = *nowtm;
+  hour_tm.tm_min = 0;
+  hour_tm.tm_sec = 0;
+  time_t hour_start = mktime(&hour_tm);
+
+  if (current_hour_start != 0 && hour_start != current_hour_start)
   {
-    // Day changed — save the completed day's summary.
-    // Derive the month from today's date: if today is the 1st, the completed
-    // day was in the previous month. This is correct for single-day transitions;
-    // multi-day skips across month boundaries would tag with the wrong month,
-    // but that can't happen in practice (ULP_SAFETY_NET_US wakes every hour).
-    uint8_t completed_month = nowtm->tm_mon + 1;
-    if (day == 1)
-      completed_month = (completed_month == 1) ? 12 : completed_month - 1;
+    // Clock hour changed — finalize the completed hour's entry
+    HourlyEntry entry;
+    entry.min_x10 = current_hour_min_x10;
+    entry.max_x10 = current_hour_max_x10;
+    entry.avg_x10 = (current_hour_sample_count > 0)
+      ? (int16_t)(current_hour_sum_x10 / current_hour_sample_count)
+      : current_hour_min_x10;
 
-    daily_history[daily_history_idx] = {
-      current_day_min_x10, current_day_max_x10,
-      current_day, completed_month
-    };
-    daily_history_idx = (daily_history_idx + 1) % DAILY_HISTORY_SIZE;
-    if (daily_history_count < DAILY_HISTORY_SIZE)
-      daily_history_count++;
+    hourly_history[hourly_history_idx] = entry;
+    hourly_history_idx = (hourly_history_idx + 1) % HOURLY_HISTORY_SIZE;
+    if (hourly_history_count < HOURLY_HISTORY_SIZE)
+      hourly_history_count++;
 
-    // Reset accumulators for new day
-    current_day_min_x10 = 9990;
-    current_day_max_x10 = -9990;
+    // Fill any skipped hours with the finalized entry's values.
+    // Skipped hours mean the ULP safety-net woke but no delta was detected,
+    // so temperature was stable — the last known value is the best estimate.
+    // Uses time_t difference (UTC-based) so DST transitions are handled
+    // correctly — a "spring forward" skip produces one fill, a "fall back"
+    // repeat produces hours_elapsed=0 (no fill needed).
+    int hours_elapsed = (int)((hour_start - current_hour_start) / 3600);
+    if (hours_elapsed > HOURLY_HISTORY_SIZE)
+      hours_elapsed = HOURLY_HISTORY_SIZE;
+    for (int i = 1; i < hours_elapsed; i++)
+    {
+      hourly_history[hourly_history_idx] = entry;  // repeat last known value
+      hourly_history_idx = (hourly_history_idx + 1) % HOURLY_HISTORY_SIZE;
+      if (hourly_history_count < HOURLY_HISTORY_SIZE)
+        hourly_history_count++;
+    }
+
+    // Update reference time: the last written entry's start-of-hour
+    hourly_latest_time = hour_start - 3600;
+
+    // Reset accumulator for the new hour
+    current_hour_sum_x10 = 0;
+    current_hour_sample_count = 0;
+    current_hour_min_x10 = 9990;
+    current_hour_max_x10 = -9990;
   }
 
-  current_day = day;
-  if (temp_x10 < current_day_min_x10)
-    current_day_min_x10 = temp_x10;
-  if (temp_x10 > current_day_max_x10)
-    current_day_max_x10 = temp_x10;
+  // First reading after boot — initialize reference time
+  if (current_hour_start == 0)
+    hourly_latest_time = hour_start;
+
+  current_hour_start = hour_start;
+
+  // Accumulate reading into current hour's stats
+  current_hour_sample_count++;
+  current_hour_sum_x10 += temp_x10;
+  if (temp_x10 < current_hour_min_x10)
+    current_hour_min_x10 = temp_x10;
+  if (temp_x10 > current_hour_max_x10)
+    current_hour_max_x10 = temp_x10;
 }
 
 static void update_temp_extremes(float temp)
@@ -142,34 +189,50 @@ static void update_temp_extremes(float temp)
 static void fill_mock_data(time_t now)
 {
   mock_fill_sparkline(now, temp_history, &temp_history_count, &temp_history_idx);
-  mock_fill_daily(now, daily_history, &daily_history_count, &daily_history_idx);
+  mock_fill_hourly(now, hourly_history, &hourly_history_count, &hourly_history_idx,
+                   &hourly_latest_time);
 
   min_temp_since_boot = 18.5f;
   max_temp_since_boot = 22.8f;
   previous_temp = 22.1f;
 
-  struct tm today_tm;
-  localtime_r(&now, &today_tm);
-  current_day = today_tm.tm_mday;
-  current_day_min_x10 = 195;  // 19.5°C
-  current_day_max_x10 = 223;  // 22.3°C
+  // Set up in-progress hour accumulator with mock values
+  struct tm now_tm;
+  localtime_r(&now, &now_tm);
+  now_tm.tm_min = 0;
+  now_tm.tm_sec = 0;
+  current_hour_start = mktime(&now_tm);
+  current_hour_sample_count = 3;
+  current_hour_sum_x10 = 223 * 3;  // 22.3°C × 3 readings
+  current_hour_min_x10 = 219;      // 21.9°C
+  current_hour_max_x10 = 228;      // 22.8°C
 }
 #endif
 
 DisplayStats make_display_stats()
 {
-  // Compute circular buffer start index (oldest entry)
+  // Compute circular buffer start indices (oldest entry)
   uint8_t history_start = (temp_history_count < TEMP_HISTORY_SIZE)
     ? 0
     : temp_history_idx;
-  uint8_t daily_start = (daily_history_count < DAILY_HISTORY_SIZE)
+  uint16_t hourly_start = (hourly_history_count < HOURLY_HISTORY_SIZE)
     ? 0
-    : daily_history_idx;
+    : hourly_history_idx;
 
   // Map ESP-IDF wake cause to a portable int for display
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
   int wake = (cause == ESP_SLEEP_WAKEUP_ULP) ? 1 :
              (cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 : 0;
+
+  // Compute in-progress hour entry from accumulator
+  bool has_current = (current_hour_sample_count > 0);
+  HourlyEntry current_entry = {};
+  if (has_current)
+  {
+    current_entry.min_x10 = current_hour_min_x10;
+    current_entry.max_x10 = current_hour_max_x10;
+    current_entry.avg_x10 = (int16_t)(current_hour_sum_x10 / current_hour_sample_count);
+  }
 
   return {
     boot_count, previous_boot_count, display_refresh_count,
@@ -177,8 +240,8 @@ DisplayStats make_display_stats()
     sensor.SupportsUlp(), wake, wifi_ok, ntp_synced, last_sensor_ok,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     temp_history, temp_history_count, history_start,
-    daily_history, daily_history_count, daily_start,
-    current_day_min_x10, current_day_max_x10, current_day
+    hourly_history, hourly_history_count, hourly_start,
+    hourly_latest_time, current_entry, has_current
   };
 }
 
@@ -482,7 +545,7 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   get_time(&now, &nowtm);
 
   update_temp_extremes(temp);
-  update_daily_history(&nowtm, temp);
+  update_hourly_history(now, &nowtm, temp);
 
   LOGI("now: %ld. next clear time: %ld. first boot time: %ld. prev_temp: %.1f",
        (long)now, (long)next_clear_time, (long)first_boot_time, previous_temp);
@@ -547,11 +610,14 @@ void setup()
     temp_history_idx = 0;
     min_temp_since_boot = 999.0f;
     max_temp_since_boot = -999.0f;
-    daily_history_count = 0;
-    daily_history_idx = 0;
-    current_day = 0;
-    current_day_min_x10 = 9990;
-    current_day_max_x10 = -9990;
+    hourly_history_count = 0;
+    hourly_history_idx = 0;
+    hourly_latest_time = 0;
+    current_hour_start = 0;
+    current_hour_sum_x10 = 0;
+    current_hour_sample_count = 0;
+    current_hour_min_x10 = 9990;
+    current_hour_max_x10 = -9990;
     wifi_ok = false;
     ntp_synced = false;
     last_sensor_ok = true;

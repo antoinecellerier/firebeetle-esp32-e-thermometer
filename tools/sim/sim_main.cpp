@@ -68,8 +68,8 @@ int main(int argc, char **argv)
 
   // Shared mock data buffers
   TempReading mock_history[TEMP_HISTORY_SIZE];
-  DailySummary mock_daily[DAILY_HISTORY_SIZE];
-  DisplayStats stats = mock_make_stats(now, mock_history, mock_daily);
+  static HourlyEntry mock_hourly[HOURLY_HISTORY_SIZE]; // static: 4320 bytes, avoid stack overflow
+  DisplayStats stats = mock_make_stats(now, mock_history, mock_hourly);
 
   struct tm nowtm;
   localtime_r(&now, &nowtm);

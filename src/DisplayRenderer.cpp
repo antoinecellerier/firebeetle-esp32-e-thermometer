@@ -366,6 +366,60 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
   }
 }
 
+// Draw a Catmull-Rom spline as individual dots at regular arc-length intervals.
+// dot_spacing is the distance in pixels between consecutive dots along the curve.
+static void draw_spline_dotted(Adafruit_GFX &gfx,
+                                 const int16_t *py, int n,
+                                 int16_t x0, int16_t chart_w,
+                                 int16_t y_clamp_min, int16_t y_clamp_max,
+                                 float dot_spacing, uint16_t color)
+{
+  if (n < 2 || dot_spacing <= 0) return;
+  // Fine evaluation: enough steps so each covers well under 1px of arc length,
+  // even on steep curve sections where Y changes rapidly between data points.
+  int steps = max(32, chart_w / max(1, n - 1));
+
+  // Track position in float to avoid int16_t truncation errors in distance calc.
+  // With sub-pixel step sizes (~0.15px/step), integer rounding would lose most
+  // of the X movement and make spacing appear Y-only.
+  float prev_fx = (float)x0;
+  float prev_fy = constrain((float)py[0], (float)y_clamp_min, (float)y_clamp_max);
+  gfx.drawPixel((int16_t)prev_fx, (int16_t)prev_fy, color);
+  float accum = 0;
+
+  for (int i = 0; i < n - 1; i++)
+  {
+    float p0 = py[max(0, i - 1)];
+    float p1 = py[i];
+    float p2 = py[i + 1];
+    float p3 = py[min(n - 1, i + 2)];
+
+    for (int s = 1; s <= steps; s++)
+    {
+      float t = (float)s / steps;
+      float t2 = t * t, t3 = t2 * t;
+
+      float frac = (i + t) / (n - 1);
+      float cur_fx = x0 + frac * chart_w;
+      float cur_fy = 0.5f * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
+      cur_fy = constrain(cur_fy, (float)y_clamp_min, (float)y_clamp_max);
+
+      float dx = cur_fx - prev_fx;
+      float dy = cur_fy - prev_fy;
+      accum += sqrtf(dx * dx + dy * dy);
+
+      if (accum >= dot_spacing)
+      {
+        gfx.drawPixel((int16_t)cur_fx, (int16_t)cur_fy, color);
+        accum = 0;
+      }
+
+      prev_fx = cur_fx;
+      prev_fy = cur_fy;
+    }
+  }
+}
+
 // Draw a Catmull-Rom spline through an array of Y values evenly spaced on X.
 // If dotted > 0, draw every dotted-th pixel instead of a solid line.
 static void draw_spline(Adafruit_GFX &gfx,
@@ -417,100 +471,57 @@ static void draw_spline(Adafruit_GFX &gfx,
   }
 }
 
-void render_monthly_bars(Adafruit_GFX &gfx, const Rect &zone,
-                          const DisplayStats &stats)
+// --- Monthly chart: shared gridline + Y-axis label drawing ---
+
+static void draw_monthly_grid(Adafruit_GFX &gfx, const Rect &zone,
+                                int16_t chart_x, int16_t chart_y,
+                                int16_t chart_w, int16_t chart_h,
+                                bool large, float y_min, float y_range)
 {
-  if (zone.h < 20) return;
-
-  bool has_today = (stats.today_day != 0 &&
-                    stats.today_min_x10 <= stats.today_max_x10 &&
-                    stats.today_min_x10 < 9990);
-  int total_pts = stats.daily_count + (has_today ? 1 : 0);
-  if (total_pts == 0) return;
-
-  draw_hline(gfx, zone.x, zone.y, zone.w, EPD_BLACK);
-
-  // Collect min/max/avg data points
-  float mins[DAILY_HISTORY_SIZE + 1];
-  float maxs[DAILY_HISTORY_SIZE + 1];
-  float avgs[DAILY_HISTORY_SIZE + 1];
-  int16_t overall_min_x10 = 9990, overall_max_x10 = -9990;
-
-  for (int i = 0; i < stats.daily_count; i++)
-  {
-    int idx = (stats.daily_start + i) % DAILY_HISTORY_SIZE;
-    mins[i] = stats.daily_history[idx].min_x10 / 10.0f;
-    maxs[i] = stats.daily_history[idx].max_x10 / 10.0f;
-    avgs[i] = (mins[i] + maxs[i]) / 2.0f;
-    if (stats.daily_history[idx].min_x10 < overall_min_x10)
-      overall_min_x10 = stats.daily_history[idx].min_x10;
-    if (stats.daily_history[idx].max_x10 > overall_max_x10)
-      overall_max_x10 = stats.daily_history[idx].max_x10;
-  }
-  if (has_today)
-  {
-    int i = stats.daily_count;
-    mins[i] = stats.today_min_x10 / 10.0f;
-    maxs[i] = stats.today_max_x10 / 10.0f;
-    avgs[i] = (mins[i] + maxs[i]) / 2.0f;
-    if (stats.today_min_x10 < overall_min_x10) overall_min_x10 = stats.today_min_x10;
-    if (stats.today_max_x10 > overall_max_x10) overall_max_x10 = stats.today_max_x10;
-  }
-
-  // Chart area
-  bool large = (zone.h >= 80);
-  int16_t label_w = large ? 40 : 18;
-  int16_t pad_top = large ? 8 : 3;
-  int16_t pad_bot = large ? 22 : (zone.h > 30 ? 10 : 2); // room for X-axis labels
-  int16_t pad_right = large ? 6 : 3;
-  int16_t chart_x = zone.x + label_w;
-  int16_t chart_y = zone.y + pad_top;
-  int16_t chart_w = zone.w - label_w - pad_right;
-  int16_t chart_h = zone.h - pad_top - pad_bot;
-
-  if (chart_w < 10 || chart_h < 10) return;
-
-  // Y range
-  float y_min = (overall_min_x10 - 5) / 10.0f;
-  float y_max = (overall_max_x10 + 5) / 10.0f;
-  if (y_max - y_min < 1.0f)
-  {
-    float mid = (y_max + y_min) / 2;
-    y_min = mid - 0.5f;
-    y_max = mid + 0.5f;
-  }
-  float y_range = y_max - y_min;
-
-  // Dotted gridlines + Y-axis labels at whole degrees
-  // Y-axis labels — FreeSans12pt on large displays for clean strokes
   const GFXfont *label_font = large ? &FreeSans12pt7b : &TomThumb;
   gfx.setFont(label_font);
   gfx.setTextSize(1);
   gfx.setTextColor(EPD_BLACK);
 
+  int16_t label_w = large ? 40 : 18;
   int grid_spacing = large ? 8 : 5;
   int deg_min = (int)roundf(y_min);
-  int deg_max = (int)roundf(y_max);
+  int deg_max = (int)roundf(y_min + y_range);
   int deg_range = deg_max - deg_min;
-  // Adapt grid step to chart height: aim for ~3-5 visible gridlines
+
+  // Gridline step: draw dotted lines at every grid_step degrees
   int grid_step;
   if (chart_h >= 100) grid_step = (deg_range > 8) ? 2 : 1;
   else if (chart_h >= 40) grid_step = (deg_range > 4) ? 2 : 1;
   else grid_step = max(2, deg_range / 2);
-  int label_step = grid_step;
-  // Bottom margin: skip Y labels near the bottom edge to avoid
-  // overlapping with X-axis date labels
-  int16_t label_bottom_margin = (chart_h > 50) ? 15 : 8;
 
-  for (int deg = deg_min; deg <= deg_max; deg += grid_step)
+  // Label step: adaptive density based on chart height and font size.
+  // Must be a multiple of grid_step so labels land on visited gridlines.
+  // Pick the smallest multiple that keeps labels readable (at least
+  // min_label_spacing pixels apart), preferring "nice" degree intervals.
+  int16_t min_label_spacing = large ? 30 : 10;
+  int16_t label_bottom_margin = large ? 8 : 4;
+  int usable_h = max(1, (int)chart_h - label_bottom_margin);
+  int max_labels = max(2, usable_h / min_label_spacing);  // always ≥2 for scale
+  // Find smallest multiple of grid_step that fits within max_labels
+  int label_step = grid_step;
+  while (deg_range / label_step > max_labels)
+    label_step += grid_step;
+  // Align grid and label starts to multiples of their respective steps,
+  // so label degrees always land on visited gridlines.
+  int grid_start = (int)ceilf((float)deg_min / grid_step) * grid_step;
+  int label_start = (int)ceilf((float)deg_min / label_step) * label_step;
+
+  for (int deg = grid_start; deg <= deg_max; deg += grid_step)
   {
     int16_t gy = chart_y + chart_h - 1 - (int16_t)(((float)deg - y_min) / y_range * (chart_h - 1));
     if (gy <= chart_y || gy >= chart_y + chart_h - 1) continue;
     draw_dotted_hline(gfx, chart_x, gy, chart_w, grid_spacing, EPD_BLACK);
 
-    // Draw label only if not in the X-axis label zone at the bottom
-    bool in_label_zone = (gy > chart_y + chart_h - label_bottom_margin);
-    if (!in_label_zone && (deg % label_step) == 0)
+    // Label only at multiples of label_step, away from X-axis labels
+    bool is_label_deg = (deg >= label_start && (deg - label_start) % label_step == 0);
+    bool in_bottom_margin = (gy > chart_y + chart_h - label_bottom_margin);
+    if (is_label_deg && !in_bottom_margin)
     {
       char label[8];
       int16_t lx, ly; uint16_t lw, lh;
@@ -521,40 +532,280 @@ void render_monthly_bars(Adafruit_GFX &gfx, const Rect &zone,
       gfx.print(label);
     }
   }
+}
 
-  // Convert temperature values to pixel Y coordinates
-  int16_t py_min[DAILY_HISTORY_SIZE + 1];
-  int16_t py_max[DAILY_HISTORY_SIZE + 1];
-  int16_t py_avg[DAILY_HISTORY_SIZE + 1];
+// --- Monthly chart: X-axis date labels at midnight boundaries ---
+
+static void draw_monthly_xlabels(Adafruit_GFX &gfx,
+                                   int16_t chart_x, int16_t chart_y,
+                                   int16_t chart_w, int16_t chart_h,
+                                   bool large, time_t oldest_time,
+                                   float total_seconds)
+{
+  if (chart_h <= 20) return;
+
+  gfx.setFont(large ? &FreeSans9pt7b : &TomThumb);
+  gfx.setTextSize(1);
+  gfx.setTextColor(EPD_BLACK);
+
+  static const char *month_abbr[] = {
+    "Jan","Feb","Mar","Apr","May","Jun",
+    "Jul","Aug","Sep","Oct","Nov","Dec"
+  };
+
+  // Find the first midnight at or after oldest_time
+  struct tm mt;
+  localtime_r(&oldest_time, &mt);
+  mt.tm_hour = 0;
+  mt.tm_min = 0;
+  mt.tm_sec = 0;
+  time_t midnight = mktime(&mt);
+  if (midnight <= oldest_time)
+    midnight += 86400;
+
+  // Label every 7 days from the first midnight
+  time_t end_time = oldest_time + (time_t)total_seconds;
+  while (midnight < end_time)
+  {
+    int16_t mark_x = chart_x + (int16_t)((float)(midnight - oldest_time) / total_seconds * chart_w);
+    if (mark_x >= chart_x + 5 && mark_x <= chart_x + chart_w - 10)
+    {
+      gfx.drawLine(mark_x, chart_y + chart_h - 2, mark_x, chart_y + chart_h + 1, EPD_BLACK);
+
+      struct tm label_tm;
+      localtime_r(&midnight, &label_tm);
+      const char *mon = month_abbr[label_tm.tm_mon];
+      char dlabel[8];
+      snprintf(dlabel, sizeof(dlabel), "%s %d", mon, label_tm.tm_mday);
+      int16_t dlx, dly; uint16_t dlw, dlh;
+      gfx.getTextBounds(dlabel, 0, 0, &dlx, &dly, &dlw, &dlh);
+      gfx.setCursor(mark_x - dlw / 2 - dlx, chart_y + chart_h + 3 + dlh);
+      gfx.print(dlabel);
+    }
+    midnight += 7 * 86400;
+  }
+}
+
+// --- Monthly chart: hourly resolution for large displays ---
+// Draws all hourly entries as three Catmull-Rom splines (max solid, avg dotted,
+// min solid), showing daily temperature cycles and transient events over 30 days.
+
+static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
+                                    int16_t chart_x, int16_t chart_y,
+                                    int16_t chart_w, int16_t chart_h,
+                                    const DisplayStats &stats, time_t now)
+{
+  int total_pts = stats.hourly_count + (stats.has_current_hour ? 1 : 0);
+  if (total_pts < 2) return;
+
+  // Static arrays to avoid stack overflow (720+ entries × 2 bytes × 3 = ~4.3KB).
+  // Safe: rendering is single-threaded.
+  static int16_t py_avg[HOURLY_HISTORY_SIZE + 1];
+  static int16_t py_min[HOURLY_HISTORY_SIZE + 1];
+  static int16_t py_max[HOURLY_HISTORY_SIZE + 1];
+
+  // First pass: collect temp values, forward-fill sentinels, find Y range
+  int16_t last_avg = 200, last_min = 200, last_max = 200; // 20°C default
+  float y_min_f = 999.0f, y_max_f = -999.0f;
 
   for (int i = 0; i < total_pts; i++)
   {
-    py_min[i] = chart_y + chart_h - 1 - (int16_t)((mins[i] - y_min) / y_range * (chart_h - 1));
-    py_max[i] = chart_y + chart_h - 1 - (int16_t)((maxs[i] - y_min) / y_range * (chart_h - 1));
-    py_avg[i] = chart_y + chart_h - 1 - (int16_t)((avgs[i] - y_min) / y_range * (chart_h - 1));
+    HourlyEntry e;
+    if (i < (int)stats.hourly_count)
+    {
+      int idx = (stats.hourly_start + i) % HOURLY_HISTORY_SIZE;
+      e = stats.hourly_history[idx];
+    }
+    else
+    {
+      e = stats.current_hour_entry;
+    }
+
+    // Forward-fill sentinel entries (cold start / gap) with last known value
+    if (e.min_x10 == HOURLY_NO_DATA)
+      e = { last_min, last_max, last_avg };
+    else
+    {
+      last_avg = e.avg_x10;
+      last_min = e.min_x10;
+      last_max = e.max_x10;
+    }
+
+    // Store raw temp_x10 values (converted to pixel Y in second pass)
+    py_avg[i] = e.avg_x10;
+    py_min[i] = e.min_x10;
+    py_max[i] = e.max_x10;
+
+    float fmin = e.min_x10 / 10.0f;
+    float fmax = e.max_x10 / 10.0f;
+    if (fmin < y_min_f) y_min_f = fmin;
+    if (fmax > y_max_f) y_max_f = fmax;
   }
 
-  // On large zones: three curves (max, avg dotted, min).
-  // On small zones (< 60px chart height): just the avg curve for clarity.
-  bool thick = large;
-  if (chart_h >= 60)
+  // Y range with proportional padding, minimum 1°C span
+  float pad_y = max(0.3f, (y_max_f - y_min_f) * 0.15f);
+  y_min_f -= pad_y;
+  y_max_f += pad_y;
+  if (y_max_f - y_min_f < 1.0f)
   {
-    draw_spline(gfx, py_max, total_pts, chart_x, chart_w,
-                 chart_y, (int16_t)(chart_y + chart_h - 1), 0, thick, EPD_BLACK);
-    draw_spline(gfx, py_avg, total_pts, chart_x, chart_w,
-                 chart_y, (int16_t)(chart_y + chart_h - 1), 6, false, EPD_BLACK);
-    draw_spline(gfx, py_min, total_pts, chart_x, chart_w,
-                 chart_y, (int16_t)(chart_y + chart_h - 1), 0, thick, EPD_BLACK);
+    float mid = (y_max_f + y_min_f) / 2;
+    y_min_f = mid - 0.5f;
+    y_max_f = mid + 0.5f;
   }
-  else
+  float y_range = y_max_f - y_min_f;
+
+  // Gridlines + Y-axis labels
+  draw_monthly_grid(gfx, zone, chart_x, chart_y, chart_w, chart_h,
+                     true, y_min_f, y_range);
+
+  // Second pass: convert temp_x10 values to pixel Y coordinates in-place
+  for (int i = 0; i < total_pts; i++)
   {
-    draw_spline(gfx, py_avg, total_pts, chart_x, chart_w,
-                 chart_y, (int16_t)(chart_y + chart_h - 1), 0, false, EPD_BLACK);
+    py_avg[i] = chart_y + chart_h - 1 - (int16_t)((py_avg[i] / 10.0f - y_min_f) / y_range * (chart_h - 1));
+    py_min[i] = chart_y + chart_h - 1 - (int16_t)((py_min[i] / 10.0f - y_min_f) / y_range * (chart_h - 1));
+    py_max[i] = chart_y + chart_h - 1 - (int16_t)((py_max[i] / 10.0f - y_min_f) / y_range * (chart_h - 1));
   }
 
-  // X-axis day labels: every 7th day
-  // X-axis date labels — skip on small charts where they'd be illegible
-  if (chart_h > 20 && total_pts > 7)
+  // Three curves: avg (solid 2px), min/max envelope (dotted 1px, 2px spacing).
+  int16_t y_clamp_max = (int16_t)(chart_y + chart_h - 1);
+  draw_spline(gfx, py_avg, total_pts, chart_x, chart_w,
+               chart_y, y_clamp_max, 0, true, EPD_BLACK);
+  draw_spline_dotted(gfx, py_max, total_pts, chart_x, chart_w,
+                      chart_y, y_clamp_max, 2.0f, EPD_BLACK);
+  draw_spline_dotted(gfx, py_min, total_pts, chart_x, chart_w,
+                      chart_y, y_clamp_max, 2.0f, EPD_BLACK);
+
+  // X-axis date labels every 7 days
+  time_t oldest_time = stats.hourly_latest_time - (time_t)(stats.hourly_count - 1) * 3600;
+  float total_seconds = (float)(total_pts - 1) * 3600;
+  draw_monthly_xlabels(gfx, chart_x, chart_y, chart_w, chart_h,
+                        true, oldest_time, total_seconds);
+}
+
+// --- Monthly chart: daily-derived view for small displays ---
+// Groups hourly entries into days and draws daily min/max/avg splines,
+// matching the visual style of the original daily chart.
+
+static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
+                                   int16_t chart_x, int16_t chart_y,
+                                   int16_t chart_w, int16_t chart_h,
+                                   bool large, const DisplayStats &stats)
+{
+  int total_hourly = stats.hourly_count + (stats.has_current_hour ? 1 : 0);
+  if (total_hourly == 0) return;
+
+  // Derive daily summaries by grouping hourly entries by calendar day.
+  // Uses hour-of-day modular arithmetic to detect midnight crossings,
+  // avoiding expensive localtime_r calls in the inner loop.
+  // (Ignores DST transitions — off by ±1 hour on transition days, negligible.)
+  struct DerivedDay { float min_f, max_f, avg_f; uint8_t day; uint8_t month; };
+  DerivedDay days[32];
+  int num_days = 0;
+
+  // Get hour-of-day for the oldest entry (one localtime_r call)
+  time_t oldest_time = stats.hourly_latest_time - (time_t)(stats.hourly_count - 1) * 3600;
+  struct tm oldest_tm;
+  localtime_r(&oldest_time, &oldest_tm);
+  int h = oldest_tm.tm_hour;
+
+  int16_t day_min = 9990, day_max = -9990;
+  int32_t day_sum = 0;
+  int day_count = 0;
+
+  for (int i = 0; i < total_hourly; i++)
+  {
+    HourlyEntry e;
+    if (i < (int)stats.hourly_count)
+    {
+      int idx = (stats.hourly_start + i) % HOURLY_HISTORY_SIZE;
+      e = stats.hourly_history[idx];
+    }
+    else
+    {
+      e = stats.current_hour_entry;
+    }
+
+    // Skip sentinel entries (cold start gaps)
+    if (e.min_x10 == HOURLY_NO_DATA) { h = (h + 1) % 24; continue; }
+
+    if (e.min_x10 < day_min) day_min = e.min_x10;
+    if (e.max_x10 > day_max) day_max = e.max_x10;
+    day_sum += e.avg_x10;
+    day_count++;
+
+    h = (h + 1) % 24;
+    bool midnight = (h == 0);
+    bool last = (i == total_hourly - 1);
+
+    if ((midnight || last) && day_count > 0 && num_days < 32)
+    {
+      // Compute the calendar date for this day (one localtime_r per day)
+      time_t day_time = oldest_time + (time_t)i * 3600;
+      struct tm day_tm;
+      localtime_r(&day_time, &day_tm);
+
+      days[num_days].min_f = day_min / 10.0f;
+      days[num_days].max_f = day_max / 10.0f;
+      days[num_days].avg_f = (float)day_sum / day_count / 10.0f;
+      days[num_days].day = day_tm.tm_mday;
+      days[num_days].month = day_tm.tm_mon + 1;
+      num_days++;
+
+      day_min = 9990; day_max = -9990;
+      day_sum = 0; day_count = 0;
+    }
+  }
+
+  if (num_days < 2) return;
+
+  // Y range from derived daily data
+  int16_t overall_min_x10 = 9990, overall_max_x10 = -9990;
+  for (int i = 0; i < num_days; i++)
+  {
+    int16_t mn = (int16_t)(days[i].min_f * 10);
+    int16_t mx = (int16_t)(days[i].max_f * 10);
+    if (mn < overall_min_x10) overall_min_x10 = mn;
+    if (mx > overall_max_x10) overall_max_x10 = mx;
+  }
+
+  float y_min = (overall_min_x10 - 5) / 10.0f;
+  float y_max = (overall_max_x10 + 5) / 10.0f;
+  if (y_max - y_min < 1.0f)
+  {
+    float mid = (y_max + y_min) / 2;
+    y_min = mid - 0.5f;
+    y_max = mid + 0.5f;
+  }
+  float y_range = y_max - y_min;
+
+  // Gridlines + Y-axis labels
+  draw_monthly_grid(gfx, zone, chart_x, chart_y, chart_w, chart_h,
+                     large, y_min, y_range);
+
+  // Convert to pixel Y coordinates
+  int16_t py_min_arr[32], py_max_arr[32], py_avg_arr[32];
+  for (int i = 0; i < num_days; i++)
+  {
+    py_min_arr[i] = chart_y + chart_h - 1 - (int16_t)((days[i].min_f - y_min) / y_range * (chart_h - 1));
+    py_max_arr[i] = chart_y + chart_h - 1 - (int16_t)((days[i].max_f - y_min) / y_range * (chart_h - 1));
+    py_avg_arr[i] = chart_y + chart_h - 1 - (int16_t)((days[i].avg_f - y_min) / y_range * (chart_h - 1));
+  }
+
+  // Draw curves: avg solid, min/max dotted envelope.
+  // On very short charts (< 20px), skip envelope — too cramped to be useful.
+  int16_t y_clamp_max = (int16_t)(chart_y + chart_h - 1);
+  draw_spline(gfx, py_avg_arr, num_days, chart_x, chart_w,
+               chart_y, y_clamp_max, 0, false, EPD_BLACK);
+  if (chart_h >= 20)
+  {
+    draw_spline_dotted(gfx, py_max_arr, num_days, chart_x, chart_w,
+                        chart_y, y_clamp_max, 2.0f, EPD_BLACK);
+    draw_spline_dotted(gfx, py_min_arr, num_days, chart_x, chart_w,
+                        chart_y, y_clamp_max, 2.0f, EPD_BLACK);
+  }
+
+  // X-axis date labels every 7 days
+  if (chart_h > 20 && num_days > 7)
   {
     gfx.setFont(large ? &FreeSans9pt7b : &TomThumb);
     gfx.setTextSize(1);
@@ -565,33 +816,59 @@ void render_monthly_bars(Adafruit_GFX &gfx, const Rect &zone,
       "Jul","Aug","Sep","Oct","Nov","Dec"
     };
 
-    for (int i = 0; i < total_pts; i += 7)
+    for (int i = 0; i < num_days; i += 7)
     {
-      int16_t mark_x = chart_x + (int16_t)((float)i / (total_pts - 1) * chart_w);
-
+      int16_t mark_x = chart_x + (int16_t)((float)i / (num_days - 1) * chart_w);
       gfx.drawLine(mark_x, chart_y + chart_h - 2, mark_x, chart_y + chart_h + 1, EPD_BLACK);
 
-      // "Mar 24" format label
-      int idx = (i < stats.daily_count)
-        ? (stats.daily_start + i) % DAILY_HISTORY_SIZE
-        : -1;
-      int day_num = (idx >= 0) ? stats.daily_history[idx].day : stats.today_day;
-      int month = (idx >= 0) ? stats.daily_history[idx].month : 0;
-      // month is 1-12 in DailySummary; for today, derive from the last entry
-      if (month == 0 && stats.daily_count > 0)
-      {
-        int last = (stats.daily_start + stats.daily_count - 1) % DAILY_HISTORY_SIZE;
-        month = stats.daily_history[last].month;
-      }
-      const char *mon = (month >= 1 && month <= 12) ? month_abbr[month - 1] : "?";
+      const char *mon = (days[i].month >= 1 && days[i].month <= 12)
+        ? month_abbr[days[i].month - 1] : "?";
       char dlabel[8];
-      snprintf(dlabel, sizeof(dlabel), "%s %d", mon, day_num);
+      snprintf(dlabel, sizeof(dlabel), "%s %d", mon, days[i].day);
       int16_t dlx, dly; uint16_t dlw, dlh;
       gfx.getTextBounds(dlabel, 0, 0, &dlx, &dly, &dlw, &dlh);
       gfx.setCursor(mark_x - dlw / 2 - dlx, chart_y + chart_h + 3 + dlh);
       gfx.print(dlabel);
     }
   }
+}
+
+// --- Monthly chart entry point ---
+// Large displays (chart_w >= 400): hourly resolution showing daily cycles.
+// Small displays: daily summaries derived from hourly data.
+
+void render_monthly_chart(Adafruit_GFX &gfx, const Rect &zone,
+                           const DisplayStats &stats, time_t now)
+{
+  if (zone.h < 20) return;
+
+  int total = stats.hourly_count + (stats.has_current_hour ? 1 : 0);
+  if (total == 0) return;
+
+  draw_hline(gfx, zone.x, zone.y, zone.w, EPD_BLACK);
+
+  // Chart area dimensions
+  bool large = (zone.h >= 80);
+  int16_t label_w = large ? 40 : 18;
+  int16_t pad_top = large ? 8 : 3;
+  int16_t pad_bot = large ? 22 : (zone.h > 30 ? 10 : 2);
+  int16_t pad_right = large ? 6 : 3;
+  int16_t chart_x = zone.x + label_w;
+  int16_t chart_y = zone.y + pad_top;
+  int16_t chart_w = zone.w - label_w - pad_right;
+  int16_t chart_h = zone.h - pad_top - pad_bot;
+
+  if (chart_w < 10 || chart_h < 10) return;
+
+  // Large displays have enough pixels to show all 720 hourly entries
+  // with daily temperature cycles visible. Small displays aggregate
+  // into daily min/max/avg for a cleaner view.
+  if (chart_w >= 400)
+    render_monthly_hourly(gfx, zone, chart_x, chart_y, chart_w, chart_h,
+                           stats, now);
+  else
+    render_monthly_daily(gfx, zone, chart_x, chart_y, chart_w, chart_h,
+                          large, stats);
 }
 
 void render_info(Adafruit_GFX &gfx, int16_t x, int16_t y, int16_t w,
@@ -751,7 +1028,7 @@ void render_dashboard(Adafruit_GFX &gfx, int16_t w, int16_t h,
   render_temperature(gfx, L, temp, stats);
   render_status_indicators(gfx, L, stats);
   render_sparkline(gfx, L.spark, stats, now);
-  render_monthly_bars(gfx, L.month, stats);
+  render_monthly_chart(gfx, L.month, stats, now);
 
   // Info bar: embedded in temp zone bottom (landscape) or separate zone (portrait)
   if (L.landscape)

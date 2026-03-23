@@ -69,62 +69,94 @@ inline void mock_fill_sparkline(time_t now, TempReading *history,
   *out_idx = idx;
 }
 
-// Fill the 30-day daily summary buffer with mock data.
-// Shows a gradual spring warming trend with a cold snap mid-month
-// and slightly warmer weekends (people home all day).
-inline void mock_fill_daily(time_t now, DailySummary *daily,
-                             uint8_t *out_count, uint8_t *out_idx)
+// Fill the 30-day hourly history buffer with mock data.
+// Generates 720 hourly entries (30 days × 24 hours) with:
+// - Realistic daily temperature cycles via mock_temp_at_hour()
+// - Gradual spring warming trend (+0.08°C/day)
+// - Cold snap mid-month (days 12-16)
+// - Slightly warmer weekends (people home all day)
+// - Small min/max spread per hour, with occasional larger spikes
+//   simulating transient events (window opens, sun/shadow)
+inline void mock_fill_hourly(time_t now, HourlyEntry *history,
+                              uint16_t *out_count, uint16_t *out_idx,
+                              time_t *out_latest_time)
 {
-  uint8_t count = 0;
-  uint8_t idx = 0;
+  // Compute the start-of-hour for the last complete hour before now
+  struct tm now_tm;
+  localtime_r(&now, &now_tm);
+  now_tm.tm_min = 0;
+  now_tm.tm_sec = 0;
+  time_t latest = mktime(&now_tm) - 3600;
 
-  for (int i = 29; i >= 0; i--)
+  // Compute hour-of-day and day-of-week for the oldest entry
+  // to avoid calling localtime_r in the inner loop
+  time_t first_time = latest - (time_t)(HOURLY_HISTORY_SIZE - 1) * 3600;
+  struct tm first_tm;
+  localtime_r(&first_time, &first_tm);
+  int first_hour = first_tm.tm_hour;
+  int first_wday = first_tm.tm_wday;
+
+  uint16_t idx = 0;
+
+  for (int i = 0; i < HOURLY_HISTORY_SIZE; i++)
   {
-    time_t day_time = now - (time_t)i * 86400;
-    struct tm day_tm;
-    localtime_r(&day_time, &day_tm);
+    // Approximate hour-of-day and day offset (ignores DST — fine for mock data)
+    int h = (first_hour + i) % 24;
+    int day_offset = (first_hour + i) / 24;
+    int day_num = day_offset + 1;  // 1 = oldest day, ~30 = newest
+    int wday = (first_wday + day_offset) % 7;
 
-    int day_num = 30 - i; // 1 = oldest, 30 = today
-    float base = 20.0f + day_num * 0.08f;
+    // Day-to-day trend: gradual warming
+    float base_offset = day_num * 0.08f;
 
     // Cold snap: days 12-16 drop 1-3°C
     if (day_num >= 12 && day_num <= 16)
     {
       float snap = (day_num == 14) ? 3.0f : (day_num == 13 || day_num == 15) ? 2.0f : 1.0f;
-      base -= snap;
+      base_offset -= snap;
     }
 
     // Weekend bump
-    if (day_tm.tm_wday == 0 || day_tm.tm_wday == 6)
-      base += 0.3f;
+    if (wday == 0 || wday == 6)
+      base_offset += 0.3f;
 
-    float dmin = base - 1.5f - ((day_num * 41 + 7) % 100) * 0.005f;
-    float dmax = base + 1.5f + ((day_num * 29 + 13) % 100) * 0.005f;
+    float temp = mock_temp_at_hour((float)h) + base_offset;
 
-    daily[idx] = {
-      (int16_t)(dmin * 10), (int16_t)(dmax * 10),
-      (uint8_t)day_tm.tm_mday, (uint8_t)(day_tm.tm_mon + 1)
-    };
-    idx = (idx + 1) % DAILY_HISTORY_SIZE;
-    count++;
+    // Deterministic noise
+    int seed = i;
+    temp += ((seed * 73 + 17) % 100 - 50) * 0.002f;
+
+    int16_t avg = (int16_t)(temp * 10);
+
+    // Min/max spread: larger during rapid temperature changes (morning/evening),
+    // with occasional bigger spikes simulating door/window events
+    float rate = fabsf(mock_temp_at_hour((float)h + 0.5f) - mock_temp_at_hour((float)h - 0.5f));
+    int16_t spread = (int16_t)(rate * 10) + 1;  // at least 0.1°C
+    if ((seed * 41 + 7) % 47 == 0)
+      spread += 15;  // +1.5°C transient spike every ~2 days
+
+    history[idx].avg_x10 = avg;
+    history[idx].min_x10 = avg - spread;
+    history[idx].max_x10 = avg + spread;
+    idx = (idx + 1) % HOURLY_HISTORY_SIZE;
   }
 
-  *out_count = count;
+  *out_count = HOURLY_HISTORY_SIZE;
   *out_idx = idx;
+  *out_latest_time = latest;
 }
 
 // Populate a DisplayStats struct with a complete set of mock data.
 // Used by the simulator; device code calls the fill functions directly.
 inline DisplayStats mock_make_stats(time_t now,
                                      TempReading *history_buf,
-                                     DailySummary *daily_buf)
+                                     HourlyEntry *hourly_buf)
 {
-  uint8_t h_count, h_idx, d_count, d_idx;
+  uint8_t h_count, h_idx;
+  uint16_t hr_count, hr_idx;
+  time_t hr_latest;
   mock_fill_sparkline(now, history_buf, &h_count, &h_idx);
-  mock_fill_daily(now, daily_buf, &d_count, &d_idx);
-
-  struct tm today_tm;
-  localtime_r(&now, &today_tm);
+  mock_fill_hourly(now, hourly_buf, &hr_count, &hr_idx, &hr_latest);
 
   DisplayStats stats = {};
   stats.boot_count = 847;
@@ -145,11 +177,14 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.temp_history = history_buf;
   stats.history_count = h_count;
   stats.history_start = (h_count < TEMP_HISTORY_SIZE) ? 0 : h_idx;
-  stats.daily_history = daily_buf;
-  stats.daily_count = d_count;
-  stats.daily_start = (d_count < DAILY_HISTORY_SIZE) ? 0 : d_idx;
-  stats.today_min_x10 = 195;
-  stats.today_max_x10 = 223;
-  stats.today_day = today_tm.tm_mday;
+  stats.hourly_history = hourly_buf;
+  stats.hourly_count = hr_count;
+  stats.hourly_start = (hr_count < HOURLY_HISTORY_SIZE) ? 0 : hr_idx;
+  stats.hourly_latest_time = hr_latest;
+
+  // Mock in-progress hour: 22.3°C average with small spread
+  stats.current_hour_entry = { 219, 228, 223 };  // 21.9/22.8/22.3°C
+  stats.has_current_hour = true;
+
   return stats;
 }
