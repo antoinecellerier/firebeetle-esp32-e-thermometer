@@ -58,6 +58,14 @@ static void draw_battery_icon(Adafruit_GFX &gfx, int16_t x, int16_t y,
     gfx.fillRect(x + 2, y + 2, fill_w, h - 4, color);
 }
 
+// Evaluate a Catmull-Rom spline at parameter t ∈ [0,1] between p1 and p2,
+// using p0 and p3 as outer control points.
+static inline float catmull_rom(float p0, float p1, float p2, float p3, float t)
+{
+  float t2 = t * t, t3 = t2 * t;
+  return 0.5f * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
+}
+
 // --- Layout computation ---
 
 Layout compute_layout(int16_t w, int16_t h)
@@ -309,10 +317,9 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
     for (int s = 1; s <= steps_per_seg; s++)
     {
       float t = (float)s / steps_per_seg;
-      float t2 = t * t, t3 = t2 * t;
 
-      float sx = 0.5f * (2*x1 + (-x0+x2)*t + (2*x0-5*x1+4*x2-x3)*t2 + (-x0+3*x1-3*x2+x3)*t3);
-      float sy = 0.5f * (2*y1 + (-y0+y2)*t + (2*y0-5*y1+4*y2-y3)*t2 + (-y0+3*y1-3*y2+y3)*t3);
+      float sx = catmull_rom(x0, x1, x2, x3, t);
+      float sy = catmull_rom(y0, y1, y2, y3, t);
 
       int16_t cur_sx = constrain((int16_t)sx, chart_x, (int16_t)(chart_x + chart_w - 1));
       int16_t cur_sy = constrain((int16_t)sy, chart_y, (int16_t)(chart_y + chart_h - 1));
@@ -397,11 +404,10 @@ static void draw_spline_dotted(Adafruit_GFX &gfx,
     for (int s = 1; s <= steps; s++)
     {
       float t = (float)s / steps;
-      float t2 = t * t, t3 = t2 * t;
 
       float frac = (i + t) / (n - 1);
       float cur_fx = x0 + frac * chart_w;
-      float cur_fy = 0.5f * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
+      float cur_fy = catmull_rom(p0, p1, p2, p3, t);
       cur_fy = constrain(cur_fy, (float)y_clamp_min, (float)y_clamp_max);
 
       float dx = cur_fx - prev_fx;
@@ -445,12 +451,11 @@ static void draw_spline(Adafruit_GFX &gfx,
     for (int s = 1; s <= steps; s++)
     {
       float t = (float)s / steps;
-      float t2 = t * t, t3 = t2 * t;
 
       float frac = (i + t) / (n - 1);
       int16_t cur_sx = x0 + (int16_t)(frac * chart_w);
 
-      float sy = 0.5f * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
+      float sy = catmull_rom(p0, p1, p2, p3, t);
       int16_t cur_sy = constrain((int16_t)sy, y_clamp_min, y_clamp_max);
 
       pixel_count++;
