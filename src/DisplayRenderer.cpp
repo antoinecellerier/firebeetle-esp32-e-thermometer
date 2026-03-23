@@ -925,41 +925,18 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   gfx.setTextColor(EPD_BLACK);
 
   int16_t x = L.temp.x + 4;
-  int16_t y = L.temp.y + (large ? 16 : 8);
-  int16_t line_h = large ? 18 : 9;
+  int16_t y = L.temp.y + (large ? 20 : 6);
 
-  if (stats.dummy_sensor)
-  {
-    gfx.setCursor(x, y);
-    gfx.print("! DUMMY");
-    y += line_h;
-  }
-  if (stats.mock_data)
-  {
-    gfx.setCursor(x, y);
-    gfx.print("! MOCK");
-    y += line_h;
-  }
+  // Render in a line so it's readable. Stacking on multiple lines would
+  // lead to indicators rendered behind other UI elements.
+  gfx.setCursor(x, y);
+  if (stats.dummy_sensor) gfx.print("! DUMMY ");
+  if (stats.mock_data) gfx.print("! MOCK ");
 
-  if (!stats.wifi_ok)
-  {
-    gfx.setCursor(x, y);
-    gfx.print("! NO WIFI");
-    y += line_h;
-  }
-  else if (!stats.ntp_synced)
-  {
-    // WiFi connected but NTP failed — different root cause
-    gfx.setCursor(x, y);
-    gfx.print("! NO NTP");
-    y += line_h;
-  }
+  if (!stats.wifi_ok) gfx.print("! NO WIFI ");
+  else if (!stats.ntp_synced) gfx.print("! NO NTP "); // WiFi connected but NTP failed — different root cause
 
-  if (!stats.sensor_ok)
-  {
-    gfx.setCursor(x, y);
-    gfx.print("! SENSOR");
-  }
+  if (!stats.sensor_ok) gfx.print("! SENSOR ");
 }
 
 // --- Full dashboard render ---
