@@ -183,6 +183,68 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
   gfx.print("C");
 }
 
+// --- Shared Y-axis gridlines + labels ---
+
+static void draw_y_grid(Adafruit_GFX &gfx, int16_t zone_x, int16_t label_w,
+                          int16_t chart_x, int16_t chart_y,
+                          int16_t chart_w, int16_t chart_h,
+                          bool large, float y_min, float y_range)
+{
+  const GFXfont *label_font = large ? &FreeSans12pt7b : &TomThumb;
+  gfx.setFont(label_font);
+  gfx.setTextSize(1);
+  gfx.setTextColor(EPD_BLACK);
+
+  int grid_spacing = large ? 8 : 5;
+  int deg_min = (int)roundf(y_min);
+  int deg_max = (int)roundf(y_min + y_range);
+  int deg_range = deg_max - deg_min;
+
+  // Gridline step: draw dotted lines at every grid_step degrees
+  int grid_step;
+  if (chart_h >= 100) grid_step = (deg_range > 8) ? 2 : 1;
+  else if (chart_h >= 40) grid_step = (deg_range > 4) ? 2 : 1;
+  else grid_step = max(2, deg_range / 2);
+
+  // Label step: adaptive density based on chart height and font size.
+  // Must be a multiple of grid_step so labels land on visited gridlines.
+  // Pick the smallest multiple that keeps labels readable (at least
+  // min_label_spacing pixels apart), preferring "nice" degree intervals.
+  int16_t min_label_spacing = large ? 30 : 10;
+  int16_t label_bottom_margin = large ? 8 : 4;
+  int usable_h = max(1, (int)chart_h - label_bottom_margin);
+  int max_labels = max(2, usable_h / min_label_spacing);  // always ≥2 for scale
+  // Find smallest multiple of grid_step that fits within max_labels
+  int label_step = grid_step;
+  while (deg_range / label_step > max_labels)
+    label_step += grid_step;
+  // Align grid and label starts to multiples of their respective steps,
+  // so label degrees always land on visited gridlines.
+  int grid_start = (int)ceilf((float)deg_min / grid_step) * grid_step;
+  int label_start = (int)ceilf((float)deg_min / label_step) * label_step;
+
+  for (int deg = grid_start; deg <= deg_max; deg += grid_step)
+  {
+    int16_t gy = chart_y + chart_h - 1 - (int16_t)(((float)deg - y_min) / y_range * (chart_h - 1));
+    if (gy <= chart_y || gy >= chart_y + chart_h - 1) continue;
+    draw_dotted_hline(gfx, chart_x, gy, chart_w, grid_spacing, EPD_BLACK);
+
+    // Label only at multiples of label_step, away from X-axis labels
+    bool is_label_deg = (deg >= label_start && (deg - label_start) % label_step == 0);
+    bool in_bottom_margin = (gy > chart_y + chart_h - label_bottom_margin);
+    if (is_label_deg && !in_bottom_margin)
+    {
+      char label[8];
+      int16_t lx, ly; uint16_t lw, lh;
+      snprintf(label, sizeof(label), "%d", deg);
+      gfx.getTextBounds(label, 0, 0, &lx, &ly, &lw, &lh);
+      int16_t label_gap = large ? 12 : 3;
+      gfx.setCursor(zone_x + label_w - lw - label_gap - lx, gy + lh / 2);
+      gfx.print(label);
+    }
+  }
+}
+
 void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
                        const DisplayStats &stats, time_t now)
 {
@@ -237,40 +299,9 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
   float t_range = t_max - t_min;
   float time_range = (float)(now - window_start);
 
-  // Y-axis labels — FreeSans12pt on large displays for clean strokes
-  const GFXfont *label_font = large ? &FreeSans12pt7b : &TomThumb;
-  gfx.setFont(label_font);
-  gfx.setTextSize(1);
-  gfx.setTextColor(EPD_BLACK);
-
   // Dotted gridlines + Y-axis labels — adaptive step based on chart height
-  int grid_spacing = large ? 8 : 5;
-  int deg_min = (int)roundf(t_min);
-  int deg_max = (int)roundf(t_max);
-  int deg_range = deg_max - deg_min;
-  int grid_step;
-  if (chart_h >= 100) grid_step = (deg_range > 8) ? 2 : 1;
-  else if (chart_h >= 40) grid_step = (deg_range > 4) ? 2 : 1;
-  else grid_step = max(2, deg_range / 2);
-  int label_step = grid_step;
-
-  for (int deg = deg_min; deg <= deg_max; deg += grid_step)
-  {
-    int16_t gy = chart_y + chart_h - 1 - (int16_t)(((float)deg - t_min) / t_range * (chart_h - 1));
-    if (gy <= chart_y || gy >= chart_y + chart_h - 1) continue;
-    draw_dotted_hline(gfx, chart_x, gy, chart_w, grid_spacing, EPD_BLACK);
-
-    if ((deg % label_step) == 0)
-    {
-      char label[8];
-      int16_t lx, ly; uint16_t lw, lh;
-      snprintf(label, sizeof(label), "%d", deg);
-      gfx.getTextBounds(label, 0, 0, &lx, &ly, &lw, &lh);
-      int16_t label_gap = large ? 12 : 3;
-      gfx.setCursor(zone.x + label_w - lw - label_gap - lx, gy + lh / 2);
-      gfx.print(label);
-    }
-  }
+  draw_y_grid(gfx, zone.x, label_w, chart_x, chart_y, chart_w, chart_h,
+              large, t_min, t_range);
 
   // Collect data points within the 24h window
   int16_t px_arr[TEMP_HISTORY_SIZE];
@@ -476,69 +507,6 @@ static void draw_spline(Adafruit_GFX &gfx,
   }
 }
 
-// --- Monthly chart: shared gridline + Y-axis label drawing ---
-
-static void draw_monthly_grid(Adafruit_GFX &gfx, const Rect &zone,
-                                int16_t chart_x, int16_t chart_y,
-                                int16_t chart_w, int16_t chart_h,
-                                bool large, float y_min, float y_range)
-{
-  const GFXfont *label_font = large ? &FreeSans12pt7b : &TomThumb;
-  gfx.setFont(label_font);
-  gfx.setTextSize(1);
-  gfx.setTextColor(EPD_BLACK);
-
-  int16_t label_w = large ? 40 : 18;
-  int grid_spacing = large ? 8 : 5;
-  int deg_min = (int)roundf(y_min);
-  int deg_max = (int)roundf(y_min + y_range);
-  int deg_range = deg_max - deg_min;
-
-  // Gridline step: draw dotted lines at every grid_step degrees
-  int grid_step;
-  if (chart_h >= 100) grid_step = (deg_range > 8) ? 2 : 1;
-  else if (chart_h >= 40) grid_step = (deg_range > 4) ? 2 : 1;
-  else grid_step = max(2, deg_range / 2);
-
-  // Label step: adaptive density based on chart height and font size.
-  // Must be a multiple of grid_step so labels land on visited gridlines.
-  // Pick the smallest multiple that keeps labels readable (at least
-  // min_label_spacing pixels apart), preferring "nice" degree intervals.
-  int16_t min_label_spacing = large ? 30 : 10;
-  int16_t label_bottom_margin = large ? 8 : 4;
-  int usable_h = max(1, (int)chart_h - label_bottom_margin);
-  int max_labels = max(2, usable_h / min_label_spacing);  // always ≥2 for scale
-  // Find smallest multiple of grid_step that fits within max_labels
-  int label_step = grid_step;
-  while (deg_range / label_step > max_labels)
-    label_step += grid_step;
-  // Align grid and label starts to multiples of their respective steps,
-  // so label degrees always land on visited gridlines.
-  int grid_start = (int)ceilf((float)deg_min / grid_step) * grid_step;
-  int label_start = (int)ceilf((float)deg_min / label_step) * label_step;
-
-  for (int deg = grid_start; deg <= deg_max; deg += grid_step)
-  {
-    int16_t gy = chart_y + chart_h - 1 - (int16_t)(((float)deg - y_min) / y_range * (chart_h - 1));
-    if (gy <= chart_y || gy >= chart_y + chart_h - 1) continue;
-    draw_dotted_hline(gfx, chart_x, gy, chart_w, grid_spacing, EPD_BLACK);
-
-    // Label only at multiples of label_step, away from X-axis labels
-    bool is_label_deg = (deg >= label_start && (deg - label_start) % label_step == 0);
-    bool in_bottom_margin = (gy > chart_y + chart_h - label_bottom_margin);
-    if (is_label_deg && !in_bottom_margin)
-    {
-      char label[8];
-      int16_t lx, ly; uint16_t lw, lh;
-      snprintf(label, sizeof(label), "%d", deg);
-      gfx.getTextBounds(label, 0, 0, &lx, &ly, &lw, &lh);
-      int16_t label_gap = large ? 12 : 3;
-      gfx.setCursor(zone.x + label_w - lw - label_gap - lx, gy + lh / 2);
-      gfx.print(label);
-    }
-  }
-}
-
 // --- Monthly chart: X-axis date labels at midnight boundaries ---
 
 static void draw_monthly_xlabels(Adafruit_GFX &gfx,
@@ -660,8 +628,8 @@ static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
   float y_range = y_max_f - y_min_f;
 
   // Gridlines + Y-axis labels
-  draw_monthly_grid(gfx, zone, chart_x, chart_y, chart_w, chart_h,
-                     true, y_min_f, y_range);
+  draw_y_grid(gfx, zone.x, 40, chart_x, chart_y, chart_w, chart_h,
+              true, y_min_f, y_range);
 
   // Second pass: convert temp_x10 values to pixel Y coordinates in-place
   for (int i = 0; i < total_pts; i++)
@@ -694,7 +662,8 @@ static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
 static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
                                    int16_t chart_x, int16_t chart_y,
                                    int16_t chart_w, int16_t chart_h,
-                                   bool large, const DisplayStats &stats)
+                                   int16_t label_w, bool large,
+                                   const DisplayStats &stats)
 {
   int total_hourly = stats.hourly_count + (stats.has_current_hour ? 1 : 0);
   if (total_hourly == 0) return;
@@ -784,8 +753,8 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
   float y_range = y_max - y_min;
 
   // Gridlines + Y-axis labels
-  draw_monthly_grid(gfx, zone, chart_x, chart_y, chart_w, chart_h,
-                     large, y_min, y_range);
+  draw_y_grid(gfx, zone.x, label_w, chart_x, chart_y, chart_w, chart_h,
+              large, y_min, y_range);
 
   // Convert to pixel Y coordinates
   int16_t py_min_arr[32], py_max_arr[32], py_avg_arr[32];
@@ -873,7 +842,7 @@ void render_monthly_chart(Adafruit_GFX &gfx, const Rect &zone,
                            stats, now);
   else
     render_monthly_daily(gfx, zone, chart_x, chart_y, chart_w, chart_h,
-                          large, stats);
+                          label_w, large, stats);
 }
 
 void render_info(Adafruit_GFX &gfx, int16_t x, int16_t y, int16_t w,
