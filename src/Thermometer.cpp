@@ -596,6 +596,36 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 }
 
 
+// Reset all RTC-persisted state to initial values.
+// Called when RTC_LAYOUT_VERSION changes (firmware update with new layout).
+static void reset_rtc_state()
+{
+  boot_count = 0;
+  display_refresh_count = 0;
+  first_boot_time = 0;
+  next_clear_time = 0;
+  previous_temp = -1;
+  previous_boot_count = -1;
+  max_battery_mv = 0;
+  bad_pin27_count = 0;
+  temp_history_count = 0;
+  temp_history_idx = 0;
+  min_temp_since_boot = TEMP_INIT_MIN;
+  max_temp_since_boot = TEMP_INIT_MAX;
+  hourly_history_count = 0;
+  hourly_history_idx = 0;
+  hourly_latest_time = 0;
+  current_hour_start = 0;
+  current_hour_sum_x10 = 0;
+  current_hour_sample_count = 0;
+  current_hour_min_x10 = TEMP_INIT_MIN_X10;
+  current_hour_max_x10 = TEMP_INIT_MAX_X10;
+  wifi_ok = false;
+  ntp_synced = false;
+  last_sensor_ok = true;
+  rtc_layout_version = RTC_LAYOUT_VERSION;
+}
+
 void setup()
 {
   setup_serial();
@@ -610,30 +640,7 @@ void setup()
   if (rtc_layout_version != RTC_LAYOUT_VERSION)
   {
     LOGI("RTC layout version mismatch — resetting all RTC state");
-    boot_count = 0;
-    display_refresh_count = 0;
-    first_boot_time = 0;
-    next_clear_time = 0;
-    previous_temp = -1;
-    previous_boot_count = -1;
-    max_battery_mv = 0;
-    bad_pin27_count = 0;
-    temp_history_count = 0;
-    temp_history_idx = 0;
-    min_temp_since_boot = TEMP_INIT_MIN;
-    max_temp_since_boot = TEMP_INIT_MAX;
-    hourly_history_count = 0;
-    hourly_history_idx = 0;
-    hourly_latest_time = 0;
-    current_hour_start = 0;
-    current_hour_sum_x10 = 0;
-    current_hour_sample_count = 0;
-    current_hour_min_x10 = TEMP_INIT_MIN_X10;
-    current_hour_max_x10 = TEMP_INIT_MAX_X10;
-    wifi_ok = false;
-    ntp_synced = false;
-    last_sensor_ok = true;
-    rtc_layout_version = RTC_LAYOUT_VERSION;
+    reset_rtc_state();
   }
 
   boot_count++;
