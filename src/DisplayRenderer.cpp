@@ -577,11 +577,16 @@ static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
   int total_pts = stats.hourly_count + (stats.has_current_hour ? 1 : 0);
   if (total_pts < 2) return;
 
-  // Static arrays to avoid stack overflow (720+ entries × 2 bytes × 3 = ~4.3KB).
-  // Safe: rendering is single-threaded.
-  static int16_t py_avg[HOURLY_HISTORY_SIZE + 1];
-  static int16_t py_min[HOURLY_HISTORY_SIZE + 1];
-  static int16_t py_max[HOURLY_HISTORY_SIZE + 1];
+  // Heap-allocate to avoid both stack overflow (720+ × 2B × 3 = ~4.3KB) and
+  // permanent BSS usage that pushes past pioarduino's effective DRAM ceiling
+  // on ESP32 boards without PSRAM (~48KB BSS limit).
+  int16_t *py_avg = (int16_t *)malloc((HOURLY_HISTORY_SIZE + 1) * sizeof(int16_t));
+  int16_t *py_min = (int16_t *)malloc((HOURLY_HISTORY_SIZE + 1) * sizeof(int16_t));
+  int16_t *py_max = (int16_t *)malloc((HOURLY_HISTORY_SIZE + 1) * sizeof(int16_t));
+  if (!py_avg || !py_min || !py_max) {
+    free(py_avg); free(py_min); free(py_max);
+    return;
+  }
 
   // First pass: collect temp values, forward-fill sentinels, find Y range
   int16_t last_avg = 200, last_min = 200, last_max = 200; // 20°C default
@@ -641,6 +646,8 @@ static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
   float total_seconds = (float)(total_pts - 1) * 3600;
   draw_monthly_xlabels(gfx, chart_x, chart_y, chart_w, chart_h,
                         true, oldest_time, total_seconds);
+
+  free(py_avg); free(py_min); free(py_max);
 }
 
 // --- Monthly chart: daily-derived view for small displays ---
