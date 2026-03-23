@@ -682,7 +682,7 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
   localtime_r(&oldest_time, &oldest_tm);
   int h = oldest_tm.tm_hour;
 
-  int16_t day_min = 9990, day_max = -9990;
+  int16_t day_min = TEMP_INIT_MIN_X10, day_max = TEMP_INIT_MAX_X10;
   int32_t day_sum = 0;
   int day_count = 0;
 
@@ -725,7 +725,7 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
       days[num_days].month = day_tm.tm_mon + 1;
       num_days++;
 
-      day_min = 9990; day_max = -9990;
+      day_min = TEMP_INIT_MIN_X10; day_max = TEMP_INIT_MAX_X10;
       day_sum = 0; day_count = 0;
     }
   }
@@ -733,7 +733,7 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
   if (num_days < 2) return;
 
   // Y range from derived daily data
-  int16_t overall_min_x10 = 9990, overall_max_x10 = -9990;
+  int16_t overall_min_x10 = TEMP_INIT_MIN_X10, overall_max_x10 = TEMP_INIT_MAX_X10;
   for (int i = 0; i < num_days; i++)
   {
     int16_t mn = (int16_t)(days[i].min_f * 10);

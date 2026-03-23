@@ -46,6 +46,14 @@
 // Magic value to detect stale RTC memory after firmware change.
 // Increment this whenever the RTC_DATA_ATTR layout changes.
 #define RTC_LAYOUT_VERSION 0xDA020002
+
+// Initial min/max temperature sentinels (float).
+// Any real reading will replace these on first comparison.
+#define TEMP_INIT_MIN  999.0f
+#define TEMP_INIT_MAX (-999.0f)
+
+// Minimum temperature change (C) to trigger a display refresh
+#define DISPLAY_TEMP_DELTA 0.1f
 RTC_DATA_ATTR uint32_t rtc_layout_version = 0;
 
 RTC_DATA_ATTR int boot_count = 0;
@@ -68,8 +76,8 @@ RTC_DATA_ATTR uint8_t temp_history_count = 0;
 RTC_DATA_ATTR uint8_t temp_history_idx = 0;
 
 // Min/max temperature since boot
-RTC_DATA_ATTR float min_temp_since_boot = 999.0f;
-RTC_DATA_ATTR float max_temp_since_boot = -999.0f;
+RTC_DATA_ATTR float min_temp_since_boot = TEMP_INIT_MIN;
+RTC_DATA_ATTR float max_temp_since_boot = TEMP_INIT_MAX;
 
 // Hourly temperature history for 30-day chart (circular buffer in RTC memory).
 // Each entry summarizes one clock hour: min/max capture transient events
@@ -87,8 +95,8 @@ RTC_DATA_ATTR time_t hourly_latest_time = 0;
 RTC_DATA_ATTR time_t current_hour_start = 0;     // start-of-hour time, 0 = uninitialized
 RTC_DATA_ATTR int32_t  current_hour_sum_x10 = 0;
 RTC_DATA_ATTR uint16_t current_hour_sample_count = 0;
-RTC_DATA_ATTR int16_t  current_hour_min_x10 = 9990;
-RTC_DATA_ATTR int16_t  current_hour_max_x10 = -9990;
+RTC_DATA_ATTR int16_t  current_hour_min_x10 = TEMP_INIT_MIN_X10;
+RTC_DATA_ATTR int16_t  current_hour_max_x10 = TEMP_INIT_MAX_X10;
 
 // Status flags for display error indicators
 RTC_DATA_ATTR bool wifi_ok = false;
@@ -156,8 +164,8 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
     // Reset accumulator for the new hour
     current_hour_sum_x10 = 0;
     current_hour_sample_count = 0;
-    current_hour_min_x10 = 9990;
-    current_hour_max_x10 = -9990;
+    current_hour_min_x10 = TEMP_INIT_MIN_X10;
+    current_hour_max_x10 = TEMP_INIT_MAX_X10;
   }
 
   // First reading after boot — initialize reference time
@@ -297,17 +305,11 @@ void get_time(time_t *now, struct tm *nowtm)
   localtime_r(now, nowtm);
 }
 
-#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
+// Battery thresholds (mV).
 // https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
 // https://www.best-microcontroller-projects.com/tp4056.html
 const uint32_t low_battery_mv = 3200;
 const uint32_t no_battery_mv = 3000; // Controller stops delivering current at 2.9V
-#elif defined(ARDUINO_XIAO_ESP32C6)
-const uint32_t low_battery_mv = 3200;
-const uint32_t no_battery_mv = 3000; // Controller stops delivering current at 2.9V
-#else
-  #error "Unknown board type"
-#endif
 
 uint32_t read_battery_level()
 {
@@ -565,7 +567,7 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   temp = 22.3f;
 #endif
   bool should_refresh = periodic_display_clear(now, nowtm) ||
-                         fabsf(temp - previous_temp) >= 0.1f;
+                         fabsf(temp - previous_temp) >= DISPLAY_TEMP_DELTA;
   if (!should_refresh)
   {
     LOGI("temperature hasn't changed significantly, no need to refresh display");
@@ -618,16 +620,16 @@ void setup()
     bad_pin27_count = 0;
     temp_history_count = 0;
     temp_history_idx = 0;
-    min_temp_since_boot = 999.0f;
-    max_temp_since_boot = -999.0f;
+    min_temp_since_boot = TEMP_INIT_MIN;
+    max_temp_since_boot = TEMP_INIT_MAX;
     hourly_history_count = 0;
     hourly_history_idx = 0;
     hourly_latest_time = 0;
     current_hour_start = 0;
     current_hour_sum_x10 = 0;
     current_hour_sample_count = 0;
-    current_hour_min_x10 = 9990;
-    current_hour_max_x10 = -9990;
+    current_hour_min_x10 = TEMP_INIT_MIN_X10;
+    current_hour_max_x10 = TEMP_INIT_MAX_X10;
     wifi_ok = false;
     ntp_synced = false;
     last_sensor_ok = true;

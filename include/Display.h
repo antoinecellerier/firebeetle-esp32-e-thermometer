@@ -28,6 +28,11 @@ struct HourlyEntry {
 // Check with: entry.min_x10 == HOURLY_NO_DATA
 #define HOURLY_NO_DATA ((int16_t)0x8000)
 
+// Initial min/max sentinel values for temperature accumulators (x10 scale).
+// Any real reading will be below/above these, so the first reading always wins.
+#define TEMP_INIT_MIN_X10  ((int16_t) 9990)   //  999.0 C
+#define TEMP_INIT_MAX_X10  ((int16_t)-9990)   // -999.0 C
+
 // Data needed by the display — passed by value/pointer to avoid
 // coupling the display module to Thermometer's RTC globals.
 struct DisplayStats {
