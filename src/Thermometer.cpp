@@ -238,6 +238,16 @@ DisplayStats make_display_stats()
     boot_count, previous_boot_count, display_refresh_count,
     first_boot_time, next_clear_time, max_battery_mv, bad_pin27_count,
     sensor.SupportsUlp(), wake, wifi_ok, ntp_synced, last_sensor_ok,
+#ifdef USE_DUMMY_SENSOR
+    true,
+#else
+    false,
+#endif
+#ifdef MOCK_DISPLAY_DATA
+    true,
+#else
+    false,
+#endif
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     temp_history, temp_history_count, history_start,
     hourly_history, hourly_history_count, hourly_start,

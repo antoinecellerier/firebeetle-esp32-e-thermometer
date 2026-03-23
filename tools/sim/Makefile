@@ -13,13 +13,15 @@ INCLUDES := \
 TARGET := render_display
 FONT_SCRIPT := $(PROJECT_ROOT)/scripts/generate_font.py
 FONT_STAMP := $(PROJECT_ROOT)/include/generated/.stamp
+FONT_CONFIG := $(PROJECT_ROOT)/include/generated/font_config.h
 
 .PHONY: all clean render screenshots
 
 all: $(TARGET)
 
-# Generate fonts only when the script changes or stamp is missing
-$(FONT_STAMP): $(FONT_SCRIPT)
+# Generate fonts when the script changes, stamp is missing, or PIO
+# overwrote font_config.h (single-display mode clobbers --all output)
+$(FONT_STAMP): $(FONT_SCRIPT) $(FONT_CONFIG)
 	python3 $(FONT_SCRIPT) --all
 	touch $@
 

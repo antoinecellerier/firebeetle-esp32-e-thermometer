@@ -171,6 +171,8 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.wifi_ok = true;
   stats.ntp_synced = true;
   stats.sensor_ok = true;
+  stats.dummy_sensor = true;
+  stats.mock_data = true;
   stats.previous_temp = 22.1f;
   stats.min_temp = 18.5f;
   stats.max_temp = 22.8f;

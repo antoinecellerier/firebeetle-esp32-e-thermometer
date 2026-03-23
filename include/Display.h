@@ -43,6 +43,8 @@ struct DisplayStats {
   bool wifi_ok;        // true if WiFi connected on first boot
   bool ntp_synced;     // true if NTP time sync succeeded
   bool sensor_ok;      // false if last sensor read had an error/fallback
+  bool dummy_sensor;   // true if USE_DUMMY_SENSOR is defined
+  bool mock_data;      // true if MOCK_DISPLAY_DATA is defined
 
   // Temperature context
   float previous_temp;

@@ -983,7 +983,8 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
                                        const DisplayStats &stats)
 {
   // Only render when there's an issue — no clutter when things are normal
-  if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok)
+  if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
+      && !stats.dummy_sensor && !stats.mock_data)
     return;
 
   bool large = (L.dh >= 400 || L.dw >= 600);
@@ -994,6 +995,19 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   int16_t x = L.temp.x + 4;
   int16_t y = L.temp.y + (large ? 16 : 8);
   int16_t line_h = large ? 18 : 9;
+
+  if (stats.dummy_sensor)
+  {
+    gfx.setCursor(x, y);
+    gfx.print("! DUMMY");
+    y += line_h;
+  }
+  if (stats.mock_data)
+  {
+    gfx.setCursor(x, y);
+    gfx.print("! MOCK");
+    y += line_h;
+  }
 
   if (!stats.wifi_ok)
   {
