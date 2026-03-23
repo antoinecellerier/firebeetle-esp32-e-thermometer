@@ -176,7 +176,6 @@ include/
   Display.h            -- TempReading, DailySummary, DisplayStats structs
   DisplayRenderer.h    -- Layout/Rect structs, render function declarations
   MockData.h           -- Shared mock data generation (device + simulator)
-  icons.h              -- PROGMEM bitmap arrays for trend arrows (12x12)
 
 src/
   DisplayRenderer.cpp  -- All rendering logic (shared by device + simulator)
