@@ -28,8 +28,9 @@
 #define SLEEP_INTERVAL_S 60
 #endif
 
-// TODO: Timer safety net when ULP is running — main CPU should wake periodically
-// for housekeeping (daily display clear, battery check) even if temperature is stable.
+// Timer safety net when ULP is running: main CPU wakes periodically for
+// housekeeping (daily display clear, battery check) even if temperature is stable.
+#define ULP_SAFETY_NET_US (3600ULL * 1000000ULL)  // 1 hour
 
 // PPK2 debug pins — wire to PPK2 digital channels for power trace correlation
 // D10/GPIO17 → PPK2 D0: HIGH while main CPU is awake

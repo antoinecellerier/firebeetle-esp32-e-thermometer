@@ -285,7 +285,9 @@ void start_deep_sleep()
   {
     // ULP is polling the sensor — it will wake us when temperature changes
     esp_sleep_enable_ulp_wakeup();
-    LOGI("Sleeping with ULP wakeup only");
+    // Timer safety net for periodic housekeeping (display clear, battery check)
+    esp_sleep_enable_timer_wakeup(ULP_SAFETY_NET_US);
+    LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", (int)(ULP_SAFETY_NET_US / 60000000ULL));
   }
   else
   {
