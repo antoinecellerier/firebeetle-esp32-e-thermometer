@@ -66,6 +66,25 @@ static inline float catmull_rom(float p0, float p1, float p2, float p3, float t)
   return 0.5f * (2*p1 + (-p0+p2)*t + (2*p0-5*p1+4*p2-p3)*t2 + (-p0+3*p1-3*p2+p3)*t3);
 }
 
+static const char *month_abbr[] = {
+  "Jan","Feb","Mar","Apr","May","Jun",
+  "Jul","Aug","Sep","Oct","Nov","Dec"
+};
+
+// Proportional padding with minimum 1°C span, used by all chart Y-range computations.
+static void pad_y_range(float &y_min, float &y_max)
+{
+  float pad = max(0.3f, (y_max - y_min) * 0.15f);
+  y_min -= pad;
+  y_max += pad;
+  if (y_max - y_min < 1.0f)
+  {
+    float mid = (y_max + y_min) / 2;
+    y_min = mid - 0.5f;
+    y_max = mid + 0.5f;
+  }
+}
+
 // --- Layout computation ---
 
 Layout compute_layout(int16_t w, int16_t h)
@@ -152,7 +171,6 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
                          float temp, const DisplayStats &stats)
 {
   Rect z = L.temp;
-  bool large = (L.dh >= 400 || L.dw >= 600);
 
   // --- Main temperature number ---
   char temp_str[16];
@@ -286,16 +304,7 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
   }
   if (valid_count == 0) return;
 
-  // Y range with proportional padding, minimum 1°C span
-  float pad_t = max(0.3f, (t_max - t_min) * 0.15f);
-  t_min -= pad_t;
-  t_max += pad_t;
-  if (t_max - t_min < 1.0f)
-  {
-    float mid = (t_max + t_min) / 2;
-    t_min = mid - 0.5f;
-    t_max = mid + 0.5f;
-  }
+  pad_y_range(t_min, t_max);
   float t_range = t_max - t_min;
   float time_range = (float)(now - window_start);
 
@@ -457,18 +466,16 @@ static void draw_spline_dotted(Adafruit_GFX &gfx,
   }
 }
 
-// Draw a Catmull-Rom spline through an array of Y values evenly spaced on X.
-// If dotted > 0, draw every dotted-th pixel instead of a solid line.
+// Draw a solid Catmull-Rom spline through an array of Y values evenly spaced on X.
 static void draw_spline(Adafruit_GFX &gfx,
                          const int16_t *py, int n,
                          int16_t x0, int16_t chart_w,
                          int16_t y_clamp_min, int16_t y_clamp_max,
-                         int dotted, bool thick, uint16_t color)
+                         bool thick, uint16_t color)
 {
   if (n < 2) return;
   int steps = max(2, chart_w / max(1, n - 1));
 
-  int pixel_count = 0;
   for (int i = 0; i < n - 1; i++)
   {
     float p0 = py[max(0, i - 1)];
@@ -489,14 +496,6 @@ static void draw_spline(Adafruit_GFX &gfx,
       float sy = catmull_rom(p0, p1, p2, p3, t);
       int16_t cur_sy = constrain((int16_t)sy, y_clamp_min, y_clamp_max);
 
-      pixel_count++;
-      if (dotted > 0 && (pixel_count % dotted) >= dotted / 2)
-      {
-        prev_sx = cur_sx;
-        prev_sy = cur_sy;
-        continue; // skip this segment for dotted effect
-      }
-
       gfx.drawLine(prev_sx, prev_sy, cur_sx, cur_sy, color);
       if (thick)
         gfx.drawLine(prev_sx, prev_sy + 1, cur_sx, cur_sy + 1, color);
@@ -505,6 +504,18 @@ static void draw_spline(Adafruit_GFX &gfx,
       prev_sy = cur_sy;
     }
   }
+}
+
+// Access hourly entry i from the circular buffer, including the in-progress
+// current_hour_entry as the last element when has_current_hour is true.
+static HourlyEntry get_hourly_entry(const DisplayStats &stats, int i)
+{
+  if (i < (int)stats.hourly_count)
+  {
+    int idx = (stats.hourly_start + i) % HOURLY_HISTORY_SIZE;
+    return stats.hourly_history[idx];
+  }
+  return stats.current_hour_entry;
 }
 
 // --- Monthly chart: X-axis date labels at midnight boundaries ---
@@ -520,11 +531,6 @@ static void draw_monthly_xlabels(Adafruit_GFX &gfx,
   gfx.setFont(large ? &FreeSans9pt7b : &TomThumb);
   gfx.setTextSize(1);
   gfx.setTextColor(EPD_BLACK);
-
-  static const char *month_abbr[] = {
-    "Jan","Feb","Mar","Apr","May","Jun",
-    "Jul","Aug","Sep","Oct","Nov","Dec"
-  };
 
   // Find the first midnight at or after oldest_time
   struct tm mt;
@@ -583,16 +589,7 @@ static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
 
   for (int i = 0; i < total_pts; i++)
   {
-    HourlyEntry e;
-    if (i < (int)stats.hourly_count)
-    {
-      int idx = (stats.hourly_start + i) % HOURLY_HISTORY_SIZE;
-      e = stats.hourly_history[idx];
-    }
-    else
-    {
-      e = stats.current_hour_entry;
-    }
+    HourlyEntry e = get_hourly_entry(stats, i);
 
     // Forward-fill sentinel entries (cold start / gap) with last known value
     if (e.min_x10 == HOURLY_NO_DATA)
@@ -615,16 +612,7 @@ static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
     if (fmax > y_max_f) y_max_f = fmax;
   }
 
-  // Y range with proportional padding, minimum 1°C span
-  float pad_y = max(0.3f, (y_max_f - y_min_f) * 0.15f);
-  y_min_f -= pad_y;
-  y_max_f += pad_y;
-  if (y_max_f - y_min_f < 1.0f)
-  {
-    float mid = (y_max_f + y_min_f) / 2;
-    y_min_f = mid - 0.5f;
-    y_max_f = mid + 0.5f;
-  }
+  pad_y_range(y_min_f, y_max_f);
   float y_range = y_max_f - y_min_f;
 
   // Gridlines + Y-axis labels
@@ -642,7 +630,7 @@ static void render_monthly_hourly(Adafruit_GFX &gfx, const Rect &zone,
   // Three curves: avg (solid 2px), min/max envelope (dotted 1px, 2px spacing).
   int16_t y_clamp_max = (int16_t)(chart_y + chart_h - 1);
   draw_spline(gfx, py_avg, total_pts, chart_x, chart_w,
-               chart_y, y_clamp_max, 0, true, EPD_BLACK);
+               chart_y, y_clamp_max, true, EPD_BLACK);
   draw_spline_dotted(gfx, py_max, total_pts, chart_x, chart_w,
                       chart_y, y_clamp_max, 2.0f, EPD_BLACK);
   draw_spline_dotted(gfx, py_min, total_pts, chart_x, chart_w,
@@ -685,19 +673,11 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
   int16_t day_min = TEMP_INIT_MIN_X10, day_max = TEMP_INIT_MAX_X10;
   int32_t day_sum = 0;
   int day_count = 0;
+  float y_min = 999.0f, y_max = -999.0f;
 
   for (int i = 0; i < total_hourly; i++)
   {
-    HourlyEntry e;
-    if (i < (int)stats.hourly_count)
-    {
-      int idx = (stats.hourly_start + i) % HOURLY_HISTORY_SIZE;
-      e = stats.hourly_history[idx];
-    }
-    else
-    {
-      e = stats.current_hour_entry;
-    }
+    HourlyEntry e = get_hourly_entry(stats, i);
 
     // Skip sentinel entries (cold start gaps)
     if (e.min_x10 == HOURLY_NO_DATA) { h = (h + 1) % 24; continue; }
@@ -723,6 +703,9 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
       days[num_days].avg_f = (float)day_sum / day_count / 10.0f;
       days[num_days].day = day_tm.tm_mday;
       days[num_days].month = day_tm.tm_mon + 1;
+
+      if (days[num_days].min_f < y_min) y_min = days[num_days].min_f;
+      if (days[num_days].max_f > y_max) y_max = days[num_days].max_f;
       num_days++;
 
       day_min = TEMP_INIT_MIN_X10; day_max = TEMP_INIT_MAX_X10;
@@ -732,24 +715,7 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
 
   if (num_days < 2) return;
 
-  // Y range from derived daily data
-  int16_t overall_min_x10 = TEMP_INIT_MIN_X10, overall_max_x10 = TEMP_INIT_MAX_X10;
-  for (int i = 0; i < num_days; i++)
-  {
-    int16_t mn = (int16_t)(days[i].min_f * 10);
-    int16_t mx = (int16_t)(days[i].max_f * 10);
-    if (mn < overall_min_x10) overall_min_x10 = mn;
-    if (mx > overall_max_x10) overall_max_x10 = mx;
-  }
-
-  float y_min = (overall_min_x10 - 5) / 10.0f;
-  float y_max = (overall_max_x10 + 5) / 10.0f;
-  if (y_max - y_min < 1.0f)
-  {
-    float mid = (y_max + y_min) / 2;
-    y_min = mid - 0.5f;
-    y_max = mid + 0.5f;
-  }
+  pad_y_range(y_min, y_max);
   float y_range = y_max - y_min;
 
   // Gridlines + Y-axis labels
@@ -769,7 +735,7 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
   // On very short charts (< 20px), skip envelope — too cramped to be useful.
   int16_t y_clamp_max = (int16_t)(chart_y + chart_h - 1);
   draw_spline(gfx, py_avg_arr, num_days, chart_x, chart_w,
-               chart_y, y_clamp_max, 0, false, EPD_BLACK);
+               chart_y, y_clamp_max, false, EPD_BLACK);
   if (chart_h >= 20)
   {
     draw_spline_dotted(gfx, py_max_arr, num_days, chart_x, chart_w,
@@ -784,11 +750,6 @@ static void render_monthly_daily(Adafruit_GFX &gfx, const Rect &zone,
     gfx.setFont(large ? &FreeSans9pt7b : &TomThumb);
     gfx.setTextSize(1);
     gfx.setTextColor(EPD_BLACK);
-
-    static const char *month_abbr[] = {
-      "Jan","Feb","Mar","Apr","May","Jun",
-      "Jul","Aug","Sep","Oct","Nov","Dec"
-    };
 
     for (int i = 0; i < num_days; i += 7)
     {
@@ -915,16 +876,13 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
                           (stats.wake_cause == 2) ? "TMR" : "?";
 
   // Format first boot date if NTP-synced (epoch > 1 day means real time)
-  static const char *mon_names[] = {
-    "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"
-  };
   char boot_date[12] = "";
   if (stats.ntp_synced)
   {
     struct tm bt;
     localtime_r(&stats.first_boot_time, &bt);
     snprintf(boot_date, sizeof(boot_date), "%s%d'%02d",
-             mon_names[bt.tm_mon], bt.tm_mday, bt.tm_year % 100);
+             month_abbr[bt.tm_mon], bt.tm_mday, bt.tm_year % 100);
   }
 
   // Center text vertically in the footer zone
@@ -1048,48 +1006,38 @@ void render_empty_battery(Adafruit_GFX &gfx, int16_t w, int16_t h,
   // Compute available height above footer
   int16_t avail_h = L.foot.y;
 
+  int16_t line_gap, y1;
   if (large)
   {
     // Big display: use the build-time generated alert font (no aliased scaling)
     gfx.setFont(get_alert_font(w, h));
-    gfx.setTextSize(1);
-    int16_t line_gap = 70;
-    int16_t y1 = avail_h / 5;
-
-    const char *lines[] = {"EMPTY", "BATTERY", "RECHARGE!"};
-    int16_t tbx, tby; uint16_t tbw, tbh;
-    for (int i = 0; i < 3; i++)
-    {
-      gfx.getTextBounds(lines[i], 0, 0, &tbx, &tby, &tbw, &tbh);
-      gfx.setCursor((w - tbw) / 2 - tbx, y1 + i * line_gap);
-      gfx.print(lines[i]);
-    }
+    line_gap = 70;
+    y1 = avail_h / 5;
   }
   else
   {
-    // Small displays: compact layout, single message + voltage
+    // Small displays: compact layout
     bool use_small = (avail_h < 140 || w < 220);
     gfx.setFont(use_small ? &FreeSansBold18pt7b : &FreeSansBold24pt7b);
-    gfx.setTextSize(1);
 
     int16_t tbx, tby; uint16_t tbw, tbh;
     gfx.getTextBounds("M", 0, 0, &tbx, &tby, &tbw, &tbh);
-    int16_t ascent = -tby; // how far text extends above baseline
-    int16_t line_h = ascent + 5;
+    int16_t ascent = -tby;
+    line_gap = ascent + 5;
 
-    // Stack from top: center the 3-line warning block vertically
-    int16_t warn_h = ascent + line_h * 2;
-    int16_t total_h = warn_h;
-    int16_t y_start = max((int16_t)2, (int16_t)((avail_h - total_h) / 2));
-    int16_t y1 = y_start + ascent; // first baseline
+    int16_t warn_h = ascent + line_gap * 2;
+    int16_t y_start = max((int16_t)2, (int16_t)((avail_h - warn_h) / 2));
+    y1 = y_start + ascent;
+  }
 
-    const char *lines[] = {"EMPTY", "BATTERY", "RECHARGE!"};
-    for (int i = 0; i < 3; i++)
-    {
-      gfx.getTextBounds(lines[i], 0, 0, &tbx, &tby, &tbw, &tbh);
-      gfx.setCursor((w - tbw) / 2 - tbx, y1 + i * line_h);
-      gfx.print(lines[i]);
-    }
+  gfx.setTextSize(1);
+  const char *lines[] = {"EMPTY", "BATTERY", "RECHARGE!"};
+  int16_t tbx, tby; uint16_t tbw, tbh;
+  for (int i = 0; i < 3; i++)
+  {
+    gfx.getTextBounds(lines[i], 0, 0, &tbx, &tby, &tbw, &tbh);
+    gfx.setCursor((w - tbw) / 2 - tbx, y1 + i * line_gap);
+    gfx.print(lines[i]);
   }
 
   gfx.setTextWrap(true);
