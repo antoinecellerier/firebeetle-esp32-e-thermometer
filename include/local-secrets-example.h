@@ -19,6 +19,9 @@
 // Uncomment to disable display
 // #define DISABLE_DISPLAY
 
+// Uncomment if DESPI-C02 VCC is power-gated via P-FET on GPIO13/D7
+// #define EPD_POWER_GATE
+
 // Select active display
 //#define USE_154_Z90 // Tri-Color 200x200 1.54" with 15s full refresh
 //#define USE_154_M09 // Bi-Color 200x200 1.54" with partial updates and 0.83s full refresh

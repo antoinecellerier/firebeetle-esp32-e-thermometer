@@ -46,3 +46,21 @@ can read the sensor during deep sleep.
 | GND     | GND              |
 | 0/D5    | SDA              |
 | 4/D12   | SCL              |
+
+## DESPI-C02 power gate (FDN340P)
+
+The DESPI-C02 adapter board draws ~534 µA quiescent due to its boost converter.
+A P-channel MOSFET on the 3.3V line cuts power during deep sleep.
+
+```
+3.3V ──────┬──────── FDN340P Source (pin 2)
+           │
+          10kΩ
+           │
+13/D7 ─────┴──────── FDN340P Gate (pin 1)
+
+DESPI-C02 3.3V ───── FDN340P Drain (pin 3)
+DESPI-C02 GND ────── GND (direct)
+```
+
+GPIO LOW → display powered on. GPIO HIGH / high-Z (deep sleep) → display off.

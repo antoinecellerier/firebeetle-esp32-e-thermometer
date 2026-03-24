@@ -127,6 +127,19 @@ capacitors leak current even after the display controller is put into deep sleep
 2. **Replace the DESPI-C02** with direct panel wiring using the panel's spec capacitors
 3. **Use a different adapter board** with better sleep characteristics
 
+### Fix implemented: FDN340P power gate (March 2026)
+
+P-channel MOSFET (FDN340P, SOT-23) on the DESPI-C02 3.3V line, gate driven by GPIO13/D7
+with 10kΩ pull-up to 3.3V. See `docs/wiring.md` for circuit details.
+
+- **Deep sleep with power gate: ~18 µA average** (down from ~562 µA)
+- MOSFET cuts all power to DESPI-C02 during deep sleep (GPIO goes high-Z, pull-up holds gate at VCC)
+- Software: `EPD_POWER_GATE` define in `local-secrets.h` enables power control in `Display.cpp`
+- `epd_power_on()` drives GPIO13 LOW + 10ms delay before display init
+- `epd_power_off()` drives GPIO13 HIGH after display hibernate
+
+![BMP390L + ULP + P-FET temperature measurement](thermometer-deepsleep-pfet.png)
+
 ### Adafruit 1.54" eInk breakout — tested and rejected
 
 The Adafruit 1.54" Tri-Color eInk breakout (ThinkInk, product #3625) was tested as an alternative.
@@ -165,9 +178,9 @@ Note: `PPK2_DEBUG_ULP_GPIO` forces RTC peripherals on during deep sleep, which i
 
 - ULP GPIO debug (D13) initially didn't show signal — fixed by removing `rtc_gpio_hold_en()` which was blocking ULP register writes
 - The 562 µA with ULP bit-bang I2C is ~20x better than old wake-every-cycle (~12.6 mA) but ~20x above bare deep sleep floor (~27 µA)
-- The dominant cost is the DESPI-C02 ePaper adapter board (~534 µA quiescent, known hardware issue — see section above)
+- The dominant cost was the DESPI-C02 ePaper adapter board (~534 µA quiescent, known hardware issue — see section above)
 - With EPD disconnected, total sleep current is ~28 µA (ULP + BMP390L + RTC_PERIPH ≈ 1 µA overhead)
-- Fix requires hardware: power-gate DESPI-C02 with MOSFET, replace adapter, or wire panel directly
+- **Resolved:** FDN340P power gate on DESPI-C02 VCC brings deep sleep to ~18 µA — below bare-board baseline (pull-up likely reduces leakage paths)
 
 # XIAO ESP32C6 power measurements (March 2026)
 

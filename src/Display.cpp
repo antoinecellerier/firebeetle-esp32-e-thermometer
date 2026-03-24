@@ -7,8 +7,24 @@
 #define EPD_CS    14 // D6 (was D5/GPIO0, moved to free GPIO0 for RTC I2C SDA)
 #define EPD_BUSY  26 // D3
 #define EPD_RESET 25 // D2
-
 #ifndef DISABLE_DISPLAY
+
+#ifdef EPD_POWER_GATE
+#define EPD_POWER 13 // D7 — P-FET gate: LOW = on, HIGH = off
+static void epd_power_on()
+{
+  pinMode(EPD_POWER, OUTPUT);
+  digitalWrite(EPD_POWER, LOW);
+  delay(10); // let boost converter stabilize
+}
+static void epd_power_off()
+{
+  digitalWrite(EPD_POWER, HIGH);
+}
+#else
+static void epd_power_on() {}
+static void epd_power_off() {}
+#endif
 
 #include "GxEPD2_BW.h"
 #if defined(USE_154_Z90)
@@ -61,9 +77,11 @@ static void init_for_render(int boot_count)
 void display_clear()
 {
 #ifndef DISABLE_DISPLAY
+  epd_power_on();
   display.init(0 /* disable serial debug output */);
   display.clearScreen();
   display.hibernate();
+  epd_power_off();
   LOGI("Done");
 #endif
 }
@@ -73,6 +91,7 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
                               const DisplayStats &stats)
 {
 #ifndef DISABLE_DISPLAY
+  epd_power_on();
   init_for_render(stats.boot_count);
 
   LOGI("Display dashboard (%dx%d)", display.width(), display.height());
@@ -81,6 +100,7 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
 
   display.display();
   display.hibernate();
+  epd_power_off();
   LOGI("Done updating display and powering down");
 #endif
 }
@@ -88,6 +108,7 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
 void display_show_pin27_diagnostic(int boot_count)
 {
 #ifndef DISABLE_DISPLAY
+  epd_power_on();
   init_for_render(boot_count);
   display.setFont(NULL);
   display.setTextSize(2);
@@ -96,6 +117,7 @@ void display_show_pin27_diagnostic(int boot_count)
   display.print("Read pin27 == 0");
   display.display();
   display.hibernate();
+  epd_power_off();
 #endif
 }
 
@@ -103,10 +125,12 @@ void display_show_empty_battery(uint32_t battery_mv, time_t now,
                                 const DisplayStats &stats)
 {
 #ifndef DISABLE_DISPLAY
+  epd_power_on();
   init_for_render(stats.boot_count);
   render_empty_battery(display, display.width(), display.height(),
                         battery_mv, now, stats);
   display.display();
   display.hibernate();
+  epd_power_off();
 #endif
 }
