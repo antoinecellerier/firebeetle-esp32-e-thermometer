@@ -654,7 +654,7 @@ void setup()
   LOGI("CPU frequency: %d", getCpuFrequencyMhz());
   LOGI("Xtal frequency: %d", getXtalFrequencyMhz());
 
-  LOGI("Boot count: %d", boot_count);
+  LOGI("Boot count: %d [%s]", boot_count, GIT_HASH);
   esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
   LOGI("Wakeup caused by %d", (int)wakeup_cause);
 

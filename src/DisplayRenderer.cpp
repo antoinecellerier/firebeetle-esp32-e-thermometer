@@ -914,6 +914,7 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
     gfx.printf(" b27:%d", (int)stats.bad_pin27_count);
   if (boot_date[0])
     gfx.printf(" %s", boot_date);
+  gfx.printf(" %s", GIT_HASH);
 }
 
 // --- Status indicators (top-left corner of temp zone) ---

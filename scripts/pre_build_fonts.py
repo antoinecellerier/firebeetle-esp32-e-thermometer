@@ -1,4 +1,4 @@
-"""PlatformIO pre-build script: generate custom bitmap fonts if needed."""
+"""PlatformIO pre-build script: generate custom bitmap fonts and inject git hash."""
 Import("env")
 
 import subprocess
@@ -18,3 +18,13 @@ def generate_fonts(source, target, env):
     subprocess.check_call(args)
 
 env.AddPreAction("buildprog", generate_fonts)
+
+# Inject short git commit hash as GIT_HASH define
+try:
+    git_hash = subprocess.check_output(
+        ["git", "describe", "--always", "--dirty"],
+        cwd=project_dir, text=True
+    ).strip()
+except Exception:
+    git_hash = "unknown"
+env.Append(CPPDEFINES=[("GIT_HASH", env.StringifyMacro(git_hash))])
