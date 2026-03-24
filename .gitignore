@@ -9,3 +9,4 @@ core
 sdkconfig.*
 managed_components/
 include/generated/
+*.swp
