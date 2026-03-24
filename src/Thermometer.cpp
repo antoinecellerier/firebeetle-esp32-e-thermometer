@@ -10,6 +10,11 @@
 #include <math.h>
 #ifndef DISABLE_WIFI
 #include "WiFi.h"
+#include <Preferences.h>
+#ifdef CONFIG_ESP_WIFI_DPP_SUPPORT
+#include "DppProvisioning.h"
+#include "qrcode.h"
+#endif
 #endif
 
 #include "Display.h"
@@ -457,47 +462,29 @@ void handle_permanent_shutdown(uint32_t battery_mv)
   }
 }
 
-void on_first_boot()
+// Default empty credentials when not defined — allows DPP-only builds
+#ifndef MY_WIFI_SSID
+#define MY_WIFI_SSID ""
+#endif
+#ifndef MY_WIFI_PASSWORD
+#define MY_WIFI_PASSWORD ""
+#endif
+
+#ifndef DISABLE_WIFI
+static bool wait_for_wifi(unsigned long timeout_ms)
 {
-#ifdef DISABLE_WIFI
-  LOGI("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.");
-  // Not an error — suppress "! NO WIFI" indicator on display
-  wifi_ok = true;
-  set_status_led(rgb(255, 255, 0));
-  delay(100);
-#else
-  #if !(defined(MY_WIFI_SSID) && defined(MY_WIFI_PASSWORD))
-    #error "MY_WIFI_SSID and/or MY_WIFI_PASSWORD are not defined. See local-secrets.h to fix."
-  #endif
-  if (*MY_WIFI_SSID == 0)
-  {
-    LOGI("Missing WiFi SSID. Will assume network connectivity isn't possible. See local-secrets.h to fix.");
-    return;
-  }
-
-  // Connect to WiFi with timeout (avoids hanging forever if network is down)
-  LOGI("Connecting to WiFi");
-  set_status_led(rgb(0, 0, 255));
-
-  WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
-  unsigned long wifi_start = millis();
-  const unsigned long WIFI_TIMEOUT_MS = 15000;
+  unsigned long start = millis();
   while (!WiFi.isConnected())
   {
-    if (millis() - wifi_start > WIFI_TIMEOUT_MS)
-    {
-      LOGI("WiFi connection timed out after %lu ms", WIFI_TIMEOUT_MS);
-      WiFi.disconnect(true, true);
-      // wifi_ok stays false, ntp_synced stays false
-      return;
-    }
+    if (millis() - start > timeout_ms)
+      return false;
     delay(100);
-    LOGI("Waiting for WiFi");
   }
-  LOGI("Connected to WiFi");
-  wifi_ok = true;
+  return true;
+}
 
-  // Synchronize time via NTP
+static void sync_ntp()
+{
   LOGI("Synchronizing time");
   set_status_led(rgb(0, 255, 0));
   configTzTime(MY_TZ, "pool.ntp.org");
@@ -509,10 +496,105 @@ void on_first_boot()
   ntp_synced = (first_boot_time > 86400 * 365);
   if (!ntp_synced)
     LOGI("NTP sync failed — time is unreliable");
-
-  WiFi.disconnect(true, true);
-  LOGI("WiFi disconnected");
+}
 #endif
+
+void on_first_boot()
+{
+#ifdef DISABLE_WIFI
+  LOGI("WiFi has been disabled at build time with DISABLE_WIFI. See local-secrets.h to fix.");
+  // Not an error — suppress "! NO WIFI" indicator on display
+  wifi_ok = true;
+  set_status_led(rgb(255, 255, 0));
+  delay(100);
+#else
+  const unsigned long WIFI_TIMEOUT_MS = 15000;
+  WiFi.mode(WIFI_STA);
+
+  // Step 1: try hardcoded credentials
+  if (*MY_WIFI_SSID != 0)
+  {
+    LOGI("Connecting to WiFi (hardcoded: %s)", MY_WIFI_SSID);
+    set_status_led(rgb(0, 0, 255));
+    WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
+    if (wait_for_wifi(WIFI_TIMEOUT_MS))
+    {
+      LOGI("Connected to WiFi (hardcoded)");
+      wifi_ok = true;
+      sync_ntp();
+      WiFi.disconnect(true, true);
+      return;
+    }
+    LOGI("Hardcoded WiFi timed out after %lu ms", WIFI_TIMEOUT_MS);
+    WiFi.disconnect(false); // disconnect but keep WiFi stack running
+  }
+
+  // Step 2: try NVS-stored credentials (from previous DPP provisioning)
+  {
+    Preferences prefs;
+    prefs.begin("wifi", true);
+    String nvs_ssid = prefs.getString("ssid", "");
+    String nvs_pass = prefs.getString("pass", "");
+    prefs.end();
+
+    if (nvs_ssid.length() > 0)
+    {
+      LOGI("Connecting to WiFi (NVS: %s)", nvs_ssid.c_str());
+      set_status_led(rgb(0, 0, 255));
+      WiFi.begin(nvs_ssid.c_str(), nvs_pass.c_str());
+      if (wait_for_wifi(WIFI_TIMEOUT_MS))
+      {
+        LOGI("Connected to WiFi (NVS)");
+        wifi_ok = true;
+        sync_ntp();
+        WiFi.disconnect(true, true);
+        return;
+      }
+      LOGI("NVS WiFi timed out, clearing stale credentials");
+      WiFi.disconnect(false);
+      Preferences prefs_clear;
+      prefs_clear.begin("wifi", false);
+      prefs_clear.clear();
+      prefs_clear.end();
+    }
+  }
+
+#ifdef CONFIG_ESP_WIFI_DPP_SUPPORT
+  // Step 3: DPP provisioning — show QR code and wait for configurator
+  LOGI("Starting DPP provisioning");
+  set_status_led(rgb(255, 0, 255)); // magenta = DPP provisioning
+
+  DppResult dpp = run_dpp_provisioning(120000, [](const char *uri) {
+    // Show QR on e-paper if available, always print to serial
+    display_show_dpp_qr(uri, 1);
+#ifdef DISABLE_DISPLAY
+    // Print ASCII QR to serial console as fallback
+    esp_qrcode_config_t qr_cfg = ESP_QRCODE_CONFIG_DEFAULT();
+    esp_qrcode_generate(&qr_cfg, uri);
+#endif
+    LOGI("DPP URI: %s", uri);
+  });
+
+  if (dpp.success)
+  {
+    LOGI("DPP provisioning succeeded, storing credentials");
+    Preferences prefs;
+    prefs.begin("wifi", false);
+    prefs.putString("ssid", dpp.ssid);
+    prefs.putString("pass", dpp.password);
+    prefs.end();
+
+    wifi_ok = true;
+    sync_ntp();
+    WiFi.disconnect(true, true);
+    return;
+  }
+  LOGI("DPP provisioning failed or timed out");
+#endif // CONFIG_ESP_WIFI_DPP_SUPPORT
+
+  // All attempts failed
+  WiFi.disconnect(true, true);
+#endif // DISABLE_WIFI
 }
 
 

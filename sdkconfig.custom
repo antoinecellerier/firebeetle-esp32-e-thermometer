@@ -1,0 +1,13 @@
+# Disable unused Bluetooth — recovers ~55KB DRAM reserved by BTDM in memory.ld
+# CONFIG_BT_ENABLED is not set
+
+# Disable SPIRAM — board has no PSRAM; removes cache workaround overhead
+# and SPIRAM-aware malloc behavior that breaks heap on non-PSRAM boards
+# CONFIG_SPIRAM is not set
+
+# Enable DPP (Wi-Fi Easy Connect) provisioning
+CONFIG_ESP_WIFI_DPP_SUPPORT=y
+
+# Move framework functions from IRAM to flash (frees IRAM → more DRAM for heap)
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=y
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y

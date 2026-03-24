@@ -91,3 +91,8 @@ void display_show_pin27_diagnostic(int boot_count);
 // Show empty battery warning with stats before permanent shutdown.
 void display_show_empty_battery(uint32_t battery_mv, time_t now,
                                 const DisplayStats &stats);
+
+// Show DPP provisioning QR code on the e-paper display.
+// The QR code encodes the given URI. Does not hibernate — screen stays
+// visible while the device listens for DPP authentication.
+void display_show_dpp_qr(const char *uri, int boot_count);

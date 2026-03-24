@@ -8,6 +8,12 @@
 // re-arms the LP timer and halts. This matches the official ESP-IDF
 // lp_adc example pattern (ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER).
 
+// Guard: this file is for LP core targets only (C6, C5, P4).
+// The lib-recompile path (espidf.py) tries to compile ulp/ files for all
+// targets — skip everything on non-LP-core MCUs like ESP32.
+#include "soc/soc_caps.h"
+#if SOC_LP_CORE_SUPPORTED
+
 // Toggle for testing without BMP390L hardware
 #define LP_CORE_IDLE
 
@@ -109,4 +115,6 @@ int main(void)
     return 0;
 }
 
-#endif
+#endif // LP_CORE_IDLE
+
+#endif // SOC_LP_CORE_SUPPORTED

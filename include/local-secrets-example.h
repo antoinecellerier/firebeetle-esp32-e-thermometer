@@ -1,6 +1,9 @@
 // Copy this sample to local-secrets.h to set values
 
 // WiFi configuration
+// Leave empty or omit entirely to use DPP (Wi-Fi Easy Connect) provisioning
+// instead — the device shows a QR code on the display that you scan with
+// an Android 10+ phone to push credentials without recompiling.
 #define MY_WIFI_SSID ""
 #define MY_WIFI_PASSWORD ""
 // Uncomment to disable wifi at compile time which significantly reduces binary size

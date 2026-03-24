@@ -2,6 +2,10 @@
 #include "DisplayRenderer.h"
 #include "common.h"
 
+#ifndef DISABLE_DISPLAY
+#include "qrcode.h"
+#endif
+
 // 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board to simplify wiring
 #define EPD_DC     2 // D9
 #define EPD_CS    14 // D6 (was D5/GPIO0, moved to free GPIO0 for RTC I2C SDA)
@@ -108,5 +112,59 @@ void display_show_empty_battery(uint32_t battery_mv, time_t now,
                         battery_mv, now, stats);
   display.display();
   display.hibernate();
+#endif
+}
+
+void display_show_dpp_qr(const char *uri, int boot_count)
+{
+#ifndef DISABLE_DISPLAY
+  init_for_render(boot_count);
+
+  // Render QR code via esp_qrcode callback that draws onto the e-paper
+  struct QrRenderCtx {
+    int16_t w, h;
+  };
+  static QrRenderCtx ctx;
+  ctx.w = display.width();
+  ctx.h = display.height();
+
+  esp_qrcode_config_t cfg = {
+    .display_func = [](esp_qrcode_handle_t qrcode) {
+      int qr_size = esp_qrcode_get_size(qrcode);
+      // Use 70% of the shorter display dimension for the QR code
+      int16_t avail = (ctx.w < ctx.h ? ctx.w : ctx.h) * 7 / 10;
+      int scale = avail / qr_size;
+      if (scale < 1) scale = 1;
+      int16_t qr_px = qr_size * scale;
+      int16_t x0 = (ctx.w - qr_px) / 2;
+      int16_t y0 = (ctx.h - qr_px) / 2 - 10; // shift up slightly for text below
+
+      for (int y = 0; y < qr_size; y++) {
+        for (int x = 0; x < qr_size; x++) {
+          if (esp_qrcode_get_module(qrcode, x, y)) {
+            display.fillRect(x0 + x * scale, y0 + y * scale, scale, scale, GxEPD_BLACK);
+          }
+        }
+      }
+
+      // Label below QR code
+      display.setFont(NULL);
+      display.setTextSize(1);
+      display.setTextColor(GxEPD_BLACK);
+      const char *label = "Scan to connect WiFi";
+      int16_t tx = (ctx.w - (int16_t)strlen(label) * 6) / 2;
+      int16_t ty = y0 + qr_px + 8;
+      display.setCursor(tx, ty);
+      display.print(label);
+    },
+    .max_qrcode_version = 10,
+    .qrcode_ecc_level = ESP_QRCODE_ECC_LOW,
+  };
+
+  esp_qrcode_generate(&cfg, uri);
+
+  display.display();
+  // Do NOT hibernate — screen stays visible while DPP listens
+  LOGI("QR code displayed for DPP provisioning");
 #endif
 }
