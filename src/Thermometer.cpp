@@ -662,7 +662,8 @@ void setup()
 
   handle_permanent_shutdown(battery_mv);
 
-  if (wakeup_cause == ESP_SLEEP_WAKEUP_ULP && sensor.SupportsUlp())
+  if ((wakeup_cause == ESP_SLEEP_WAKEUP_ULP || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
+      && sensor.SupportsUlp())
   {
     float temp;
     if (sensor.ReadUlpTemperature(&temp))
@@ -673,7 +674,6 @@ void setup()
     }
     // ULP I2C error — fall through to normal sensor read
     last_sensor_ok = false;
-    // ULP I2C error — fall through to normal sensor read
   }
 
   // TODO: rather than run this only once, run daily/weekly

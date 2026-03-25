@@ -66,6 +66,7 @@ float BMP390LSensor::GetTemperatureC()
     // stale/empty registers.
     _sensor.setPWRMode(DFRobot_BMP3XX::ePressEN | DFRobot_BMP3XX::eTempEN |
                        DFRobot_BMP3XX::eForcedMode);
+    delay(10); // wait for conversion (~5ms at ultra-low precision)
 
     return _sensor.readTempC();
 }
