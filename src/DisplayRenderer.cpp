@@ -195,8 +195,13 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
   int16_t gap = (int16_t)cw * 4 / 10;
   int16_t total_w = (int16_t)tbw + gap + (int16_t)cw;
 
+  // Combined vertical extent of number + "C" (C may be taller than digits)
+  int16_t top = min(tby, cy);              // highest point above baseline
+  int16_t bot = max(tby + (int16_t)tbh, cy + (int16_t)ch); // lowest point below baseline
+  int16_t full_h = bot - top;
+
   int16_t text_x = z.x + (z.w - total_w) / 2 - tbx;
-  int16_t baseline_y = z.y + (z.h + tbh) / 2;
+  int16_t baseline_y = z.y + (z.h - full_h) / 2 - top;
 
   gfx.setCursor(text_x, baseline_y);
   gfx.print(temp_str);
