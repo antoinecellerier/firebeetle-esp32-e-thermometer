@@ -1,5 +1,9 @@
 #include "DisplayRenderer.h"
 
+#ifndef GIT_HASH
+#define GIT_HASH "0000000"
+#endif
+
 #include <math.h>
 #include "Adafruit_GFX.h"
 // Temperature font: generated at build time based on display resolution.
@@ -172,14 +176,13 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
 {
   Rect z = L.temp;
 
-  // --- Main temperature number ---
   char temp_str[16];
   snprintf(temp_str, sizeof(temp_str), "%.1f", temp);
 
-  // Measure digits and "C" suffix (same font for consistent sizing)
   gfx.setFont(L.big_font);
   gfx.setTextSize(1);
   gfx.setTextColor(EPD_BLACK);
+  gfx.setTextWrap(false);
 
   int16_t tbx, tby;
   uint16_t tbw, tbh;
@@ -187,18 +190,19 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
 
   int16_t cx, cy; uint16_t cw, ch;
   gfx.getTextBounds("C", 0, 0, &cx, &cy, &cw, &ch);
-  int16_t suffix_w = 12 + cw; // gap + "C"
 
-  // Center temperature + suffix horizontally and vertically in zone
-  int16_t text_x = z.x + (z.w - (int16_t)(tbw + suffix_w)) / 2 - tbx;
+  // Thin gap between number and "C" (~40% of "C" glyph width)
+  int16_t gap = (int16_t)cw * 4 / 10;
+  int16_t total_w = (int16_t)tbw + gap + (int16_t)cw;
+
+  int16_t text_x = z.x + (z.w - total_w) / 2 - tbx;
   int16_t baseline_y = z.y + (z.h + tbh) / 2;
 
   gfx.setCursor(text_x, baseline_y);
   gfx.print(temp_str);
-
-  int16_t after_x = gfx.getCursorX();
-  gfx.setCursor(after_x + 12, baseline_y);
+  gfx.setCursor(text_x - tbx + (int16_t)tbw + gap - cx, baseline_y);
   gfx.print("C");
+  gfx.setTextWrap(true);
 }
 
 // --- Shared Y-axis gridlines + labels ---
