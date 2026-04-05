@@ -932,8 +932,9 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
                                        const DisplayStats &stats)
 {
   // Only render when there's an issue — no clutter when things are normal
+  bool significant_drift = abs(stats.clock_drift_ms) >= 60000;  // >= 1 minute
   if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
-      && !stats.dummy_sensor && !stats.mock_data)
+      && !stats.dummy_sensor && !stats.mock_data && !significant_drift)
     return;
 
   bool large = (L.dh >= 400 || L.dw >= 600);
@@ -954,6 +955,18 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   else if (!stats.ntp_synced) gfx.print("! NO NTP "); // WiFi connected but NTP failed — different root cause
 
   if (!stats.sensor_ok) gfx.print("! SENSOR ");
+
+  if (significant_drift)
+  {
+    char drift_str[32];
+    int drift_s = (int)(stats.clock_drift_ms / 1000);
+    int interval_d = stats.drift_interval_s / 86400;
+    if (interval_d > 0)
+      snprintf(drift_str, sizeof(drift_str), "! DRIFT %+ds/%dd ", drift_s, interval_d);
+    else
+      snprintf(drift_str, sizeof(drift_str), "! DRIFT %+ds ", drift_s);
+    gfx.print(drift_str);
+  }
 }
 
 // --- Full dashboard render ---

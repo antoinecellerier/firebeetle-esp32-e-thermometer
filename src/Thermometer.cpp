@@ -45,7 +45,7 @@
 
 // Magic value to detect stale RTC memory after firmware change.
 // Increment this whenever the RTC_DATA_ATTR layout changes.
-#define RTC_LAYOUT_VERSION 0xDA020002
+#define RTC_LAYOUT_VERSION 0xDA020003
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -97,6 +97,12 @@ RTC_DATA_ATTR int32_t  current_hour_sum_x10 = 0;
 RTC_DATA_ATTR uint16_t current_hour_sample_count = 0;
 RTC_DATA_ATTR int16_t  current_hour_min_x10 = TEMP_INIT_MIN_X10;
 RTC_DATA_ATTR int16_t  current_hour_max_x10 = TEMP_INIT_MAX_X10;
+
+// Periodic NTP resync state
+RTC_DATA_ATTR time_t next_resync_time = 0;           // when to next attempt NTP resync
+RTC_DATA_ATTR int32_t resync_interval_s = 7 * 86400; // current interval (starts at 1 week)
+RTC_DATA_ATTR int32_t last_drift_ms = 0;             // drift measured at last resync (positive = clock ahead)
+RTC_DATA_ATTR int32_t last_resync_interval_s = 0;    // interval at time of last drift measurement
 
 // Status flags for display error indicators
 RTC_DATA_ATTR bool wifi_ok = false;
@@ -256,6 +262,7 @@ DisplayStats make_display_stats()
 #else
     false,
 #endif
+    last_drift_ms, last_resync_interval_s,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     temp_history, temp_history_count, history_start,
     hourly_history, hourly_history_count, hourly_start,
@@ -306,6 +313,112 @@ void get_time(time_t *now, struct tm *nowtm)
   time(now);
   localtime_r(now, nowtm);
 }
+
+#ifndef DISABLE_WIFI
+// Connect to WiFi with timeout. Returns true on success.
+static const unsigned long WIFI_TIMEOUT_MS = 15000;
+
+static bool wifi_connect()
+{
+  WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
+  unsigned long start = millis();
+  while (!WiFi.isConnected())
+  {
+    if (millis() - start > WIFI_TIMEOUT_MS)
+    {
+      LOGI("WiFi connection timed out after %lu ms", WIFI_TIMEOUT_MS);
+      WiFi.disconnect(true, true);
+      return false;
+    }
+    delay(100);
+    LOGI("Waiting for WiFi");
+  }
+  return true;
+}
+
+// Minimum resync interval (1 day) — floor to avoid hammering WiFi
+#define RESYNC_INTERVAL_MIN  (86400)
+// Maximum resync interval (4 weeks)
+#define RESYNC_INTERVAL_MAX  (28 * 86400)
+
+// Attempt NTP resync if due. Measures clock drift and adjusts next interval.
+static void maybe_ntp_resync(time_t now)
+{
+  if (!ntp_synced)
+    return;  // never synced — nothing to resync against
+  if (next_resync_time == 0)
+  {
+    // First call after boot — schedule initial resync
+    next_resync_time = now + resync_interval_s;
+    return;
+  }
+  if (now < next_resync_time)
+    return;
+
+  LOGI("NTP resync: connecting to WiFi");
+  if (!wifi_connect())
+  {
+    LOGI("NTP resync: WiFi failed, deferring to next scheduled resync");
+    next_resync_time = now + resync_interval_s;
+    return;
+  }
+
+  // Capture pre-sync time for drift measurement
+  time_t before_sync;
+  time(&before_sync);
+
+  configTzTime(MY_TZ, "pool.ntp.org");
+  struct tm t;
+  if (!getLocalTime(&t, 30000U))
+  {
+    LOGI("NTP resync: sync failed, deferring to next scheduled resync");
+    WiFi.disconnect(true, true);
+    next_resync_time = now + resync_interval_s;
+    return;
+  }
+
+  time_t after_sync;
+  time(&after_sync);
+
+  // Drift = what the clock said before sync minus what NTP says now.
+  // Positive = clock was ahead, negative = clock was behind.
+  // after_sync is the corrected time; before_sync was the drifted time.
+  last_drift_ms = (int32_t)(before_sync - after_sync) * 1000;
+  last_resync_interval_s = resync_interval_s;
+  LOGI("NTP resync: drift was %d ms (interval was %d s)",
+       (int)last_drift_ms, (int)resync_interval_s);
+
+  // Only shorten the interval if drift is significant (>= 1 minute).
+  // For a low-fidelity EPD thermometer display, sub-minute drift is invisible.
+  int32_t abs_drift = abs(last_drift_ms);
+  if (abs_drift >= 60000)
+  {
+    // Aim for <60s drift at next resync.
+    // target = 60 * interval_s * 1000 / abs_drift_ms
+    int32_t target = (int32_t)((60LL * resync_interval_s * 1000) / abs_drift);
+    if (target < RESYNC_INTERVAL_MIN)
+      target = RESYNC_INTERVAL_MIN;
+    if (target > RESYNC_INTERVAL_MAX)
+      target = RESYNC_INTERVAL_MAX;
+    resync_interval_s = target;
+    LOGI("NTP resync: significant drift, interval adjusted to %d s (%d h)",
+         (int)resync_interval_s, (int)(resync_interval_s / 3600));
+  }
+  else
+  {
+    // Drift < 1 minute — double the interval (capped)
+    if (resync_interval_s < RESYNC_INTERVAL_MAX / 2)
+      resync_interval_s *= 2;
+    else
+      resync_interval_s = RESYNC_INTERVAL_MAX;
+    LOGI("NTP resync: drift negligible, extending interval to %d s (%d h)",
+         (int)resync_interval_s, (int)(resync_interval_s / 3600));
+  }
+
+  WiFi.disconnect(true, true);
+  next_resync_time = after_sync + resync_interval_s;
+}
+#endif // DISABLE_WIFI
 
 // Battery thresholds (mV).
 // https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
@@ -479,20 +592,10 @@ void on_first_boot()
   LOGI("Connecting to WiFi");
   set_status_led(rgb(0, 0, 255));
 
-  WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
-  unsigned long wifi_start = millis();
-  const unsigned long WIFI_TIMEOUT_MS = 15000;
-  while (!WiFi.isConnected())
+  if (!wifi_connect())
   {
-    if (millis() - wifi_start > WIFI_TIMEOUT_MS)
-    {
-      LOGI("WiFi connection timed out after %lu ms", WIFI_TIMEOUT_MS);
-      WiFi.disconnect(true, true);
-      // wifi_ok stays false, ntp_synced stays false
-      return;
-    }
-    delay(100);
-    LOGI("Waiting for WiFi");
+    // wifi_ok stays false, ntp_synced stays false
+    return;
   }
   LOGI("Connected to WiFi");
   wifi_ok = true;
@@ -558,6 +661,12 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   struct tm nowtm;
   get_time(&now, &nowtm);
 
+#ifndef DISABLE_WIFI
+  maybe_ntp_resync(now);
+  // Re-read time after potential resync correction
+  get_time(&now, &nowtm);
+#endif
+
   update_temp_extremes(temp);
   update_hourly_history(now, &nowtm, temp);
 
@@ -622,6 +731,10 @@ static void reset_rtc_state()
   current_hour_sample_count = 0;
   current_hour_min_x10 = TEMP_INIT_MIN_X10;
   current_hour_max_x10 = TEMP_INIT_MAX_X10;
+  next_resync_time = 0;
+  resync_interval_s = 7 * 86400;
+  last_drift_ms = 0;
+  last_resync_interval_s = 0;
   wifi_ok = false;
   ntp_synced = false;
   last_sensor_ok = true;
@@ -676,7 +789,6 @@ void setup()
     last_sensor_ok = false;
   }
 
-  // TODO: rather than run this only once, run daily/weekly
   if (boot_count == 1)
   {
     initialize_status_led();

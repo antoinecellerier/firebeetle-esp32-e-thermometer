@@ -173,6 +173,8 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.sensor_ok = true;
   stats.dummy_sensor = true;
   stats.mock_data = true;
+  stats.clock_drift_ms = 0;
+  stats.drift_interval_s = 0;
   stats.previous_temp = 22.1f;
   stats.min_temp = 18.5f;
   stats.max_temp = 22.8f;
