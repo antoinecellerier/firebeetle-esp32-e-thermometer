@@ -1,6 +1,7 @@
 #include "sensors/BMP390LSensor.hpp"
 #include "common.h"
 
+#include <math.h>
 #include "DFRobot_BMP3XX.h"
 
 #ifdef HAS_ULP_SUPPORT
@@ -11,10 +12,7 @@ RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
 // --- ULP FSM path (ESP32 original, HULP bit-bang I2C) ---
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
 #include "UlpProgram.h"
-
-#ifdef PPK2_DEBUG_ULP_GPIO
 #include "driver/rtc_io.h"
-#endif
 #endif
 
 // --- LP core path (ESP32-C6, hardware LP I2C) ---
@@ -214,10 +212,46 @@ void BMP390LSensor::InitializeUlp() {}
 // ReadUlpTemperature — two implementations
 // ============================================================
 
+#ifdef HAS_ULP_SUPPORT
+// Maximum plausible temperature jump (°C) between consecutive readings.
+// If a ULP reading differs from the previous by more than this, we do a
+// direct I2C re-read to verify.
+#define TEMP_REREAD_DELTA   5.0f
+// Tolerance for confirming a suspicious ULP reading via direct I2C re-read.
+// BMP390L noise is ~0.05°C; 0.5°C gives margin for thermal drift between reads.
+#define TEMP_REREAD_CONFIRM 0.5f
+
+// Verify a suspicious ULP temperature by doing a direct I2C re-read.
+// Returns true if *temp was accepted or corrected, false if verification failed.
+static bool verify_ulp_temp(TwoWire &wire, float *temp)
+{
+    wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    float reread;
+    bool ok = bmp390l_direct_read(wire, &bmp390l_calib, &reread);
+    wire.end();
+    if (!ok)
+    {
+        LOGI("Direct I2C re-read failed, discarding suspicious ULP value");
+        return false;
+    }
+    LOGI("Direct I2C re-read: %.2f °C", reread);
+    if (fabsf(reread - *temp) <= TEMP_REREAD_CONFIRM)
+    {
+        LOGI("Re-read confirms ULP value, accepting %.2f", *temp);
+    }
+    else
+    {
+        LOGI("Re-read disagrees (ULP=%.2f, I2C=%.2f), using I2C value", *temp, reread);
+        *temp = reread;
+    }
+    return true;
+}
+#endif
+
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
 // --- ESP32 ULP FSM path ---
 
-bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
+bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
 {
     uint16_t wake_reason = ulp_read_var(ULP_DATA_BASE, ULP_VAR_WAKE_REASON);
     uint16_t samples = ulp_read_var(ULP_DATA_BASE, ULP_VAR_SAMPLE_COUNT);
@@ -240,13 +274,30 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
     *temp_out = bmp390l_compensate_temperature(&bmp390l_calib,
                                                 (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
     LOGI("ULP compensated temp: %.2f °C", *temp_out);
+
+#ifdef TEST_CORRUPT_ULP_TEMP
+    LOGI("TEST: corrupting ULP temp %.2f → %.2f", *temp_out, *temp_out + 50.0f);
+    *temp_out += 50.0f;
+#endif
+
+    if (previous_temp != TEMP_NO_PREVIOUS && fabsf(*temp_out - previous_temp) > TEMP_REREAD_DELTA)
+    {
+        LOGI("Suspicious ULP temp %.2f (previous %.2f, delta %.2f) — verifying",
+             *temp_out, previous_temp, *temp_out - previous_temp);
+        // Reclaim I2C pins from RTC GPIO mode (ULP bit-bang leaves them as RTC GPIOs)
+        rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
+        rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
+        if (!verify_ulp_temp(_twoWire, temp_out))
+            return false;
+    }
+
     return true;
 }
 
 #elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP390L)
 // --- ESP32-C6 LP core path ---
 
-bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
+bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
 {
     // Read shared variables from LP core (via generated symbol addresses)
     uint32_t reason = ulp_wake_reason;
@@ -272,13 +323,28 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
     *temp_out = bmp390l_compensate_temperature(&bmp390l_calib,
                                                 (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
     LOGI("LP core compensated temp: %.2f °C", *temp_out);
+
+#ifdef TEST_CORRUPT_ULP_TEMP
+    LOGI("TEST: corrupting LP core temp %.2f → %.2f", *temp_out, *temp_out + 50.0f);
+    *temp_out += 50.0f;
+#endif
+
+    if (previous_temp != TEMP_NO_PREVIOUS && fabsf(*temp_out - previous_temp) > TEMP_REREAD_DELTA)
+    {
+        LOGI("Suspicious LP core temp %.2f (previous %.2f, delta %.2f) — verifying",
+             *temp_out, previous_temp, *temp_out - previous_temp);
+        // C6 LP I2C uses dedicated pins — no RTC GPIO deinit needed
+        if (!verify_ulp_temp(_twoWire, temp_out))
+            return false;
+    }
+
     return true;
 }
 
 #else
 // --- No ULP support ---
 
-bool BMP390LSensor::ReadUlpTemperature(float *temp_out)
+bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
 {
     return false;
 }

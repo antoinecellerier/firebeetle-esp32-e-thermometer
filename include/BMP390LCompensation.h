@@ -34,3 +34,8 @@ bool bmp390l_read_calibration(TwoWire &wire, struct BMP390LCalib *calib);
 // raw_0, raw_1, raw_2 are the three bytes from DATA_0 (0x07), DATA_1, DATA_2.
 float bmp390l_compensate_temperature(const struct BMP390LCalib *calib,
                                      uint8_t raw_0, uint8_t raw_1, uint8_t raw_2);
+
+// Trigger a forced-mode conversion and read compensated temperature via raw I2C.
+// Uses Wire directly — no DFRobot library dependency.  Caller must have called
+// wire.begin() beforehand.  Returns false on I2C error.
+bool bmp390l_direct_read(TwoWire &wire, const struct BMP390LCalib *calib, float *temp_out);

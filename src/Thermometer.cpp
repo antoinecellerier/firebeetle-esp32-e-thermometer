@@ -63,7 +63,7 @@ RTC_DATA_ATTR time_t first_boot_time = 0;
 RTC_DATA_ATTR time_t next_clear_time = 0;
 const time_t one_day = 86400;
 
-RTC_DATA_ATTR float previous_temp = -1;
+RTC_DATA_ATTR float previous_temp = TEMP_NO_PREVIOUS;
 RTC_DATA_ATTR int previous_boot_count = -1;
 
 RTC_DATA_ATTR uint32_t max_battery_mv = 0;
@@ -715,7 +715,7 @@ static void reset_rtc_state()
   display_refresh_count = 0;
   first_boot_time = 0;
   next_clear_time = 0;
-  previous_temp = -1;
+  previous_temp = TEMP_NO_PREVIOUS;
   previous_boot_count = -1;
   max_battery_mv = 0;
   bad_pin27_count = 0;
@@ -779,7 +779,7 @@ void setup()
       && sensor.SupportsUlp())
   {
     float temp;
-    if (sensor.ReadUlpTemperature(&temp))
+    if (sensor.ReadUlpTemperature(&temp, previous_temp))
     {
       last_sensor_ok = true;
       refresh_and_sleep(battery_mv, temp);
@@ -806,7 +806,7 @@ void setup()
     get_time(&mock_now, &mock_nowtm);
     fill_mock_data(mock_now);
     // Force display refresh by invalidating previous_temp
-    previous_temp = -999;
+    previous_temp = TEMP_NO_PREVIOUS;
   }
 #endif
 

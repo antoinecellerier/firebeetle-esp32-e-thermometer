@@ -52,3 +52,38 @@ float bmp390l_compensate_temperature(const struct BMP390LCalib *calib,
 
   return temp_c;
 }
+
+
+// BMP390L register addresses
+#define BMP390L_REG_PWR_CTRL 0x1B
+#define BMP390L_REG_TEMP_0   0x07
+
+// Trigger forced-mode conversion and read compensated temperature via raw Wire.
+// Bypasses DFRobot library — uses same compensation as ULP path.
+bool bmp390l_direct_read(TwoWire &wire, const struct BMP390LCalib *calib, float *temp_out)
+{
+  // Trigger forced-mode conversion: temp_en | press_en | forced_mode
+  wire.beginTransmission(BMP390L_I2C_ADDRESS);
+  wire.write(BMP390L_REG_PWR_CTRL);
+  wire.write(0x13);  // temp_en=1, press_en=1, mode=forced (0b00010011)
+  if (wire.endTransmission() != 0)
+    return false;
+
+  delay(10);  // conversion takes ~5ms at ultra-low precision
+
+  // Burst-read 3 temperature bytes (DATA_0..DATA_2 at 0x07..0x09)
+  wire.beginTransmission(BMP390L_I2C_ADDRESS);
+  wire.write(BMP390L_REG_TEMP_0);
+  if (wire.endTransmission(false) != 0)
+    return false;
+
+  if (wire.requestFrom((uint8_t)BMP390L_I2C_ADDRESS, (uint8_t)3) != 3)
+    return false;
+
+  uint8_t raw_0 = wire.read();
+  uint8_t raw_1 = wire.read();
+  uint8_t raw_2 = wire.read();
+
+  *temp_out = bmp390l_compensate_temperature(calib, raw_0, raw_1, raw_2);
+  return true;
+}

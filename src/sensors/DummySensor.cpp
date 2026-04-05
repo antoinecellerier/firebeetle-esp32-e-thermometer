@@ -37,7 +37,7 @@ void DummySensor::InitializeUlp()
     ESP_ERROR_CHECK(ulp_lp_core_run(&cfg));
 }
 
-bool DummySensor::ReadUlpTemperature(float *temp_out)
+bool DummySensor::ReadUlpTemperature(float *temp_out, float previous_temp)
 {
     uint32_t reason = ulp_wake_reason;
     ulp_wake_reason = 0;
