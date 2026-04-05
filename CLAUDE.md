@@ -25,7 +25,7 @@ IMPORTANT: After any display/rendering change, run the simulator and check the P
 - ULP variant: `SOC_ULP_FSM_SUPPORTED` (ESP32-E) vs `SOC_LP_CORE_SUPPORTED` (C6); unified `HAS_ULP_SUPPORT` macro
 - Temperature storage: `int16_t` × 10 (223 = 22.3°C)
 - Chart styling: thick solid for primary curve (avg), arc-length dotted via `draw_spline_dotted` (~2px spacing) for envelope (min/max)
-- All persistent state uses `RTC_DATA_ATTR`; bump `RTC_LAYOUT_VERSION` when changing struct layout
+- All persistent state uses `RTC_DATA_ATTR`; survives deep sleep but NOT power-on reset (flash/battery swap). Bump `RTC_HISTORY_VERSION` when changing the `RtcHistory` struct, bump `RTC_STATE_VERSION` for other RTC variable changes. The `self_addr` field in `historical_data` auto-detects linker address shifts.
 
 ## Commit style
 

@@ -43,9 +43,21 @@
   #error "Unknown sensor type"
 #endif
 
-// Magic value to detect stale RTC memory after firmware change.
-// Increment this whenever the RTC_DATA_ATTR layout changes.
-#define RTC_LAYOUT_VERSION 0xDA020004
+// --- RTC memory layout ---
+// RTC memory survives deep sleep but NOT power-on reset (firmware upload,
+// battery swap, reset button). RTC_NOINIT_ATTR doesn't help — the FireBeetle
+// board's reset circuit causes a full RTC power cycle on every reset.
+//
+// History is grouped in a struct with a version tag and self_addr field.
+// The self_addr detects if the linker moved the struct (e.g. due to
+// adding/removing other RTC variables). On power-on reset, .rtc.data is
+// zeroed, version won't match, and history is reinitialized cleanly.
+//
+// Bump RTC_HISTORY_VERSION when changing anything inside RtcHistory
+// (struct fields, buffer sizes, semantics).
+// Bump RTC_STATE_VERSION when changing operational state variables below.
+#define RTC_HISTORY_VERSION 0xDA050001
+#define RTC_STATE_VERSION   0xDA050001
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -54,7 +66,37 @@
 
 // Minimum temperature change (C) to trigger a display refresh
 #define DISPLAY_TEMP_DELTA 0.1f
-RTC_DATA_ATTR uint32_t rtc_layout_version = 0;
+
+// History data — new fields must be added at the END (and bump
+// RTC_HISTORY_VERSION). The self_addr field detects if the linker moved
+// the struct between firmware versions.
+struct RtcHistory {
+  uint32_t version;
+  uint32_t self_addr;  // &historical_data at init time; detects address shifts
+
+  // 24h sparkline
+  TempReading temp[TEMP_HISTORY_SIZE];
+  uint8_t temp_count;
+  uint8_t temp_idx;
+
+  // 30-day hourly chart (circular buffer, one entry per clock hour)
+  HourlyEntry hourly[HOURLY_HISTORY_SIZE];
+  uint16_t hourly_count;
+  uint16_t hourly_idx;
+  time_t hourly_latest_time;
+
+  // In-progress hour accumulator (finalized on hour boundary)
+  time_t current_hour_start;
+  int32_t  current_hour_sum_x10;
+  uint16_t current_hour_sample_count;
+  int16_t  current_hour_min_x10;
+  int16_t  current_hour_max_x10;
+};
+RTC_DATA_ATTR RtcHistory historical_data;
+
+// Operational state — changes here are caught by self_addr if the linker
+// shifts historical_data, and by RTC_STATE_VERSION for format changes.
+RTC_DATA_ATTR uint32_t rtc_state_version = 0;
 
 RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int display_refresh_count = 0;
@@ -70,33 +112,9 @@ RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
 RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 
-// Temperature history for 24h sparkline
-RTC_DATA_ATTR TempReading temp_history[TEMP_HISTORY_SIZE];
-RTC_DATA_ATTR uint8_t temp_history_count = 0;
-RTC_DATA_ATTR uint8_t temp_history_idx = 0;
-
 // Min/max temperature since boot
 RTC_DATA_ATTR float min_temp_since_boot = TEMP_INIT_MIN;
 RTC_DATA_ATTR float max_temp_since_boot = TEMP_INIT_MAX;
-
-// Hourly temperature history for 30-day chart (circular buffer in RTC memory).
-// Each entry summarizes one clock hour: min/max capture transient events
-// (window opens, sun/shadow, wind), avg tracks the underlying trend.
-// Populated on every main CPU wake (delta-triggered + hourly safety-net).
-// Total RTC usage: 720 × 6 bytes = 4320 bytes.
-RTC_DATA_ATTR HourlyEntry hourly_history[HOURLY_HISTORY_SIZE];
-RTC_DATA_ATTR uint16_t hourly_history_count = 0;
-RTC_DATA_ATTR uint16_t hourly_history_idx = 0;
-RTC_DATA_ATTR time_t hourly_latest_time = 0;
-
-// In-progress hour accumulator. Temperature readings are accumulated here
-// on every wake until the clock hour changes, at which point the entry is
-// finalized (avg = sum/count) and appended to hourly_history.
-RTC_DATA_ATTR time_t current_hour_start = 0;     // start-of-hour time, 0 = uninitialized
-RTC_DATA_ATTR int32_t  current_hour_sum_x10 = 0;
-RTC_DATA_ATTR uint16_t current_hour_sample_count = 0;
-RTC_DATA_ATTR int16_t  current_hour_min_x10 = TEMP_INIT_MIN_X10;
-RTC_DATA_ATTR int16_t  current_hour_max_x10 = TEMP_INIT_MAX_X10;
 
 // Periodic NTP resync state
 RTC_DATA_ATTR time_t next_resync_time = 0;           // when to next attempt NTP resync
@@ -115,23 +133,23 @@ static void append_temp_history(time_t now, float temp)
   // no display refreshes), insert a point just before the new reading at the
   // previous temperature. This anchors the flat region so the sparkline
   // renderer draws a continuous line instead of a gap.
-  if (temp_history_count > 0)
+  if (historical_data.temp_count > 0)
   {
-    int prev_idx = (temp_history_idx + TEMP_HISTORY_SIZE - 1) % TEMP_HISTORY_SIZE;
-    time_t prev_time = temp_history[prev_idx].timestamp;
+    int prev_idx = (historical_data.temp_idx + TEMP_HISTORY_SIZE - 1) % TEMP_HISTORY_SIZE;
+    time_t prev_time = historical_data.temp[prev_idx].timestamp;
     if (now - prev_time > 3600)  // arbitrary; harmless even if lowered
     {
-      temp_history[temp_history_idx] = { now - 1, temp_history[prev_idx].temp_x10 };
-      temp_history_idx = (temp_history_idx + 1) % TEMP_HISTORY_SIZE;
-      if (temp_history_count < TEMP_HISTORY_SIZE)
-        temp_history_count++;
+      historical_data.temp[historical_data.temp_idx] = { now - 1, historical_data.temp[prev_idx].temp_x10 };
+      historical_data.temp_idx = (historical_data.temp_idx + 1) % TEMP_HISTORY_SIZE;
+      if (historical_data.temp_count < TEMP_HISTORY_SIZE)
+        historical_data.temp_count++;
     }
   }
 
-  temp_history[temp_history_idx] = { now, (int16_t)(temp * 10) };
-  temp_history_idx = (temp_history_idx + 1) % TEMP_HISTORY_SIZE;
-  if (temp_history_count < TEMP_HISTORY_SIZE)
-    temp_history_count++;
+  historical_data.temp[historical_data.temp_idx] = { now, (int16_t)(temp * 10) };
+  historical_data.temp_idx = (historical_data.temp_idx + 1) % TEMP_HISTORY_SIZE;
+  if (historical_data.temp_count < TEMP_HISTORY_SIZE)
+    historical_data.temp_count++;
 }
 
 // Update the hourly history buffer with a new temperature reading.
@@ -149,20 +167,20 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
   hour_tm.tm_sec = 0;
   time_t hour_start = mktime(&hour_tm);
 
-  if (current_hour_start != 0 && hour_start != current_hour_start)
+  if (historical_data.current_hour_start != 0 && hour_start != historical_data.current_hour_start)
   {
     // Clock hour changed — finalize the completed hour's entry
     HourlyEntry entry;
-    entry.min_x10 = current_hour_min_x10;
-    entry.max_x10 = current_hour_max_x10;
-    entry.avg_x10 = (current_hour_sample_count > 0)
-      ? (int16_t)(current_hour_sum_x10 / current_hour_sample_count)
-      : current_hour_min_x10;
+    entry.min_x10 = historical_data.current_hour_min_x10;
+    entry.max_x10 = historical_data.current_hour_max_x10;
+    entry.avg_x10 = (historical_data.current_hour_sample_count > 0)
+      ? (int16_t)(historical_data.current_hour_sum_x10 / historical_data.current_hour_sample_count)
+      : historical_data.current_hour_min_x10;
 
-    hourly_history[hourly_history_idx] = entry;
-    hourly_history_idx = (hourly_history_idx + 1) % HOURLY_HISTORY_SIZE;
-    if (hourly_history_count < HOURLY_HISTORY_SIZE)
-      hourly_history_count++;
+    historical_data.hourly[historical_data.hourly_idx] = entry;
+    historical_data.hourly_idx = (historical_data.hourly_idx + 1) % HOURLY_HISTORY_SIZE;
+    if (historical_data.hourly_count < HOURLY_HISTORY_SIZE)
+      historical_data.hourly_count++;
 
     // Fill any skipped hours with the finalized entry's values.
     // Skipped hours mean the ULP safety-net woke but no delta was detected,
@@ -170,40 +188,40 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
     // Uses time_t difference (UTC-based) so DST transitions are handled
     // correctly — a "spring forward" skip produces one fill, a "fall back"
     // repeat produces hours_elapsed=0 (no fill needed).
-    int hours_elapsed = (int)((hour_start - current_hour_start) / 3600);
+    int hours_elapsed = (int)((hour_start - historical_data.current_hour_start) / 3600);
     if (hours_elapsed > HOURLY_HISTORY_SIZE)
       hours_elapsed = HOURLY_HISTORY_SIZE;
     for (int i = 1; i < hours_elapsed; i++)
     {
-      hourly_history[hourly_history_idx] = entry;  // repeat last known value
-      hourly_history_idx = (hourly_history_idx + 1) % HOURLY_HISTORY_SIZE;
-      if (hourly_history_count < HOURLY_HISTORY_SIZE)
-        hourly_history_count++;
+      historical_data.hourly[historical_data.hourly_idx] = entry;  // repeat last known value
+      historical_data.hourly_idx = (historical_data.hourly_idx + 1) % HOURLY_HISTORY_SIZE;
+      if (historical_data.hourly_count < HOURLY_HISTORY_SIZE)
+        historical_data.hourly_count++;
     }
 
     // Update reference time: the last written entry's start-of-hour
-    hourly_latest_time = hour_start - 3600;
+    historical_data.hourly_latest_time = hour_start - 3600;
 
     // Reset accumulator for the new hour
-    current_hour_sum_x10 = 0;
-    current_hour_sample_count = 0;
-    current_hour_min_x10 = TEMP_INIT_MIN_X10;
-    current_hour_max_x10 = TEMP_INIT_MAX_X10;
+    historical_data.current_hour_sum_x10 = 0;
+    historical_data.current_hour_sample_count = 0;
+    historical_data.current_hour_min_x10 = TEMP_INIT_MIN_X10;
+    historical_data.current_hour_max_x10 = TEMP_INIT_MAX_X10;
   }
 
   // First reading after boot — initialize reference time
-  if (current_hour_start == 0)
-    hourly_latest_time = hour_start;
+  if (historical_data.current_hour_start == 0)
+    historical_data.hourly_latest_time = hour_start;
 
-  current_hour_start = hour_start;
+  historical_data.current_hour_start = hour_start;
 
   // Accumulate reading into current hour's stats
-  current_hour_sample_count++;
-  current_hour_sum_x10 += temp_x10;
-  if (temp_x10 < current_hour_min_x10)
-    current_hour_min_x10 = temp_x10;
-  if (temp_x10 > current_hour_max_x10)
-    current_hour_max_x10 = temp_x10;
+  historical_data.current_hour_sample_count++;
+  historical_data.current_hour_sum_x10 += temp_x10;
+  if (temp_x10 < historical_data.current_hour_min_x10)
+    historical_data.current_hour_min_x10 = temp_x10;
+  if (temp_x10 > historical_data.current_hour_max_x10)
+    historical_data.current_hour_max_x10 = temp_x10;
 }
 
 static void update_temp_extremes(float temp)
@@ -219,9 +237,9 @@ static void update_temp_extremes(float temp)
 
 static void fill_mock_data(time_t now)
 {
-  mock_fill_sparkline(now, temp_history, &temp_history_count, &temp_history_idx);
-  mock_fill_hourly(now, hourly_history, &hourly_history_count, &hourly_history_idx,
-                   &hourly_latest_time);
+  mock_fill_sparkline(now, historical_data.temp, &historical_data.temp_count, &historical_data.temp_idx);
+  mock_fill_hourly(now, historical_data.hourly, &historical_data.hourly_count, &historical_data.hourly_idx,
+                   &historical_data.hourly_latest_time);
 
   min_temp_since_boot = 18.5f;
   max_temp_since_boot = 22.8f;
@@ -232,23 +250,23 @@ static void fill_mock_data(time_t now)
   localtime_r(&now, &now_tm);
   now_tm.tm_min = 0;
   now_tm.tm_sec = 0;
-  current_hour_start = mktime(&now_tm);
-  current_hour_sample_count = 3;
-  current_hour_sum_x10 = 223 * 3;  // 22.3°C × 3 readings
-  current_hour_min_x10 = 219;      // 21.9°C
-  current_hour_max_x10 = 228;      // 22.8°C
+  historical_data.current_hour_start = mktime(&now_tm);
+  historical_data.current_hour_sample_count = 3;
+  historical_data.current_hour_sum_x10 = 223 * 3;  // 22.3°C × 3 readings
+  historical_data.current_hour_min_x10 = 219;      // 21.9°C
+  historical_data.current_hour_max_x10 = 228;      // 22.8°C
 }
 #endif
 
 DisplayStats make_display_stats()
 {
   // Compute circular buffer start indices (oldest entry)
-  uint8_t history_start = (temp_history_count < TEMP_HISTORY_SIZE)
+  uint8_t history_start = (historical_data.temp_count < TEMP_HISTORY_SIZE)
     ? 0
-    : temp_history_idx;
-  uint16_t hourly_start = (hourly_history_count < HOURLY_HISTORY_SIZE)
+    : historical_data.temp_idx;
+  uint16_t hourly_start = (historical_data.hourly_count < HOURLY_HISTORY_SIZE)
     ? 0
-    : hourly_history_idx;
+    : historical_data.hourly_idx;
 
   // Map ESP-IDF wake cause to a portable int for display
   esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
@@ -256,13 +274,13 @@ DisplayStats make_display_stats()
              (cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 : 0;
 
   // Compute in-progress hour entry from accumulator
-  bool has_current = (current_hour_sample_count > 0);
+  bool has_current = (historical_data.current_hour_sample_count > 0);
   HourlyEntry current_entry = {};
   if (has_current)
   {
-    current_entry.min_x10 = current_hour_min_x10;
-    current_entry.max_x10 = current_hour_max_x10;
-    current_entry.avg_x10 = (int16_t)(current_hour_sum_x10 / current_hour_sample_count);
+    current_entry.min_x10 = historical_data.current_hour_min_x10;
+    current_entry.max_x10 = historical_data.current_hour_max_x10;
+    current_entry.avg_x10 = (int16_t)(historical_data.current_hour_sum_x10 / historical_data.current_hour_sample_count);
   }
 
   return {
@@ -281,9 +299,9 @@ DisplayStats make_display_stats()
 #endif
     last_drift_ms, last_resync_interval_s,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
-    temp_history, temp_history_count, history_start,
-    hourly_history, hourly_history_count, hourly_start,
-    hourly_latest_time, current_entry, has_current
+    historical_data.temp, historical_data.temp_count, history_start,
+    historical_data.hourly, historical_data.hourly_count, hourly_start,
+    historical_data.hourly_latest_time, current_entry, has_current
   };
 }
 
@@ -724,8 +742,19 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 }
 
 
-// Reset all RTC-persisted state to initial values.
-// Called when RTC_LAYOUT_VERSION changes (firmware update with new layout).
+// Reset history buffers (sparkline + hourly).
+// Called when the history data format changes (struct layout, buffer sizes).
+static void reset_rtc_history()
+{
+  memset(&historical_data, 0, sizeof(historical_data));
+  historical_data.current_hour_min_x10 = TEMP_INIT_MIN_X10;
+  historical_data.current_hour_max_x10 = TEMP_INIT_MAX_X10;
+  historical_data.version = RTC_HISTORY_VERSION;
+  historical_data.self_addr = (uint32_t)&historical_data;
+}
+
+// Reset operational state (counters, flags, thresholds).
+// Called when non-history RTC variables change. Preserves history.
 static void reset_rtc_state()
 {
   boot_count = 0;
@@ -736,18 +765,8 @@ static void reset_rtc_state()
   previous_boot_count = -1;
   max_battery_mv = 0;
   bad_pin27_count = 0;
-  temp_history_count = 0;
-  temp_history_idx = 0;
   min_temp_since_boot = TEMP_INIT_MIN;
   max_temp_since_boot = TEMP_INIT_MAX;
-  hourly_history_count = 0;
-  hourly_history_idx = 0;
-  hourly_latest_time = 0;
-  current_hour_start = 0;
-  current_hour_sum_x10 = 0;
-  current_hour_sample_count = 0;
-  current_hour_min_x10 = TEMP_INIT_MIN_X10;
-  current_hour_max_x10 = TEMP_INIT_MAX_X10;
   next_resync_time = 0;
   resync_interval_s = 7 * 86400;
   last_drift_ms = 0;
@@ -755,7 +774,7 @@ static void reset_rtc_state()
   wifi_ok = false;
   ntp_synced = false;
   last_sensor_ok = true;
-  rtc_layout_version = RTC_LAYOUT_VERSION;
+  rtc_state_version = RTC_STATE_VERSION;
 }
 
 void setup()
@@ -768,10 +787,24 @@ void setup()
 #endif
   PPK2_CPU_ACTIVE_HIGH();
 
-  // Detect stale RTC memory from a different firmware version
-  if (rtc_layout_version != RTC_LAYOUT_VERSION)
+  // Detect stale RTC memory from a different firmware version.
+  // Three checks: version tag mismatch (format changed), address shift
+  // (linker moved the struct due to other RTC variable changes), and
+  // state version mismatch (non-history RTC variables changed).
+  if (historical_data.version != RTC_HISTORY_VERSION ||
+      historical_data.self_addr != (uint32_t)&historical_data)
   {
-    LOGI("RTC layout version mismatch — resetting all RTC state");
+    if (historical_data.version != RTC_HISTORY_VERSION)
+      LOGI("RTC history version mismatch — resetting history");
+    else
+      LOGI("RTC history address shifted (was 0x%08x, now 0x%08x) — resetting history",
+           (unsigned)historical_data.self_addr, (unsigned)(uint32_t)&historical_data);
+    reset_rtc_history();
+    reset_rtc_state();
+  }
+  else if (rtc_state_version != RTC_STATE_VERSION)
+  {
+    LOGI("RTC state version mismatch — resetting state (history preserved)");
     reset_rtc_state();
   }
 
@@ -816,7 +849,7 @@ void setup()
 #ifdef MOCK_DISPLAY_DATA
   // Fill mock data if history is empty (handles both first boot and stale RTC
   // memory after firmware upload without power-cycle)
-  if (temp_history_count == 0)
+  if (historical_data.temp_count == 0)
   {
     time_t mock_now;
     struct tm mock_nowtm;

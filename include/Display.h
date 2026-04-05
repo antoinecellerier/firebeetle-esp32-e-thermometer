@@ -4,7 +4,9 @@
 #include <stdint.h>
 
 // A single temperature reading with timestamp, for the 24h sparkline.
-struct TempReading {
+// Packed to save 2 bytes per entry (6 vs 8); safe on ESP32 Xtensa (handles
+// unaligned loads) and x86 (simulator).
+struct __attribute__((packed)) TempReading {
   time_t timestamp;
   int16_t temp_x10;  // temperature * 10, e.g. 223 = 22.3°C
 };
