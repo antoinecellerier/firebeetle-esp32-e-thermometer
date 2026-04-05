@@ -21,7 +21,7 @@ struct HourlyEntry {
   int16_t avg_x10;  // average temperature × 10 (from accumulated readings)
 };
 
-#define TEMP_HISTORY_SIZE 96
+#define TEMP_HISTORY_SIZE 192
 #define HOURLY_HISTORY_SIZE 720  // 30 days × 24 hours/day
 
 // Sentinel value for hours with no readings (e.g., gap after device restart).

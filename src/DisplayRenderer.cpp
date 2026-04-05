@@ -352,9 +352,6 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
 
   for (int i = 0; i < num_pts - 1; i++)
   {
-    // Break the line at gaps > 4 hours (stable temperature, no readings)
-    if (pt_arr[i + 1] - pt_arr[i] > 4 * 3600) continue;
-
     // Control points: clamp at boundaries by duplicating endpoints
     float x0 = px_arr[max(0, i - 1)], y0 = py_arr[max(0, i - 1)];
     float x1 = px_arr[i],             y1 = py_arr[i];

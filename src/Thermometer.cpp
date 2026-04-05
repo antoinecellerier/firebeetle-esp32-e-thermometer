@@ -45,7 +45,7 @@
 
 // Magic value to detect stale RTC memory after firmware change.
 // Increment this whenever the RTC_DATA_ATTR layout changes.
-#define RTC_LAYOUT_VERSION 0xDA020003
+#define RTC_LAYOUT_VERSION 0xDA020004
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -111,6 +111,23 @@ RTC_DATA_ATTR bool last_sensor_ok = true;
 
 static void append_temp_history(time_t now, float temp)
 {
+  // Backfill: if there's a long gap since the last entry (stable temperature,
+  // no display refreshes), insert a point just before the new reading at the
+  // previous temperature. This anchors the flat region so the sparkline
+  // renderer draws a continuous line instead of a gap.
+  if (temp_history_count > 0)
+  {
+    int prev_idx = (temp_history_idx + TEMP_HISTORY_SIZE - 1) % TEMP_HISTORY_SIZE;
+    time_t prev_time = temp_history[prev_idx].timestamp;
+    if (now - prev_time > 3600)  // arbitrary; harmless even if lowered
+    {
+      temp_history[temp_history_idx] = { now - 1, temp_history[prev_idx].temp_x10 };
+      temp_history_idx = (temp_history_idx + 1) % TEMP_HISTORY_SIZE;
+      if (temp_history_count < TEMP_HISTORY_SIZE)
+        temp_history_count++;
+    }
+  }
+
   temp_history[temp_history_idx] = { now, (int16_t)(temp * 10) };
   temp_history_idx = (temp_history_idx + 1) % TEMP_HISTORY_SIZE;
   if (temp_history_count < TEMP_HISTORY_SIZE)
