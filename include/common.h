@@ -10,7 +10,7 @@
 #define LOGI(...)
 #endif
 
-// I2C pins — BMP390L must be wired to these
+// I2C pins — BMP390L or BMP58x must be wired to these
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
 // RTC I2C pins for ULP bit-bang I2C (HULP)
 #define I2C_SDA_PIN 0  // GPIO0 (D5) — RTC I2C SDA

@@ -36,6 +36,9 @@
 #elif defined(USE_BMP390L)
   #include "sensors/BMP390LSensor.hpp"
   BMP390LSensor sensor;
+#elif defined(USE_BMP58x)
+  #include "sensors/BMP58xSensor.hpp"
+  BMP58xSensor sensor;
 #elif defined(USE_DUMMY_SENSOR)
   #include "sensors/DummySensor.hpp"
   DummySensor sensor;

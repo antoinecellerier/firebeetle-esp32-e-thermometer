@@ -1,12 +1,13 @@
 #pragma once
 
-// ULP coprocessor program for BMP390L temperature polling
+// ULP coprocessor program for BMP390L / BMP58x temperature polling
 //
-// The ULP wakes periodically, triggers a forced-mode measurement on the BMP390L
+// The ULP wakes periodically, triggers a forced-mode measurement on the sensor
 // via bit-bang I2C (HULP), reads the raw temperature bytes, and compares the middle byte
-// (DATA_1, ~0.4°C resolution) against the previous reading. If the delta exceeds
-// the threshold, it wakes the main CPU to update the display.
+// (DATA_1) against the previous reading. If the delta exceeds the threshold, it wakes
+// the main CPU to update the display.
 //
+// Sensor selection: USE_BMP390L or USE_BMP58x (compile-time, from local-secrets.h)
 // I2C pins: GPIO0=SDA, GPIO4=SCL (bit-bang via HULP; EPD_CS moved to GPIO14/D6)
 
 #include "common.h"
