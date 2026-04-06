@@ -324,7 +324,6 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
   // Collect data points within the 24h window
   int16_t px_arr[TEMP_HISTORY_SIZE];
   int16_t py_arr[TEMP_HISTORY_SIZE];
-  time_t  pt_arr[TEMP_HISTORY_SIZE];
   int num_pts = 0;
 
   for (int i = 0; i < stats.history_count; i++)
@@ -341,33 +340,33 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
 
     px_arr[num_pts] = px;
     py_arr[num_pts] = py;
-    pt_arr[num_pts] = r.timestamp;
     num_pts++;
   }
 
   // Draw Catmull-Rom spline through the data points.
-  // This produces a smooth curve that passes through each point
-  // without the angular joints of piecewise linear interpolation.
+  // X advances linearly (it's time — always monotonic); only Y is
+  // spline-interpolated. This avoids parametric x-overshoot that
+  // caused the chart line to zigzag back and forth in time.
   int16_t steps_per_seg = large ? 16 : (medium ? 8 : 4);
 
   for (int i = 0; i < num_pts - 1; i++)
   {
-    // Control points: clamp at boundaries by duplicating endpoints
-    float x0 = px_arr[max(0, i - 1)], y0 = py_arr[max(0, i - 1)];
-    float x1 = px_arr[i],             y1 = py_arr[i];
-    float x2 = px_arr[i + 1],         y2 = py_arr[i + 1];
-    float x3 = px_arr[min(num_pts-1, i+2)], y3 = py_arr[min(num_pts-1, i+2)];
+    // Y control points for Catmull-Rom (clamp at boundaries)
+    float y0 = py_arr[max(0, i - 1)];
+    float y1 = py_arr[i];
+    float y2 = py_arr[i + 1];
+    float y3 = py_arr[min(num_pts-1, i+2)];
 
-    int16_t prev_sx = (int16_t)x1, prev_sy = (int16_t)y1;
+    int16_t prev_sx = px_arr[i], prev_sy = (int16_t)y1;
 
     for (int s = 1; s <= steps_per_seg; s++)
     {
       float t = (float)s / steps_per_seg;
 
-      float sx = catmull_rom(x0, x1, x2, x3, t);
+      int16_t cur_sx = px_arr[i] + (int16_t)(t * (px_arr[i + 1] - px_arr[i]));
       float sy = catmull_rom(y0, y1, y2, y3, t);
 
-      int16_t cur_sx = constrain((int16_t)sx, chart_x, (int16_t)(chart_x + chart_w - 1));
+      cur_sx = constrain(cur_sx, chart_x, (int16_t)(chart_x + chart_w - 1));
       int16_t cur_sy = constrain((int16_t)sy, chart_y, (int16_t)(chart_y + chart_h - 1));
 
       gfx.drawLine(prev_sx, prev_sy, cur_sx, cur_sy, EPD_BLACK);
