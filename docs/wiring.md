@@ -33,7 +33,7 @@
 
 - Firebeetle ESP32-E
 - Sensor:
-  - Fermion: BMP390L Digital Barometric Pressure Sensor (Breakout)
+  - Fermion: BMP390L Digital Barometric Pressure Sensor (Breakout, SEN0423)
 - Display:
   - DESPI-C02 + GDEW0213M21 (or 1.54" Z90c tricolor)
 
@@ -54,7 +54,7 @@ differs (0x47 vs 0x77), so both sensors can coexist on the same bus.
 
 - Sensor:
   - Fermion: BMP581 Digital Barometric Pressure Sensor (SEN0667), or
-  - Fermion: BMP585 Digital Barometric Pressure Sensor (product-3071)
+  - Fermion: BMP585 Digital Barometric Pressure Sensor (SEN0666)
 
 | ESP32   | BMP58x breakout |
 |---------|-----------------|
@@ -84,3 +84,60 @@ DESPI-C02 GND ────── GND (direct)
 ```
 
 GPIO LOW → display powered on. GPIO HIGH / high-Z (deep sleep) → display off.
+
+# Xiao Seed ESP32C6 + BMPxxx
+
+- Xiao Seed ESP32C6
+- Sensor:
+  - Fermion BMP581
+- Display + DESPI-CO2 + FDN340P
+- Battery JST-2 PH-2P connectors on BAT - / +
+- Current measurement - https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/#reading-battery-voltage
+
+## Sensor
+| Xiao ESP32C6      | BMP581 breakout |
+|-------------------|-----------------|
+| 3V3               | VCC             |
+| GND               | GND             |
+| LP I2C SDA (MTCK) | SDA             |
+| LP I2C SCL (MTDO) | SCL             |
+
+## Battery
+```
+A0 (D0) ──┬──200kΩ── Bat - ── PH-2P right
+          │
+          ┴──200kΩ── Bat + ── PH-2P left
+```
+
+## Display
+
+Wiring to the DESPI-C02 using same digital pins as Firebeetle?
+
+| Xiao ESP32C6 | DESPI-C02 |
+|--------------|-----------|
+| 3.3V         | 3.3V      |
+| GND          | GND       |
+| MOSI (D10)   | SDI       |
+| SCK (D8)     | SCK       |
+| D6           | CS        |
+| D9           | D/C       |
+| D2           | RES       |
+| D3           | BUSY      |
+
+Use D7 for the MOSFET Gate
+
+## Unused pins
+
+Breakout:
+VBUS
+D1
+D4
+D5
+
+Under board:
+MTDI
+GND
+EN
+MTMS
+3V3
+BOOT
