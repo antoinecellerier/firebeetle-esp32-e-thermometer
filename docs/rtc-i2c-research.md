@@ -667,13 +667,15 @@ write, with NACK and arbitration-loss error callbacks.
 When the bit-bang subroutine (~76 instructions) is included in the program,
 ESP-IDF's `M_MOVL(reg, label)` macro produces incorrect addresses for labels
 defined after the subroutine. The workaround is to use `I_MOVI(reg, constant)`
-with a fixed `ULP_DATA_BASE` address (200) instead of label-relative data areas.
+with a fixed `ULP_DATA_BASE` address instead of label-relative data areas.
+**Note:** `ULP_DATA_BASE` must be past the end of all `.rtc.data` / `.rtc.force_slow`
+sections — these share the same 8KB physical memory. The post-build script verifies this.
 
 ### Verified working configuration
 
 - **I2C method**: HULP bit-bang (`hulp_i2cbb.h`), NOT hardware RTC I2C
 - **Bus recovery**: 9 SCL clocks + STOP after `Wire.end()`, before pin reconfig
 - **Pin mode**: `RTC_GPIO_MODE_INPUT_ONLY` with `GPIO_PULLUP_ONLY`
-- **Data area**: Fixed at `RTC_SLOW_MEM[200]`, not label-based
+- **Data area**: Fixed at `RTC_SLOW_MEM[ULP_DATA_BASE]`, not label-based (must be past .rtc.data)
 - **Temperature**: BMP390L chip_id=0x60 confirmed, compensated temp matches sensor
 - **Delta wake**: ULP compares DATA_1 byte, wakes CPU on ≥1 count change (~0.005°C)

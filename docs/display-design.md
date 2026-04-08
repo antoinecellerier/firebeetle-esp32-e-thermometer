@@ -205,32 +205,36 @@ Individual zone renderers are also declared in `DisplayRenderer.h` for direct te
 
 ## RTC Memory Budget
 
-Sizes depend on `sizeof(time_t)` -- 4 bytes on ESP32 (Xtensa), 8 bytes on ESP32-C6 (RISC-V).
+`sizeof(time_t)` is 8 bytes on both ESP32 (Xtensa) and ESP32-C6 (RISC-V) with ESP-IDF 5.x / pioarduino.
 
-**TempReading** = `time_t` + `int16_t` (+ padding to align):
-- ESP32: 4 + 2 + 2 pad = 8 bytes
-- ESP32-C6: 8 + 2 + 6 pad = 16 bytes
+**TempReading** = `time_t` + `int16_t`, packed to avoid 6 bytes padding per entry:
+- Both platforms: 8 + 2 = 10 bytes (packed), 16 bytes (unpacked)
+
+**IMPORTANT:** RTC slow memory (8KB at 0x50000000) is shared between `RTC_DATA_ATTR`
+variables and the ULP program/data. `ULP_DATA_BASE` must be set past the end of all
+`.rtc.data`/`.rtc.force_slow` sections — the post-build script `post_build_check_rtc.py`
+verifies this automatically.
 
 **HourlyEntry** = 3 x `int16_t` = 6 bytes (both platforms).
 
 **BMP390LCalib** = 3 x `float` = 12 bytes.
 
-| Data | ESP32 (32-bit time_t) | ESP32-C6 (64-bit time_t) |
-|---|---|---|
-| temp_history[96] (TempReading) | 768 bytes | 1536 bytes |
-| hourly_history[720] (HourlyEntry) | 4320 bytes | 4320 bytes |
-| bmp390l_calib (BMP390LCalib) | 12 bytes | 12 bytes |
-| Scalars: boot_count, display_refresh_count, previous_boot_count (3x int) | 12 bytes | 12 bytes |
-| first_boot_time, next_clear_time (2x time_t) | 8 bytes | 16 bytes |
-| previous_temp, min_temp_since_boot, max_temp_since_boot (3x float) | 12 bytes | 12 bytes |
-| max_battery_mv, bad_pin27_count (2x uint32_t) | 8 bytes | 8 bytes |
-| temp_history_count, temp_history_idx (2x uint8_t) | 2 bytes | 2 bytes |
-| hourly_history_count, hourly_history_idx (2x uint16_t) | 4 bytes | 4 bytes |
-| hourly_latest_time (time_t) | 4 bytes | 8 bytes |
-| Hour accumulator: current_hour_start (time_t), sum_x10 (int32_t), sample_count (uint16_t), min_x10/max_x10 (2x int16_t) | 16 bytes | 20 bytes |
-| Status flags: wifi_ok, ntp_synced, last_sensor_ok (3x bool) | 3 bytes | 3 bytes |
-| rtc_layout_version (uint32_t) | 4 bytes | 4 bytes |
-| **Total** | **~5173 bytes** | **~5957 bytes** |
+| Data | Size (64-bit time_t) |
+|---|---|
+| temp_history[192] (TempReading, packed) | 1920 bytes |
+| hourly_history[720] (HourlyEntry) | 4320 bytes |
+| bmp390l_calib (BMP390LCalib) | 12 bytes |
+| Scalars: boot_count, display_refresh_count, previous_boot_count (3x int) | 12 bytes |
+| first_boot_time, next_clear_time (2x time_t) | 16 bytes |
+| previous_temp, min_temp_since_boot, max_temp_since_boot (3x float) | 12 bytes |
+| max_battery_mv, bad_pin27_count (2x uint32_t) | 8 bytes |
+| temp_history_count, temp_history_idx (2x uint8_t) | 2 bytes |
+| hourly_history_count, hourly_history_idx (2x uint16_t) | 4 bytes |
+| hourly_latest_time (time_t) | 8 bytes |
+| Hour accumulator: current_hour_start (time_t), sum_x10 (int32_t), sample_count (uint16_t), min_x10/max_x10 (2x int16_t) | 20 bytes |
+| Status flags: wifi_ok, ntp_synced, last_sensor_ok (3x bool) | 3 bytes |
+| rtc_layout_version (uint32_t) | 4 bytes |
+| **Total** | **~6341 bytes** |
 
-Well within the 8KB RTC slow memory limit, though significantly larger than the previous
-daily-summary design due to hourly_history[720] (4320 bytes).
+Tight fit in the 8KB RTC slow memory (which is shared with the ULP program and its data).
+The hourly_history[720] alone is 4320 bytes.
