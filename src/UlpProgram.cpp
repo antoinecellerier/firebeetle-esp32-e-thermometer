@@ -5,6 +5,7 @@
 
 #if !defined(NO_ULP) && defined(SOC_ULP_FSM_SUPPORTED)
 
+#include "Arduino.h"
 #include "esp32/ulp.h"
 #include "hulp.h"
 
@@ -20,6 +21,25 @@ void ulp_configure_i2c_bitbang()
   hulp_peripherals_on();
 }
 
+
+void ulp_check_data_overlap()
+{
+  // _rtc_force_slow_end is the linker-determined end of all RTC slow memory
+  // sections (.rtc.data, .rtc.bss, .rtc.force_slow). ULP data must not overlap.
+  extern uint32_t _rtc_force_slow_end;
+  uintptr_t rtc_data_end   = (uintptr_t)&_rtc_force_slow_end;
+  uintptr_t ulp_data_start = (uintptr_t)&RTC_SLOW_MEM[ULP_DATA_BASE];
+  uintptr_t ulp_data_end   = (uintptr_t)&RTC_SLOW_MEM[ULP_DATA_BASE + ULP_VAR_COUNT];
+  if (ulp_data_start < rtc_data_end)
+  {
+    LOGI("FATAL: ULP_DATA_BASE (word %d, 0x%08x-0x%08x) overlaps RTC data (ends 0x%08x). "
+         "Increase ULP_DATA_BASE to at least %d.",
+         ULP_DATA_BASE, (unsigned)ulp_data_start, (unsigned)ulp_data_end,
+         (unsigned)rtc_data_end,
+         (int)((&_rtc_force_slow_end - RTC_SLOW_MEM) + 1));
+    abort();
+  }
+}
 
 void ulp_start()
 {

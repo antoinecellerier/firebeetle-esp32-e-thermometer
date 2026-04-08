@@ -29,10 +29,12 @@
 #define ULP_TEST_WAKE_EVERY 3
 #endif
 
-// Fixed base address for ULP data variables in RTC_SLOW_MEM.
+// Fixed base address for ULP data variables in RTC_SLOW_MEM (32-bit word offset).
 // Using a fixed address avoids label resolution issues with large bit-bang I2C subroutines.
-// Must be past the end of the largest ULP program (~110 instructions).
-#define ULP_DATA_BASE 200
+// Must be past BOTH the ULP program (~110 words) AND the .rtc.data section
+// (RTC_DATA_ATTR variables), which share the same 8KB physical memory.
+// Current .rtc.data ends at word ~1628 (check firmware.map after layout changes).
+#define ULP_DATA_BASE 1800
 
 // RTC slow memory offsets for shared variables (in 32-bit words from ULP_DATA_BASE)
 // These are written by the ULP and read by the main CPU after wakeup.
@@ -45,6 +47,10 @@ enum ulp_var_offset {
   ULP_VAR_SAMPLE_COUNT,     // number of ULP measurement cycles
   ULP_VAR_COUNT             // total number of variables
 };
+
+// Verify ULP data area doesn't overlap RTC slow memory variables (they share
+// the same 8KB). Uses the linker symbol _rtc_force_slow_end. Aborts on overlap.
+void ulp_check_data_overlap();
 
 // Initialise I2C, build/load ULP program, and start ULP with configured wakeup period.
 // Must be called once from the main CPU before entering deep sleep.

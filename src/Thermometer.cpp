@@ -46,6 +46,10 @@
   #error "Unknown sensor type"
 #endif
 
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
+void ulp_check_data_overlap();
+#endif
+
 // --- RTC memory layout ---
 // RTC memory survives deep sleep but NOT power-on reset (firmware upload,
 // battery swap, reset button). RTC_NOINIT_ATTR doesn't help — the FireBeetle
@@ -59,7 +63,7 @@
 // Bump RTC_HISTORY_VERSION when changing anything inside RtcHistory
 // (struct fields, buffer sizes, semantics).
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_HISTORY_VERSION 0xDA050001
+#define RTC_HISTORY_VERSION 0xDA050002
 #define RTC_STATE_VERSION   0xDA050001
 
 // Initial min/max temperature sentinels (float).
@@ -784,6 +788,10 @@ void setup()
 {
   setup_serial();
 
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
+  ulp_check_data_overlap();  // abort immediately if ULP data overlaps RTC variables
+#endif
+
 #ifdef PPK2_DEBUG
   pinMode(PPK2_PIN_CPU_ACTIVE, OUTPUT);
   pinMode(PPK2_PIN_DISPLAY, OUTPUT);
@@ -820,7 +828,25 @@ void setup()
   LOGI("CPU frequency: %d", getCpuFrequencyMhz());
   LOGI("Xtal frequency: %d", getXtalFrequencyMhz());
 
-  LOGI("Boot count: %d [%s]", boot_count, GIT_HASH);
+  LOGI("Boot count: %d [%s] sizeof(TempReading)=%d sizeof(time_t)=%d",
+       boot_count, GIT_HASH, (int)sizeof(TempReading), (int)sizeof(time_t));
+
+  // Diagnostic: dump sparkline buffer to detect packed struct corruption
+  if (historical_data.temp_count > 0)
+  {
+    LOGI("Sparkline: count=%d idx=%d", historical_data.temp_count, historical_data.temp_idx);
+    int start = (historical_data.temp_count < TEMP_HISTORY_SIZE)
+      ? 0 : historical_data.temp_idx;
+    for (int i = 0; i < historical_data.temp_count; i++)
+    {
+      int idx = (start + i) % TEMP_HISTORY_SIZE;
+      LOGI("  [%d] idx=%d ts=%lld temp_x10=%d",
+           i, idx,
+           (long long)historical_data.temp[idx].timestamp,
+           (int)historical_data.temp[idx].temp_x10);
+    }
+  }
+
   esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
   LOGI("Wakeup caused by %d", (int)wakeup_cause);
 
