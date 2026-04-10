@@ -102,12 +102,39 @@ GPIO LOW → display powered on. GPIO HIGH / high-Z (deep sleep) → display off
 | LP I2C SDA (MTCK) | SDA             |
 | LP I2C SCL (MTDO) | SCL             |
 
-## Battery
+## Battery voltage divider (GPIO-switched)
+
+Seeed documents a 200kΩ/200kΩ (or 220kΩ) always-on divider, but that draws
+~10µA continuously — almost doubles the deep sleep floor. A GPIO-switched
+divider with an N-channel MOSFET eliminates quiescent draw entirely.
+
+**Components:** 2× 100kΩ resistors + AO3400A (N-channel MOSFET, SOT-23)
+
 ```
-A0 (D0) ──┬──200kΩ── Bat - ── PH-2P right
-          │
-          ┴──200kΩ── Bat + ── PH-2P left
+Bat+ ─── 100kΩ ─── A0 (D0) ─── 100kΩ ─── AO3400A Drain
+                                                │
+                                             Source ─── GND
+                                                │
+                                        Gate ←── D1 (GP1)
 ```
+
+- D1 HIGH → MOSFET on, divider active, A0 reads Vbat/2
+- D1 LOW / deep sleep → MOSFET off, zero divider current
+- R_source = 50kΩ → ADC settles in ~2µs, minimal averaging needed
+- When MOSFET off, A0 floats toward Vbat through 100kΩ; leakage through
+  the ADC's ESD clamp is ~(4.2−3.9V)/100kΩ ≈ 3µA — but only through the
+  internal protection diode, negligible in practice
+
+**Read sequence:** set D1 HIGH, delayMicroseconds(100), analogRead(A0) a
+few times for noise averaging, set D1 LOW. Total on-time <1ms.
+
+**Why 100kΩ, not 1MΩ:** with 1MΩ/1MΩ (R_source = 500kΩ), the ESP32 SAR
+ADC sample window (~300ns) is far too short for the RC to settle — readings
+are biased low, not just noisy, and averaging doesn't fix bias. 100kΩ/100kΩ
+settles in ~2µs which is still longer than the sample window but close enough
+that a few back-to-back reads converge. Adding a 100nF buffer cap at A0 would
+allow higher resistance values (charges in 5×R_source×100nF) but adds a
+component for no real benefit when the divider is switched off during sleep.
 
 ## Display
 
@@ -133,7 +160,6 @@ D7 (GP17) for the MOSFET Gate
 
 Breakout:
 VBUS
-D1
 D4
 D5
 
