@@ -2,7 +2,7 @@ PROJECT_ROOT := $(shell git -C $(dir $(lastword $(MAKEFILE_LIST))) rev-parse --s
 GFX_LIB := $(PROJECT_ROOT)/.pio/libdeps/dfrobot_firebeetle2_esp32e_debug/Adafruit GFX Library
 
 CXX := g++
-CXXFLAGS := -std=c++17 -O2 -Wall -Wno-unused-parameter -DARDUINO=200
+CXXFLAGS := -std=c++17 -O2 -Wall -Wno-unused-parameter -DARDUINO=200 -DSLEEP_INTERVAL_S=5
 
 INCLUDES := \
 	-I$(CURDIR)/stubs \

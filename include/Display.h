@@ -51,6 +51,7 @@ struct DisplayStats {
   bool sensor_ok;      // false if last sensor read had an error/fallback
   bool dummy_sensor;   // true if USE_DUMMY_SENSOR is defined
   bool mock_data;      // true if MOCK_DISPLAY_DATA is defined
+  bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
   int32_t clock_drift_ms;    // drift at last NTP resync (positive = clock ahead), 0 = no resync yet
   int32_t drift_interval_s;  // resync interval when drift was measured (observation window)
 

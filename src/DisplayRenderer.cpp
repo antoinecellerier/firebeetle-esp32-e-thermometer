@@ -1,4 +1,5 @@
 #include "DisplayRenderer.h"
+#include "common.h"
 
 #ifndef GIT_HASH
 #define GIT_HASH "0000000"
@@ -929,8 +930,10 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
 {
   // Only render when there's an issue — no clutter when things are normal
   bool significant_drift = abs(stats.clock_drift_ms) >= 60000;  // >= 1 minute
+  bool debug_build = !stats.power_efficient;
   if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
-      && !stats.dummy_sensor && !stats.mock_data && !significant_drift)
+      && !stats.dummy_sensor && !stats.mock_data && !significant_drift
+      && !debug_build)
     return;
 
   bool large = (L.dh >= 400 || L.dw >= 600);
@@ -944,6 +947,12 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   // Render in a line so it's readable. Stacking on multiple lines would
   // lead to indicators rendered behind other UI elements.
   gfx.setCursor(x, y);
+  if (debug_build)
+  {
+    char dbg_str[24];
+    snprintf(dbg_str, sizeof(dbg_str), "! DEBUG %ds ", SLEEP_INTERVAL_S);
+    gfx.print(dbg_str);
+  }
   if (stats.dummy_sensor) gfx.print("! DUMMY ");
   if (stats.mock_data) gfx.print("! MOCK ");
 

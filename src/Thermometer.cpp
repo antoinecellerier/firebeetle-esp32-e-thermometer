@@ -304,6 +304,14 @@ DisplayStats make_display_stats()
 #else
     false,
 #endif
+    // power_efficient: true only when serial is off, sleep interval is
+    // production-length, no debug instrumentation, and USB CDC off (C6)
+#if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG) \
+    && !ARDUINO_USB_CDC_ON_BOOT
+    true,
+#else
+    false,
+#endif
     last_drift_ms, last_resync_interval_s,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     historical_data.temp, historical_data.temp_count, history_start,
