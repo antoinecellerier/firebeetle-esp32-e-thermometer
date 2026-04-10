@@ -185,7 +185,14 @@ void BMP390LSensor::InitializeUlp()
     delay(10);
 
     // Configure LP I2C hardware peripheral (GPIO6=SDA, GPIO7=SCL)
-    lp_core_i2c_cfg_t i2c_cfg = LP_CORE_I2C_DEFAULT_CONFIG();
+    // LP_CORE_I2C_DEFAULT_CONFIG() uses C designated initializers — not valid in C++
+    lp_core_i2c_cfg_t i2c_cfg = {};
+    i2c_cfg.i2c_pin_cfg.sda_io_num = LP_I2C_SDA_IO;
+    i2c_cfg.i2c_pin_cfg.scl_io_num = LP_I2C_SCL_IO;
+    i2c_cfg.i2c_pin_cfg.sda_pullup_en = true;
+    i2c_cfg.i2c_pin_cfg.scl_pullup_en = true;
+    i2c_cfg.i2c_timing_cfg.clk_speed_hz = 400000;
+    i2c_cfg.i2c_src_clk = LP_I2C_SCLK_LP_FAST;
     ESP_ERROR_CHECK(lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg));
 
     // Load and start the LP core binary

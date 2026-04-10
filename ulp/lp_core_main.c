@@ -10,9 +10,9 @@
 //   LP_CORE_BMP58X   — BMP58x (BMP581/BMP585) temperature polling via LP I2C
 //
 // Uncomment exactly one:
-#define LP_CORE_IDLE
+//#define LP_CORE_IDLE
 //#define LP_CORE_BMP390L
-//#define LP_CORE_BMP58X
+#define LP_CORE_BMP58X
 
 #include <stdint.h>
 #include "ulp_lp_core_utils.h"

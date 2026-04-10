@@ -111,20 +111,23 @@ A0 (D0) ──┬──200kΩ── Bat - ── PH-2P right
 
 ## Display
 
-Wiring to the DESPI-C02 using same digital pins as Firebeetle?
+D9 (GPIO20) is also SPI MISO — SPI.begin() must be called with MISO=-1 before
+GxEPD2 init to avoid the SPI peripheral stealing the D/C pin (e-paper is
+write-only so MISO is not needed). Similarly D3 (GPIO21) is SPI SS; passing
+SS=-1 prevents it claiming the BUSY pin.
 
-| Xiao ESP32C6 | DESPI-C02 |
-|--------------|-----------|
-| 3.3V         | 3.3V      |
-| GND          | GND       |
-| MOSI (D10)   | SDI       |
-| SCK (D8)     | SCK       |
-| D6           | CS        |
-| D9           | D/C       |
-| D2           | RES       |
-| D3           | BUSY      |
+| Xiao ESP32C6   | DESPI-C02 |
+|-----------------|-----------|
+| 3.3V            | 3.3V      |
+| GND             | GND       |
+| MOSI/D10 (GP18) | SDI       |
+| SCK/D8 (GP19)   | SCK       |
+| D6 (GP16)       | CS        |
+| D9 (GP20)       | D/C       |
+| D2 (GP2)        | RES       |
+| D3 (GP21)       | BUSY      |
 
-Use D7 for the MOSFET Gate
+D7 (GP17) for the MOSFET Gate
 
 ## Unused pins
 

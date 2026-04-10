@@ -8,6 +8,11 @@ import os
 RTC_SECTIONS = {'.rtc.data', '.rtc.bss', '.rtc_noinit', '.rtc.force_slow'}
 
 def check_ulp_rtc_overlap(source, target, env):
+    # ULP_DATA_BASE is only used by ULP FSM (ESP32-E), not LP core (C6).
+    mcu = env.BoardConfig().get("build.mcu", "")
+    if mcu != "esp32":
+        return
+
     build_dir = env.subst("$BUILD_DIR")
     map_file = os.path.join(build_dir, "firmware.map")
     if not os.path.isfile(map_file):

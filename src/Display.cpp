@@ -2,15 +2,31 @@
 #include "DisplayRenderer.h"
 #include "common.h"
 
-// 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board to simplify wiring
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
+// 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board
 #define EPD_DC     2 // D9
 #define EPD_CS    14 // D6 (was D5/GPIO0, moved to free GPIO0 for RTC I2C SDA)
 #define EPD_BUSY  26 // D3
 #define EPD_RESET 25 // D2
+#elif defined(ARDUINO_XIAO_ESP32C6)
+// Same Dx labels as Firebeetle — see docs/wiring.md for C6 GPIO mapping
+#define EPD_DC    20 // D9
+#define EPD_CS    16 // D6
+#define EPD_BUSY  21 // D3
+#define EPD_RESET  2 // D2
+#else
+#error "EPD pin mapping not defined for this board"
+#endif
 #ifndef DISABLE_DISPLAY
 
 #ifdef EPD_POWER_GATE
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
 #define EPD_POWER 13 // D7 — P-FET gate: LOW = on, HIGH = off
+#elif defined(ARDUINO_XIAO_ESP32C6)
+#define EPD_POWER 17 // D7
+#else
+#error "EPD_POWER pin not defined for this board"
+#endif
 static void epd_power_on()
 {
   pinMode(EPD_POWER, OUTPUT);
@@ -54,9 +70,32 @@ static void epd_power_off() {}
 #define EPD_BLACK GxEPD_BLACK
 #define EPD_WHITE GxEPD_WHITE
 
+static void epd_configure_pins()
+{
+  // Ensure EPD pins are in GPIO mode before GxEPD2 calls digitalWrite.
+  // Required on C6 where GPIO16 (CS) defaults to non-GPIO function;
+  // harmless on ESP32-E where these are already GPIO.
+  pinMode(EPD_CS, OUTPUT);
+  pinMode(EPD_DC, OUTPUT);
+  pinMode(EPD_RESET, OUTPUT);
+#if defined(ARDUINO_XIAO_ESP32C6)
+  // GxEPD2 calls SPI.begin() with no args, which configures GPIO20 as MISO
+  // and GPIO21 as SS — both conflict with EPD_DC and EPD_BUSY. Pre-init SPI
+  // with only SCK/MOSI (e-paper is write-only, CS managed by GxEPD2).
+  SPI.begin(SCK, -1, MOSI, -1);
+  // Reconfigure DC and BUSY after SPI.begin() since it may have claimed them
+  // as MISO/SS (GPIO20/21 are the default SPI MISO/SS on C6).
+  pinMode(EPD_DC, OUTPUT);
+  pinMode(EPD_BUSY, INPUT);
+#else
+  pinMode(EPD_BUSY, INPUT);
+#endif
+}
+
 static void init_for_render(int boot_count)
 {
   LOGI("Initializing display");
+  epd_configure_pins();
   // Second arg: true on first boot triggers full hardware reset;
   // false on subsequent boots allows faster partial-update init.
   display.init(0 /* disable serial debug output */,
@@ -78,6 +117,7 @@ void display_clear()
 {
 #ifndef DISABLE_DISPLAY
   epd_power_on();
+  epd_configure_pins();
   display.init(0 /* disable serial debug output */);
   display.clearScreen();
   display.hibernate();
@@ -101,7 +141,6 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
   display.display();
   display.hibernate();
   epd_power_off();
-  LOGI("Done updating display and powering down");
 #endif
 }
 

@@ -316,10 +316,17 @@ void setup_serial()
 {
 #ifndef DISABLE_SERIAL
   Serial.begin(115200);
-  while (!Serial)
-  {
-    delay(10);
+#if ARDUINO_USB_CDC_ON_BOOT
+  // USB CDC: operator bool() blocks until a host opens the port.
+  // On UART (Firebeetle) it returns true immediately.
+  // Skip the wait entirely if no USB cable is plugged in;
+  // otherwise wait up to 1s for a monitor to attach.
+  if (Serial.isPlugged()) {
+    unsigned long t0 = millis();
+    while (!Serial && millis() - t0 < 1000)
+      delay(10);
   }
+#endif
   Serial.printf("Logging to serial\n");
   LOGI("Logging to log facilities - info");
 #else
@@ -645,7 +652,7 @@ void on_first_boot()
   // Synchronize time via NTP
   LOGI("Synchronizing time");
   set_status_led(rgb(0, 255, 0));
-  configTzTime(MY_TZ, "pool.ntp.org");
+  configTzTime(MY_TZ, "pool.ntp.org", "time.google.com");
   struct tm t;
   getLocalTime(&t, 30000U /* max wait time in ms */);
   first_boot_time = mktime(&t);

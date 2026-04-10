@@ -77,6 +77,7 @@ void BMP58xSensor::Initialize()
         return;
 
     _twoWire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    delay(5); // BMP58x needs ~2ms after power-up before I2C is ready
 
     uint8_t chip_id;
     if (ReadRegister(BMP58X_REG_CHIP_ID, &chip_id, 1))
@@ -194,7 +195,14 @@ void BMP58xSensor::InitializeUlp()
     _isInitialized = false;
     delay(10);
 
-    lp_core_i2c_cfg_t i2c_cfg = LP_CORE_I2C_DEFAULT_CONFIG();
+    // LP_CORE_I2C_DEFAULT_CONFIG() uses C designated initializers — not valid in C++
+    lp_core_i2c_cfg_t i2c_cfg = {};
+    i2c_cfg.i2c_pin_cfg.sda_io_num = LP_I2C_SDA_IO;
+    i2c_cfg.i2c_pin_cfg.scl_io_num = LP_I2C_SCL_IO;
+    i2c_cfg.i2c_pin_cfg.sda_pullup_en = true;
+    i2c_cfg.i2c_pin_cfg.scl_pullup_en = true;
+    i2c_cfg.i2c_timing_cfg.clk_speed_hz = 400000;
+    i2c_cfg.i2c_src_clk = LP_I2C_SCLK_LP_FAST;
     ESP_ERROR_CHECK(lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg));
 
     uint64_t wakeup_us = (uint64_t)SLEEP_INTERVAL_S * 1000000ULL;
