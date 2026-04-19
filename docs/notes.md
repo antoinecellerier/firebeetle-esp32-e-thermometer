@@ -233,3 +233,49 @@ Setup: Bare XIAO ESP32C6, no BMP390L connected. USB CDC OFF. LP core running in 
 - Verify LP I2C reads work (GPIO6=SDA, GPIO7=SCL, LP_I2C_NUM_0)
 - Measure LP core power with real I2C transactions vs idle delay
 - Tune TEMP_DELTA_THRESHOLD (currently 20 ≈ 0.1°C) and SLEEP_INTERVAL_S (60s for production)
+
+## Pending: BMP58x mode testing (April 2026)
+
+Current C6 production setup uses BMP58x (BMP581/BMP585) via LP core, not BMP390L.
+Code complete; hardware validation queued.
+
+**Context — forced-mode fix applied 2026-04-19:** `ODR_CONFIG` previously wrote `0x01`
+which is `BMP5_POWERMODE_NORMAL` per Bosch's `bmp5_defs.h`, not forced. Sensor was
+sampling continuously at default ODR 240 Hz between wakes (~200 µA continuous).
+Now writes `0x02` (`BMP5_POWERMODE_FORCED`) — sensor runs one measurement then
+auto-returns to standby. All deep-standby entry conditions now hold (deep_dis=0,
+FIFO off, IIR off, ODR=0), so the sensor auto-enters deep standby (~0.5 µA)
+between wakes without any extra code.
+
+Hardware preparation:
+- Solder BMP581 or BMP585 to XIAO C6 (SDA=GPIO6, SCL=GPIO7, I2C addr `0x47`)
+- Switch `ulp/lp_core_main.c` from `#define LP_CORE_IDLE` to `#define LP_CORE_BMP58X`
+- Set `SLEEP_INTERVAL_S=60` and `WAKE_EVERY=1` (60s LP timer, HP wake on delta only)
+- Confirm `USE_BMP58x` in `local-secrets.h`
+
+### Measurements needed to confirm full C6 operation
+
+Baseline / correctness:
+- [ ] **Deep sleep floor with BMP58x connected, steady temperature.** No HP wake for ≥2 min; LP core fires every 60s but no delta. Expected ~15 µA + sensor deep standby (~0.5 µA) ≈ **15–16 µA**. Any reading ≥200 µA means forced-mode fix didn't take — investigate `ODR_CONFIG` write landing.
+- [ ] **Confirm sensor is in deep standby between wakes.** Between LP core spikes, sensor contribution should be ~0.5 µA (not ~1 µA standby). If the measurement can't resolve that, alternative check: read `ODR_CONFIG` back via HP I2C right after deep-sleep exit — `pwr_mode` bits [1:0] should read `00` (standby).
+
+LP core wake characterisation:
+- [ ] **LP core spike duration.** Current sequence: 1× I2C write (2-byte ODR trigger), ~3 ms conversion delay, 1× I2C read (1-byte reg + 3-byte data). Expected total active window **~3.5–4 ms** (vs 7 ms LP_CORE_IDLE baseline — shorter because we dropped the extra OSR write).
+- [ ] **LP core spike amplitude.** Core ~1 mA + sensor ~200 µA during the 1.6 ms conversion portion — visible as a stepped spike.
+- [ ] **Charge per LP wake** (integrate current × time). Use PPK2 area measurement. Multiply by wakes/hour (3600/60 = 60) to project hourly load.
+
+HP wake characterisation:
+- [ ] **HP wake duration with BMP58x** — expected shorter than DummySensor (no sensor bring-up overhead since sensor is already in deep standby). No display refresh if temp delta small.
+- [ ] **Delta-wake trigger.** Heat sensor with finger; confirm HP wake fires when LP-core delta ≥25 counts (~0.1 °C). Measure HP spike shape during a real delta-triggered wake.
+- [ ] **Safety-net HP wake** — confirm the periodic safety wake fires at the configured cadence (for hourly/daily bucket finalisation).
+
+Averages:
+- [ ] **1-minute average at steady state** (no delta wakes): should be ~15 µA baseline + (LP wake charge) × 1/min. Target **<30 µA**.
+- [ ] **1-hour average at steady state** — dominated by 60 × LP wakes + occasional safety-net HP wake.
+- [ ] **1-hour average under slow drift** (e.g., room temp drifting 1 °C/hour → ~10 delta wakes/hour) — characterises typical indoor use.
+
+Regression checks vs prior measurements:
+- [ ] Compare C6 BMP58x deep sleep floor against C6 LP_CORE_IDLE floor (~15 µA). Delta should be ≤1 µA.
+- [ ] Compare against ESP32-E BMP390L production (~562 µA with DESPI-C02 attached, ~28 µA without). C6 has no DESPI-C02, so C6 floor should track bare-board baseline.
+
+PPK2 GPIO markers (reuse existing scheme from ESP32-E): tag LP-core-active and HP-active pins so the trace can be segmented automatically.
