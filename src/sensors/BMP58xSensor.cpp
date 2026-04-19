@@ -17,8 +17,8 @@
 
 // OSR_CONFIG: 1x temperature oversampling, pressure disabled
 #define BMP58X_OSR_TEMP_1X 0x00
-// ODR_CONFIG: forced mode (mode bits [1:0] = 0b01)
-#define BMP58X_FORCED_MODE 0x01
+// ODR_CONFIG: forced mode (pwr_mode = BMP5_POWERMODE_FORCED per Bosch bmp5_defs.h)
+#define BMP58X_FORCED_MODE 0x02
 
 // --- ULP FSM path (ESP32 original, HULP bit-bang I2C) ---
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
@@ -94,6 +94,8 @@ void BMP58xSensor::Initialize()
         LOGI("WARNING: failed to read BMP58x chip ID");
     }
 
+    WriteRegister(BMP58X_REG_OSR_CONFIG, BMP58X_OSR_TEMP_1X);
+
     _isInitialized = true;
 }
 
@@ -101,9 +103,7 @@ float BMP58xSensor::GetTemperatureC()
 {
     Initialize();
 
-    // Configure 1x oversampling, pressure disabled
-    WriteRegister(BMP58X_REG_OSR_CONFIG, BMP58X_OSR_TEMP_1X);
-    // Trigger forced-mode measurement
+    // Trigger forced-mode measurement (OSR configured once in Initialize())
     WriteRegister(BMP58X_REG_ODR_CONFIG, BMP58X_FORCED_MODE);
     delay(3); // conversion ~1.6ms at 1x OSR
 
@@ -140,7 +140,10 @@ void BMP58xSensor::InitializeUlp()
 #else
     LOGI("Initialising ULP coprocessor for BMP58x polling");
 
-    // No calibration read needed — BMP58x output is already compensated
+    // No calibration read needed — BMP58x output is already compensated.
+    // Ensure chip ID + OSR_CONFIG have been written via digital I2C before
+    // handing the bus off to ULP bit-bang (idempotent if already initialised).
+    Initialize();
 
     // Release digital I2C before switching pins to ULP bit-bang
     _twoWire.end();
@@ -189,7 +192,10 @@ void BMP58xSensor::InitializeUlp()
 {
     LOGI("Initialising LP core for BMP58x polling");
 
-    // No calibration read needed — BMP58x output is already compensated
+    // No calibration read needed — BMP58x output is already compensated.
+    // Ensure chip ID + OSR_CONFIG have been written via digital I2C before
+    // handing the bus off to LP I2C (idempotent if already initialised).
+    Initialize();
 
     _twoWire.end();
     _isInitialized = false;
@@ -233,14 +239,9 @@ void BMP58xSensor::InitializeUlp() {}
 #define TEMP_REREAD_CONFIRM 0.5f
 
 // Direct I2C re-read for plausibility verification
+// (OSR was already configured in Initialize() before ULP/LP-core took over the bus)
 static bool bmp58x_direct_read(TwoWire &wire, float *temp_out)
 {
-    wire.beginTransmission(BMP58X_I2C_ADDR);
-    wire.write(BMP58X_REG_OSR_CONFIG);
-    wire.write(BMP58X_OSR_TEMP_1X);
-    if (wire.endTransmission() != 0)
-        return false;
-
     wire.beginTransmission(BMP58X_I2C_ADDR);
     wire.write(BMP58X_REG_ODR_CONFIG);
     wire.write(BMP58X_FORCED_MODE);

@@ -1,15 +1,16 @@
 // ULP FSM program for BMP58x (BMP581/BMP585) temperature polling via HULP bit-bang I2C.
 //
 // BMP58x output is already compensated — no NVM calibration needed.
+// OSR_CONFIG is written once by the main CPU in Initialize(); this loop only
+// triggers forced-mode measurements.
 //
 // Flow:
-//   1. Configure OSR (1x temp, no pressure) via I2C write to OSR_CONFIG
-//   2. Trigger forced-mode measurement via I2C write to ODR_CONFIG
-//   3. Wait ~2ms for conversion
-//   4. Read 3 temperature bytes via I2C, store in RTC memory
-//   5. Compare DATA_1 with previous value
-//   6. If |delta| >= threshold: update reference, set wake_reason=1, WAKE
-//   7. Else: increment sample count, HALT (or WAKE if ULP_ALWAYS_WAKE)
+//   1. Trigger forced-mode measurement via I2C write to ODR_CONFIG
+//   2. Wait ~2ms for conversion
+//   3. Read 3 temperature bytes via I2C, store in RTC memory
+//   4. Compare DATA_1 with previous value
+//   5. If |delta| >= threshold: update reference, set wake_reason=1, WAKE
+//   6. Else: increment sample count, HALT (or WAKE if ULP_ALWAYS_WAKE)
 
 #include "UlpProgram.h"
 
@@ -20,13 +21,12 @@
 #include "hulp_i2cbb.h"
 
 #define BMP58X_I2C_ADDR       0x47
-#define BMP58X_REG_OSR_CONFIG 0x36
 #define BMP58X_REG_ODR_CONFIG 0x37
 #define BMP58X_REG_TEMP_XLSB  0x1D
 #define BMP58X_REG_TEMP_LSB   0x1E
 #define BMP58X_REG_TEMP_MSB   0x1F
-#define BMP58X_OSR_TEMP_1X    0x00
-#define BMP58X_FORCED_MODE    0x01
+// pwr_mode = BMP5_POWERMODE_FORCED per Bosch bmp5_defs.h
+#define BMP58X_FORCED_MODE    0x02
 
 #define I2C_BB_SCL  ((gpio_num_t)I2C_SCL_PIN)
 #define I2C_BB_SDA  ((gpio_num_t)I2C_SDA_PIN)
@@ -40,7 +40,6 @@ void ulp_build_and_load_program()
     LBL_I2C_WR = 11,
     LBL_I2C_ARBLOST = 12,
     LBL_I2C_NACK = 13,
-    LBL_WR_OSR_DONE = 14,
     LBL_WR_ODR_DONE = 15,
     LBL_RD0_DONE = 16,
     LBL_RD1_DONE = 17,
@@ -48,16 +47,13 @@ void ulp_build_and_load_program()
   };
 
   const ulp_insn_t program[] = {
-    // 1. Configure OSR: 1x temperature, pressure disabled
-    M_I2CBB_WR(LBL_WR_OSR_DONE, LBL_I2C_WR, BMP58X_REG_OSR_CONFIG, BMP58X_OSR_TEMP_1X),
-
-    // 2. Trigger forced-mode measurement
+    // 1. Trigger forced-mode measurement
     M_I2CBB_WR(LBL_WR_ODR_DONE, LBL_I2C_WR, BMP58X_REG_ODR_CONFIG, BMP58X_FORCED_MODE),
 
-    // 3. Wait ~2ms for conversion (8 MHz RTC_FAST_CLK × 0.002s = 16000 cycles)
+    // 2. Wait ~2ms for conversion (8 MHz RTC_FAST_CLK × 0.002s = 16000 cycles)
     I_DELAY(16000),
 
-    // 4. Read 3 temperature bytes (XLSB, LSB, MSB)
+    // 3. Read 3 temperature bytes (XLSB, LSB, MSB)
     M_I2CBB_RD(LBL_RD0_DONE, LBL_I2C_RD, BMP58X_REG_TEMP_XLSB),
     I_MOVI(R2, ULP_DATA_BASE),
     I_ST(R0, R2, ULP_VAR_TEMP_0),
@@ -82,7 +78,7 @@ void ulp_build_and_load_program()
     I_WAKE(),
     I_HALT(),
 #else
-    // 5. Delta comparison: current DATA_1 vs previous
+    // 4. Delta comparison: current DATA_1 vs previous
     I_LD(R0, R2, ULP_VAR_TEMP_1),
     I_LD(R1, R2, ULP_VAR_PREV_TEMP_MSB),
     I_SUBR(R0, R0, R1),
