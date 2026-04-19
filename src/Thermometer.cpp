@@ -136,24 +136,27 @@ RTC_DATA_ATTR bool last_sensor_ok = true;
 
 static void append_temp_history(time_t now, float temp)
 {
-  // Backfill: if there's a long gap since the last entry (stable temperature,
-  // no display refreshes), insert a point just before the new reading at the
-  // previous temperature. This anchors the flat region so the sparkline
-  // renderer draws a continuous line instead of a gap.
+  int16_t new_x10 = (int16_t)(temp * 10);
+
+  // Backfill on a long gap *and* a meaningful jump: anchor the prior flat
+  // region so the spline doesn't ramp-interpolate across it. Skip when the
+  // delta is ≤0.1°C — that's our sampling resolution, not a real step, and
+  // anchoring it produces a staircase on slow monotonic drift.
   if (historical_data.temp_count > 0)
   {
     int prev_idx = (historical_data.temp_idx + TEMP_HISTORY_SIZE - 1) % TEMP_HISTORY_SIZE;
-    time_t prev_time = historical_data.temp[prev_idx].timestamp;
-    if (now - prev_time > 3600)  // arbitrary; harmless even if lowered
+    time_t  prev_time = historical_data.temp[prev_idx].timestamp;
+    int16_t prev_x10  = historical_data.temp[prev_idx].temp_x10;
+    if (now - prev_time > 3600 && abs(new_x10 - prev_x10) >= 2)
     {
-      historical_data.temp[historical_data.temp_idx] = { now - 1, historical_data.temp[prev_idx].temp_x10 };
+      historical_data.temp[historical_data.temp_idx] = { now - 1, prev_x10 };
       historical_data.temp_idx = (historical_data.temp_idx + 1) % TEMP_HISTORY_SIZE;
       if (historical_data.temp_count < TEMP_HISTORY_SIZE)
         historical_data.temp_count++;
     }
   }
 
-  historical_data.temp[historical_data.temp_idx] = { now, (int16_t)(temp * 10) };
+  historical_data.temp[historical_data.temp_idx] = { now, new_x10 };
   historical_data.temp_idx = (historical_data.temp_idx + 1) % TEMP_HISTORY_SIZE;
   if (historical_data.temp_count < TEMP_HISTORY_SIZE)
     historical_data.temp_count++;
