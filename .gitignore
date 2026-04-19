@@ -10,3 +10,9 @@ sdkconfig.*
 managed_components/
 include/generated/
 *.swp
+
+# Claude Code local-only state (keep .claude/ itself tracked so shared
+# settings / agents / skills can be checked in when desired)
+.claude/settings.local.json
+.claude/projects/
+.claude/worktrees/
