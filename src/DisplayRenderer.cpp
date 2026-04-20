@@ -548,7 +548,16 @@ static void draw_monthly_xlabels(Adafruit_GFX &gfx,
   if (midnight <= oldest_time)
     midnight += 86400;
 
-  // Label every 7 days from the first midnight
+  // Adaptive stride: keep weekly cadence when the span yields >=2 weekly
+  // labels; otherwise step down so cold-start charts still have scale refs.
+  float span_days = total_seconds / 86400.0f;
+  int stride_days;
+  if (span_days >= 14.0f)      stride_days = 7;
+  else if (span_days >= 6.0f)  stride_days = 3;
+  else if (span_days >= 3.0f)  stride_days = 2;
+  else                         stride_days = 1;
+  time_t stride_sec = (time_t)stride_days * 86400;
+
   time_t end_time = oldest_time + (time_t)total_seconds;
   while (midnight < end_time)
   {
@@ -567,7 +576,7 @@ static void draw_monthly_xlabels(Adafruit_GFX &gfx,
       gfx.setCursor(mark_x - dlw / 2 - dlx, chart_y + chart_h + 3 + dlh);
       gfx.print(dlabel);
     }
-    midnight += 7 * 86400;
+    midnight += stride_sec;
   }
 }
 
