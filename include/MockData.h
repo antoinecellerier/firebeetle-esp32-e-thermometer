@@ -163,6 +163,9 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.previous_boot_count = 846;
   stats.display_refresh_count = 203;
   stats.lp_wake_count = 50820;  // ~60 per boot, consistent with stable temp
+  stats.lp_error_count = 0;
+  stats.last_lp_error = 0;
+  stats.last_lp_op = 0;
   stats.first_boot_time = now - 12 * 86400;
   stats.next_clear_time = now + 3600;
   stats.max_battery_mv = 4200;

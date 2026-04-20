@@ -26,6 +26,11 @@ volatile float    prev_temp_c = 0.0f;  // BMP58x path (full °C, no byte-wrap is
 volatile uint32_t wake_reason = 0;     // 0=none, 1=temp change, 2=I2C error
 volatile uint32_t sample_count = 0;    // reset by HP each wake
 volatile uint32_t lp_wake_count = 0;   // cumulative; HP reads for lp/hp ratio diagnostic
+volatile uint32_t lp_error_count = 0;  // cumulative I2C / sensor failures
+volatile int32_t  last_lp_error = 0;   // most recent esp_err_t from a failed LP op
+// Identifies which step of the LP routine failed (0 = none yet):
+//   1 = trigger / command write   2 = data read
+volatile uint32_t last_lp_op    = 0;
 
 #if defined(LP_CORE_IDLE)
 #include "lp_core_idle.h"

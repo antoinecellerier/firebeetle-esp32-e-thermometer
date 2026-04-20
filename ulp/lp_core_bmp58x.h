@@ -17,11 +17,18 @@ int main(void)
 {
     esp_err_t ret;
 
+    // Counter reflects every wake attempt, so it increments even when an I2C
+    // failure later short-circuits to wake_reason = 2.
+    lp_wake_count++;
+
     // 1. Trigger forced-mode measurement (pwr_mode = BMP5_POWERMODE_FORCED)
     uint8_t odr_cmd[2] = {BMP58X_REG_ODR_CONFIG, 0x02};
     ret = lp_core_i2c_master_write_to_device(LP_I2C_NUM_0, BMP58X_I2C_ADDR,
                                               odr_cmd, 2, LP_I2C_TIMEOUT_CYCLES);
     if (ret != ESP_OK) {
+        last_lp_error = ret;
+        last_lp_op = 1;  // trigger write
+        lp_error_count++;
         wake_reason = 2;
         ulp_lp_core_wakeup_main_processor();
         return 0;
@@ -37,6 +44,9 @@ int main(void)
                                                 &reg_addr, 1, data, 3,
                                                 LP_I2C_TIMEOUT_CYCLES);
     if (ret != ESP_OK) {
+        last_lp_error = ret;
+        last_lp_op = 2;  // data read
+        lp_error_count++;
         wake_reason = 2;
         ulp_lp_core_wakeup_main_processor();
         return 0;
@@ -47,7 +57,6 @@ int main(void)
     temp_raw_1 = data[1];
     temp_raw_2 = data[2];
     sample_count++;
-    lp_wake_count++;
 
     // 5. Delta comparison in °C. BMP58x output is already compensated:
     // 24-bit signed, 1/65536 °C per LSB. Avoid byte-wise compare (wraps at

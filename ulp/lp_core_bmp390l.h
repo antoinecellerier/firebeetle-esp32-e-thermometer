@@ -14,12 +14,16 @@
 int main(void)
 {
     esp_err_t ret;
+    lp_wake_count++;
 
     // 1. Trigger forced-mode measurement
     uint8_t pwr_ctrl_cmd[2] = {BMP390L_REG_PWR_CTRL, BMP390L_FORCED_MODE};
     ret = lp_core_i2c_master_write_to_device(LP_I2C_NUM_0, BMP390L_I2C_ADDR,
                                               pwr_ctrl_cmd, 2, LP_I2C_TIMEOUT_CYCLES);
     if (ret != ESP_OK) {
+        last_lp_error = ret;
+        last_lp_op = 1;  // trigger write
+        lp_error_count++;
         wake_reason = 2;
         ulp_lp_core_wakeup_main_processor();
         return 0;
@@ -35,6 +39,9 @@ int main(void)
                                                 &reg_addr, 1, data, 3,
                                                 LP_I2C_TIMEOUT_CYCLES);
     if (ret != ESP_OK) {
+        last_lp_error = ret;
+        last_lp_op = 2;  // data read
+        lp_error_count++;
         wake_reason = 2;
         ulp_lp_core_wakeup_main_processor();
         return 0;
@@ -45,7 +52,6 @@ int main(void)
     temp_raw_1 = data[1];
     temp_raw_2 = data[2];
     sample_count++;
-    lp_wake_count++;
 
     // 5. Delta comparison on DATA_1 byte (~0.005°C resolution per count).
     // TODO: byte-wise compare wraps at ~1.28°C intervals. BMP390L raw needs

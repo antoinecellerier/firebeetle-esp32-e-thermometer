@@ -921,9 +921,12 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
 
   gfx.setCursor(zone.x + (large ? 4 : 2), footer_text_y);
 
-  gfx.printf("#%d r%d lp%u %s w:%s mx%.1fV",
+  gfx.printf("#%d r%d lp%u",
               stats.boot_count, stats.display_refresh_count,
-              (unsigned)stats.lp_wake_count,
+              (unsigned)stats.lp_wake_count);
+  if (stats.lp_error_count > 0)
+    gfx.printf(" e%u", (unsigned)stats.lp_error_count);
+  gfx.printf(" %s w:%s mx%.1fV",
               uptime_str, wake_str,
               stats.max_battery_mv / 1000.0f);
   if (stats.bad_pin27_count > 0)
@@ -941,9 +944,14 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   // Only render when there's an issue — no clutter when things are normal
   bool significant_drift = abs(stats.clock_drift_ms) >= 60000;  // >= 1 minute
   bool debug_build = !stats.power_efficient;
+  // LP errors are only alarm-worthy when they form a meaningful fraction of
+  // wake attempts (>=10%). Ignore rare transients and early-boot noise.
+  bool lp_errors_significant = stats.lp_wake_count > 0
+                             && stats.lp_error_count >= 3
+                             && stats.lp_error_count * 10 >= stats.lp_wake_count;
   if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
       && !stats.dummy_sensor && !stats.mock_data && !significant_drift
-      && !debug_build)
+      && !debug_build && !lp_errors_significant)
     return;
 
   bool large = (L.dh >= 400 || L.dw >= 600);
@@ -981,6 +989,19 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
     else
       snprintf(drift_str, sizeof(drift_str), "! DRIFT %+ds ", drift_s);
     gfx.print(drift_str);
+  }
+
+  if (lp_errors_significant)
+  {
+    // op 1 = trigger/command write, 2 = sensor data read. Error is the raw
+    // esp_err_t — grep ESP-IDF esp_err.h (e.g. 0x107 = ESP_ERR_TIMEOUT).
+    const char *op_str = (stats.last_lp_op == 1) ? "W"
+                       : (stats.last_lp_op == 2) ? "R"
+                       : "?";
+    char lp_str[32];
+    snprintf(lp_str, sizeof(lp_str), "! LP %s 0x%x ",
+             op_str, (unsigned)stats.last_lp_error);
+    gfx.print(lp_str);
   }
 }
 

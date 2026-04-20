@@ -298,12 +298,19 @@ DisplayStats make_display_stats()
   }
 
   uint32_t lp_wakes = 0;
+  uint32_t lp_errors = 0;
+  int32_t  lp_last_err = 0;
+  uint32_t lp_last_op = 0;
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
-  lp_wakes = ulp_lp_wake_count;
+  lp_wakes    = ulp_lp_wake_count;
+  lp_errors   = ulp_lp_error_count;
+  lp_last_err = (int32_t)ulp_last_lp_error;
+  lp_last_op  = ulp_last_lp_op;
 #endif
 
   return {
-    boot_count, previous_boot_count, display_refresh_count, lp_wakes,
+    boot_count, previous_boot_count, display_refresh_count,
+    lp_wakes, lp_errors, lp_last_err, lp_last_op,
     first_boot_time, next_clear_time, max_battery_mv, bad_pin27_count,
     sensor.SupportsUlp(), wake, wifi_ok, ntp_synced, last_sensor_ok,
 #ifdef USE_DUMMY_SENSOR
