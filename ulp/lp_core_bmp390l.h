@@ -45,8 +45,12 @@ int main(void)
     temp_raw_1 = data[1];
     temp_raw_2 = data[2];
     sample_count++;
+    lp_wake_count++;
 
-    // 5. Delta comparison on DATA_1 byte (~0.005°C resolution per count)
+    // 5. Delta comparison on DATA_1 byte (~0.005°C resolution per count).
+    // TODO: byte-wise compare wraps at ~1.28°C intervals. BMP390L raw needs
+    // compensation before comparing in °C (unlike BMP58x). Fix once BMP390L
+    // is re-enabled on C6.
     uint32_t current_msb = data[1];
     int32_t delta = (int32_t)current_msb - (int32_t)prev_temp_msb;
     if (delta < 0) delta = -delta;

@@ -40,6 +40,7 @@ struct DisplayStats {
   int boot_count;
   int previous_boot_count;
   int display_refresh_count;
+  uint32_t lp_wake_count;  // cumulative LP core wakes (0 if no ULP support)
   time_t first_boot_time;
   time_t next_clear_time;
   uint32_t max_battery_mv;

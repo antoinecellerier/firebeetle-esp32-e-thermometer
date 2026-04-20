@@ -921,8 +921,9 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
 
   gfx.setCursor(zone.x + (large ? 4 : 2), footer_text_y);
 
-  gfx.printf("#%d r%d %s w:%s mx%.1fV",
+  gfx.printf("#%d r%d lp%u %s w:%s mx%.1fV",
               stats.boot_count, stats.display_refresh_count,
+              (unsigned)stats.lp_wake_count,
               uptime_str, wake_str,
               stats.max_battery_mv / 1000.0f);
   if (stats.bad_pin27_count > 0)

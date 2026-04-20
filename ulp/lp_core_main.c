@@ -21,9 +21,11 @@
 volatile uint32_t temp_raw_0 = 0;
 volatile uint32_t temp_raw_1 = 0;
 volatile uint32_t temp_raw_2 = 0;
-volatile uint32_t prev_temp_msb = 0;
-volatile uint32_t wake_reason = 0;    // 0=none, 1=temp change, 2=I2C error
-volatile uint32_t sample_count = 0;
+volatile uint32_t prev_temp_msb = 0;   // BMP390L path (single-byte reference; TODO: byte-wrap bug)
+volatile float    prev_temp_c = 0.0f;  // BMP58x path (full °C, no byte-wrap issues)
+volatile uint32_t wake_reason = 0;     // 0=none, 1=temp change, 2=I2C error
+volatile uint32_t sample_count = 0;    // reset by HP each wake
+volatile uint32_t lp_wake_count = 0;   // cumulative; HP reads for lp/hp ratio diagnostic
 
 #if defined(LP_CORE_IDLE)
 #include "lp_core_idle.h"

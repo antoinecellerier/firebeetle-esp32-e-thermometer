@@ -10,8 +10,8 @@
 #define BMP58X_REG_TEMP_XLSB  0x1D
 
 #define LP_I2C_TIMEOUT_CYCLES  5000
-// Each DATA_1 count ≈ 0.004°C, so 25 ≈ 0.1°C
-#define TEMP_DELTA_THRESHOLD   25
+// Wake HP when temperature has moved this far from the last reference.
+#define TEMP_DELTA_THRESHOLD_C 0.1f
 
 int main(void)
 {
@@ -47,14 +47,20 @@ int main(void)
     temp_raw_1 = data[1];
     temp_raw_2 = data[2];
     sample_count++;
+    lp_wake_count++;
 
-    // 5. Delta comparison on DATA_1 byte (~0.004°C resolution per count)
-    uint32_t current_msb = data[1];
-    int32_t delta = (int32_t)current_msb - (int32_t)prev_temp_msb;
-    if (delta < 0) delta = -delta;
+    // 5. Delta comparison in °C. BMP58x output is already compensated:
+    // 24-bit signed, 1/65536 °C per LSB. Avoid byte-wise compare (wraps at
+    // every whole-degree boundary and spuriously wakes HP).
+    int32_t raw = ((int32_t)data[2] << 16) | ((int32_t)data[1] << 8) | data[0];
+    if (raw & 0x800000) raw |= 0xFF000000;  // sign-extend 24→32
+    float current_c = (float)raw / 65536.0f;
 
-    if (delta >= TEMP_DELTA_THRESHOLD) {
-        prev_temp_msb = current_msb;
+    float delta = current_c - prev_temp_c;
+    if (delta < 0.0f) delta = -delta;
+
+    if (delta >= TEMP_DELTA_THRESHOLD_C) {
+        prev_temp_c = current_c;
         wake_reason = 1;
         ulp_lp_core_wakeup_main_processor();
     }

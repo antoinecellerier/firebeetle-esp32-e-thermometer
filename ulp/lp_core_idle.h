@@ -6,6 +6,7 @@
 int main(void)
 {
     sample_count++;
+    lp_wake_count++;
 
     // Simulate sensor read time (~7ms like BMP390L)
     ulp_lp_core_delay_us(7000);

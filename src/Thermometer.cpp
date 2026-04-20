@@ -50,6 +50,10 @@
 void ulp_check_data_overlap();
 #endif
 
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+#include "ulp_main.h"  // exposes ulp_lp_wake_count and other LP-core globals
+#endif
+
 // --- RTC memory layout ---
 // RTC memory survives deep sleep but NOT power-on reset (firmware upload,
 // battery swap, reset button). RTC_NOINIT_ATTR doesn't help — the FireBeetle
@@ -293,8 +297,13 @@ DisplayStats make_display_stats()
     current_entry.avg_x10 = (int16_t)(historical_data.current_hour_sum_x10 / historical_data.current_hour_sample_count);
   }
 
+  uint32_t lp_wakes = 0;
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
+  lp_wakes = ulp_lp_wake_count;
+#endif
+
   return {
-    boot_count, previous_boot_count, display_refresh_count,
+    boot_count, previous_boot_count, display_refresh_count, lp_wakes,
     first_boot_time, next_clear_time, max_battery_mv, bad_pin27_count,
     sensor.SupportsUlp(), wake, wifi_ok, ntp_synced, last_sensor_ok,
 #ifdef USE_DUMMY_SENSOR
