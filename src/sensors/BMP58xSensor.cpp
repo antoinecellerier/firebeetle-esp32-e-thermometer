@@ -214,6 +214,17 @@ void BMP58xSensor::InitializeUlp()
     uint64_t wakeup_us = (uint64_t)SLEEP_INTERVAL_S * 1000000ULL;
     ESP_ERROR_CHECK(ulp_lp_core_load_binary(ulp_main_bin_start,
                                             (ulp_main_bin_end - ulp_main_bin_start)));
+    // Zero LP shared state explicitly: .bss lives past the end of the embedded
+    // binary blob and is NOT touched by ulp_lp_core_load_binary(), so on a
+    // fresh power-on these symbols would otherwise reflect uninitialised SRAM.
+    ulp_lp_wake_count  = 0;
+    ulp_lp_error_count = 0;
+    ulp_last_lp_error  = 0;
+    ulp_last_lp_op     = 0;
+    ulp_sample_count   = 0;
+    ulp_wake_reason    = 0;
+    ulp_prev_temp_c    = 0.0f;
+
     ulp_lp_core_cfg_t cfg = {
         .wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
         .lp_timer_sleep_duration_us = (uint32_t)wakeup_us,

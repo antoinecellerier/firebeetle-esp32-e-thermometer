@@ -776,7 +776,11 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
     previous_boot_count = boot_count;
   }
 
-  if (sensor.SupportsUlp())
+  // Only (re)load the LP/ULP program on a fresh boot. On deep-sleep wakes
+  // the LP core is still running with its existing configuration — reloading
+  // the binary would wipe its counters and is not needed.
+  if (sensor.SupportsUlp()
+      && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
     sensor.InitializeUlp();
 
   start_deep_sleep();
