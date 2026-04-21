@@ -870,12 +870,47 @@ void render_info(Adafruit_GFX &gfx, int16_t x, int16_t y, int16_t w,
   gfx.setCursor(bat_x + bat_w + (large ? 12 : 6), text_baseline);
   gfx.print(bat_str);
 
-  // Time, right-aligned, same baseline
+  // Date + time, right-aligned, same baseline. Pick the longest variant that
+  // fits in the space between the battery text and the right edge: full date
+  // with year, then date without year, then time-only.
   gfx.setTextColor(EPD_BLACK);
-  char time_str[8];
-  strftime(time_str, sizeof(time_str), "%H:%M", nowtm);
 
-  gfx.getTextBounds(time_str, 0, 0, &tbx, &tby, &tbw, &tbh);
+  char t_only[8];
+  char t_date[16];
+  char t_full[24];
+  strftime(t_only, sizeof(t_only), "%H:%M", nowtm);
+  snprintf(t_date, sizeof(t_date), "%s %d  %s",
+           month_abbr[nowtm->tm_mon], nowtm->tm_mday, t_only);
+  snprintf(t_full, sizeof(t_full), "%s %d %d  %s",
+           month_abbr[nowtm->tm_mon], nowtm->tm_mday,
+           nowtm->tm_year + 1900, t_only);
+
+  int16_t bat_text_end = bat_x + bat_w + (large ? 12 : 6) + (int16_t)tbw;
+  int16_t min_gap = large ? 20 : 10;
+  int16_t avail_w = (x + w - 6) - bat_text_end - min_gap;
+
+  // Skip date if clock is pre-NTP (year looks bogus)
+  bool year_ok = (nowtm->tm_year + 1900) >= 2024;
+  const char *candidates[3];
+  int nc = 0;
+  if (year_ok)
+  {
+    candidates[nc++] = t_full;
+    candidates[nc++] = t_date;
+  }
+  candidates[nc++] = t_only;
+
+  const char *time_str = t_only;
+  for (int i = 0; i < nc; i++)
+  {
+    gfx.getTextBounds(candidates[i], 0, 0, &tbx, &tby, &tbw, &tbh);
+    if ((int16_t)tbw <= avail_w || i == nc - 1)
+    {
+      time_str = candidates[i];
+      break;
+    }
+  }
+
   gfx.setCursor(x + w - tbw - 6 - tbx, text_baseline);
   gfx.print(time_str);
 }
