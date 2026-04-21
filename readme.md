@@ -4,7 +4,22 @@ A low power FireBeetle ESP32-E based thermometer with an ePaper display
 
 See [docs/wiring.md](docs/wiring.md) for wiring information.
 
-See [docs/notes.md](docs/notes.md) for notes on current consumption.
+# Power consumption
+
+Measured with a Nordic PPK2; full traces and methodology in [docs/notes.md](docs/notes.md).
+
+| Setup | Deep-sleep floor | Sensor wake | Display refresh |
+|-------|-----------------|-------------|-----------------|
+| ESP32-E + BMP390L + DESPI-C02 ePaper (FDN340P power gate) | ~18 µA | ULP bit-bang I2C every 5 s, avg ≈0 | — |
+| XIAO ESP32-C6 + BMP581 + GDEH0576T81 ePaper | ~14 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~93 mC (3.2 s × 29 mA avg, 322 mA peak) |
+
+The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display refresh is the dominant event on a typical day. Long-term average stays in the 15–40 µA band, which works out to roughly **1–3 years on a 400 mAh LiPo** depending on how often the display refreshes (and probably longer in practice — Li-ion self-discharge starts to compete with the load at that level). A 2600 mAh 18650 is well past the self-discharge limit and effectively ages out before the load flattens it.
+
+Two gotchas worth surfacing:
+- **DESPI-C02 ePaper adapter** leaks ~534 µA from its boost converter even with the panel hibernated. A P-channel MOSFET (FDN340P) on its 3.3 V line eliminates it.
+- **XIAO C6 USB Serial/JTAG** stays on in deep sleep by default (~20 mA), masking all savings. Disabled via `ARDUINO_USB_CDC_ON_BOOT=0` plus matching `build_unflags`.
+
+For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran a 2600 mAh cell flat in 8.5 days at ~12.6 mA average — the ULP/LP-core redesign is ~700× more efficient.
 
 # Hardware
 
