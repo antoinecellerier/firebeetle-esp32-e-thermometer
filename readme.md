@@ -60,5 +60,5 @@ Good Display panels are driven through a DESPI-C02 adapter. Its boost converter 
 - AO3400A N-channel MOSFET (SOT-23) — switches the XIAO C6 battery voltage divider so it doesn't draw ~10 µA continuously
 
 ## Battery
-- Current builds: single-cell LiPo pouch, ~400 mAh, JST-PH connector
+- Current builds: PR502535 single-cell LiPo pouch, 400 mAh https://www.gotronic.fr/art-accu-lipo-3-7-vcc-400-mah-pr502535-5812.htm
 - Original prototype: RS Pro 18650 26H Li-ion, 2600 mAh https://fr.rs-online.com/web/p/batteries-taille-speciale/1449406/
