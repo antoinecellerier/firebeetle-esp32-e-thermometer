@@ -256,13 +256,13 @@ Hardware preparation:
 ### Measurements needed to confirm full C6 operation
 
 Baseline / correctness:
-- [ ] **Deep sleep floor with BMP58x connected, steady temperature.** No HP wake for ≥2 min; LP core fires every 60s but no delta. Expected ~15 µA + sensor deep standby (~0.5 µA) ≈ **15–16 µA**. Any reading ≥200 µA means forced-mode fix didn't take — investigate `ODR_CONFIG` write landing.
-- [ ] **Confirm sensor is in deep standby between wakes.** Between LP core spikes, sensor contribution should be ~0.5 µA (not ~1 µA standby). If the measurement can't resolve that, alternative check: read `ODR_CONFIG` back via HP I2C right after deep-sleep exit — `pwr_mode` bits [1:0] should read `00` (standby).
+- [x] **Deep sleep floor with BMP58x connected, steady temperature.** Measured ~14 µA on 2026-04-21 (SLEEP_INTERVAL_S=5, no HP wakes in window) — matches the 15–16 µA expectation, well below the 200 µA forced-mode-broken threshold.
+- [ ] **Confirm sensor is in deep standby between wakes.** Between LP core spikes, sensor contribution should be ~0.5 µA (not ~1 µA standby). If the measurement can't resolve that, alternative check: read `ODR_CONFIG` back via HP I2C right after deep-sleep exit — `pwr_mode` bits [1:0] should read `00` (standby). (Indirectly supported by the 14 µA floor, but not directly verified.)
 
 LP core wake characterisation:
-- [ ] **LP core spike duration.** Current sequence: 1× I2C write (2-byte ODR trigger), ~3 ms conversion delay, 1× I2C read (1-byte reg + 3-byte data). Expected total active window **~3.5–4 ms** (vs 7 ms LP_CORE_IDLE baseline — shorter because we dropped the extra OSR write).
-- [ ] **LP core spike amplitude.** Core ~1 mA + sensor ~200 µA during the 1.6 ms conversion portion — visible as a stepped spike.
-- [ ] **Charge per LP wake** (integrate current × time). Use PPK2 area measurement. Multiply by wakes/hour (3600/60 = 60) to project hourly load.
+- [x] **LP core spike duration.** Measured ~3 ms on 2026-04-21 — matches the predicted 3.5–4 ms window and confirms the OSR-write removal shortened the spike vs the 7 ms LP_CORE_IDLE baseline.
+- [x] **LP core spike amplitude.** Measured ~1 mA peak; stepped shape from sensor conversion not separately resolved at this zoom.
+- [ ] **Charge per LP wake** (integrate current × time). Use PPK2 area measurement. Multiply by wakes/hour (3600/60 = 60) to project hourly load. (Rough estimate from spike shape: ~3 µC/wake → ~180 µC/hour ≈ 50 nA avg at 60s interval.)
 
 HP wake characterisation:
 - [ ] **HP wake duration with BMP58x** — expected shorter than DummySensor (no sensor bring-up overhead since sensor is already in deep standby). No display refresh if temp delta small.
@@ -275,7 +275,13 @@ Averages:
 - [ ] **1-hour average under slow drift** (e.g., room temp drifting 1 °C/hour → ~10 delta wakes/hour) — characterises typical indoor use.
 
 Regression checks vs prior measurements:
-- [ ] Compare C6 BMP58x deep sleep floor against C6 LP_CORE_IDLE floor (~15 µA). Delta should be ≤1 µA.
+- [x] Compare C6 BMP58x deep sleep floor against C6 LP_CORE_IDLE floor (~15 µA). Measured 14 µA on 2026-04-21 — within 1 µA, no regression.
 - [ ] Compare against ESP32-E BMP390L production (~562 µA with DESPI-C02 attached, ~28 µA without). C6 has no DESPI-C02, so C6 floor should track bare-board baseline.
 
 PPK2 GPIO markers (reuse existing scheme from ESP32-E): tag LP-core-active and HP-active pins so the trace can be segmented automatically.
+
+### Measured 2026-04-21 (BMP581 on XIAO C6, LP_CORE_BMP58X, SLEEP_INTERVAL_S=5)
+
+- Deep sleep floor: **~14 µA** (PPK2 3.32 V, steady room temp, no HP wakes in window).
+- LP core wake spike: **~3 ms at ~1 mA** — matches the expected 3.5–4 ms window (shorter than the 7 ms LP_CORE_IDLE baseline, as predicted after dropping the per-wake OSR write).
+- Gotcha: after a warm reset (reflash or HP restart), PPK2 briefly showed extra ~200 ms spikes on top of the LP-core cadence. They **did not reappear after a full cold boot** (power cycle). Suspected leftover PMU/LP-clock state from the previous run; not investigated further since it's self-clearing.
