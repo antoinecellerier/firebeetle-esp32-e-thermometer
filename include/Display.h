@@ -58,6 +58,7 @@ struct DisplayStats {
   bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
   int32_t clock_drift_ms;    // drift at last NTP resync (positive = clock ahead), 0 = no resync yet
   int32_t drift_interval_s;  // resync interval when drift was measured (observation window)
+  time_t  last_sync_time;    // wall-clock of last successful NTP sync (0 = never)
 
   // Temperature context
   float previous_temp;

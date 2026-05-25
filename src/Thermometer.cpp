@@ -10,6 +10,7 @@
 #include <math.h>
 #ifndef DISABLE_WIFI
 #include "WiFi.h"
+#include "esp_sntp.h"
 #endif
 
 #include "Display.h"
@@ -132,6 +133,7 @@ RTC_DATA_ATTR time_t next_resync_time = 0;           // when to next attempt NTP
 RTC_DATA_ATTR int32_t resync_interval_s = 7 * 86400; // current interval (starts at 1 week)
 RTC_DATA_ATTR int32_t last_drift_ms = 0;             // drift measured at last resync (positive = clock ahead)
 RTC_DATA_ATTR int32_t last_resync_interval_s = 0;    // interval at time of last drift measurement
+RTC_DATA_ATTR time_t last_sync_time = 0;             // wall-clock of last successful NTP sync (0 = never)
 
 // Status flags for display error indicators
 RTC_DATA_ATTR bool wifi_ok = false;
@@ -331,7 +333,7 @@ DisplayStats make_display_stats()
 #else
     false,
 #endif
-    last_drift_ms, last_resync_interval_s,
+    last_drift_ms, last_resync_interval_s, last_sync_time,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     historical_data.temp, historical_data.temp_count, history_start,
     historical_data.hourly, historical_data.hourly_count, hourly_start,
@@ -417,6 +419,22 @@ static bool wifi_connect()
 // Maximum resync interval (4 weeks)
 #define RESYNC_INTERVAL_MAX  (28 * 86400)
 
+// Wait until SNTP applies a fresh time response (clock stepped), or timeout.
+// Returns true if a new sync completed within timeout_ms. Unlike getLocalTime(),
+// this actually waits for a new NTP packet instead of returning immediately on
+// an already-set (but drifted) clock.
+static bool wait_for_sntp(uint32_t timeout_ms)
+{
+  uint32_t start = millis();
+  while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED)
+  {
+    if (millis() - start > timeout_ms)
+      return false;
+    delay(50);
+  }
+  return true;
+}
+
 // Attempt NTP resync if due. Measures clock drift and adjusts next interval.
 static void maybe_ntp_resync(time_t now)
 {
@@ -443,9 +461,13 @@ static void maybe_ntp_resync(time_t now)
   time_t before_sync;
   time(&before_sync);
 
+  // Re-init SNTP and wait for a genuinely fresh response. We must NOT use
+  // getLocalTime() here: the clock is already set (just drifted), so it returns
+  // immediately on the stale value without waiting for a new packet — making
+  // the measured drift ~0 and never actually correcting the clock.
   configTzTime(MY_TZ, "pool.ntp.org");
-  struct tm t;
-  if (!getLocalTime(&t, 30000U))
+  sntp_set_sync_status(SNTP_SYNC_STATUS_RESET);
+  if (!wait_for_sntp(30000U))
   {
     LOGI("NTP resync: sync failed, deferring to next scheduled resync");
     WiFi.disconnect(true, true);
@@ -455,6 +477,7 @@ static void maybe_ntp_resync(time_t now)
 
   time_t after_sync;
   time(&after_sync);
+  last_sync_time = after_sync;
 
   // Drift = what the clock said before sync minus what NTP says now.
   // Positive = clock was ahead, negative = clock was behind.
@@ -686,7 +709,9 @@ void on_first_boot()
 
   // Verify sync succeeded (time should be well past epoch)
   ntp_synced = (first_boot_time > 86400 * 365);
-  if (!ntp_synced)
+  if (ntp_synced)
+    last_sync_time = first_boot_time;
+  else
     LOGI("NTP sync failed — time is unreliable");
 
   WiFi.disconnect(true, true);
@@ -816,6 +841,7 @@ static void reset_rtc_state()
   resync_interval_s = 7 * 86400;
   last_drift_ms = 0;
   last_resync_interval_s = 0;
+  last_sync_time = 0;
   wifi_ok = false;
   ntp_synced = false;
   last_sensor_ok = true;

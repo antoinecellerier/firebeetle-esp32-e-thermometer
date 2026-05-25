@@ -942,6 +942,21 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
              month_abbr[bt.tm_mon], bt.tm_mday, bt.tm_year % 100);
   }
 
+  // Age since last successful NTP sync — confirms resync is actually working
+  // on long-running deployments (grows unbounded if resync silently fails).
+  char sync_str[12] = "";
+  if (stats.ntp_synced && stats.last_sync_time > 0)
+  {
+    time_t age = now - stats.last_sync_time;
+    if (age < 0) age = 0;
+    if (age < 3600)
+      snprintf(sync_str, sizeof(sync_str), " s%dm", (int)(age / 60));
+    else if (age < 86400)
+      snprintf(sync_str, sizeof(sync_str), " s%dh", (int)(age / 3600));
+    else
+      snprintf(sync_str, sizeof(sync_str), " s%dd", (int)(age / 86400));
+  }
+
   // Center text vertically in the footer zone
   int16_t fx, fy; uint16_t fw, fh;
   gfx.getTextBounds("M", 0, 0, &fx, &fy, &fw, &fh);
@@ -969,6 +984,8 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
   gfx.printf(" %s", GIT_HASH);
   if (boot_date[0])
     gfx.printf(" %s", boot_date);
+  if (sync_str[0])
+    gfx.printf("%s", sync_str);
 }
 
 // --- Status indicators (top-left corner of temp zone) ---
