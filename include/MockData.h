@@ -42,9 +42,19 @@ inline void mock_fill_sparkline(time_t now, TempReading *history,
                                  uint8_t *out_count, uint8_t *out_idx)
 {
   time_t start_time = now - 86400;
-  time_t t = start_time;
   uint8_t count = 0;
   uint8_t idx = 0;
+
+  // Stable initial period: when the 24h window opens mid–flat-night, the device
+  // carries in its last pre-window reading and records nothing (delta encoding)
+  // until the temperature next moves. Reproduce that here — one carry-in reading
+  // just before the window, then no readings for the first STABLE_HOURS — so the
+  // chart must anchor the flat region back to the left edge instead of leaving
+  // it blank. Regression test for that rendering path.
+  const float STABLE_HOURS = 6.0f;
+  history[idx] = { start_time - 1800, (int16_t)(mock_temp_at_hour(STABLE_HOURS) * 10) };
+  idx = (idx + 1) % TEMP_HISTORY_SIZE; count++;
+  time_t t = start_time + (time_t)(STABLE_HOURS * 3600);
 
   while (t < now && count < TEMP_HISTORY_SIZE)
   {

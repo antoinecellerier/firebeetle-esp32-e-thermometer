@@ -297,6 +297,16 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
 
   time_t window_start = now - 86400;
 
+  // Carry-in: value of the last reading before the window opens. Delta encoding
+  // records no point until temperature next changes, so when the window starts
+  // mid-stable-period the first in-window point sits well right of the left
+  // edge, leaving the initial flat region unplotted. Anchoring that value at
+  // window_start draws the flat region back to the left edge.
+  bool has_carry_in = false;
+  int16_t carry_in_x10 = 0;
+  time_t first_in_window = 0;
+  bool have_first = false;
+
   // Find temperature range within the 24h window
   float t_min = 999.0f, t_max = -999.0f;
   int valid_count = 0;
@@ -304,8 +314,14 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
   {
     int idx = (stats.history_start + i) % TEMP_HISTORY_SIZE;
     const TempReading &r = stats.temp_history[idx];
-    if (r.timestamp >= window_start)
+    if (r.timestamp < window_start)
     {
+      carry_in_x10 = r.temp_x10;
+      has_carry_in = true;
+    }
+    else
+    {
+      if (!have_first) { first_in_window = r.timestamp; have_first = true; }
       float t = r.temp_x10 / 10.0f;
       if (t < t_min) t_min = t;
       if (t > t_max) t_max = t;
@@ -313,6 +329,14 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
     }
   }
   if (valid_count == 0) return;
+
+  bool prepend_anchor = has_carry_in && have_first && first_in_window > window_start;
+  if (prepend_anchor)
+  {
+    float t = carry_in_x10 / 10.0f;
+    if (t < t_min) t_min = t;
+    if (t > t_max) t_max = t;
+  }
 
   pad_y_range(t_min, t_max);
   float t_range = t_max - t_min;
@@ -326,6 +350,16 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
   int16_t px_arr[TEMP_HISTORY_SIZE];
   int16_t py_arr[TEMP_HISTORY_SIZE];
   int num_pts = 0;
+
+  // Synthetic anchor at the left edge for a mid-stable-period window start
+  if (prepend_anchor)
+  {
+    float t = carry_in_x10 / 10.0f;
+    int16_t py = chart_y + chart_h - 1 - (int16_t)((t - t_min) / t_range * (chart_h - 1));
+    px_arr[num_pts] = chart_x;
+    py_arr[num_pts] = constrain(py, chart_y, (int16_t)(chart_y + chart_h - 1));
+    num_pts++;
+  }
 
   for (int i = 0; i < stats.history_count; i++)
   {
