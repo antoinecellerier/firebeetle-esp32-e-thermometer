@@ -189,6 +189,15 @@ def write_font_config(display_fonts):
             else:
                 f.write(f'#include "generated/{name}.h"\n')
 
+        # Single-display (device) builds bake in exactly one panel. Emit its
+        # dimensions so the firmware can assert the runtime display matches — a
+        # mismatch means a stale font_config.h and giant/clipped temperature
+        # text. Omitted in --all (simulator) mode, which is genuinely multi-panel.
+        if len(display_fonts) == 1:
+            _, dw, dh, _, _, _, _ = display_fonts[0]
+            f.write(f"\n#define FONT_CONFIG_W {dw}\n")
+            f.write(f"#define FONT_CONFIG_H {dh}\n")
+
         f.write("\n// Select optimal font based on display dimensions\n")
         f.write("inline const GFXfont* get_temp_font(int16_t w, int16_t h) {\n")
         for _, dw, dh, _, _, temp_name, _ in display_fonts:

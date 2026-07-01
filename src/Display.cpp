@@ -1,6 +1,7 @@
 #include "Display.h"
 #include "DisplayRenderer.h"
 #include "common.h"
+#include "generated/font_config.h"  // FONT_CONFIG_W/H for the stale-font guard
 
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
 // 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board
@@ -135,6 +136,14 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
   init_for_render(stats.boot_count);
 
   LOGI("Display dashboard (%dx%d)", display.width(), display.height());
+#if defined(FONT_CONFIG_W)
+  if (display.width() != FONT_CONFIG_W || display.height() != FONT_CONFIG_H) {
+    LOGI("*** FONT CONFIG MISMATCH: fonts built for %dx%d but display is %dx%d "
+         "— temperature text will be wrong size. Stale include/generated/"
+         "font_config.h; rebuild. ***",
+         FONT_CONFIG_W, FONT_CONFIG_H, display.width(), display.height());
+  }
+#endif
   render_dashboard(display, display.width(), display.height(),
                     temp, battery_mv, low_battery, now, nowtm, stats);
 
