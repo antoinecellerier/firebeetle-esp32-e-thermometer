@@ -1,6 +1,7 @@
 #include "Display.h"
 #include "DisplayRenderer.h"
 #include "common.h"
+#include "displays.h"               // DISPLAY_HAS_RED / DISPLAY_ROTATION
 #include "generated/font_config.h"  // FONT_CONFIG_W/H for the stale-font guard
 
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
@@ -50,21 +51,42 @@ static void epd_power_off() {}
 #include "GxEPD2_BW.h"
 #if defined(USE_154_Z90)
   #include "GxEPD2_3C.h"
-  GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  using PanelT = GxEPD2_154_Z90c;
+  GxEPD2_3C<PanelT, PanelT::HEIGHT> display(PanelT(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
 #elif defined(USE_154_M09)
-  GxEPD2_BW<GxEPD2_154_M09, GxEPD2_154_M09::HEIGHT> display(GxEPD2_154_M09(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  using PanelT = GxEPD2_154_M09;
+  GxEPD2_BW<PanelT, PanelT::HEIGHT> display(PanelT(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
 #elif defined(USE_213_M21)
-  GxEPD2_BW<GxEPD2_213_M21, GxEPD2_213_M21::HEIGHT> display(GxEPD2_213_M21(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  using PanelT = GxEPD2_213_M21;
+  GxEPD2_BW<PanelT, PanelT::HEIGHT> display(PanelT(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
 #elif defined(USE_290_I6FD)
-  GxEPD2_BW<GxEPD2_290_I6FD, GxEPD2_290_I6FD::HEIGHT> display(GxEPD2_290_I6FD(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  using PanelT = GxEPD2_290_I6FD;
+  GxEPD2_BW<PanelT, PanelT::HEIGHT> display(PanelT(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
 #elif defined(USE_154_GDEY)
-  GxEPD2_BW<GxEPD2_154_GDEY0154D67, GxEPD2_154_GDEY0154D67::HEIGHT> display(GxEPD2_154_GDEY0154D67(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  using PanelT = GxEPD2_154_GDEY0154D67;
+  GxEPD2_BW<PanelT, PanelT::HEIGHT> display(PanelT(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
 #elif defined(USE_576_T81)
+  using PanelT = GxEPD2_576_GDEH0576T81;
   // Heap-allocate: the 78KB buffer won't fit in static BSS alongside other globals,
   // but there's plenty of heap. Paged rendering doesn't work (SSD2677 requires full-screen writes).
-  static auto& display = *new GxEPD2_BW<GxEPD2_576_GDEH0576T81, GxEPD2_576_GDEH0576T81::HEIGHT>(GxEPD2_576_GDEH0576T81(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
+  static auto& display = *new GxEPD2_BW<PanelT, PanelT::HEIGHT>(PanelT(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
 #else
   #error Unknown screen type
+#endif
+
+// The GxEPD2 panel is the authority. Cross-check the two things that must agree
+// with it: displays.h's tri-color flag, and the generated font's dimensions
+// (relied on by the GxEPD2-free renderer/sim and the Python font generator).
+// GxEPD2's WIDTH/HEIGHT are pre-rotation, so compare the font as an unordered pair.
+#ifndef DISABLE_DISPLAY
+static_assert(PanelT::hasColor == (bool)DISPLAY_HAS_RED,
+              "DISPLAY_HAS_RED (displays.h) disagrees with the GxEPD2 panel's hasColor");
+#if defined(FONT_CONFIG_W)
+static_assert((FONT_CONFIG_W == PanelT::WIDTH && FONT_CONFIG_H == PanelT::HEIGHT) ||
+              (FONT_CONFIG_W == PanelT::HEIGHT && FONT_CONFIG_H == PanelT::WIDTH),
+              "font_config.h built for different dimensions than the panel — "
+              "stale include/generated/font_config.h; rebuild");
+#endif
 #endif
 
 static void epd_configure_pins()
@@ -97,13 +119,7 @@ static void init_for_render(int boot_count)
   // false on subsequent boots allows faster partial-update init.
   display.init(0 /* disable serial debug output */,
                boot_count == 1 /* full reset on first boot only */);
-  #if defined(USE_213_M21) || defined(USE_290_I6FD)
-  display.setRotation(1);
-  #elif defined(USE_576_T81)
-  display.setRotation(0);
-  #else
-  display.setRotation(2);
-  #endif
+  display.setRotation(DISPLAY_ROTATION);
   display.fillScreen(GxEPD_WHITE);
 }
 

@@ -1,5 +1,6 @@
 #include "DisplayRenderer.h"
 #include "common.h"
+#include "displays.h"  // DISPLAY_HAS_RED (panel tri-color capability)
 
 #ifndef GIT_HASH
 #define GIT_HASH "0000000"
@@ -30,12 +31,12 @@ using std::max;
 #define EPD_BLACK 0x0000
 #endif
 // RGB565 red — the exact value GxEPD2_3C routes to its red plane (== GxEPD_RED).
-// Keyed on the configured panel (visible here via common.h -> local-secrets.h):
-// on bi-color panels it collapses to EPD_BLACK, so every red draw below is a
-// no-op there without a runtime flag. This is the single definition of the
-// color; Display.cpp uses GxEPD_* directly for its driver calls, so the
-// duplicate that previously drifted (and silently disabled red) is gone.
-#if defined(USE_154_Z90)  // the only tri-color panel currently supported
+// Gated by DISPLAY_HAS_RED (see displays.h): on bi-color panels it collapses to
+// EPD_BLACK, so every red draw below is a no-op there without a runtime flag.
+// This is the single definition of the color; Display.cpp uses GxEPD_* directly
+// for its driver calls, so the duplicate that previously drifted (and silently
+// disabled red) is gone.
+#if DISPLAY_HAS_RED
 #define EPD_RED 0xF800
 #else
 #define EPD_RED EPD_BLACK
