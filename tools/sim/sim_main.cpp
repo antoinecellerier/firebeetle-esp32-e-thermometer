@@ -21,41 +21,50 @@ static const struct { const char *name; int16_t w, h; } displays[] = {
   {"920x680", 920, 680},   // 5.76" (USE_576_T81, rotation 0)
 };
 
-// Save GFXcanvas1 buffer as PBM (P4 binary).
-// GFXcanvas1 with fillScreen(0xFFFF): bit 1 = white, bit 0 = black (drawn).
-// PBM P4: bit 1 = black, bit 0 = white. So we invert.
-static void save_pbm(const char *path, GFXcanvas1 &canvas)
+// Save GFXcanvas16 buffer as PPM (P6 binary, RGB). A 16-bit color canvas lets
+// the tri-color panels' red (EPD_RED == 0xF800) show up distinctly — matching
+// the real hardware instead of collapsing to black like the old 1-bit canvas.
+static void save_ppm(const char *path, GFXcanvas16 &canvas)
 {
   int16_t w = canvas.width();
   int16_t h = canvas.height();
-  uint8_t *buf = canvas.getBuffer();
-  int bytes_per_row = (w + 7) / 8;
+  uint16_t *buf = canvas.getBuffer();
 
   FILE *f = fopen(path, "wb");
   if (!f) { fprintf(stderr, "Cannot write %s\n", path); return; }
-  fprintf(f, "P4\n%d %d\n", w, h);
+  fprintf(f, "P6\n%d %d\n255\n", w, h);
 
-  for (int y = 0; y < h; y++)
-    for (int x = 0; x < bytes_per_row; x++)
-    {
-      uint8_t b = ~buf[y * bytes_per_row + x]; // invert for PBM
-      fwrite(&b, 1, 1, f);
+  for (int i = 0; i < w * h; i++)
+  {
+    uint16_t c = buf[i];
+    uint8_t rgb[3];
+    // The renderer only emits black/white/red; map those crisply and fall back
+    // to a generic RGB565->RGB888 expansion for anything unexpected.
+    if (c == 0x0000)      { rgb[0] = rgb[1] = rgb[2] = 0; }
+    else if (c == 0xFFFF) { rgb[0] = rgb[1] = rgb[2] = 255; }
+    else if (c == 0xF800) { rgb[0] = 255; rgb[1] = 0; rgb[2] = 0; }
+    else {
+      rgb[0] = ((c >> 11) & 0x1F) << 3;
+      rgb[1] = ((c >> 5) & 0x3F) << 2;
+      rgb[2] = (c & 0x1F) << 3;
     }
+    fwrite(rgb, 1, 3, f);
+  }
   fclose(f);
 }
 
 static void save_and_convert(const char *size_name, const char *suffix,
-                              GFXcanvas1 &canvas)
+                              GFXcanvas16 &canvas)
 {
-  char pbm[256], png[256], cmd[512];
-  snprintf(pbm, sizeof(pbm), "tools/mock_%s%s.pbm", size_name, suffix);
+  char ppm[256], png[256], cmd[1024];
+  snprintf(ppm, sizeof(ppm), "tools/mock_%s%s.ppm", size_name, suffix);
   snprintf(png, sizeof(png), "tools/mock_%s%s.png", size_name, suffix);
 
-  save_pbm(pbm, canvas);
+  save_ppm(ppm, canvas);
 
-  snprintf(cmd, sizeof(cmd),
-    "python3 -c \"from PIL import Image; Image.open('%s').save('%s')\" && rm -f '%s'",
-    pbm, png, pbm);
+  // ImageMagick reads PPM natively — simpler and more portable than depending
+  // on a Python Pillow install (which may be shadowed by a non-system python3).
+  snprintf(cmd, sizeof(cmd), "convert '%s' '%s' && rm -f '%s'", ppm, png, ppm);
   system(cmd);
 
   printf("  %s\n", png);
@@ -87,7 +96,7 @@ int main(int argc, char **argv)
       if (!found) continue;
     }
 
-    GFXcanvas1 canvas(cfg.w, cfg.h);
+    GFXcanvas16 canvas(cfg.w, cfg.h);
     canvas.fillScreen(0xFFFF); // white
 
     // Scenario 1: Normal dashboard
@@ -95,6 +104,13 @@ int main(int argc, char **argv)
                       22.3f, 3842, false,
                       now, &nowtm, stats);
     save_and_convert(cfg.name, "", canvas);
+
+    // Scenario 1b: Hot temperature (>=30C renders red on tri-color panels)
+    canvas.fillScreen(0xFFFF);
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      31.5f, 3842, false,
+                      now, &nowtm, stats);
+    save_and_convert(cfg.name, "_hot", canvas);
 
     // Scenario 2: Low battery warning (red icon)
     canvas.fillScreen(0xFFFF);

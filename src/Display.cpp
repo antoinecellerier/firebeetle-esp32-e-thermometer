@@ -43,33 +43,29 @@ static void epd_power_on() {}
 static void epd_power_off() {}
 #endif
 
+// This file drives GxEPD2 directly, so it uses the library's GxEPD_* color
+// constants. The renderer (DisplayRenderer.cpp) owns the EPD_* abstraction and
+// its panel-keyed EPD_RED — keeping the color in one place avoids the duplicate
+// that once drifted and silently disabled the tri-color red.
 #include "GxEPD2_BW.h"
 #if defined(USE_154_Z90)
   #include "GxEPD2_3C.h"
   GxEPD2_3C<GxEPD2_154_Z90c, GxEPD2_154_Z90c::HEIGHT> display(GxEPD2_154_Z90c(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_RED
 #elif defined(USE_154_M09)
   GxEPD2_BW<GxEPD2_154_M09, GxEPD2_154_M09::HEIGHT> display(GxEPD2_154_M09(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_BLACK
 #elif defined(USE_213_M21)
   GxEPD2_BW<GxEPD2_213_M21, GxEPD2_213_M21::HEIGHT> display(GxEPD2_213_M21(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_BLACK
 #elif defined(USE_290_I6FD)
   GxEPD2_BW<GxEPD2_290_I6FD, GxEPD2_290_I6FD::HEIGHT> display(GxEPD2_290_I6FD(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_BLACK
 #elif defined(USE_154_GDEY)
   GxEPD2_BW<GxEPD2_154_GDEY0154D67, GxEPD2_154_GDEY0154D67::HEIGHT> display(GxEPD2_154_GDEY0154D67(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_BLACK
 #elif defined(USE_576_T81)
   // Heap-allocate: the 78KB buffer won't fit in static BSS alongside other globals,
   // but there's plenty of heap. Paged rendering doesn't work (SSD2677 requires full-screen writes).
   static auto& display = *new GxEPD2_BW<GxEPD2_576_GDEH0576T81, GxEPD2_576_GDEH0576T81::HEIGHT>(GxEPD2_576_GDEH0576T81(EPD_CS, EPD_DC, EPD_RESET, EPD_BUSY));
-  #define EPD_RED GxEPD_BLACK
 #else
   #error Unknown screen type
 #endif
-#define EPD_BLACK GxEPD_BLACK
-#define EPD_WHITE GxEPD_WHITE
 
 static void epd_configure_pins()
 {
@@ -160,7 +156,7 @@ void display_show_pin27_diagnostic(int boot_count)
   init_for_render(boot_count);
   display.setFont(NULL);
   display.setTextSize(2);
-  display.setTextColor(EPD_BLACK);
+  display.setTextColor(GxEPD_BLACK);
   display.setCursor(10, 30);
   display.print("Read pin27 == 0");
   display.display();

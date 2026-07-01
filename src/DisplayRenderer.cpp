@@ -29,9 +29,20 @@ using std::max;
 #ifndef EPD_BLACK
 #define EPD_BLACK 0x0000
 #endif
-#ifndef EPD_RED
+// RGB565 red — the exact value GxEPD2_3C routes to its red plane (== GxEPD_RED).
+// Keyed on the configured panel (visible here via common.h -> local-secrets.h):
+// on bi-color panels it collapses to EPD_BLACK, so every red draw below is a
+// no-op there without a runtime flag. This is the single definition of the
+// color; Display.cpp uses GxEPD_* directly for its driver calls, so the
+// duplicate that previously drifted (and silently disabled red) is gone.
+#if defined(USE_154_Z90)  // the only tri-color panel currently supported
+#define EPD_RED 0xF800
+#else
 #define EPD_RED EPD_BLACK
 #endif
+
+// Temperature at/above this renders red on tri-color panels (no-op on B&W).
+#define TEMP_HOT_THRESHOLD_C 30.0f
 
 // --- Drawing helpers ---
 
@@ -182,7 +193,9 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
 
   gfx.setFont(L.big_font);
   gfx.setTextSize(1);
-  gfx.setTextColor(EPD_BLACK);
+  // Hot temperatures render red on tri-color panels; EPD_RED == EPD_BLACK on
+  // bi-color panels, so this is automatically a no-op there.
+  gfx.setTextColor(temp >= TEMP_HOT_THRESHOLD_C ? EPD_RED : EPD_BLACK);
   gfx.setTextWrap(false);
 
   int16_t tbx, tby;
