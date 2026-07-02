@@ -5,6 +5,7 @@
 // and the host simulator (sim_main.cpp).
 
 #include "Display.h"
+#include "TempHistory.h"
 #include <math.h>
 #include <time.h>
 
@@ -39,11 +40,10 @@ inline float mock_temp_at_hour(float h)
 // (morning warmup, evening cooldown) and sparse during stable periods — this
 // mirrors the real delta-threshold-based wake behavior.
 inline void mock_fill_sparkline(time_t now, TempReading *history,
-                                 uint8_t *out_count, uint8_t *out_idx)
+                                 uint16_t *out_count)
 {
   time_t start_time = now - 86400;
-  uint8_t count = 0;
-  uint8_t idx = 0;
+  uint16_t count = 0;
 
   // Stable initial period: when the 24h window opens mid–flat-night, the device
   // carries in its last pre-window reading and records nothing (delta encoding)
@@ -52,8 +52,8 @@ inline void mock_fill_sparkline(time_t now, TempReading *history,
   // chart must anchor the flat region back to the left edge instead of leaving
   // it blank. Regression test for that rendering path.
   const float STABLE_HOURS = 6.0f;
-  history[idx] = { start_time - 1800, (int16_t)(mock_temp_at_hour(STABLE_HOURS) * 10) };
-  idx = (idx + 1) % TEMP_HISTORY_SIZE; count++;
+  history[count++] = { (uint32_t)(start_time - 1800),
+                       (int16_t)(mock_temp_at_hour(STABLE_HOURS) * 10) };
   time_t t = start_time + (time_t)(STABLE_HOURS * 3600);
 
   while (t < now && count < TEMP_HISTORY_SIZE)
@@ -62,9 +62,7 @@ inline void mock_fill_sparkline(time_t now, TempReading *history,
     float temp = mock_temp_at_hour(h);
     temp += ((count * 73 + 17) % 100 - 50) * 0.001f; // small deterministic noise
 
-    history[idx] = { t, (int16_t)(temp * 10) };
-    idx = (idx + 1) % TEMP_HISTORY_SIZE;
-    count++;
+    history[count++] = { (uint32_t)t, (int16_t)(temp * 10) };
 
     // Variable gap: more readings during rapid temperature changes
     float rate = fabsf(mock_temp_at_hour(h + 0.1f) - mock_temp_at_hour(h));
@@ -76,7 +74,45 @@ inline void mock_fill_sparkline(time_t now, TempReading *history,
   }
 
   *out_count = count;
-  *out_idx = idx;
+}
+
+// Noisy 24h scenario: a heatwave day where a window opens mid-afternoon,
+// producing sustained ±0.5°C oscillation. The delta trigger then fires on
+// nearly every 60s poll, generating far more than TEMP_HISTORY_SIZE points —
+// this drives readings through the real TempHistory.h append/evict path, so
+// the sim exercises smart eviction end to end. Regression test: the rendered
+// sparkline must still span the full 24h (a drop-oldest ring would truncate
+// to the most recent few hours).
+inline void mock_fill_sparkline_noisy(time_t now, TempReading *history,
+                                       uint16_t *out_count)
+{
+  uint16_t count = 0;
+  float last_recorded = -999.0f;
+
+  // Start 26h back so the buffer holds a pre-window carry-in point
+  for (time_t t = now - 26 * 3600; t <= now; t += 60)  // 60s = ULP poll cadence
+  {
+    float win_h = (float)(t - (now - 86400)) / 3600.0f;  // hours into 24h window
+    float h = ((float)(t % 86400)) / 3600.0f;
+    float temp = mock_temp_at_hour(h);
+
+    // Heatwave: ramp +3°C over window hours 8-16, hold after
+    if (win_h > 8.0f)
+      temp += 3.0f * fminf((win_h - 8.0f) / 8.0f, 1.0f);
+
+    // Open window: ±0.5°C triangle wave, ~10 min period, hours 10-16
+    if (win_h >= 10.0f && win_h < 16.0f)
+      temp += ((t / 300) % 2 == 0) ? 0.5f : -0.5f;
+
+    // Recording gate — mirrors DISPLAY_TEMP_DELTA in Thermometer.cpp
+    if (fabsf(temp - last_recorded) >= 0.1f)
+    {
+      temp_history_record(history, &count, t, (int16_t)(temp * 10));
+      last_recorded = temp;
+    }
+  }
+
+  *out_count = count;
 }
 
 // Fill the 30-day hourly history buffer with mock data.
@@ -162,10 +198,10 @@ inline DisplayStats mock_make_stats(time_t now,
                                      TempReading *history_buf,
                                      HourlyEntry *hourly_buf)
 {
-  uint8_t h_count, h_idx;
+  uint16_t h_count;
   uint16_t hr_count, hr_idx;
   time_t hr_latest;
-  mock_fill_sparkline(now, history_buf, &h_count, &h_idx);
+  mock_fill_sparkline(now, history_buf, &h_count);
   mock_fill_hourly(now, hourly_buf, &hr_count, &hr_idx, &hr_latest);
 
   DisplayStats stats = {};
@@ -196,7 +232,6 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.max_temp = 22.8f;
   stats.temp_history = history_buf;
   stats.history_count = h_count;
-  stats.history_start = (h_count < TEMP_HISTORY_SIZE) ? 0 : h_idx;
   stats.hourly_history = hourly_buf;
   stats.hourly_count = hr_count;
   stats.hourly_start = (hr_count < HOURLY_HISTORY_SIZE) ? 0 : hr_idx;

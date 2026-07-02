@@ -4,10 +4,11 @@
 #include <stdint.h>
 
 // A single temperature reading with timestamp, for the 24h sparkline.
-// Packed to fit 192 entries in RTC slow memory (10 vs 16 bytes per entry).
+// uint32_t (not time_t) + packed = 6 bytes per entry, so 320 entries fit in
+// the same RTC slow memory as 192 did at 10 bytes. Good until 2106.
 struct __attribute__((packed)) TempReading {
-  time_t timestamp;
-  int16_t temp_x10;  // temperature * 10, e.g. 223 = 22.3°C
+  uint32_t timestamp;  // unix time
+  int16_t temp_x10;    // temperature * 10, e.g. 223 = 22.3°C
 };
 
 // Finalized hourly temperature entry for the 30-day chart.
@@ -22,7 +23,7 @@ struct HourlyEntry {
   int16_t avg_x10;  // average temperature × 10 (from accumulated readings)
 };
 
-#define TEMP_HISTORY_SIZE 192
+#define TEMP_HISTORY_SIZE 320
 #define HOURLY_HISTORY_SIZE 720  // 30 days × 24 hours/day
 
 // Sentinel value for hours with no readings (e.g., gap after device restart).
@@ -65,10 +66,9 @@ struct DisplayStats {
   float min_temp;
   float max_temp;
 
-  // 24h sparkline history (circular buffer)
+  // 24h sparkline history (linear, oldest first)
   const TempReading *temp_history;
-  uint8_t history_count;  // number of valid entries (0..TEMP_HISTORY_SIZE)
-  uint8_t history_start;  // index of oldest entry in circular buffer
+  uint16_t history_count;  // number of valid entries (0..TEMP_HISTORY_SIZE)
 
   // 30-day hourly history (circular buffer, one entry per clock hour).
   // Each entry's wall-clock time is derived from hourly_latest_time:

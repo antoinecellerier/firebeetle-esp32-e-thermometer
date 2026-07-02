@@ -80,6 +80,13 @@ int main(int argc, char **argv)
   static HourlyEntry mock_hourly[HOURLY_HISTORY_SIZE]; // static: 4320 bytes, avoid stack overflow
   DisplayStats stats = mock_make_stats(now, mock_history, mock_hourly);
 
+  // Noisy variant: exercises smart eviction (TempHistory.h) with more
+  // delta-triggered readings than the buffer holds
+  TempReading noisy_history[TEMP_HISTORY_SIZE];
+  DisplayStats noisy_stats = stats;
+  mock_fill_sparkline_noisy(now, noisy_history, &noisy_stats.history_count);
+  noisy_stats.temp_history = noisy_history;
+
   struct tm nowtm;
   localtime_r(&now, &nowtm);
 
@@ -111,6 +118,13 @@ int main(int argc, char **argv)
                       31.5f, 3842, false,
                       now, &nowtm, stats);
     save_and_convert(cfg.name, "_hot", canvas);
+
+    // Scenario 1c: Noisy 24h history (smart eviction keeps full-width span)
+    canvas.fillScreen(0xFFFF);
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, noisy_stats);
+    save_and_convert(cfg.name, "_noisy", canvas);
 
     // Scenario 2: Low battery warning (red icon)
     canvas.fillScreen(0xFFFF);

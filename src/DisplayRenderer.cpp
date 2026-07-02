@@ -326,8 +326,7 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
   int valid_count = 0;
   for (int i = 0; i < stats.history_count; i++)
   {
-    int idx = (stats.history_start + i) % TEMP_HISTORY_SIZE;
-    const TempReading &r = stats.temp_history[idx];
+    const TempReading &r = stats.temp_history[i];
     if (r.timestamp < window_start)
     {
       carry_in_x10 = r.temp_x10;
@@ -377,8 +376,7 @@ void render_sparkline(Adafruit_GFX &gfx, const Rect &zone,
 
   for (int i = 0; i < stats.history_count; i++)
   {
-    int idx = (stats.history_start + i) % TEMP_HISTORY_SIZE;
-    const TempReading &r = stats.temp_history[idx];
+    const TempReading &r = stats.temp_history[i];
     if (r.timestamp < window_start) continue;
 
     float t = r.temp_x10 / 10.0f;

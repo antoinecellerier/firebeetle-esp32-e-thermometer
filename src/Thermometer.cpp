@@ -14,6 +14,7 @@
 #endif
 
 #include "Display.h"
+#include "TempHistory.h"
 
 // Used for JTAG. Avoid for other purposes if possible
 // Firebeetle Pin | JTAG PIN
@@ -68,7 +69,7 @@ void ulp_check_data_overlap();
 // Bump RTC_HISTORY_VERSION when changing anything inside RtcHistory
 // (struct fields, buffer sizes, semantics).
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_HISTORY_VERSION 0xDA050002
+#define RTC_HISTORY_VERSION 0xDA050003
 #define RTC_STATE_VERSION   0xDA050001
 
 // Initial min/max temperature sentinels (float).
@@ -86,10 +87,9 @@ struct RtcHistory {
   uint32_t version;
   uint32_t self_addr;  // &historical_data at init time; detects address shifts
 
-  // 24h sparkline
+  // 24h sparkline (linear, oldest first — see TempHistory.h)
   TempReading temp[TEMP_HISTORY_SIZE];
-  uint8_t temp_count;
-  uint8_t temp_idx;
+  uint16_t temp_count;
 
   // 30-day hourly chart (circular buffer, one entry per clock hour)
   HourlyEntry hourly[HOURLY_HISTORY_SIZE];
@@ -139,34 +139,6 @@ RTC_DATA_ATTR time_t last_sync_time = 0;             // wall-clock of last succe
 RTC_DATA_ATTR bool wifi_ok = false;
 RTC_DATA_ATTR bool ntp_synced = false;
 RTC_DATA_ATTR bool last_sensor_ok = true;
-
-static void append_temp_history(time_t now, float temp)
-{
-  int16_t new_x10 = (int16_t)(temp * 10);
-
-  // Backfill on a long gap *and* a meaningful jump: anchor the prior flat
-  // region so the spline doesn't ramp-interpolate across it. Skip when the
-  // delta is ≤0.1°C — that's our sampling resolution, not a real step, and
-  // anchoring it produces a staircase on slow monotonic drift.
-  if (historical_data.temp_count > 0)
-  {
-    int prev_idx = (historical_data.temp_idx + TEMP_HISTORY_SIZE - 1) % TEMP_HISTORY_SIZE;
-    time_t  prev_time = historical_data.temp[prev_idx].timestamp;
-    int16_t prev_x10  = historical_data.temp[prev_idx].temp_x10;
-    if (now - prev_time > 3600 && abs(new_x10 - prev_x10) >= 2)
-    {
-      historical_data.temp[historical_data.temp_idx] = { now - 1, prev_x10 };
-      historical_data.temp_idx = (historical_data.temp_idx + 1) % TEMP_HISTORY_SIZE;
-      if (historical_data.temp_count < TEMP_HISTORY_SIZE)
-        historical_data.temp_count++;
-    }
-  }
-
-  historical_data.temp[historical_data.temp_idx] = { now, new_x10 };
-  historical_data.temp_idx = (historical_data.temp_idx + 1) % TEMP_HISTORY_SIZE;
-  if (historical_data.temp_count < TEMP_HISTORY_SIZE)
-    historical_data.temp_count++;
-}
 
 // Update the hourly history buffer with a new temperature reading.
 // Called on every main CPU wake (both delta-triggered and safety-net timer).
@@ -253,7 +225,7 @@ static void update_temp_extremes(float temp)
 
 static void fill_mock_data(time_t now)
 {
-  mock_fill_sparkline(now, historical_data.temp, &historical_data.temp_count, &historical_data.temp_idx);
+  mock_fill_sparkline(now, historical_data.temp, &historical_data.temp_count);
   mock_fill_hourly(now, historical_data.hourly, &historical_data.hourly_count, &historical_data.hourly_idx,
                    &historical_data.hourly_latest_time);
 
@@ -276,10 +248,7 @@ static void fill_mock_data(time_t now)
 
 DisplayStats make_display_stats()
 {
-  // Compute circular buffer start indices (oldest entry)
-  uint8_t history_start = (historical_data.temp_count < TEMP_HISTORY_SIZE)
-    ? 0
-    : historical_data.temp_idx;
+  // Compute circular buffer start index (oldest entry)
   uint16_t hourly_start = (historical_data.hourly_count < HOURLY_HISTORY_SIZE)
     ? 0
     : historical_data.hourly_idx;
@@ -335,7 +304,7 @@ DisplayStats make_display_stats()
 #endif
     last_drift_ms, last_resync_interval_s, last_sync_time,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
-    historical_data.temp, historical_data.temp_count, history_start,
+    historical_data.temp, historical_data.temp_count,
     historical_data.hourly, historical_data.hourly_count, hourly_start,
     historical_data.hourly_latest_time, current_entry, has_current
   };
@@ -790,7 +759,8 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
     if (max_battery_mv < battery_mv)
       max_battery_mv = battery_mv;
 
-    append_temp_history(now, temp);
+    temp_history_record(historical_data.temp, &historical_data.temp_count,
+                        now, (int16_t)(temp * 10));
 
     PPK2_DISPLAY_HIGH();
     display_show_temperature(temp, battery_mv, battery_mv < low_battery_mv,
@@ -898,16 +868,13 @@ void setup()
   // Diagnostic: dump sparkline buffer to detect packed struct corruption
   if (historical_data.temp_count > 0)
   {
-    LOGI("Sparkline: count=%d idx=%d", historical_data.temp_count, historical_data.temp_idx);
-    int start = (historical_data.temp_count < TEMP_HISTORY_SIZE)
-      ? 0 : historical_data.temp_idx;
+    LOGI("Sparkline: count=%d", historical_data.temp_count);
     for (int i = 0; i < historical_data.temp_count; i++)
     {
-      int idx = (start + i) % TEMP_HISTORY_SIZE;
-      LOGI("  [%d] idx=%d ts=%lld temp_x10=%d",
-           i, idx,
-           (long long)historical_data.temp[idx].timestamp,
-           (int)historical_data.temp[idx].temp_x10);
+      LOGI("  [%d] ts=%lld temp_x10=%d",
+           i,
+           (long long)historical_data.temp[i].timestamp,
+           (int)historical_data.temp[i].temp_x10);
     }
   }
 

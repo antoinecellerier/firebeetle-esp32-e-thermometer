@@ -207,8 +207,15 @@ Individual zone renderers are also declared in `DisplayRenderer.h` for direct te
 
 `sizeof(time_t)` is 8 bytes on both ESP32 (Xtensa) and ESP32-C6 (RISC-V) with ESP-IDF 5.x / pioarduino.
 
-**TempReading** = `time_t` + `int16_t`, packed to avoid 6 bytes padding per entry:
-- Both platforms: 8 + 2 = 10 bytes (packed), 16 bytes (unpacked)
+**TempReading** = `uint32_t` (unix time, good until 2106) + `int16_t`, packed:
+- Both platforms: 4 + 2 = 6 bytes per entry — 320 entries in the same 1920
+  bytes that 192 entries needed with a `time_t` timestamp.
+
+The sparkline buffer is a linear array (oldest first), not a ring. When full,
+`TempHistory.h` drops the oldest point if it's outside the 24h window (the
+common case in stable periods); otherwise it drops the interior point with the
+smallest Visvalingam triangle area, so noisy periods lose redundant wiggle
+detail instead of truncating the chart's 24h span.
 
 **IMPORTANT:** RTC slow memory (8KB at 0x50000000) is shared between `RTC_DATA_ATTR`
 variables and the ULP program/data. `ULP_DATA_BASE` must be set past the end of all
@@ -221,14 +228,14 @@ verifies this automatically.
 
 | Data | Size (64-bit time_t) |
 |---|---|
-| temp_history[192] (TempReading, packed) | 1920 bytes |
+| temp_history[320] (TempReading, packed) | 1920 bytes |
 | hourly_history[720] (HourlyEntry) | 4320 bytes |
 | bmp390l_calib (BMP390LCalib) | 12 bytes |
 | Scalars: boot_count, display_refresh_count, previous_boot_count (3x int) | 12 bytes |
 | first_boot_time, next_clear_time (2x time_t) | 16 bytes |
 | previous_temp, min_temp_since_boot, max_temp_since_boot (3x float) | 12 bytes |
 | max_battery_mv, bad_pin27_count (2x uint32_t) | 8 bytes |
-| temp_history_count, temp_history_idx (2x uint8_t) | 2 bytes |
+| temp_history_count (uint16_t) | 2 bytes |
 | hourly_history_count, hourly_history_idx (2x uint16_t) | 4 bytes |
 | hourly_latest_time (time_t) | 8 bytes |
 | Hour accumulator: current_hour_start (time_t), sum_x10 (int32_t), sample_count (uint16_t), min_x10/max_x10 (2x int16_t) | 20 bytes |
