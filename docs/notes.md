@@ -429,3 +429,23 @@ debug envs too — they exist for serial logs, not JTAG stepping).
 - Running total for the day (E/Z90 rig, per refresh event):
   600 mC (spin-wait era) → 129 (busy-wait light sleep) → 114.5 (skip
   validation) → **112 mC**; pre-refresh active phase 40 → 22.5 → **20.6 mC**.
+
+## C6 measurements: skip-validate + -Os combined (July 2026)
+
+Same two changes measured together on the XIAO C6 + BMP581 + GDEH0576T81
+rig (release; the two effects were only separated on the ESP32-E above):
+
+- Active phase (boot + render + SPI push): **28.5 → 18.3 mC**
+  (1.08 s @ 26.4 mA → 0.80 s @ 22.9 mA).
+- Full refresh event: **56.25 → 45.3 mC** (−19%). At 1 refresh/hour the
+  refresh contribution drops ~15.6 → ~12.6 µA.
+- Binary 1080 → 983 KB.
+- Evidence: xiao-seeed-esp32c6-bmp581-GDEH0576T81-wake-active-phase-pre-skip-validate.png
+  (before) / -wake-active-phase-skip-validate-Os.png /
+  -screen-refresh-skip-validate-Os.png (after).
+- Deep-sleep floor still TODO on both rigs (skip-validate keeps the
+  bootloader retain area powered; expected sub-µA).
+- Bench gotcha from this session: a wrong screen/sensor local-secrets.h
+  config panic-looped at ~600 ms cadence and read as a "~670 µA floor with
+  25 mA pings" — the e-paper retaining a stale frame (old GIT_HASH + time
+  on screen) was the tell that no boot ever reached render.
