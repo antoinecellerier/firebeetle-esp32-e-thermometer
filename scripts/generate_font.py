@@ -18,8 +18,7 @@ import subprocess
 import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GFX_LIB = os.path.join(PROJECT_ROOT, ".pio", "libdeps",
-                        "dfrobot_firebeetle2_esp32e_debug", "Adafruit GFX Library")
+GFX_LIB = os.path.join(PROJECT_ROOT, "components", "adafruit_gfx", "upstream")
 FONTCONVERT_DIR = os.path.join(GFX_LIB, "fontconvert")
 FONTCONVERT_BIN = os.path.join(FONTCONVERT_DIR, "fontconvert")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "include", "generated")
@@ -117,7 +116,7 @@ def build_fontconvert():
         return
     if not os.path.isdir(FONTCONVERT_DIR):
         print(f"ERROR: Adafruit GFX library not found at {GFX_LIB}")
-        print("Run 'pio run' first to download dependencies.")
+        print("Run 'git submodule update --init' to fetch it.")
         sys.exit(1)
     print("Building fontconvert...")
     subprocess.check_call(["make", "-C", FONTCONVERT_DIR], stdout=subprocess.DEVNULL)

@@ -1,0 +1,15 @@
+[submodule "components/adafruit_gfx/upstream"]
+	path = components/adafruit_gfx/upstream
+	url = https://github.com/adafruit/Adafruit-GFX-Library
+	shallow = true
+	ignore = untracked
+[submodule "components/gxepd2/upstream"]
+	path = components/gxepd2/upstream
+	url = https://github.com/antoinecellerier/GxEPD2
+	shallow = true
+	branch = add-gdeh0576t81-support
+[submodule "components/hulp/upstream"]
+	path = components/hulp/upstream
+	url = https://github.com/antoinecellerier/HULP
+	shallow = true
+	branch = arduino-core-3x-compat
