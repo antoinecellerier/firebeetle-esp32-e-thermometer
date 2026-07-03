@@ -388,13 +388,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);
 }
 
-// Radio fully off before deep sleep (matches former WiFi.disconnect(true, true))
+// Radio fully off before deep sleep (matches former WiFi.disconnect(true, true)).
+// Handlers unregister before deinit and the stopping flag stays set throughout,
+// so a late STA_DISCONNECTED can't call esp_wifi_connect() on a dead driver.
 static void wifi_disconnect()
 {
   s_wifi_stopping = true;
   esp_wifi_stop();
-  esp_wifi_deinit();
-  s_wifi_stopping = false;
   if (s_wifi_handler)
   {
     esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_wifi_handler);
@@ -405,6 +405,8 @@ static void wifi_disconnect()
     esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, s_ip_handler);
     s_ip_handler = nullptr;
   }
+  esp_wifi_deinit();
+  s_wifi_stopping = false;
 }
 
 static bool wifi_connect()
@@ -421,7 +423,20 @@ static bool wifi_connect()
     return false;
   }
 
-  ESP_ERROR_CHECK(esp_netif_init());
+  // Degrade to "NO WIFI" on any init failure (the Arduino path never aborted);
+  // a panic here would boot-loop a battery device instead of rendering a frame.
+#define WIFI_TRY(x)                                        \
+  do {                                                     \
+    esp_err_t _e = (x);                                    \
+    if (_e != ESP_OK)                                      \
+    {                                                      \
+      LOGI("WiFi setup failed (%s): " #x, esp_err_to_name(_e)); \
+      wifi_disconnect();                                   \
+      return false;                                        \
+    }                                                      \
+  } while (0)
+
+  WIFI_TRY(esp_netif_init());
   err = esp_event_loop_create_default();
   if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) // INVALID_STATE = already created
   {
@@ -431,25 +446,31 @@ static bool wifi_connect()
   static esp_netif_t *sta_netif = nullptr;
   if (!sta_netif)
     sta_netif = esp_netif_create_default_wifi_sta();
+  if (!sta_netif)
+  {
+    LOGI("WiFi setup failed: no STA netif");
+    return false;
+  }
 
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+  WIFI_TRY(esp_wifi_init(&cfg));
 
   if (!s_wifi_events)
     s_wifi_events = xEventGroupCreate();
   xEventGroupClearBits(s_wifi_events, WIFI_CONNECTED_BIT);
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                                      &wifi_event_handler, nullptr, &s_wifi_handler));
-  ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                                      &wifi_event_handler, nullptr, &s_ip_handler));
+  WIFI_TRY(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                               &wifi_event_handler, nullptr, &s_wifi_handler));
+  WIFI_TRY(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                               &wifi_event_handler, nullptr, &s_ip_handler));
 
   wifi_config_t wcfg = {};
   strncpy((char *)wcfg.sta.ssid, MY_WIFI_SSID, sizeof(wcfg.sta.ssid) - 1);
   strncpy((char *)wcfg.sta.password, MY_WIFI_PASSWORD, sizeof(wcfg.sta.password) - 1);
-  ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM)); // reconfigured every boot; skip NVS writes
-  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wcfg));
-  ESP_ERROR_CHECK(esp_wifi_start());
+  WIFI_TRY(esp_wifi_set_storage(WIFI_STORAGE_RAM)); // reconfigured every boot; skip NVS writes
+  WIFI_TRY(esp_wifi_set_mode(WIFI_MODE_STA));
+  WIFI_TRY(esp_wifi_set_config(WIFI_IF_STA, &wcfg));
+  WIFI_TRY(esp_wifi_start());
+#undef WIFI_TRY
 
   LOGI("Waiting for WiFi");
   EventBits_t bits = xEventGroupWaitBits(s_wifi_events, WIFI_CONNECTED_BIT,
@@ -471,7 +492,7 @@ static bool sntp_sync_once(uint32_t timeout_ms)
   scfg.wait_for_sync = true;
   scfg.num_of_servers = 1;
   scfg.servers[0] = "pool.ntp.org";
-#if SNTP_MAX_NUM_SERVERS >= 2
+#if CONFIG_LWIP_SNTP_MAX_SERVERS >= 2
   scfg.num_of_servers = 2;
   scfg.servers[1] = "time.google.com";
 #endif
@@ -579,13 +600,18 @@ uint32_t read_battery_level()
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
   // https://dfimg.dfrobot.com/nobody/wiki/fd28d987619c16281bdc4f40990e5a1c.PDF => looks like 1M/1M divider == x2 ratio
   // GPIO34 (A2) = ADC1 channel 6
+  // On ADC failure return a value in the low-battery band: visible on the
+  // display as a warning, but above no_battery_mv so a transient ADC error
+  // can never trigger the permanent shutdown in handle_permanent_shutdown().
+  const uint32_t adc_fail_mv = 3100;
+
   adc_oneshot_unit_handle_t unit;
   adc_oneshot_unit_init_cfg_t ucfg = {};
   ucfg.unit_id = ADC_UNIT_1;
   if (adc_oneshot_new_unit(&ucfg, &unit) != ESP_OK)
   {
     LOGI("ERROR: ADC unit init failed");
-    return 0;
+    return adc_fail_mv;
   }
   adc_oneshot_chan_cfg_t ccfg = {};
   ccfg.atten = ADC_ATTEN_DB_12;
@@ -600,7 +626,7 @@ uint32_t read_battery_level()
   adc_cali_create_scheme_line_fitting(&lcfg, &cali);
 
   int raw = 0, mv = 0;
-  adc_oneshot_read(unit, ADC_CHANNEL_6, &raw);
+  bool read_ok = (adc_oneshot_read(unit, ADC_CHANNEL_6, &raw) == ESP_OK);
   if (cali)
   {
     adc_cali_raw_to_voltage(cali, raw, &mv);
@@ -611,6 +637,12 @@ uint32_t read_battery_level()
     mv = raw * 3100 / 4095; // uncalibrated fallback, 12dB full scale ~3.1V
   }
   adc_oneshot_del_unit(unit);
+
+  if (!read_ok)
+  {
+    LOGI("ERROR: ADC read failed");
+    return adc_fail_mv;
+  }
 
   uint32_t battery_mv = (uint32_t)mv * 2;
   LOGI("Battery level: %d mV", (int)battery_mv);
