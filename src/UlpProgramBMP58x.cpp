@@ -19,6 +19,7 @@
 #include "esp32/ulp.h"
 #include "hulp.h"
 #include "hulp_i2cbb.h"
+#include "soc/rtc_cntl_reg.h" // RDY_FOR_WAKEUP gate
 
 #define BMP58X_I2C_ADDR       0x47
 #define BMP58X_REG_ODR_CONFIG 0x37
@@ -44,6 +45,8 @@ void ulp_build_and_load_program()
     LBL_RD0_DONE = 16,
     LBL_RD1_DONE = 17,
     LBL_RD2_DONE = 18,
+    LABEL_ERR_NO_WAKE = 19,
+    LABEL_HAVE_REF = 20,
   };
 
   const ulp_insn_t program[] = {
@@ -78,6 +81,16 @@ void ulp_build_and_load_program()
     I_WAKE(),
     I_HALT(),
 #else
+    // Uninitialized reference (0 = cold-boot default): seed it — otherwise
+    // the first post-sleep poll always sees a huge phantom delta and
+    // refreshes right after boot. Falls through into the comparison, where
+    // the freshly-seeded delta is 0 → NO_WAKE (saves two words vs halting).
+    I_LD(R0, R2, ULP_VAR_PREV_TEMP_MSB),
+    M_BGE(LABEL_HAVE_REF, 1),
+    I_LD(R0, R2, ULP_VAR_TEMP_1),
+    I_ST(R0, R2, ULP_VAR_PREV_TEMP_MSB),
+    M_LABEL(LABEL_HAVE_REF),
+
     // 4. Delta comparison: current DATA_1 vs previous
     I_LD(R0, R2, ULP_VAR_TEMP_1),
     I_LD(R1, R2, ULP_VAR_PREV_TEMP_MSB),
@@ -91,7 +104,16 @@ void ulp_build_and_load_program()
     M_BL(LABEL_NO_WAKE, ULP_TEMP_DELTA_THRESHOLD),
 
     M_LABEL(LABEL_DO_WAKE),
-    I_MOVI(R2, ULP_DATA_BASE),
+    // Only signal a wake when the host is actually in deep sleep
+    // (RTC_CNTL_RDY_FOR_WAKEUP). An I_WAKE issued while the host is awake
+    // (e.g. still rendering the previous refresh) latches and fires the
+    // moment deep sleep is entered — observed as back-to-back refresh
+    // trains on the PPK2. Skipping WITHOUT updating the reference means the
+    // delta is re-detected at the next poll: at most one wake per interval.
+    I_RD_REG(RTC_CNTL_LOW_POWER_ST_REG, RTC_CNTL_RDY_FOR_WAKEUP_S, RTC_CNTL_RDY_FOR_WAKEUP_S),
+    M_BL(LABEL_NO_WAKE, 1),
+    // R2 still holds ULP_DATA_BASE (nothing clobbers it after the sample
+    // counter block) — no reload needed, saves a word
     I_LD(R0, R2, ULP_VAR_TEMP_1),
     I_ST(R0, R2, ULP_VAR_PREV_TEMP_MSB),
     I_MOVI(R0, 1),
@@ -109,7 +131,10 @@ void ulp_build_and_load_program()
     I_MOVI(R2, ULP_DATA_BASE),
     I_MOVI(R0, 2),
     I_ST(R0, R2, ULP_VAR_WAKE_REASON),
+    I_RD_REG(RTC_CNTL_LOW_POWER_ST_REG, RTC_CNTL_RDY_FOR_WAKEUP_S, RTC_CNTL_RDY_FOR_WAKEUP_S),
+    M_BL(LABEL_ERR_NO_WAKE, 1),
     I_WAKE(),
+    M_LABEL(LABEL_ERR_NO_WAKE),
     I_HALT(),
 
     // Bit-bang I2C subroutine
@@ -118,7 +143,18 @@ void ulp_build_and_load_program()
   };
 
   size_t program_size = sizeof(program) / sizeof(ulp_insn_t);
-  ESP_ERROR_CHECK(ulp_process_macros_and_load(0, program, &program_size));
+  esp_err_t load_err = ulp_process_macros_and_load(0, program, &program_size);
+  if (load_err != ESP_OK)
+  {
+    // Degrade instead of abort-looping: without the ULP the safety-net timer
+    // still wakes the host hourly. program_size holds the word count on
+    // ESP_ERR_ULP_SIZE_TOO_BIG (limit = CONFIG_ULP_COPROC_RESERVE_MEM / 4).
+    LOGI("ERROR: ULP program load failed (0x%x, %u words, limit %u)",
+         load_err, (unsigned)program_size, (unsigned)(CONFIG_ULP_COPROC_RESERVE_MEM / 4));
+    return;
+  }
+  LOGI("ULP program loaded: %u/%u words", (unsigned)program_size,
+       (unsigned)(CONFIG_ULP_COPROC_RESERVE_MEM / 4));
 
   for (int i = 0; i < ULP_VAR_COUNT; i++)
     RTC_SLOW_MEM[ULP_DATA_BASE + i] = 0;

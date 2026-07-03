@@ -347,3 +347,22 @@ All figures are config-specific — panel + sensor + board matter.
   latency-wise — the GPIO level wake ends each wait instantly): cuts the
   wake-blip overhead ~5x, worth ~5% of the event on the slow Z90 rig,
   negligible on the C6.
+
+## ULP wake latch — refresh trains (July 2026)
+
+Symptom (PPK2, E/Z90 release): bursts of ~3 back-to-back refresh events with
+~2 s gaps, then a clean 60 s sleep, repeating. Cause: the ULP FSM programs
+called I_WAKE unconditionally; a wake signalled while the host was still awake
+(Z90 renders ~21 s, easily overlapping a 60 s poll) latches in RTC_CNTL and
+fires the moment deep sleep is entered. Pre-existing (same trains visible in
+Arduino-era-equivalent debug logs); NOT caused by the light-sleep change.
+
+Fix: gate I_WAKE on RTC_CNTL_RDY_FOR_WAKEUP and skip without updating the
+delta reference — the delta re-detects at the next poll, so wakes happen at
+most once per poll interval.
+
+Open: the C6 LP-core program (ulp/lp_core_bmp58x.h) has the same unconditional
+ulp_lp_core_wakeup_main_processor() calls, but the 5.76" rig is only awake
+~3.8 s per cycle (~6% collision chance at 60 s polls). Gating needs a PMU
+HP-sleep-state check from LP-core C code — do if trains are ever observed on
+the C6.
