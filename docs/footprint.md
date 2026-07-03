@@ -5,8 +5,11 @@
 Arduino (baseline) → pure ESP-IDF, both boards, stock platform, no fork:
 
 - **Flash**: ESP32-E release 1196KB → 1014KB (−182KB); C6 release 1265KB → 1072KB
-  (−193KB, display enabled). App slot went from 1280KB OTA (~91–97% full) to a
-  4MB single-app partition (~24–26% full) — the flash ceiling is gone.
+  (−193KB, display enabled). App slot went from 1280KB OTA (~91–97% full) to the
+  3968KB single-app slot in partitions.csv (~26% full) — the flash ceiling is gone.
+  What remains is the WiFi floor, not framework overhead: radio+wpa_supplicant
+  (~380KB) + lwip (~96KB) + crypto (~127KB) + libc (~81KB); the app itself is
+  ~139KB, two-thirds of which is generated font data.
 - **Static DRAM**: ESP32-E 49.7KB → 38.0KB (−11.7KB); C6 44.0KB → 39.4KB (−4.6KB).
 - **Where it came from**: Arduino core + String/Print/HAL statics, Arduino
   WiFi/Network stack (→ esp_wifi direct), DFRobot/Wire (→ I2cBus over
@@ -15,6 +18,12 @@ Arduino (baseline) → pure ESP-IDF, both boards, stock platform, no fork:
   deep-sleep current path (was already pure IDF sleep code).
 - **Build times**: env-switch invalidation eliminated (167s/~2400 files → 3–4s/0);
   same-env no-op 19–30s → 3–4s; one-time ~5min IDF-from-source per clean checkout.
+
+All rows measured with the then-active local-secrets.h config (USE_576_T81 920x680 +
+USE_BMP58x) — other panel/sensor selections shift absolute sizes by tens of KB
+(font bitmaps dominate app .rodata). The Flash% denominator varies by era: 1280KB
+app0 (baseline/A/B), 4MB board flash (** rows — see *** correction), 3968KB
+partitions.csv slot (F2). `.bin bytes` is the only apples-to-apples column.
 
 Method: `size -A .pio/build/<env>/firmware.elf` (toolchain binutils) + `stat -c%s firmware.bin`.
 DRAM = `.dram0.data` + `.dram0.bss` (+ `.noinit`). Flash% is against the 1280KB `app0` slot
@@ -57,6 +66,10 @@ figures above marked ** were computed against board flash, not the app slot.
 
 Behavioral baseline (2026-07-03): sim screenshots saved (28 PNGs, all scenarios render);
 C6 deep-sleep ~15µA (PPK2, prior measurement). Tag: `pre-idf-migration`.
+
+Post-migration hardware check (2026-07-03, IDF 6.0.1): ESP32-E release deep-sleep
+19-20µA vs ~18µA Arduino-era on the same rig (readme.md) — sleep floor unchanged,
+as expected (sleep path was already pure IDF code).
 
 ## Build times
 
