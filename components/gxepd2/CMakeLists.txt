@@ -17,3 +17,7 @@ idf_component_register(
     INCLUDE_DIRS "src"
     REQUIRES arduino_shim adafruit_gfx
 )
+
+# Vendored code — don't let new-toolchain warnings (IDF 6 defaults to
+# warnings-as-errors) break the build
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error)

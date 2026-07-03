@@ -48,7 +48,8 @@ static inline void yield() { vTaskDelay(1); }
 #define pgm_read_byte(addr)    (*(const uint8_t *)(addr))
 #define pgm_read_word(addr)    (*(const uint16_t *)(addr))
 #define pgm_read_dword(addr)   (*(const uint32_t *)(addr))
-#define pgm_read_pointer(addr) (*(const void *const *)(addr))
+// (no pgm_read_pointer here — Adafruit_GFX.cpp defines its own; a second
+// definition is a redefinition error under IDF 6's warnings-as-errors)
 #define PSTR(s) (s)
 
 class __FlashStringHelper;

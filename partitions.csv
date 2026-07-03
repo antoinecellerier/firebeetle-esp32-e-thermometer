@@ -1,0 +1,9 @@
+# Single-app partition table, both boards (4MB flash, no OTA — flashed over USB).
+# Referenced from BOTH build paths so they agree:
+#   - platformio.ini board_build.partitions (PIO generates the table from this)
+#   - sdkconfig.defaults CONFIG_PARTITION_TABLE_CUSTOM_FILENAME (idf.py)
+# Name,   Type, SubType,  Offset,   Size
+nvs,      data, nvs,      0x9000,   0x6000
+phy_init, data, phy,      0xf000,   0x1000
+factory,  app,  factory,  0x10000,  0x3E0000
+coredump, data, coredump, 0x3F0000, 0x10000

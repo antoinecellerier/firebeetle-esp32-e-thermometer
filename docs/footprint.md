@@ -41,6 +41,15 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | D | esp32e_release | 1014240 | 24.2%** | 37980 | 109199 | 6536 | −124KB bin + −11.5KB DRAM vs B (Arduino) |
 | D | c6_debug | 1075168 | 25.6%** | 39420 | 127554 | 6428 | display re-enabled (DISABLE_DISPLAY dropped) |
 | D | c6_release | 1071664 | 25.5%** | 39420 | 127554 | 6428 | |
+| F official platform | all four | ≈D | 25-27%*** | ≈D | ≈D | — | espressif32@~6.13.0 (IDF 5.5.3), sizes within noise of D |
+
+*** Stage F correction: through stages C-D the ACTUAL flashed partition table was
+PlatformIO's default 1MB single-app (PIO ignores the sdkconfig partition choice) —
+the C6 binaries would have failed the bootloader size check on real hardware. The
+official platform's stricter size check exposed it. Fixed with a repo-owned
+partitions.csv (3968KB factory app + 64KB coredump) referenced by both PIO
+(board_build.partitions) and idf.py (CONFIG_PARTITION_TABLE_CUSTOM). Flash%
+figures above marked ** were computed against board flash, not the app slot.
 
 Behavioral baseline (2026-07-03): sim screenshots saved (28 PNGs, all scenarios render);
 C6 deep-sleep ~15µA (PPK2, prior measurement). Tag: `pre-idf-migration`.

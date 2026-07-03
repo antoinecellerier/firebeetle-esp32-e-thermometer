@@ -12,8 +12,9 @@ IMPORTANT: After any display/rendering change, run the simulator and check the P
 
 ## Build system (pure ESP-IDF)
 
-Both boards build `framework = espidf` on the stock pioarduino platform — no
-Arduino framework, no platform fork. The tree is a standard IDF CMake project
+Both boards build `framework = espidf` on the official registry platform
+(`espressif32 @ ~6.13.0`, ESP-IDF 5.5.3) — no Arduino framework, no platform
+fork, no pinned zip URL. The tree is a standard IDF CMake project
 (`CMakeLists.txt` + `src/CMakeLists.txt` + `components/`), so
 `idf.py -DIDF_TARGET=esp32c6 build` also works (fonts auto-generate at cmake
 configure; GIT_HASH shows the fallback outside PlatformIO).
@@ -28,8 +29,13 @@ configure; GIT_HASH shows the fallback outside PlatformIO).
   `components/gxepd2/CMakeLists.txt` when enabling a new `USE_*` panel.
   `components/hulp` (ESP32-E ULP FSM) registers empty on other targets.
 - **sdkconfig**: authored `sdkconfig.defaults` + `sdkconfig.defaults.<target>`
-  are tracked; generated `sdkconfig.<env>` files are gitignored. Single-app 4MB
-  partition (no OTA). CPU is fixed at 80MHz at build time.
+  are tracked; generated `sdkconfig.<env>` files are gitignored. CPU is fixed
+  at 80MHz at build time.
+- **Partition table lives in `partitions.csv`** (3968KB single app, no OTA) and
+  is referenced from BOTH `board_build.partitions` (PlatformIO — which IGNORES
+  the sdkconfig partition selection and always generates from this option) and
+  `CONFIG_PARTITION_TABLE_CUSTOM_FILENAME` (idf.py). Keep them pointing at the
+  same file.
 - **Never name a project header like an IDF-internal one** — IDF's mbedtls
   exposes a private `common.h` that shadowed ours (hence `app_common.h`).
 - **PlatformIO's espidf builder feeds every file in `ulp/` to the active ULP

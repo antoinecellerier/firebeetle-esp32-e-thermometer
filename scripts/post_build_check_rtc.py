@@ -4,6 +4,11 @@ Import("env")
 import re
 import os
 
+# The official espressif32 espidf builder doesn't emit a map file by itself
+# (pioarduino did) — request one so the check below has input. Duplicate -Map
+# flags are harmless (last one wins).
+env.Append(LINKFLAGS=["-Wl,-Map,%s" % os.path.join(env.subst("$BUILD_DIR"), "firmware.map")])
+
 # RTC slow memory sections that contain user data (exclude system-reserved sections)
 RTC_SECTIONS = {'.rtc.data', '.rtc.bss', '.rtc_noinit', '.rtc.force_slow'}
 

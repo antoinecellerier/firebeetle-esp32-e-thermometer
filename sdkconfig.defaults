@@ -7,8 +7,11 @@ CONFIG_FREERTOS_HZ=1000
 # IDF default (3584) would overflow
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 
-# No OTA — single large app partition removes the 1280KB ceiling
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+# No OTA — repo-owned table with a maximal app slot (see partitions.csv).
+# NOTE: PlatformIO ignores sdkconfig partition selection and generates the
+# table from board_build.partitions; both point at the same file.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
