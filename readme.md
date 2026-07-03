@@ -6,18 +6,29 @@ See [docs/wiring.md](docs/wiring.md) for wiring information.
 
 # Power consumption
 
-Measured with a Nordic PPK2; full traces and methodology in [docs/notes.md](docs/notes.md).
+Measured with a Nordic PPK2 (July 2026, pure ESP-IDF firmware with light sleep
+during panel refreshes); full traces and methodology in [docs/notes.md](docs/notes.md).
+Figures are config-specific — panel, sensor, and board all matter.
 
 | Setup | Deep-sleep floor | Sensor wake | Display refresh |
 |-------|-----------------|-------------|-----------------|
-| ESP32-E + BMP390L + DESPI-C02 ePaper (FDN340P power gate) | ~18 µA | ULP bit-bang I2C every 5 s, avg ≈0 | — |
-| XIAO ESP32-C6 + BMP581 + GDEH0576T81 ePaper | ~14 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~93 mC (3.2 s × 29 mA avg, 322 mA peak) |
+| ESP32-E + BMP390L + GDEH0154Z90 via DESPI-C02 (FDN340P power gate) | 19–20 µA | ULP bit-bang I2C every 5 s, avg ≈0 | ~139 mC (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
+| XIAO ESP32-C6 + BMP581 + GDEH0576T81 ePaper | 15.5–16 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~56 mC (~3.8 s, was ~93–95 mC before light sleep) |
 
-The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display refresh is the dominant event on a typical day. Long-term average stays in the 15–40 µA band, which gives a load-only runtime of roughly **1–3 years on a 400 mAh LiPo** depending on how often the display refreshes. At this current level LiPo self-discharge (a few %/month ≈ 15–25 µA equivalent) is comparable to the load itself, so **expected runtime is on the order of a year** — to be confirmed against real long-run measurements. A 2600 mAh 18650 sits near the self-discharge floor and is expected to age out before the load meaningfully drains it.
+The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display
+refresh is the dominant event on a typical day. At one refresh per hour it adds
+~16 µA (C6/5.76") or ~39 µA (Z90) to the sleep floor, putting long-term averages
+in the **~16–60 µA band depending on rig and refresh cadence** — load-only
+runtime of roughly **1–3 years on a 400 mAh LiPo**. At this current level LiPo
+self-discharge (a few %/month ≈ 15–25 µA equivalent) is comparable to the load
+itself, so **expected runtime is on the order of a year** — to be confirmed
+against real long-run measurements. A 2600 mAh 18650 sits near the
+self-discharge floor and is expected to age out before the load meaningfully
+drains it.
 
 Two gotchas worth surfacing:
 - **DESPI-C02 ePaper adapter** leaks ~534 µA from its boost converter even with the panel hibernated. A P-channel MOSFET (FDN340P) on its 3.3 V line eliminates it.
-- **XIAO C6 USB Serial/JTAG** stays on in deep sleep by default (~20 mA), masking all savings. Under the Arduino-era firmware this needed `ARDUINO_USB_CDC_ON_BOOT=0` gymnastics; the pure-IDF firmware uses the USB-Serial-JTAG console (`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`), which doesn't hold the port active in deep sleep — to be reconfirmed on the PPK2.
+- **XIAO C6 USB Serial/JTAG** stayed on in deep sleep under the Arduino-era firmware (~20 mA, needing `ARDUINO_USB_CDC_ON_BOOT=0` gymnastics); the pure-IDF firmware's USB-Serial-JTAG console (`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`) doesn't hold the port active — confirmed on the PPK2 (15.5–16 µA deep sleep).
 
 For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran a 2600 mAh cell flat in 8.5 days at ~12.6 mA average — the ULP/LP-core redesign is ~700× more efficient.
 
