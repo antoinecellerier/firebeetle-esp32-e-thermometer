@@ -7,6 +7,9 @@
 
 #include "Arduino.h"
 #include "esp_sleep.h"
+#include "esp_adc/adc_oneshot.h"
+#include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 #include <math.h>
 #ifndef DISABLE_WIFI
 #include "WiFi.h"
@@ -328,9 +331,9 @@ void setup_serial()
   // Skip the wait entirely if no USB cable is plugged in;
   // otherwise wait up to 1s for a monitor to attach.
   if (Serial.isPlugged()) {
-    unsigned long t0 = millis();
-    while (!Serial && millis() - t0 < 1000)
-      delay(10);
+    uint32_t t0 = ms_now();
+    while (!Serial && ms_now() - t0 < 1000)
+      sleep_ms(10);
   }
 #endif
   Serial.printf("Logging to serial\n");
@@ -356,7 +359,11 @@ void start_deep_sleep()
     esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 1000000ULL);
     LOGI("Sleeping for %d seconds", SLEEP_INTERVAL_S);
   }
+#ifdef ARDUINO
   Serial.flush();
+#else
+  fflush(stdout);
+#endif
   PPK2_CPU_ACTIVE_LOW();
   esp_deep_sleep_start();
 }
@@ -371,21 +378,21 @@ void get_time(time_t *now, struct tm *nowtm)
 
 #ifndef DISABLE_WIFI
 // Connect to WiFi with timeout. Returns true on success.
-static const unsigned long WIFI_TIMEOUT_MS = 15000;
+static const uint32_t WIFI_TIMEOUT_MS = 15000;
 
 static bool wifi_connect()
 {
   WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
-  unsigned long start = millis();
+  uint32_t start = ms_now();
   while (!WiFi.isConnected())
   {
-    if (millis() - start > WIFI_TIMEOUT_MS)
+    if (ms_now() - start > WIFI_TIMEOUT_MS)
     {
-      LOGI("WiFi connection timed out after %lu ms", WIFI_TIMEOUT_MS);
+      LOGI("WiFi connection timed out after %u ms", (unsigned)WIFI_TIMEOUT_MS);
       WiFi.disconnect(true, true);
       return false;
     }
-    delay(100);
+    sleep_ms(100);
     LOGI("Waiting for WiFi");
   }
   return true;
@@ -402,12 +409,12 @@ static bool wifi_connect()
 // an already-set (but drifted) clock.
 static bool wait_for_sntp(uint32_t timeout_ms)
 {
-  uint32_t start = millis();
+  uint32_t start = ms_now();
   while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED)
   {
-    if (millis() - start > timeout_ms)
+    if (ms_now() - start > timeout_ms)
       return false;
-    delay(50);
+    sleep_ms(50);
   }
   return true;
 }
@@ -504,21 +511,52 @@ const uint32_t no_battery_mv = 3000; // Controller stops delivering current at 2
 
 uint32_t read_battery_level()
 {
-  #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
   // https://dfimg.dfrobot.com/nobody/wiki/fd28d987619c16281bdc4f40990e5a1c.PDF => looks like 1M/1M divider == x2 ratio
-  #define VOLTAGE_PIN 34
-  // 34 = A2
-  #elif defined(ARDUINO_XIAO_ESP32C6)
-  // https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/#reading-battery-voltage
-  // Requires wiring A0 to VBAT see https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/#check-the-battery-voltage
-  #define VOLTAGE_PIN A0
-  return 4321; // TODO: remove this once proper circuit has been soldered
-  #else
-  #error "Unknown board type"
-  #endif
-  uint32_t battery_mv = analogReadMilliVolts(VOLTAGE_PIN) * 2;
-  LOGI("Battery level: %d mV", battery_mv);
+  // GPIO34 (A2) = ADC1 channel 6
+  adc_oneshot_unit_handle_t unit;
+  adc_oneshot_unit_init_cfg_t ucfg = {};
+  ucfg.unit_id = ADC_UNIT_1;
+  if (adc_oneshot_new_unit(&ucfg, &unit) != ESP_OK)
+  {
+    LOGI("ERROR: ADC unit init failed");
+    return 0;
+  }
+  adc_oneshot_chan_cfg_t ccfg = {};
+  ccfg.atten = ADC_ATTEN_DB_12;
+  ccfg.bitwidth = ADC_BITWIDTH_DEFAULT;
+  adc_oneshot_config_channel(unit, ADC_CHANNEL_6, &ccfg);
+
+  adc_cali_handle_t cali = nullptr;
+  adc_cali_line_fitting_config_t lcfg = {};
+  lcfg.unit_id = ADC_UNIT_1;
+  lcfg.atten = ADC_ATTEN_DB_12;
+  lcfg.bitwidth = ADC_BITWIDTH_DEFAULT;
+  adc_cali_create_scheme_line_fitting(&lcfg, &cali);
+
+  int raw = 0, mv = 0;
+  adc_oneshot_read(unit, ADC_CHANNEL_6, &raw);
+  if (cali)
+  {
+    adc_cali_raw_to_voltage(cali, raw, &mv);
+    adc_cali_delete_scheme_line_fitting(cali);
+  }
+  else
+  {
+    mv = raw * 3100 / 4095; // uncalibrated fallback, 12dB full scale ~3.1V
+  }
+  adc_oneshot_del_unit(unit);
+
+  uint32_t battery_mv = (uint32_t)mv * 2;
+  LOGI("Battery level: %d mV", (int)battery_mv);
   return battery_mv;
+#elif defined(ARDUINO_XIAO_ESP32C6)
+  // https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/#reading-battery-voltage
+  // Requires wiring A0/GPIO0 to VBAT see https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/#check-the-battery-voltage
+  return 4321; // TODO: remove this once proper circuit has been soldered
+#else
+  #error "Unknown board type"
+#endif
 }
 
 #ifndef DISABLE_LEDS
@@ -526,7 +564,7 @@ uint32_t read_battery_level()
   #include "Adafruit_NeoPixel.h"
   Adafruit_NeoPixel status_led(1, 5 /*data pin*/, NEO_GRB + NEO_KHZ800);
 #elif defined(ARDUINO_XIAO_ESP32C6)
-  #define STATUS_LED_PIN LED_BUILTIN // GPIO 15, yellow, active-high
+  #define STATUS_LED_PIN 15 // GPIO 15 (LED_BUILTIN), yellow, active-high
 #else
   #error "Unknown board type"
 #endif
@@ -544,8 +582,8 @@ void initialize_status_led()
   status_led.begin();
   status_led.setBrightness(128);
 #elif defined(ARDUINO_XIAO_ESP32C6)
-  pinMode(STATUS_LED_PIN, OUTPUT);
-  digitalWrite(STATUS_LED_PIN, LOW);
+  gpio_out_init(STATUS_LED_PIN);
+  gpio_set_level((gpio_num_t)STATUS_LED_PIN, 0);
 #else
   #error "Unknown board type"
 #endif
@@ -562,7 +600,7 @@ void set_status_led(uint32_t color)
   status_led.show();
 #elif defined(ARDUINO_XIAO_ESP32C6)
   // Single-color yellow LED
-  digitalWrite(STATUS_LED_PIN, color != 0 ? HIGH : LOW);
+  gpio_set_level((gpio_num_t)STATUS_LED_PIN, color != 0 ? 1 : 0);
 #else
   #error "Unknown board type"
 #endif
@@ -576,7 +614,7 @@ void clear_status_led()
   status_led.clear();
   status_led.show();
 #elif defined(ARDUINO_XIAO_ESP32C6)
-  digitalWrite(STATUS_LED_PIN, LOW);
+  gpio_set_level((gpio_num_t)STATUS_LED_PIN, 0);
 #else
   #error "Unknown board type"
 #endif
@@ -593,8 +631,12 @@ float read_temperature()
 
 uint16_t buttonRead(uint8_t pin)
 {
-  pinMode(pin, INPUT_PULLUP);
-  return digitalRead(pin); // return 0 when pressed
+  gpio_config_t cfg = {};
+  cfg.pin_bit_mask = 1ULL << pin;
+  cfg.mode = GPIO_MODE_INPUT;
+  cfg.pull_up_en = GPIO_PULLUP_ENABLE;
+  gpio_config(&cfg);
+  return gpio_get_level((gpio_num_t)pin); // return 0 when pressed
 }
 
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
@@ -616,7 +658,7 @@ void handle_permanent_shutdown(uint32_t battery_mv)
     {
       // Looks like we might be getting extremely rare spurious reads of 0
       // Double check after a delay ...
-      delay(1000);
+      sleep_ms(1000);
       pin27 = buttonRead(SHUTDOWN_BUTTON_PIN);
       LOGI("Button read %d confirmation: %d", SHUTDOWN_BUTTON_PIN, pin27);
       if (pin27 != 0)
@@ -653,7 +695,7 @@ void on_first_boot()
   // Not an error — suppress "! NO WIFI" indicator on display
   wifi_ok = true;
   set_status_led(rgb(255, 255, 0));
-  delay(100);
+  sleep_ms(100);
 #else
   #if !(defined(MY_WIFI_SSID) && defined(MY_WIFI_PASSWORD))
     #error "MY_WIFI_SSID and/or MY_WIFI_PASSWORD are not defined. See local-secrets.h to fix."
@@ -835,8 +877,8 @@ void setup()
 #endif
 
 #ifdef PPK2_DEBUG
-  pinMode(PPK2_PIN_CPU_ACTIVE, OUTPUT);
-  pinMode(PPK2_PIN_DISPLAY, OUTPUT);
+  gpio_out_init(PPK2_PIN_CPU_ACTIVE);
+  gpio_out_init(PPK2_PIN_DISPLAY);
 #endif
   PPK2_CPU_ACTIVE_HIGH();
 
@@ -862,6 +904,9 @@ void setup()
   }
 
   boot_count++;
+#ifdef ARDUINO
+  // Under pure ESP-IDF the CPU frequency is fixed at build time via
+  // CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ instead.
   if (boot_count != 1)
   {
     // Reducing CPU frequency to 80 MHz to save power (as none of this CPU bound)
@@ -869,6 +914,7 @@ void setup()
   }
   LOGI("CPU frequency: %d", getCpuFrequencyMhz());
   LOGI("Xtal frequency: %d", getXtalFrequencyMhz());
+#endif
 
   LOGI("Boot count: %d [%s] sizeof(TempReading)=%d sizeof(time_t)=%d",
        boot_count, GIT_HASH, (int)sizeof(TempReading), (int)sizeof(time_t));

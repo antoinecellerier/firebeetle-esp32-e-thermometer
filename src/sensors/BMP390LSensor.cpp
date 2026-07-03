@@ -2,12 +2,17 @@
 #include "common.h"
 
 #include <math.h>
-#include "DFRobot_BMP3XX.h"
+#include "esp_attr.h"
 
-#ifdef HAS_ULP_SUPPORT
-#include "BMP390LCompensation.h"
+// Calibration is needed by both the HP direct-read path and the ULP path.
+// Stored in RTC memory so it persists across deep sleep cycles.
 RTC_DATA_ATTR struct BMP390LCalib bmp390l_calib = {};
-#endif
+
+// BMP390L config registers (addresses/values per Bosch datasheet; sampling
+// setup matches the former DFRobot eUltraLowPrecision mode: 1x temp/press
+// oversampling, IIR filter off, forced mode)
+#define BMP390L_REG_OSR    0x1C
+#define BMP390L_REG_IIR    0x1F
 
 // --- ULP FSM path (ESP32 original, HULP bit-bang I2C) ---
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
@@ -29,7 +34,6 @@ extern const uint8_t ulp_main_bin_end[]   asm("_binary_ulp_main_bin_end");
 
 
 BMP390LSensor::BMP390LSensor()
-:_twoWire(0), _sensor(&_twoWire)
 {}
 
 void BMP390LSensor::Initialize()
@@ -37,18 +41,19 @@ void BMP390LSensor::Initialize()
     if (_isInitialized)
         return;
 
-    _twoWire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-    _sensor.begin();
-    // resolution when using ultra low precision & forced sampling:
-    // temperature 0.0050 °C
-    // pressure 2.64 Pa
-    // 4µA IDD
-    // measurment time ~5ms
-    // CASE_SAMPLING_MODE(eUltraLowPrecision, ePressEN | eTempEN | eForcedMode, ePressOSRMode1 | eTempOSRMode1, BMP3XX_ODR_0P01_HZ, BMP3XX_IIR_CONFIG_COEF_0)
-    _sensor.setSamplingMode(_sensor.eUltraLowPrecision);
-    #ifdef CURRENT_ALTITUDE_M
-    _sensor.calibratedAbsoluteDifference(CURRENT_ALTITUDE_M);
-    #endif
+    _i2c.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    sleep_ms(5); // ~2ms startup time after power-up
+
+    // Ultra-low precision sampling (was DFRobot eUltraLowPrecision):
+    // temperature resolution 0.0050 °C, measurement time ~5ms, 4µA IDD
+    _i2c.writeReg(BMP390L_I2C_ADDRESS, BMP390L_REG_OSR, 0x00); // 1x temp + press OSR
+    _i2c.writeReg(BMP390L_I2C_ADDRESS, BMP390L_REG_IIR, 0x00); // IIR filter off
+
+    if (bmp390l_calib.parT1 == 0.0f &&
+        !bmp390l_read_calibration(_i2c, &bmp390l_calib))
+    {
+        LOGI("ERROR: failed to read BMP390L calibration data");
+    }
 
     _isInitialized = true;
 }
@@ -57,16 +62,15 @@ float BMP390LSensor::GetTemperatureC()
 {
     Initialize();
 
-    // BMP390L forced mode: the sensor takes one measurement then returns to
-    // sleep.  Initialize() configures the sampling parameters (OSR, ODR, IIR)
-    // once; here we just re-trigger a conversion so the data registers contain
-    // a fresh reading.  Without this, readTempC() can return 0.0 °C from
-    // stale/empty registers.
-    _sensor.setPWRMode(DFRobot_BMP3XX::ePressEN | DFRobot_BMP3XX::eTempEN |
-                       DFRobot_BMP3XX::eForcedMode);
-    delay(10); // wait for conversion (~5ms at ultra-low precision)
-
-    return _sensor.readTempC();
+    // Forced mode: bmp390l_direct_read() triggers one conversion, waits, and
+    // reads + compensates the result (same compensation as the ULP path).
+    float temp;
+    if (!bmp390l_direct_read(_i2c, &bmp390l_calib, &temp))
+    {
+        LOGI("ERROR: failed to read BMP390L temperature");
+        return 0.0f;
+    }
+    return temp;
 }
 
 bool BMP390LSensor::SupportsUlp()
@@ -92,11 +96,12 @@ void BMP390LSensor::InitializeUlp()
 #else
     LOGI("Initialising ULP coprocessor for BMP390L polling");
 
-    // Only read calibration on first boot — it's stored in RTC memory and survives deep sleep
+    // Only read calibration on first boot — it's stored in RTC memory and
+    // survives deep sleep (Initialize() reads it when missing)
     if (bmp390l_calib.parT1 == 0.0f)
     {
-        Initialize(); // ensure I2C is up
-        if (!bmp390l_read_calibration(_twoWire, &bmp390l_calib))
+        Initialize();
+        if (bmp390l_calib.parT1 == 0.0f)
         {
             LOGI("ERROR: Failed to read BMP390L calibration data. ULP will not start.");
             return;
@@ -110,31 +115,11 @@ void BMP390LSensor::InitializeUlp()
     }
 
     // Release digital I2C before switching pins to ULP bit-bang
-    _twoWire.end();
+    _i2c.end();
     _isInitialized = false;
-    delay(10);
+    sleep_ms(10);
 
-    // I2C bus recovery: 9 SCL clocks + STOP condition.
-    // Wire.end() may leave a slave holding SDA low.
-    pinMode(I2C_SCL_PIN, OUTPUT);
-    pinMode(I2C_SDA_PIN, INPUT_PULLUP);
-    for (int i = 0; i < 9; i++)
-    {
-        digitalWrite(I2C_SCL_PIN, LOW);
-        delayMicroseconds(5);
-        digitalWrite(I2C_SCL_PIN, HIGH);
-        delayMicroseconds(5);
-        if (digitalRead(I2C_SDA_PIN))
-            break;
-    }
-    // Generate STOP condition (SDA low→high while SCL high)
-    pinMode(I2C_SDA_PIN, OUTPUT);
-    digitalWrite(I2C_SDA_PIN, LOW);
-    delayMicroseconds(5);
-    digitalWrite(I2C_SCL_PIN, HIGH);
-    delayMicroseconds(5);
-    digitalWrite(I2C_SDA_PIN, HIGH);
-    delayMicroseconds(5);
+    i2c_bus_recover(I2C_SDA_PIN, I2C_SCL_PIN);
 
     // Configure GPIO pins for HULP bit-bang I2C (bypasses hardware RTC I2C peripheral)
     ulp_configure_i2c_bitbang();
@@ -162,11 +147,12 @@ void BMP390LSensor::InitializeUlp()
 {
     LOGI("Initialising LP core for BMP390L polling");
 
-    // Read calibration on first boot — stored in RTC memory, survives deep sleep
+    // Read calibration on first boot — stored in RTC memory, survives deep
+    // sleep (Initialize() reads it when missing)
     if (bmp390l_calib.parT1 == 0.0f)
     {
-        Initialize(); // ensure I2C is up
-        if (!bmp390l_read_calibration(_twoWire, &bmp390l_calib))
+        Initialize();
+        if (bmp390l_calib.parT1 == 0.0f)
         {
             LOGI("ERROR: Failed to read BMP390L calibration data. LP core will not start.");
             return;
@@ -180,9 +166,9 @@ void BMP390LSensor::InitializeUlp()
     }
 
     // Release digital I2C — LP I2C will take over the pins
-    _twoWire.end();
+    _i2c.end();
     _isInitialized = false;
-    delay(10);
+    sleep_ms(10);
 
     // Configure LP I2C hardware peripheral (GPIO6=SDA, GPIO7=SCL)
     // LP_CORE_I2C_DEFAULT_CONFIG() uses C designated initializers — not valid in C++
@@ -230,12 +216,12 @@ void BMP390LSensor::InitializeUlp() {}
 
 // Verify a suspicious ULP temperature by doing a direct I2C re-read.
 // Returns true if *temp was accepted or corrected, false if verification failed.
-static bool verify_ulp_temp(TwoWire &wire, float *temp)
+static bool verify_ulp_temp(I2cBus &bus, float *temp)
 {
-    wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    bus.begin(I2C_SDA_PIN, I2C_SCL_PIN);
     float reread;
-    bool ok = bmp390l_direct_read(wire, &bmp390l_calib, &reread);
-    wire.end();
+    bool ok = bmp390l_direct_read(bus, &bmp390l_calib, &reread);
+    bus.end();
     if (!ok)
     {
         LOGI("Direct I2C re-read failed, discarding suspicious ULP value");
@@ -294,7 +280,7 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
         // Reclaim I2C pins from RTC GPIO mode (ULP bit-bang leaves them as RTC GPIOs)
         rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
         rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
-        if (!verify_ulp_temp(_twoWire, temp_out))
+        if (!verify_ulp_temp(_i2c, temp_out))
             return false;
     }
 
@@ -341,7 +327,7 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
         LOGI("Suspicious LP core temp %.2f (previous %.2f, delta %.2f) — verifying",
              *temp_out, previous_temp, *temp_out - previous_temp);
         // C6 LP I2C uses dedicated pins — no RTC GPIO deinit needed
-        if (!verify_ulp_temp(_twoWire, temp_out))
+        if (!verify_ulp_temp(_i2c, temp_out))
             return false;
     }
 

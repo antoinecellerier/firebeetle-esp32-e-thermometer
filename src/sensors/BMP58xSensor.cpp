@@ -1,7 +1,6 @@
 #include "sensors/BMP58xSensor.hpp"
 #include "common.h"
 
-#include "Arduino.h"
 #include <math.h>
 
 // BMP58x register map
@@ -38,28 +37,16 @@ extern const uint8_t ulp_main_bin_end[]   asm("_binary_ulp_main_bin_end");
 
 
 BMP58xSensor::BMP58xSensor()
-:_twoWire(0)
 {}
 
 bool BMP58xSensor::ReadRegister(uint8_t reg, uint8_t *buf, size_t len)
 {
-    _twoWire.beginTransmission(BMP58X_I2C_ADDR);
-    _twoWire.write(reg);
-    if (_twoWire.endTransmission() != 0)
-        return false;
-    if (_twoWire.requestFrom((uint8_t)BMP58X_I2C_ADDR, (uint8_t)len) != (int)len)
-        return false;
-    for (size_t i = 0; i < len; i++)
-        buf[i] = _twoWire.read();
-    return true;
+    return _i2c.readReg(BMP58X_I2C_ADDR, reg, buf, len);
 }
 
 bool BMP58xSensor::WriteRegister(uint8_t reg, uint8_t value)
 {
-    _twoWire.beginTransmission(BMP58X_I2C_ADDR);
-    _twoWire.write(reg);
-    _twoWire.write(value);
-    return _twoWire.endTransmission() == 0;
+    return _i2c.writeReg(BMP58X_I2C_ADDR, reg, value);
 }
 
 // BMP58x outputs already-compensated temperature as 24-bit signed, 1/65536 °C per LSB
@@ -76,8 +63,8 @@ void BMP58xSensor::Initialize()
     if (_isInitialized)
         return;
 
-    _twoWire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-    delay(5); // BMP58x needs ~2ms after power-up before I2C is ready
+    _i2c.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    sleep_ms(5); // BMP58x needs ~2ms after power-up before I2C is ready
 
     uint8_t chip_id;
     if (ReadRegister(BMP58X_REG_CHIP_ID, &chip_id, 1))
@@ -105,7 +92,7 @@ float BMP58xSensor::GetTemperatureC()
 
     // Trigger forced-mode measurement (OSR configured once in Initialize())
     WriteRegister(BMP58X_REG_ODR_CONFIG, BMP58X_FORCED_MODE);
-    delay(3); // conversion ~1.6ms at 1x OSR
+    sleep_ms(3); // conversion ~1.6ms at 1x OSR
 
     uint8_t data[3];
     if (!ReadRegister(BMP58X_REG_TEMP_XLSB, data, 3))
@@ -146,29 +133,11 @@ void BMP58xSensor::InitializeUlp()
     Initialize();
 
     // Release digital I2C before switching pins to ULP bit-bang
-    _twoWire.end();
+    _i2c.end();
     _isInitialized = false;
-    delay(10);
+    sleep_ms(10);
 
-    // I2C bus recovery: 9 SCL clocks + STOP condition
-    pinMode(I2C_SCL_PIN, OUTPUT);
-    pinMode(I2C_SDA_PIN, INPUT_PULLUP);
-    for (int i = 0; i < 9; i++)
-    {
-        digitalWrite(I2C_SCL_PIN, LOW);
-        delayMicroseconds(5);
-        digitalWrite(I2C_SCL_PIN, HIGH);
-        delayMicroseconds(5);
-        if (digitalRead(I2C_SDA_PIN))
-            break;
-    }
-    pinMode(I2C_SDA_PIN, OUTPUT);
-    digitalWrite(I2C_SDA_PIN, LOW);
-    delayMicroseconds(5);
-    digitalWrite(I2C_SCL_PIN, HIGH);
-    delayMicroseconds(5);
-    digitalWrite(I2C_SDA_PIN, HIGH);
-    delayMicroseconds(5);
+    i2c_bus_recover(I2C_SDA_PIN, I2C_SCL_PIN);
 
     ulp_configure_i2c_bitbang();
 #endif
@@ -197,9 +166,9 @@ void BMP58xSensor::InitializeUlp()
     // handing the bus off to LP I2C (idempotent if already initialised).
     Initialize();
 
-    _twoWire.end();
+    _i2c.end();
     _isInitialized = false;
-    delay(10);
+    sleep_ms(10);
 
     // LP_CORE_I2C_DEFAULT_CONFIG() uses C designated initializers — not valid in C++
     lp_core_i2c_cfg_t i2c_cfg = {};
@@ -251,26 +220,16 @@ void BMP58xSensor::InitializeUlp() {}
 
 // Direct I2C re-read for plausibility verification
 // (OSR was already configured in Initialize() before ULP/LP-core took over the bus)
-static bool bmp58x_direct_read(TwoWire &wire, float *temp_out)
+static bool bmp58x_direct_read(I2cBus &bus, float *temp_out)
 {
-    wire.beginTransmission(BMP58X_I2C_ADDR);
-    wire.write(BMP58X_REG_ODR_CONFIG);
-    wire.write(BMP58X_FORCED_MODE);
-    if (wire.endTransmission() != 0)
+    if (!bus.writeReg(BMP58X_I2C_ADDR, BMP58X_REG_ODR_CONFIG, BMP58X_FORCED_MODE))
         return false;
 
-    delay(3);
-
-    wire.beginTransmission(BMP58X_I2C_ADDR);
-    wire.write(BMP58X_REG_TEMP_XLSB);
-    if (wire.endTransmission() != 0)
-        return false;
-    if (wire.requestFrom((uint8_t)BMP58X_I2C_ADDR, (uint8_t)3) != 3)
-        return false;
+    sleep_ms(3);
 
     uint8_t data[3];
-    for (int i = 0; i < 3; i++)
-        data[i] = wire.read();
+    if (!bus.readReg(BMP58X_I2C_ADDR, BMP58X_REG_TEMP_XLSB, data, 3))
+        return false;
 
     uint32_t raw = (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16);
     if (raw & 0x800000)
@@ -279,12 +238,12 @@ static bool bmp58x_direct_read(TwoWire &wire, float *temp_out)
     return true;
 }
 
-static bool verify_ulp_temp(TwoWire &wire, float *temp)
+static bool verify_ulp_temp(I2cBus &bus, float *temp)
 {
-    wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    bus.begin(I2C_SDA_PIN, I2C_SCL_PIN);
     float reread;
-    bool ok = bmp58x_direct_read(wire, &reread);
-    wire.end();
+    bool ok = bmp58x_direct_read(bus, &reread);
+    bus.end();
     if (!ok)
     {
         LOGI("Direct I2C re-read failed, discarding suspicious ULP value");
@@ -341,7 +300,7 @@ bool BMP58xSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
              *temp_out, previous_temp, *temp_out - previous_temp);
         rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
         rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
-        if (!verify_ulp_temp(_twoWire, temp_out))
+        if (!verify_ulp_temp(_i2c, temp_out))
             return false;
     }
 
@@ -384,7 +343,7 @@ bool BMP58xSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
     {
         LOGI("Suspicious LP core temp %.2f (previous %.2f, delta %.2f) — verifying",
              *temp_out, previous_temp, *temp_out - previous_temp);
-        if (!verify_ulp_temp(_twoWire, temp_out))
+        if (!verify_ulp_temp(_i2c, temp_out))
             return false;
     }
 

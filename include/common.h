@@ -3,9 +3,41 @@
 // See local-secrets-example.h for a sample file if local-secrets.h is missing
 #include "local-secrets.h"
 
-// TODO: Figure out how to get proper logging facilities working (probably after switching to platformio)
+// ESP_PLATFORM is defined for device builds (both Arduino-ESP32 and pure
+// ESP-IDF); the host simulator compiles this header without it.
+#ifdef ESP_PLATFORM
+#include <stdint.h>
+#include <stdio.h>
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#ifdef ARDUINO
+#include "Arduino.h"
+#endif
+
+// Framework-agnostic time helpers (IDF APIs, available under Arduino too)
+static inline uint32_t ms_now(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
+static inline void sleep_ms(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
+
+static inline void gpio_out_init(int pin)
+{
+  gpio_config_t cfg = {};
+  cfg.pin_bit_mask = 1ULL << pin;
+  cfg.mode = GPIO_MODE_OUTPUT;
+  gpio_config(&cfg);
+}
+#endif // ESP_PLATFORM
+
 #ifndef DISABLE_SERIAL
+#if defined(ESP_PLATFORM) && defined(ARDUINO)
+// Transitional (until pure-IDF migration completes): Serial.printf follows the
+// Arduino console routing (USB CDC on C6 when enabled); plain printf only
+// reaches the IDF console UART.
 #define LOGI(str, ...) Serial.printf(str "\n", ##__VA_ARGS__)
+#else
+#define LOGI(str, ...) printf(str "\n", ##__VA_ARGS__)
+#endif
 #else
 #define LOGI(...)
 #endif
@@ -41,10 +73,10 @@
 #ifdef PPK2_DEBUG
 #define PPK2_PIN_CPU_ACTIVE 17
 #define PPK2_PIN_DISPLAY    16
-#define PPK2_CPU_ACTIVE_HIGH() digitalWrite(PPK2_PIN_CPU_ACTIVE, HIGH)
-#define PPK2_CPU_ACTIVE_LOW()  digitalWrite(PPK2_PIN_CPU_ACTIVE, LOW)
-#define PPK2_DISPLAY_HIGH()    digitalWrite(PPK2_PIN_DISPLAY, HIGH)
-#define PPK2_DISPLAY_LOW()     digitalWrite(PPK2_PIN_DISPLAY, LOW)
+#define PPK2_CPU_ACTIVE_HIGH() gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 1)
+#define PPK2_CPU_ACTIVE_LOW()  gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 0)
+#define PPK2_DISPLAY_HIGH()    gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 1)
+#define PPK2_DISPLAY_LOW()     gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 0)
 #else
 #define PPK2_CPU_ACTIVE_HIGH()
 #define PPK2_CPU_ACTIVE_LOW()

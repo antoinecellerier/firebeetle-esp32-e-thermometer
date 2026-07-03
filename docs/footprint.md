@@ -11,6 +11,10 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | 0 baseline | esp32e_release | 1195952 | 91.2% | 49652 | 93663 | 6516 | |
 | 0 baseline | c6_debug | 1272720 | 97.1%* | 44092 | 101184 | 6428 | *bin incl. padding; PIO reports 93.7% flash |
 | 0 baseline | c6_release | 1264896 | 96.5%* | 43980 | 100928 | 6428 | fork platform, Arduino precompiled libs |
+| A idf-i2c/helpers | esp32e_debug | 1213344 | 92.0% | 49508 | 92635 | 6516 | DFRobot_BMP3XX + Wire dropped |
+| A | esp32e_release | 1193648 | 90.5% | 49508 | 92635 | 6516 | −2.3KB bin vs baseline |
+| A | c6_debug | 1273104 | 94.0% | 44012 | 101176 | 6428 | ~flat (Wire→i2c_master, both already in libs) |
+| A | c6_release | 1265152 | 93.8% | 43900 | 100916 | 6428 | |
 
 Behavioral baseline (2026-07-03): sim screenshots saved (28 PNGs, all scenarios render);
 C6 deep-sleep ~15µA (PPK2, prior measurement). Tag: `pre-idf-migration`.

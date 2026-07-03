@@ -2,7 +2,7 @@
 #include "Sensor.hpp"
 #include "local-secrets.h"
 
-#include "Wire.h"
+#include "I2cBus.h"
 
 #include "soc/soc_caps.h"
 
@@ -28,7 +28,7 @@ class BMP58xSensor : public Sensor
         bool WriteRegister(uint8_t reg, uint8_t value);
         float RawToTempC(uint8_t xlsb, uint8_t lsb, uint8_t msb);
 
-        TwoWire _twoWire;
+        I2cBus _i2c;
 
         bool _isInitialized = false;
 };
