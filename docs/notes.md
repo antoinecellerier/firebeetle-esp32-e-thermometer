@@ -344,9 +344,9 @@ All figures are config-specific — panel + sensor + board matter.
   -light-sleep.png (after). Savings scale with busy duration — slow panels
   gain most; tiny/fast panels gain less.
 - Backstop raised 100→500 ms after the measurements above (free
-  latency-wise — the GPIO level wake ends each wait instantly): cuts the
-  wake-blip overhead ~5x, worth ~5% of the event on the slow Z90 rig,
-  negligible on the C6.
+  latency-wise — the GPIO level wake ends each wait instantly):
+  **confirmed ~129 mC/event on the Z90 rig** (down from 139 at 100 ms),
+  negligible difference expected on the C6.
 
 ## ULP wake latch — refresh trains (July 2026)
 
@@ -360,6 +360,15 @@ Arduino-era-equivalent debug logs); NOT caused by the light-sleep change.
 Fix: gate I_WAKE on RTC_CNTL_RDY_FOR_WAKEUP and skip without updating the
 delta reference — the delta re-detects at the next poll, so wakes happen at
 most once per poll interval.
+
+Verified on hardware (E/Z90 release, PPK2): single refresh per wake episode,
+wakes correctly spaced at the 60 s poll cadence from the end of the previous
+refresh, no cold-boot phantom refresh. Sibling fixes from the same episode:
+ULP delta reference seeded on first run (cold boots used to double-refresh,
+masked pre-gating by the wake latch), ULP program size now checked at BUILD
+time (scripts/check_ulp_size.py, exact — validated 127/128 == on-device count,
+and proven to fail the build on the old 129-word regression) with a graceful
+runtime fallback (log + safety-net wakes) instead of an abort loop.
 
 Open: the C6 LP-core program (ulp/lp_core_bmp58x.h) has the same unconditional
 ulp_lp_core_wakeup_main_processor() calls, but the 5.76" rig is only awake
