@@ -1,5 +1,11 @@
+#include "local-secrets.h"
+// With DISABLE_DISPLAY the whole renderer (and its Adafruit_GFX dependency)
+// drops out of the build — required for pure-IDF targets without the display
+// component stack.
+#ifndef DISABLE_DISPLAY
+
 #include "DisplayRenderer.h"
-#include "common.h"
+#include "app_common.h"
 #include "displays.h"  // DISPLAY_HAS_RED (panel tri-color capability)
 
 #ifndef GIT_HASH
@@ -1201,3 +1207,5 @@ void render_empty_battery(Adafruit_GFX &gfx, int16_t w, int16_t h,
 
   render_footer(gfx, L.foot, now, stats);
 }
+
+#endif // DISABLE_DISPLAY

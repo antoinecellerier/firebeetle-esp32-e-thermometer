@@ -1,6 +1,11 @@
+#include "local-secrets.h"
+// DS18B20 depends on the Arduino OneWire/DallasTemperature libraries — only
+// available when this sensor is selected (and only under framework=arduino).
+#if defined(USE_DS18B20_PAR)
+
 #include "sensors/DS18B20Sensor.hpp"
 
-#include "common.h"
+#include "app_common.h"
 
 // Don't use pin 12 / D13 for one wire as it resets the board if high on boot
 #define ONE_WIRE   4 // D12
@@ -52,3 +57,4 @@ float DS18B20Sensor::GetTemperatureC()
     #endif
     return _sensors.getTempCByIndex(0);
 }
+#endif // USE_DS18B20_PAR

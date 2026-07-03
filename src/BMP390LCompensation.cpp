@@ -8,7 +8,7 @@
 
 #include <math.h>
 #include "I2cBus.h"
-#include "common.h"
+#include "app_common.h"
 
 #define BMP390L_CALIB_REG_ADDR 0x31
 #define BMP390L_CALIB_DATA_LEN 21

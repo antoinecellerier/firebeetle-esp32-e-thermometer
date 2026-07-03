@@ -1,12 +1,15 @@
-#include "common.h"
+#include "app_common.h"
 
 // needed for setenv and tzset :-/
 #undef __STRICT_ANSI__
 #include "time.h"
 #include "stdlib.h"
 
+#ifdef ARDUINO
 #include "Arduino.h"
+#endif
 #include "esp_sleep.h"
+#include "esp_log.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
@@ -311,9 +314,10 @@ DisplayStats make_display_stats()
     false,
 #endif
     // power_efficient: true only when serial is off, sleep interval is
-    // production-length, no debug instrumentation, and USB CDC off (C6)
+    // production-length, no debug instrumentation, and USB CDC off
+    // (Arduino-only concern; pure IDF has no boot-blocking CDC)
 #if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG) \
-    && !ARDUINO_USB_CDC_ON_BOOT
+    && (!defined(ARDUINO) || !ARDUINO_USB_CDC_ON_BOOT)
     true,
 #else
     false,
@@ -329,6 +333,7 @@ DisplayStats make_display_stats()
 void setup_serial()
 {
 #ifndef DISABLE_SERIAL
+#ifdef ARDUINO
   Serial.begin(115200);
 #if ARDUINO_USB_CDC_ON_BOOT
   // USB CDC: operator bool() blocks until a host opens the port.
@@ -341,7 +346,8 @@ void setup_serial()
       sleep_ms(10);
   }
 #endif
-  Serial.printf("Logging to serial\n");
+#endif // ARDUINO — under pure IDF the console (UART/USB-Serial-JTAG per
+       // sdkconfig) is ready before app_main; nothing to set up
   LOGI("Logging to log facilities - info");
 #else
   // TODO: update our own logging levels when using JTAG debugging
@@ -1056,7 +1062,14 @@ void setup()
   refresh_and_sleep(battery_mv, temp);
 }
 
+#ifdef ARDUINO
 void loop()
 {
   // Never gets invoked as we deep sleep at the end of setup()
 }
+#else
+extern "C" void app_main(void)
+{
+  setup(); // deep-sleeps at the end; never returns
+}
+#endif

@@ -1,8 +1,6 @@
 #include "Display.h"
-#include "DisplayRenderer.h"
-#include "common.h"
+#include "app_common.h"
 #include "displays.h"               // DISPLAY_HAS_RED / DISPLAY_ROTATION
-#include "generated/font_config.h"  // FONT_CONFIG_W/H for the stale-font guard
 
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
 // 3.3V GND SCK MOSI DC CS BUSY RESET pins are all on the same side of the Firebeetle board
@@ -20,6 +18,9 @@
 #error "EPD pin mapping not defined for this board"
 #endif
 #ifndef DISABLE_DISPLAY
+
+#include "DisplayRenderer.h" // pulls in Adafruit_GFX — display builds only
+#include "generated/font_config.h"  // FONT_CONFIG_W/H for the stale-font guard
 
 #ifdef EPD_POWER_GATE
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)

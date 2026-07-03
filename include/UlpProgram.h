@@ -10,7 +10,7 @@
 // Sensor selection: USE_BMP390L or USE_BMP58x (compile-time, from local-secrets.h)
 // I2C pins: GPIO0=SDA, GPIO4=SCL (bit-bang via HULP; EPD_CS moved to GPIO14/D6)
 
-#include "common.h"
+#include "app_common.h"
 #include "soc/soc_caps.h"
 
 #if !defined(NO_ULP) && defined(SOC_ULP_FSM_SUPPORTED)

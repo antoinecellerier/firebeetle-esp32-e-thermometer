@@ -1,6 +1,6 @@
 #pragma once
 #include "Sensor.hpp"
-#include "common.h"
+#include "app_common.h"
 #include "soc/soc_caps.h"
 
 class DummySensor : public Sensor

@@ -1,5 +1,5 @@
 #include "sensors/BMP58xSensor.hpp"
-#include "common.h"
+#include "app_common.h"
 
 #include <math.h>
 

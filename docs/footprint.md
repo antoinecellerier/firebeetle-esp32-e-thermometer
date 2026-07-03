@@ -19,6 +19,8 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | B | esp32e_release | 1138400 | 86.4% | 49008 | 92635 | 6516 | −57KB bin vs stage A |
 | B | c6_debug | 1208016 | 89.6% | 43492 | 101176 | 6428 | |
 | B | c6_release | 1106528 | 82.3% | 43280 | 90130 | 6428 | −158KB bin vs stage A |
+| C pure espidf (C6) | c6_debug | 946816 | 22.6%** | 38164 | 117802 | 6428 | **single-app 4MB partition; −261KB bin vs B; DISABLE_DISPLAY temp. |
+| C | c6_release | 943648 | 22.5%** | 38164 | 117802 | 6428 | fork + Arduino layer gone |
 
 Behavioral baseline (2026-07-03): sim screenshots saved (28 PNGs, all scenarios render);
 C6 deep-sleep ~15µA (PPK2, prior measurement). Tag: `pre-idf-migration`.
@@ -35,3 +37,6 @@ Arduino+fork, building one board invalidates the other board's Arduino core buil
 | B | c6_debug after esp32e build (env switch) | 167s | ~2400 files recompiled, no source change |
 | B | c6_debug with framework re-check pass | 229s | fork's Arduino-lib recompile validation pass |
 | B | esp32e_debug incremental (1 cpp changed) | 91s | |
+| C (C6 pure espidf) | c6_debug no-op, same env | 3.3s | vs 19s under Arduino |
+| C | c6_debug no-op after esp32e build (env switch) | 4s | **0 recompiles** — flip-flop eliminated (was 167s / ~2400 files) |
+| C | c6 first build (IDF from source) | ~5min | one-time per clean checkout |

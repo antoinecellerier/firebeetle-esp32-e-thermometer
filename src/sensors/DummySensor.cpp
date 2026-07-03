@@ -1,5 +1,5 @@
 #include "sensors/DummySensor.hpp"
-#include "Arduino.h"
+#include "app_common.h"
 
 #if !defined(NO_ULP) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
 #include "ulp_lp_core.h"

@@ -1,5 +1,5 @@
 #include "sensors/BMP390LSensor.hpp"
-#include "common.h"
+#include "app_common.h"
 
 #include <math.h>
 #include "esp_attr.h"

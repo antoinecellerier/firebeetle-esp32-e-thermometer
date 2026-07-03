@@ -1,0 +1,20 @@
+# Authored defaults for the pure-ESP-IDF build (both boards).
+# Target-specific settings live in sdkconfig.defaults.<target>.
+
+CONFIG_FREERTOS_HZ=1000
+
+# app_main's task runs everything including display rendering;
+# IDF default (3584) would overflow
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# No OTA — single large app partition removes the 1280KB ceiling
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+
+# NTP: primary + fallback server (esp_netif_sntp)
+CONFIG_LWIP_SNTP_MAX_SERVERS=2
+
+# WiFi DPP (QR-code onboarding, shelved feature — was sdkconfig.custom)
+CONFIG_ESP_WIFI_DPP_SUPPORT=y

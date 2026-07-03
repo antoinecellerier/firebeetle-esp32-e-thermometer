@@ -5,8 +5,9 @@
 .vscode/ipch
 .vscode/settings.json
 core
-.dummy/
 sdkconfig.*
+!sdkconfig.defaults
+!sdkconfig.defaults.*
 managed_components/
 include/generated/
 *.swp
