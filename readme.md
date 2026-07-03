@@ -17,7 +17,7 @@ The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display
 
 Two gotchas worth surfacing:
 - **DESPI-C02 ePaper adapter** leaks ~534 µA from its boost converter even with the panel hibernated. A P-channel MOSFET (FDN340P) on its 3.3 V line eliminates it.
-- **XIAO C6 USB Serial/JTAG** stays on in deep sleep by default (~20 mA), masking all savings. Disabled via `ARDUINO_USB_CDC_ON_BOOT=0` plus matching `build_unflags`.
+- **XIAO C6 USB Serial/JTAG** stays on in deep sleep by default (~20 mA), masking all savings. Under the Arduino-era firmware this needed `ARDUINO_USB_CDC_ON_BOOT=0` gymnastics; the pure-IDF firmware uses the USB-Serial-JTAG console (`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`), which doesn't hold the port active in deep sleep — to be reconfirmed on the PPK2.
 
 For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran a 2600 mAh cell flat in 8.5 days at ~12.6 mA average — the ULP/LP-core redesign is ~700× more efficient.
 

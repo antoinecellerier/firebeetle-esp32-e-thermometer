@@ -26,12 +26,8 @@
 #include <Fonts/Org_01.h>
 #include <Fonts/TomThumb.h>
 
-#ifndef ARDUINO
-#include <algorithm>
-using std::min;
-using std::max;
-#define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
-#endif
+// min/max/constrain come from Arduino.h — the arduino_shim version on device,
+// the tools/sim stub on host (both define ARDUINO).
 
 #ifndef EPD_BLACK
 #define EPD_BLACK 0x0000

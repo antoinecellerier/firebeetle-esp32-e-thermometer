@@ -1,8 +1,7 @@
 #pragma once
 
-// Thin I2C master wrapper over the ESP-IDF i2c_master driver (driver/i2c_master.h).
-// Replaces Arduino TwoWire so sensor code compiles under both Arduino-ESP32 3.x
-// (which ships IDF 5.x) and pure ESP-IDF.
+// Thin I2C master wrapper over the ESP-IDF i2c_master driver
+// (driver/i2c_master.h) — the sensors' replacement for Arduino TwoWire.
 
 #include <stdint.h>
 #include <stddef.h>
