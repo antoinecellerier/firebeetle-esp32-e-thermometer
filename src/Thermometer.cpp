@@ -273,10 +273,18 @@ DisplayStats make_display_stats()
   int32_t  lp_last_err = 0;
   uint32_t lp_last_op = 0;
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
-  lp_wakes    = ulp_lp_wake_count;
-  lp_errors   = ulp_lp_error_count;
-  lp_last_err = (int32_t)ulp_last_lp_error;
-  lp_last_op  = ulp_last_lp_op;
+  // These counters live in the LP core's .bss, which is zeroed only by
+  // InitializeUlp() (ulp_lp_core_load_binary() doesn't touch .bss). On a cold
+  // boot that runs *after* this render, so the symbols still hold uninitialised
+  // SRAM — leave the stats at 0 until an LP/timer wake proves the LP core has
+  // run this power cycle. Avoids a phantom "! LP" indicator on the first frame.
+  if (wake != 0)
+  {
+    lp_wakes    = ulp_lp_wake_count;
+    lp_errors   = ulp_lp_error_count;
+    lp_last_err = (int32_t)ulp_last_lp_error;
+    lp_last_op  = ulp_last_lp_op;
+  }
 #endif
 
   return {
