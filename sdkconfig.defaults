@@ -16,6 +16,13 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 
+# Skip the app image SHA256 re-verification on deep-sleep wakes: with a ~1MB
+# image on DIO/40MHz flash the bootloader spent hundreds of ms re-hashing it on
+# every wake (100% of wakes, including no-refresh safety-net wakes). Power-on
+# and reset boots still validate. Uses the bootloader RTC-FAST retain area —
+# no conflict with the ULP/RTC_DATA_ATTR layout in RTC slow memory.
+CONFIG_BOOTLOADER_SKIP_VALIDATE_IN_DEEP_SLEEP=y
+
 # NTP: primary + fallback server (esp_netif_sntp)
 CONFIG_LWIP_SNTP_MAX_SERVERS=2
 

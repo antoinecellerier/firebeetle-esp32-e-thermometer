@@ -375,3 +375,25 @@ ulp_lp_core_wakeup_main_processor() calls, but the 5.76" rig is only awake
 ~3.8 s per cycle (~6% collision chance at 60 s polls). Gating needs a PMU
 HP-sleep-state check from LP-core C code — do if trains are ever observed on
 the C6.
+
+## Skip app image validation on deep-sleep wake (July 2026)
+
+`CONFIG_BOOTLOADER_SKIP_VALIDATE_IN_DEEP_SLEEP=y` (sdkconfig.defaults, both
+boards): the 2nd-stage bootloader no longer re-hashes the ~1MB app image over
+DIO/40MHz flash on every deep-sleep wake — that SHA256 pass recurred on 100%
+of wakes, including no-refresh safety-net wakes. Power-on/reset boots still
+validate. Uses the bootloader RTC-FAST retain area (16 bytes); ULP +
+RTC_DATA_ATTR live in RTC slow memory, layout unchanged (overlap check OK).
+
+- **Measured (ESP32-E/GDEH0154Z90, release, confirmed on 2 wakes):**
+  - Active phase (boot + ULP read + render + push, before panel drive):
+    **~40 → 22.5 mC** — 710 ms at ~32 mA avg (was ~1.7 s). The skipped
+    validation was ~1 s of wall time, more than the ~250-400 ms estimate.
+  - Full refresh event: **~129 → 114.5 mC** (19.0 s at 6.01 mA avg).
+  - Evidence: firebeetle2-esp32e-bmp390l-GDEH0154Z90-wake-active-phase-skip-validate.png,
+    firebeetle2-esp32e-bmp390l-GDEH0154Z90-screen-refresh-skip-validate.png.
+- TODO: re-confirm the 19-20 µA deep-sleep floor — the bootloader retain area
+  forces RTC fast memory to stay powered in deep sleep (expected sub-µA adder,
+  worth one PPK2 glance).
+- C6 not yet re-measured; its boot band was part of the ~1.5 s @ ~35 mA flat
+  segment, so a similar absolute saving is expected per HP wake.
