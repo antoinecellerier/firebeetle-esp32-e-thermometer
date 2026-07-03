@@ -7,18 +7,19 @@ See [docs/wiring.md](docs/wiring.md) for wiring information.
 # Power consumption
 
 Measured with a Nordic PPK2 (July 2026, pure ESP-IDF firmware with light sleep
-during panel refreshes); full traces and methodology in [docs/notes.md](docs/notes.md).
+during panel refreshes, no app re-validation on deep-sleep wakes, -Os);
+full traces and methodology in [docs/notes.md](docs/notes.md).
 Figures are config-specific — panel, sensor, and board all matter.
 
 | Setup | Deep-sleep floor | Sensor wake | Display refresh |
 |-------|-----------------|-------------|-----------------|
-| Firebeetle ESP32-E + BMP390L sensor + GDEH0154Z90 ePaper via DESPI-C02 (FDN340P power gate) | 19–20 µA | ULP bit-bang I2C every 5 s, avg ≈0 | ~129 mC (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
-| XIAO ESP32-C6 + BMP581 sensor + GDEH0576T81 ePaper via DESPI-C02 (FDN340P power gate) | 15.5–16 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~56 mC (~3.8 s, was ~93–95 mC before light sleep) |
+| Firebeetle ESP32-E + BMP390L sensor + GDEH0154Z90 ePaper via DESPI-C02 (FDN340P power gate) | 19–20 µA | ULP bit-bang I2C every 5 s, avg ≈0 | ~112 mC (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
+| XIAO ESP32-C6 + BMP581 sensor + GDEH0576T81 ePaper via DESPI-C02 (FDN340P power gate) | 15.5–16 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC (was ~93–95 mC before light sleep) |
 
 The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display
 refresh is the dominant event on a typical day. At one refresh per hour it adds
-~16 µA (C6/5.76") or ~39 µA (Z90) to the sleep floor, putting long-term averages
-in the **~16–60 µA band depending on rig and refresh cadence** — load-only
+~13 µA (C6/5.76") or ~31 µA (Z90) to the sleep floor, putting long-term averages
+in the **~16–51 µA band depending on rig and refresh cadence** — load-only
 runtime of roughly **1–3 years on a 400 mAh LiPo**. At this current level LiPo
 self-discharge (a few %/month ≈ 15–25 µA equivalent) is comparable to the load
 itself, so **expected runtime is on the order of a year** — to be confirmed
