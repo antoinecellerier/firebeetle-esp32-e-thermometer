@@ -12,8 +12,13 @@
 #include "esp_adc/adc_cali_scheme.h"
 #include <math.h>
 #ifndef DISABLE_WIFI
-#include "WiFi.h"
-#include "esp_sntp.h"
+#include "esp_wifi.h"
+#include "esp_netif.h"
+#include "esp_netif_sntp.h"
+#include "esp_event.h"
+#include "nvs_flash.h"
+#include "freertos/event_groups.h"
+#include <string.h>
 #endif
 
 #include "Display.h"
@@ -380,44 +385,123 @@ void get_time(time_t *now, struct tm *nowtm)
 // Connect to WiFi with timeout. Returns true on success.
 static const uint32_t WIFI_TIMEOUT_MS = 15000;
 
+static EventGroupHandle_t s_wifi_events;
+static esp_event_handler_instance_t s_wifi_handler, s_ip_handler;
+static volatile bool s_wifi_stopping = false;
+#define WIFI_CONNECTED_BIT BIT0
+
+static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
+{
+  if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START)
+    esp_wifi_connect();
+  else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED)
+  {
+    // Keep retrying until the timeout in wifi_connect() expires
+    if (!s_wifi_stopping)
+      esp_wifi_connect();
+  }
+  else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP)
+    xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);
+}
+
+// Radio fully off before deep sleep (matches former WiFi.disconnect(true, true))
+static void wifi_disconnect()
+{
+  s_wifi_stopping = true;
+  esp_wifi_stop();
+  esp_wifi_deinit();
+  s_wifi_stopping = false;
+  if (s_wifi_handler)
+  {
+    esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_wifi_handler);
+    s_wifi_handler = nullptr;
+  }
+  if (s_ip_handler)
+  {
+    esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, s_ip_handler);
+    s_ip_handler = nullptr;
+  }
+}
+
 static bool wifi_connect()
 {
-  WiFi.begin(MY_WIFI_SSID, MY_WIFI_PASSWORD);
-  uint32_t start = ms_now();
-  while (!WiFi.isConnected())
+  esp_err_t err = nvs_flash_init(); // esp_wifi_init() requires NVS
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
   {
-    if (ms_now() - start > WIFI_TIMEOUT_MS)
-    {
-      LOGI("WiFi connection timed out after %u ms", (unsigned)WIFI_TIMEOUT_MS);
-      WiFi.disconnect(true, true);
-      return false;
-    }
-    sleep_ms(100);
-    LOGI("Waiting for WiFi");
+    nvs_flash_erase();
+    err = nvs_flash_init();
+  }
+  if (err != ESP_OK)
+  {
+    LOGI("NVS init failed: 0x%x", err);
+    return false;
+  }
+
+  ESP_ERROR_CHECK(esp_netif_init());
+  err = esp_event_loop_create_default();
+  if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) // INVALID_STATE = already created
+  {
+    LOGI("Event loop creation failed: 0x%x", err);
+    return false;
+  }
+  static esp_netif_t *sta_netif = nullptr;
+  if (!sta_netif)
+    sta_netif = esp_netif_create_default_wifi_sta();
+
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+  if (!s_wifi_events)
+    s_wifi_events = xEventGroupCreate();
+  xEventGroupClearBits(s_wifi_events, WIFI_CONNECTED_BIT);
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                                      &wifi_event_handler, nullptr, &s_wifi_handler));
+  ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                                      &wifi_event_handler, nullptr, &s_ip_handler));
+
+  wifi_config_t wcfg = {};
+  strncpy((char *)wcfg.sta.ssid, MY_WIFI_SSID, sizeof(wcfg.sta.ssid) - 1);
+  strncpy((char *)wcfg.sta.password, MY_WIFI_PASSWORD, sizeof(wcfg.sta.password) - 1);
+  ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM)); // reconfigured every boot; skip NVS writes
+  ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wcfg));
+  ESP_ERROR_CHECK(esp_wifi_start());
+
+  LOGI("Waiting for WiFi");
+  EventBits_t bits = xEventGroupWaitBits(s_wifi_events, WIFI_CONNECTED_BIT,
+                                         pdFALSE, pdFALSE, pdMS_TO_TICKS(WIFI_TIMEOUT_MS));
+  if (!(bits & WIFI_CONNECTED_BIT))
+  {
+    LOGI("WiFi connection timed out after %u ms", (unsigned)WIFI_TIMEOUT_MS);
+    wifi_disconnect();
+    return false;
   }
   return true;
+}
+
+// One-shot SNTP sync: fresh instance, wait for a genuinely new time response.
+static bool sntp_sync_once(uint32_t timeout_ms)
+{
+  esp_sntp_config_t scfg = {};
+  scfg.start = true;
+  scfg.wait_for_sync = true;
+  scfg.num_of_servers = 1;
+  scfg.servers[0] = "pool.ntp.org";
+#if SNTP_MAX_NUM_SERVERS >= 2
+  scfg.num_of_servers = 2;
+  scfg.servers[1] = "time.google.com";
+#endif
+  if (esp_netif_sntp_init(&scfg) != ESP_OK)
+    return false;
+  bool ok = (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(timeout_ms)) == ESP_OK);
+  esp_netif_sntp_deinit();
+  return ok;
 }
 
 // Minimum resync interval (1 day) — floor to avoid hammering WiFi
 #define RESYNC_INTERVAL_MIN  (86400)
 // Maximum resync interval (4 weeks)
 #define RESYNC_INTERVAL_MAX  (28 * 86400)
-
-// Wait until SNTP applies a fresh time response (clock stepped), or timeout.
-// Returns true if a new sync completed within timeout_ms. Unlike getLocalTime(),
-// this actually waits for a new NTP packet instead of returning immediately on
-// an already-set (but drifted) clock.
-static bool wait_for_sntp(uint32_t timeout_ms)
-{
-  uint32_t start = ms_now();
-  while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED)
-  {
-    if (ms_now() - start > timeout_ms)
-      return false;
-    sleep_ms(50);
-  }
-  return true;
-}
 
 // Attempt NTP resync if due. Measures clock drift and adjusts next interval.
 static void maybe_ntp_resync(time_t now)
@@ -445,16 +529,13 @@ static void maybe_ntp_resync(time_t now)
   time_t before_sync;
   time(&before_sync);
 
-  // Re-init SNTP and wait for a genuinely fresh response. We must NOT use
-  // getLocalTime() here: the clock is already set (just drifted), so it returns
-  // immediately on the stale value without waiting for a new packet — making
-  // the measured drift ~0 and never actually correcting the clock.
-  configTzTime(MY_TZ, "pool.ntp.org");
-  sntp_set_sync_status(SNTP_SYNC_STATUS_RESET);
-  if (!wait_for_sntp(30000U))
+  // Fresh SNTP instance waits for a genuinely new time response. The clock is
+  // already set (just drifted), so anything that returns early on a valid-
+  // looking clock would measure ~0 drift and never actually correct it.
+  if (!sntp_sync_once(30000U))
   {
     LOGI("NTP resync: sync failed, deferring to next scheduled resync");
-    WiFi.disconnect(true, true);
+    wifi_disconnect();
     next_resync_time = now + resync_interval_s;
     return;
   }
@@ -498,7 +579,7 @@ static void maybe_ntp_resync(time_t now)
          (int)resync_interval_s, (int)(resync_interval_s / 3600));
   }
 
-  WiFi.disconnect(true, true);
+  wifi_disconnect();
   next_resync_time = after_sync + resync_interval_s;
 }
 #endif // DISABLE_WIFI
@@ -721,19 +802,16 @@ void on_first_boot()
   // Synchronize time via NTP
   LOGI("Synchronizing time");
   set_status_led(rgb(0, 255, 0));
-  configTzTime(MY_TZ, "pool.ntp.org", "time.google.com");
-  struct tm t;
-  getLocalTime(&t, 30000U /* max wait time in ms */);
-  first_boot_time = mktime(&t);
+  if (!sntp_sync_once(30000U /* max wait time in ms */))
+    LOGI("NTP sync failed — time is unreliable");
+  time(&first_boot_time);
 
   // Verify sync succeeded (time should be well past epoch)
   ntp_synced = (first_boot_time > 86400 * 365);
   if (ntp_synced)
     last_sync_time = first_boot_time;
-  else
-    LOGI("NTP sync failed — time is unreliable");
 
-  WiFi.disconnect(true, true);
+  wifi_disconnect();
   LOGI("WiFi disconnected");
 #endif
 }
