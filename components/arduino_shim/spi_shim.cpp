@@ -35,7 +35,9 @@ void SPIClass::begin(int sck, int miso, int mosi, int ss)
     buscfg.miso_io_num = -1;
     buscfg.quadwp_io_num = -1;
     buscfg.quadhd_io_num = -1;
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST_USED, &buscfg, SPI_DMA_CH_AUTO));
+    // No DMA: transfers are 1-64 bytes (GxEPD2 is byte-wise), and skipping the
+    // per-transaction DMA descriptor setup makes small polling transfers faster
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI_HOST_USED, &buscfg, SPI_DMA_DISABLED));
     _busInited = true;
 }
 
@@ -82,31 +84,65 @@ void SPIClass::beginTransaction(const SPISettings &settings)
     ensureDevice(settings);
     // Hold the bus for the whole transaction — cuts per-byte overhead
     ESP_ERROR_CHECK(spi_device_acquire_bus(_dev, portMAX_DELAY));
+    _bytesSinceYield = 0;
+}
+
+// GxEPD2 pushes whole framebuffers (~78KB on the 5.76" panel) through here in
+// a tight loop from the main task, which starves IDLE and trips the task WDT.
+// Briefly block every 16KB so IDLE runs; costs ~10ms per full-panel push.
+void SPIClass::maybeYield(size_t bytes)
+{
+    _bytesSinceYield += bytes;
+    if (_bytesSinceYield >= 16384)
+    {
+        _bytesSinceYield = 0;
+        vTaskDelay(1);
+    }
 }
 
 void SPIClass::endTransaction()
 {
+    flushPending();
     if (_dev)
         spi_device_release_bus(_dev);
 }
 
-uint8_t SPIClass::transfer(uint8_t data)
+void SPIClass::rawTransmit(const uint8_t *data, size_t count)
 {
     spi_transaction_t t = {};
-    t.length = 8;
-    t.flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA;
-    t.tx_data[0] = data;
+    t.length = count * 8;
+    t.tx_buffer = data;
     spi_device_polling_transmit(_dev, &t);
-    return t.rx_data[0];
+    maybeYield(count);
+}
+
+void SPIClass::flushPending()
+{
+    if (_pendingLen == 0)
+        return;
+    size_t n = _pendingLen;
+    _pendingLen = 0;
+    rawTransmit(_pending, n);
+}
+
+uint8_t SPIClass::transfer(uint8_t data)
+{
+    _pending[_pendingLen++] = data;
+    if (_pendingLen == sizeof(_pending))
+        flushPending();
+    return 0; // write-only bus, nothing to read back
 }
 
 void SPIClass::transfer(void *buf, size_t count)
 {
-    if (!count)
-        return;
-    spi_transaction_t t = {};
-    t.length = count * 8;
-    t.tx_buffer = buf;
-    t.rx_buffer = buf;
-    spi_device_polling_transmit(_dev, &t);
+    flushPending();
+    // Chunk to the non-DMA FIFO limit (64 bytes)
+    const uint8_t *p = (const uint8_t *)buf;
+    while (count > 0)
+    {
+        size_t n = count > 64 ? 64 : count;
+        rawTransmit(p, n);
+        p += n;
+        count -= n;
+    }
 }
