@@ -102,7 +102,7 @@ static void epd_configure_pins()
   // GxEPD2 calls SPI.begin() with no args, which configures GPIO20 as MISO
   // and GPIO21 as SS — both conflict with EPD_DC and EPD_BUSY. Pre-init SPI
   // with only SCK/MOSI (e-paper is write-only, CS managed by GxEPD2).
-  SPI.begin(SCK, -1, MOSI, -1);
+  SPI.begin(19 /* SCK, D8 */, -1, 18 /* MOSI, D10 */, -1);
   // Reconfigure DC and BUSY after SPI.begin() since it may have claimed them
   // as MISO/SS (GPIO20/21 are the default SPI MISO/SS on C6).
   pinMode(EPD_DC, OUTPUT);

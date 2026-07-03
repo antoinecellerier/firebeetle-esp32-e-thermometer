@@ -8,6 +8,7 @@
 #ifdef ESP_PLATFORM
 #include <stdint.h>
 #include <stdio.h>
+#include "soc/soc_caps.h" // SOC_ULP_FSM_SUPPORTED / SOC_LP_CORE_SUPPORTED guards
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

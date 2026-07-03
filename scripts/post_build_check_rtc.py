@@ -7,11 +7,16 @@ import os
 # RTC slow memory sections that contain user data (exclude system-reserved sections)
 RTC_SECTIONS = {'.rtc.data', '.rtc.bss', '.rtc_noinit', '.rtc.force_slow'}
 
+_already_ran = [False]
+
 def check_ulp_rtc_overlap(source, target, env):
     # ULP_DATA_BASE is only used by ULP FSM (ESP32-E), not LP core (C6).
     mcu = env.BoardConfig().get("build.mcu", "")
     if mcu != "esp32":
         return
+    if _already_ran[0]:  # both post-action hooks can fire in one build
+        return
+    _already_ran[0] = True
 
     build_dir = env.subst("$BUILD_DIR")
     map_file = os.path.join(build_dir, "firmware.map")
@@ -81,4 +86,7 @@ def check_ulp_rtc_overlap(source, target, env):
           "(ULP data at word %d, RTC sections end at word %d)"
           % (ulp_data_base, rtc_end_word))
 
+# Both hooks: "buildprog" fires under the arduino builder, the .bin artifact
+# path under the espidf builder (which doesn't trigger the alias post-action).
 env.AddPostAction("buildprog", check_ulp_rtc_overlap)
+env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", check_ulp_rtc_overlap)

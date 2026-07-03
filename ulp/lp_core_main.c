@@ -1,5 +1,10 @@
 // LP core program for ESP32-C6
 //
+// __riscv guard: PlatformIO's espidf builder feeds every file in ulp/ to the
+// active ULP toolchain. On the ESP32-E that is the FSM assembler (HULP builds
+// its program at runtime instead — see src/UlpProgram*.cpp), so this file must
+// preprocess to nothing there.
+#ifdef __riscv
 // Sensor implementations are in separate headers, selected at compile time.
 // The LP core build does NOT inherit the main project's build_flags or include
 // paths, so sensor selection uses a #define in this file (not local-secrets.h).
@@ -41,3 +46,5 @@ volatile uint32_t last_lp_op    = 0;
 #else
 #error "No LP core mode selected — define LP_CORE_IDLE, LP_CORE_BMP390L, or LP_CORE_BMP58X"
 #endif
+
+#endif // __riscv

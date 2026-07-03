@@ -1,0 +1,11 @@
+# FireBeetle 2 ESP32-E: 4MB flash, ULP FSM (HULP builds the program at
+# runtime — no ULP toolchain involved, Kconfig only), UART0 console.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
+
+# ULP FSM coprocessor. RESERVE_MEM=512 matches the Arduino-era layout
+# (.rtc.data at 0x50000000, ULP vars at word offset ULP_DATA_BASE=1800);
+# scripts/post_build_check_rtc.py + ulp_check_data_overlap() verify it.
+CONFIG_ULP_COPROC_ENABLED=y
+CONFIG_ULP_COPROC_TYPE_FSM=y
+CONFIG_ULP_COPROC_RESERVE_MEM=512
