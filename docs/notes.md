@@ -397,3 +397,14 @@ RTC_DATA_ATTR live in RTC slow memory, layout unchanged (overlap check OK).
   worth one PPK2 glance).
 - C6 not yet re-measured; its boot band was part of the ~1.5 s @ ~35 mA flat
   segment, so a similar absolute saving is expected per HP wake.
+
+## Flash QIO/80MHz — tried and reverted (July 2026)
+
+With deep-sleep image validation skipped, flash speed no longer matters:
+QIO/80MHz (vs the board-default DIO/40MHz) shrank the active phase by only
+~13 ms (710.5 → 697.3 ms) while raising its average draw ~4.4 mA
+(31.7 → 36.1 mA) — net **22.5 → 25.2 mC, WORSE**. Full refresh event ~116 mC
+(vs 114.5). Faster flash clocking costs current across the whole window; the
+post-skip-validate active phase is CPU-bound, not flash-read-bound. Reverted
+to DIO/40MHz. (Would have been the wrong experiment order pre-Stage-1: with
+the ~1 s SHA256 pass still present, QIO would likely have won.)
