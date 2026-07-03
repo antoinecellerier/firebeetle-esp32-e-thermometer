@@ -408,3 +408,24 @@ QIO/80MHz (vs the board-default DIO/40MHz) shrank the active phase by only
 post-skip-validate active phase is CPU-bound, not flash-read-bound. Reverted
 to DIO/40MHz. (Would have been the wrong experiment order pre-Stage-1: with
 the ~1 s SHA256 pass still present, QIO would likely have won.)
+
+## Compile at -Os (July 2026)
+
+IDF builds default to -Og regardless of PlatformIO's build_type=release —
+verified via compile_commands.json: all 908 app TUs were -Og. Now
+`CONFIG_COMPILER_OPTIMIZATION_SIZE=y` in sdkconfig.defaults (both boards,
+debug envs too — they exist for serial logs, not JTAG stepping).
+
+- **Measured (ESP32-E/GDEH0154Z90, release):** active phase
+  **22.5 → 20.6 mC** (710 → 640 ms at ~32 mA); full refresh event
+  **114.5 → 112 mC**. Binary 1014 → 938 KB (also speeds any future
+  power-on validation).
+- Zoomed active-phase trace (1 s window): ~90 ms ROM+bootloader, one-sample
+  ~405 mA spike at EPD power-gate turn-on (boost inrush), then a flat
+  ~33 mA band to ~620 ms (IDF bring-up + render + SPI push ≈ 12.5 mC —
+  the bulk of what's left), then panel drive takes over.
+- Evidence: firebeetle2-esp32e-bmp390l-GDEH0154Z90-wake-active-phase-Os.png,
+  firebeetle2-esp32e-bmp390l-GDEH0154Z90-screen-refresh-Os.png.
+- Running total for the day (E/Z90 rig, per refresh event):
+  600 mC (spin-wait era) → 129 (busy-wait light sleep) → 114.5 (skip
+  validation) → **112 mC**; pre-refresh active phase 40 → 22.5 → **20.6 mC**.

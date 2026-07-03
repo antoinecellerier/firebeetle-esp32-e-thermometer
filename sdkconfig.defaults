@@ -16,6 +16,12 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 CONFIG_LOG_DEFAULT_LEVEL_WARN=y
 
+# -Os instead of the IDF-default -Og (which even "release" builds used —
+# PlatformIO build_type does not set IDF's optimization level). The post-
+# skip-validate wake active phase is CPU-bound; -Os also shrinks the image.
+# Applies to debug builds too (they're for serial logs, not JTAG stepping).
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
 # Skip the app image SHA256 re-verification on deep-sleep wakes: with a ~1MB
 # image on DIO/40MHz flash the bootloader spent hundreds of ms re-hashing it on
 # every wake (100% of wakes, including no-refresh safety-net wakes). Power-on

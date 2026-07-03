@@ -55,6 +55,7 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | F2 | esp32e_release | — | 25.8%*** | 38344 | — | — | +42KB vs IDF 5.5 (newlib mode; picolibc blocked by PIO ulp.py) |
 | F2 | c6_debug | — | 27.9%*** | 39840 | — | — | |
 | F2 | c6_release | — | 27.3%*** | 39840 | — | — | +46KB vs IDF 5.5 |
+| G -Os (was -Og) | esp32e_release | 937632 | 22.9%*** | 47604 | — | — | −77KB bin; CONFIG_COMPILER_OPTIMIZATION_SIZE, wake active phase 22.5→21mC |
 
 *** Stage F correction: through stages C-D the ACTUAL flashed partition table was
 PlatformIO's default 1MB single-app (PIO ignores the sdkconfig partition choice) —
