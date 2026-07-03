@@ -392,11 +392,9 @@ RTC_DATA_ATTR live in RTC slow memory, layout unchanged (overlap check OK).
   - Full refresh event: **~129 → 114.5 mC** (19.0 s at 6.01 mA avg).
   - Evidence: firebeetle2-esp32e-bmp390l-GDEH0154Z90-wake-active-phase-skip-validate.png,
     firebeetle2-esp32e-bmp390l-GDEH0154Z90-screen-refresh-skip-validate.png.
-- TODO: re-confirm the 19-20 µA deep-sleep floor — the bootloader retain area
-  forces RTC fast memory to stay powered in deep sleep (expected sub-µA adder,
-  worth one PPK2 glance).
-- C6 not yet re-measured; its boot band was part of the ~1.5 s @ ~35 mA flat
-  segment, so a similar absolute saving is expected per HP wake.
+- Deep-sleep floor re-confirmed with the retain area powered: **~19.4 µA**
+  (within the pre-change 19-20 µA) — the sub-µA expectation held.
+- C6 re-measured below (see "C6 measurements" section).
 
 ## Flash QIO/80MHz — tried and reverted (July 2026)
 
@@ -443,8 +441,9 @@ rig (release; the two effects were only separated on the ESP32-E above):
 - Evidence: xiao-seeed-esp32c6-bmp581-GDEH0576T81-wake-active-phase-pre-skip-validate.png
   (before) / -wake-active-phase-skip-validate-Os.png /
   -screen-refresh-skip-validate-Os.png (after).
-- Deep-sleep floor still TODO on both rigs (skip-validate keeps the
-  bootloader retain area powered; expected sub-µA).
+- Deep-sleep floors re-confirmed with the skip-validate retain area powered:
+  **~15.8 µA C6, ~19.4 µA E** — both within their pre-change ranges
+  (15.5-16 / 19-20 µA); no measurable floor cost.
 - Bench gotcha from this session: a wrong screen/sensor local-secrets.h
   config panic-looped at ~600 ms cadence and read as a "~670 µA floor with
   25 mA pings" — the e-paper retaining a stale frame (old GIT_HASH + time
