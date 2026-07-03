@@ -5,7 +5,6 @@
 
 #if !defined(NO_ULP) && defined(SOC_ULP_FSM_SUPPORTED)
 
-#include "Arduino.h"
 #include "esp32/ulp.h"
 #include "hulp.h"
 

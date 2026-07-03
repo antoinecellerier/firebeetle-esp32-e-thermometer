@@ -1,5 +1,21 @@
 # Firmware footprint ledger — espidf migration
 
+## Summary (migration complete, stages 0→E)
+
+Arduino (baseline) → pure ESP-IDF, both boards, stock platform, no fork:
+
+- **Flash**: ESP32-E release 1196KB → 1014KB (−182KB); C6 release 1265KB → 1072KB
+  (−193KB, display enabled). App slot went from 1280KB OTA (~91–97% full) to a
+  4MB single-app partition (~24–26% full) — the flash ceiling is gone.
+- **Static DRAM**: ESP32-E 49.7KB → 38.0KB (−11.7KB); C6 44.0KB → 39.4KB (−4.6KB).
+- **Where it came from**: Arduino core + String/Print/HAL statics, Arduino
+  WiFi/Network stack (→ esp_wifi direct), DFRobot/Wire (→ I2cBus over
+  i2c_master), log level WARN, no OTA second slot.
+- **What didn't move (by design)**: RTC slow memory (8KB shared ULP/RTC_DATA_ATTR),
+  deep-sleep current path (was already pure IDF sleep code).
+- **Build times**: env-switch invalidation eliminated (167s/~2400 files → 3–4s/0);
+  same-env no-op 19–30s → 3–4s; one-time ~5min IDF-from-source per clean checkout.
+
 Method: `size -A .pio/build/<env>/firmware.elf` (toolchain binutils) + `stat -c%s firmware.bin`.
 DRAM = `.dram0.data` + `.dram0.bss` (+ `.noinit`). Flash% is against the 1280KB `app0` slot
 of the default OTA partition table (baseline; later stages switch to single-app).

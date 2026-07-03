@@ -13,11 +13,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
-#ifdef ARDUINO
-#include "Arduino.h"
-#endif
 
-// Framework-agnostic time helpers (IDF APIs, available under Arduino too)
+// Framework-agnostic time helpers (IDF APIs)
 static inline uint32_t ms_now(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 static inline void sleep_ms(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
 
@@ -31,14 +28,7 @@ static inline void gpio_out_init(int pin)
 #endif // ESP_PLATFORM
 
 #ifndef DISABLE_SERIAL
-#if defined(ESP_PLATFORM) && defined(ARDUINO)
-// Transitional (until pure-IDF migration completes): Serial.printf follows the
-// Arduino console routing (USB CDC on C6 when enabled); plain printf only
-// reaches the IDF console UART.
-#define LOGI(str, ...) Serial.printf(str "\n", ##__VA_ARGS__)
-#else
 #define LOGI(str, ...) printf(str "\n", ##__VA_ARGS__)
-#endif
 #else
 #define LOGI(...)
 #endif

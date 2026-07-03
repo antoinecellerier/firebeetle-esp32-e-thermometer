@@ -5,9 +5,6 @@
 #include "time.h"
 #include "stdlib.h"
 
-#ifdef ARDUINO
-#include "Arduino.h"
-#endif
 #include "esp_sleep.h"
 #include "esp_log.h"
 #include "esp_adc/adc_oneshot.h"
@@ -314,10 +311,8 @@ DisplayStats make_display_stats()
     false,
 #endif
     // power_efficient: true only when serial is off, sleep interval is
-    // production-length, no debug instrumentation, and USB CDC off
-    // (Arduino-only concern; pure IDF has no boot-blocking CDC)
-#if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG) \
-    && (!defined(ARDUINO) || !ARDUINO_USB_CDC_ON_BOOT)
+    // production-length, and no debug instrumentation
+#if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG)
     true,
 #else
     false,
@@ -333,21 +328,8 @@ DisplayStats make_display_stats()
 void setup_serial()
 {
 #ifndef DISABLE_SERIAL
-#ifdef ARDUINO
-  Serial.begin(115200);
-#if ARDUINO_USB_CDC_ON_BOOT
-  // USB CDC: operator bool() blocks until a host opens the port.
-  // On UART (Firebeetle) it returns true immediately.
-  // Skip the wait entirely if no USB cable is plugged in;
-  // otherwise wait up to 1s for a monitor to attach.
-  if (Serial.isPlugged()) {
-    uint32_t t0 = ms_now();
-    while (!Serial && ms_now() - t0 < 1000)
-      sleep_ms(10);
-  }
-#endif
-#endif // ARDUINO — under pure IDF the console (UART/USB-Serial-JTAG per
-       // sdkconfig) is ready before app_main; nothing to set up
+  // The IDF console (UART on the FireBeetle, USB-Serial-JTAG on the C6, per
+  // sdkconfig) is ready before app_main — nothing to set up.
   LOGI("Logging to log facilities - info");
 #else
   // TODO: update our own logging levels when using JTAG debugging
@@ -370,11 +352,7 @@ void start_deep_sleep()
     esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 1000000ULL);
     LOGI("Sleeping for %d seconds", SLEEP_INTERVAL_S);
   }
-#ifdef ARDUINO
-  Serial.flush();
-#else
   fflush(stdout);
-#endif
   PPK2_CPU_ACTIVE_LOW();
   esp_deep_sleep_start();
 }
@@ -988,17 +966,8 @@ void setup()
   }
 
   boot_count++;
-#ifdef ARDUINO
-  // Under pure ESP-IDF the CPU frequency is fixed at build time via
-  // CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ instead.
-  if (boot_count != 1)
-  {
-    // Reducing CPU frequency to 80 MHz to save power (as none of this CPU bound)
-    setCpuFrequencyMhz(80);
-  }
-  LOGI("CPU frequency: %d", getCpuFrequencyMhz());
-  LOGI("Xtal frequency: %d", getXtalFrequencyMhz());
-#endif
+  // CPU frequency is fixed at 80 MHz at build time (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
+  // — replaces the Arduino-era setCpuFrequencyMhz(80) on non-first boots.
 
   LOGI("Boot count: %d [%s] sizeof(TempReading)=%d sizeof(time_t)=%d",
        boot_count, GIT_HASH, (int)sizeof(TempReading), (int)sizeof(time_t));
@@ -1062,14 +1031,7 @@ void setup()
   refresh_and_sleep(battery_mv, temp);
 }
 
-#ifdef ARDUINO
-void loop()
-{
-  // Never gets invoked as we deep sleep at the end of setup()
-}
-#else
 extern "C" void app_main(void)
 {
   setup(); // deep-sleeps at the end; never returns
 }
-#endif
