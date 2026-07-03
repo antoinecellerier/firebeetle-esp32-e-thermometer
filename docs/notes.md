@@ -288,3 +288,62 @@ Setup: XIAO ESP32-C6 + BMP581 (I2C on GPIO6/7, addr 0x47) + GDEH0576T81 e-paper,
 - LP core wake spike: **~3 ms at ~1 mA** (see `docs/xiao-seeed-esp32c6-bmp581-deep-sleep-i2c-lp-core-read.png`) — matches the expected 3.5–4 ms window (shorter than the 7 ms LP_CORE_IDLE baseline, as predicted after dropping the per-wake OSR write).
 - Screen refresh (GDEH0576T81 full update): **~3.2 s at ~29 mA avg, ~322 mA peak, ~93 mC charge** per refresh (see `docs/xiao-seeed-esp32c6-bmp581-GDEH0576T81-screen-refresh.png`). Dominates the energy budget whenever it fires — at one refresh/hour this alone averages to ~26 µA.
 - Gotcha: after a warm reset (reflash or HP restart), PPK2 briefly showed extra ~200 ms spikes on top of the LP-core cadence. They **did not reappear after a full cold boot** (power cycle). Suspected leftover PMU/LP-clock state from the previous run; not investigated further since it's self-clearing.
+
+
+# Post-espidf-migration power measurements (July 2026, IDF 6.0.1, PPK2)
+
+All figures are config-specific — panel + sensor + board matter.
+
+## XIAO ESP32-C6 + BMP581 + GDEH0576T81 (920x680), release build
+
+- Deep sleep: **15.5-16 µA** (Arduino-era baseline ~15 µA — parity).
+  USB-Serial-JTAG console (CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG) confirmed
+  harmless in deep sleep; the Arduino-era ARDUINO_USB_CDC_ON_BOOT ~20 mA
+  gotcha no longer exists.
+- Temp-refresh wake (render + SPI push + full panel refresh): **3.2 s,
+  ~95 mC** per event (Arduino-era: 3.2 s, ~93 mC — parity). At one
+  refresh/hour this event alone averages ~26 µA, dominating the budget.
+- Trace shape: ~1.5 s flat ~35 mA (boot + render + SPI push), then panel
+  waveform bursts (~465 mA peak observed).
+
+## FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90 (200x200 3-color), release build
+
+- Deep sleep with FDN340P gate + ULP FSM polling: **19-20 µA** (Arduino-era
+  ~18 µA on the same rig — parity within measurement variance).
+- Z90 full refresh exceeds GxEPD2's hardcoded 20 s busy timeout → benign
+  "Busy Timeout!" print every refresh (pre-existing; the print is ungated
+  by the diag flag). Each refresh keeps the CPU awake the full ~21 s on
+  this panel — refresh-rate limiting matters most here.
+
+## Light sleep during EPD busy-wait (added after the above measurements)
+
+- GxEPD2 setBusyCallback → esp_light_sleep_start() with GPIO wake on BUSY
+  (level-agnostic) + 500 ms timer backstop; wake sources fully disarmed
+  after each slice so nothing leaks into deep sleep.
+- Needed three companions to work at all: gpio_sleep_sel_dis on
+  CS/DC/RST/SCK/MOSI **and the EPD power-gate pin** (pins otherwise switch to
+  their sleep config each slice — panel saw RST/power glitches: symptom was
+  a started refresh ending in faint noise), plus keeping the C6's TOP power
+  domain ON during slices (GPSPI register state), restored to AUTO after.
+- **Measured (C6/GDEH0576T81, release): 95.4 → 56.25 mC per refresh event,
+  −41%** — better than the ~27% estimate because light sleep covers the
+  power-on/off busy waits too. Event wall-time 3.2→~3.8 s (backstop
+  granularity; energy is what matters). Deep sleep unaffected (~15.5 µA).
+  Evidence: xiao-seeed-esp32c6-bmp581-GDEH0576T81-screen-refresh-light-sleep.png
+  vs the pre-light-sleep xiao-seeed-esp32c6-bmp581-GDEH0576T81-screen-refresh.png
+  (Arduino-era-equivalent, ~93-95 mC).
+- At 1 refresh/hour: refresh contribution ~26.5 → ~15.6 µA; total average
+  ~42 → ~31 µA. Now ~40% below the Arduino-era firmware on this metric.
+- **Measured (ESP32-E/GDEH0154Z90, release): 600 → 139 mC per refresh event,
+  −77%** — the Z90's ~21 s busy window went from a solid ~24 mA spin-wait band
+  to ~6.4 mA average (≈40 mC active phase: boot + ULP read + render + push;
+  ≈100 mC panel drive + light-sleep floor). At 1 refresh/hour the refresh
+  contribution drops ~167 → ~39 µA; total rig average ~186 → ~58 µA ≈ 3×
+  battery life at that cadence. Evidence:
+  firebeetle2-esp32e-bmp390l-GDEH0154Z90-screen-refresh.png (before) /
+  -light-sleep.png (after). Savings scale with busy duration — slow panels
+  gain most; tiny/fast panels gain less.
+- Backstop raised 100→500 ms after the measurements above (free
+  latency-wise — the GPIO level wake ends each wait instantly): cuts the
+  wake-blip overhead ~5x, worth ~5% of the event on the slow Z90 rig,
+  negligible on the C6.

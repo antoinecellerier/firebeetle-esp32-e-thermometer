@@ -112,10 +112,70 @@ static void epd_configure_pins()
 #endif
 }
 
+// Light-sleep instead of spin-waiting while the panel refreshes — otherwise
+// the CPU idles at run current for the whole busy window (measured ~25mC of
+// the ~95mC per-refresh charge on the XIAO C6 + GDEH0576T81 920x680; absolute
+// numbers vary per panel/board, see docs/notes.md).
+// GxEPD2 calls this repeatedly from _waitWhileBusy until BUSY deasserts.
+// Level-agnostic: whatever level BUSY has now is the "busy" level GxEPD2 is
+// waiting on, so arm the GPIO wake for the opposite level; a 500ms timer
+// backstop bounds each slice. Console output pauses during the sleep slices
+// (it is flushed before each entry).
+#include "esp_sleep.h"
+
+// SPI pins as wired (match components/arduino_shim/spi_shim.cpp defaults)
+#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
+#define EPD_SCK  18
+#define EPD_MOSI 23
+#elif defined(ARDUINO_XIAO_ESP32C6)
+#define EPD_SCK  19
+#define EPD_MOSI 18
+#endif
+
+// In light sleep, GPIOs switch to their per-pin sleep configuration — the EPD
+// control and SPI lines must stay actively driven or the panel sees RST/CS
+// glitches mid-refresh and aborts the waveform (symptom: faint noise, no image).
+static void epd_pin_sleep_hold()
+{
+  const int pins[] = {EPD_CS, EPD_DC, EPD_RESET, EPD_SCK, EPD_MOSI,
+#ifdef EPD_POWER_GATE
+                      EPD_POWER, // FET gate must stay LOW (panel powered) through slices
+#endif
+  };
+  for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++)
+    gpio_sleep_sel_dis((gpio_num_t)pins[i]);
+}
+
+static void epd_busy_light_sleep(const void *)
+{
+  int busy_level = gpio_get_level((gpio_num_t)EPD_BUSY);
+  gpio_wakeup_enable((gpio_num_t)EPD_BUSY,
+                     busy_level ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
+  esp_sleep_enable_gpio_wakeup();
+  esp_sleep_enable_timer_wakeup(500000); // backstop only — the GPIO level wake ends each wait instantly
+#if SOC_PM_SUPPORT_TOP_PD
+  // Keep the HP peripheral domain powered: GPSPI register state must survive
+  // the slice (C6; deep sleep is unaffected — restored to AUTO below)
+  esp_sleep_pd_config(ESP_PD_DOMAIN_TOP, ESP_PD_OPTION_ON);
+#endif
+  esp_light_sleep_start();
+  // Fully disarm: neither source may leak into the later deep sleep — the
+  // permanent-shutdown path arms nothing and must stay asleep, and the 100ms
+  // timer would otherwise pre-empt it.
+#if SOC_PM_SUPPORT_TOP_PD
+  esp_sleep_pd_config(ESP_PD_DOMAIN_TOP, ESP_PD_OPTION_AUTO);
+#endif
+  gpio_wakeup_disable((gpio_num_t)EPD_BUSY);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+}
+
 static void init_for_render(int boot_count)
 {
   LOGI("Initializing display");
   epd_configure_pins();
+  epd_pin_sleep_hold();
+  display.epd2.setBusyCallback(&epd_busy_light_sleep);
   // Second arg: true on first boot triggers full hardware reset;
   // false on subsequent boots allows faster partial-update init.
   display.init(0 /* disable serial debug output */,

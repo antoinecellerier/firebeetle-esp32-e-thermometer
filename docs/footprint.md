@@ -67,9 +67,25 @@ figures above marked ** were computed against board flash, not the app slot.
 Behavioral baseline (2026-07-03): sim screenshots saved (28 PNGs, all scenarios render);
 C6 deep-sleep ~15µA (PPK2, prior measurement). Tag: `pre-idf-migration`.
 
-Post-migration hardware check (2026-07-03, IDF 6.0.1): ESP32-E release deep-sleep
-19-20µA vs ~18µA Arduino-era on the same rig (readme.md) — sleep floor unchanged,
-as expected (sleep path was already pure IDF code).
+## Hardware validation (2026-07-03, IDF 6.0.1, PPK2)
+
+Migration parity confirmed on both boards — full measurement details live in
+docs/notes.md ("Post-espidf-migration power measurements"); figures are
+config-specific (panel + sensor + board).
+
+- ESP32-E (Z90 200x200 + BMP390L): release deep-sleep 19-20µA vs ~18µA
+  Arduino-era. Z90 "Busy Timeout!" print is pre-existing (refresh exceeds
+  GxEPD2's hardcoded 20s cap; print is ungated).
+- XIAO C6 (GDEH0576T81 920x680 + BMP581): release deep-sleep 15.5-16µA vs
+  ~15µA; temp-refresh wake 3.2s / ~95mC vs ~93mC Arduino-era. USB-Serial-JTAG
+  console harmless in deep sleep (old Arduino CDC ~20mA gotcha gone).
+- Shim history: per-byte SPI transactions initially made the C6 refresh event
+  ~10s and tripped the task WDT; fixed by 64-byte write-buffering +
+  16KB-interval yields (commits ef95f72, 9c819d3).
+- NTP timed out twice on C6 (30s) while the E synced in ~1s on the same
+  network — matches historical C6 flakiness, predates migration. Caveat:
+  system time survives reset/reflash (RTC timer), so a correct clock after a
+  "sync failed" log does NOT prove the sync worked; power-cycle to test.
 
 ## Build times
 

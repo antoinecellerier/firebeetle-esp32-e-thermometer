@@ -32,8 +32,9 @@ public:
   void beginTransaction(const SPISettings &settings);
   void endTransaction();
   // Write-buffered: bytes accumulate up to the 64-byte FIFO and go out as one
-  // transaction (per-byte transactions made a 78KB framebuffer push take
-  // seconds). The bus is write-only here (no MISO), so this returns 0.
+  // transaction (per-byte transactions measured ~10s for the 920x680
+  // GDEH0576T81's 78KB framebuffer push; smaller panels scale down).
+  // The bus is write-only here (no MISO), so this returns 0.
   // digitalWrite/digitalRead flush the buffer first — GxEPD2 toggles DC/CS
   // between transfer() calls, and no buffered byte may cross that edge.
   uint8_t transfer(uint8_t data);
