@@ -13,8 +13,11 @@ IMPORTANT: After any display/rendering change, run the simulator and check the P
 ## Build system (pure ESP-IDF)
 
 Both boards build `framework = espidf` on the official registry platform
-(`espressif32 @ ~6.13.0`, ESP-IDF 5.5.3) — no Arduino framework, no platform
-fork, no pinned zip URL. The tree is a standard IDF CMake project
+(`espressif32 @ ^7.0.1`, ESP-IDF 6.0.1) — no Arduino framework, no platform
+fork, no pinned zip URL. libc is pinned to newlib (CONFIG_LIBC_NEWLIB):
+PlatformIO's ulp.py doesn't forward ADD_PICOLIBC_SPECS to the LP-core
+sub-build, so IDF 6's picolibc default breaks it; revisit picolibc
+(~20% smaller binaries) when that's fixed or when building with idf.py. The tree is a standard IDF CMake project
 (`CMakeLists.txt` + `src/CMakeLists.txt` + `components/`), so
 `idf.py -DIDF_TARGET=esp32c6 build` also works (fonts auto-generate at cmake
 configure; GIT_HASH shows the fallback outside PlatformIO).

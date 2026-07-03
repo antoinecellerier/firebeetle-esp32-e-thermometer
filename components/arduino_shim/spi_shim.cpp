@@ -2,6 +2,9 @@
 
 #include "sdkconfig.h"
 #include "esp_err.h"
+// IDF 6 no longer includes FreeRTOS headers from driver headers
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 SPIClass SPI;
 

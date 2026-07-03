@@ -216,6 +216,8 @@ void BMP390LSensor::InitializeUlp() {}
 
 // Verify a suspicious ULP temperature by doing a direct I2C re-read.
 // Returns true if *temp was accepted or corrected, false if verification failed.
+// unused when another sensor owns the ULP (e.g. USE_BMP58x on C6)
+__attribute__((unused))
 static bool verify_ulp_temp(I2cBus &bus, float *temp)
 {
     bus.begin(I2C_SDA_PIN, I2C_SCL_PIN);

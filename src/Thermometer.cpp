@@ -262,7 +262,7 @@ DisplayStats make_display_stats()
     : historical_data.hourly_idx;
 
   // Map ESP-IDF wake cause to a portable int for display
-  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  esp_sleep_wakeup_cause_t cause = app_wakeup_cause();
   int wake = (cause == ESP_SLEEP_WAKEUP_ULP) ? 1 :
              (cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 : 0;
 
@@ -919,7 +919,7 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   // the LP core is still running with its existing configuration — reloading
   // the binary would wipe its counters and is not needed.
   if (sensor.SupportsUlp()
-      && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
+      && app_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
     sensor.InitializeUlp();
 
   start_deep_sleep();
@@ -1017,7 +1017,7 @@ void setup()
     }
   }
 
-  esp_sleep_wakeup_cause_t wakeup_cause = esp_sleep_get_wakeup_cause();
+  esp_sleep_wakeup_cause_t wakeup_cause = app_wakeup_cause();
   LOGI("Wakeup caused by %d", (int)wakeup_cause);
 
   uint32_t battery_mv = read_battery_level();

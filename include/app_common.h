@@ -18,6 +18,25 @@
 static inline uint32_t ms_now(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 static inline void sleep_ms(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
 
+// Wakeup cause, collapsed to the single value this app branches on.
+// IDF 6 deprecated the scalar API in favor of a bitmap; only ULP and TIMER
+// wake sources are ever armed here, so priority-picking them is lossless.
+#include "esp_sleep.h"
+#include "esp_idf_version.h"
+static inline esp_sleep_wakeup_cause_t app_wakeup_cause(void)
+{
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+  uint32_t causes = esp_sleep_get_wakeup_causes();
+  if (causes & BIT(ESP_SLEEP_WAKEUP_ULP))
+    return ESP_SLEEP_WAKEUP_ULP;
+  if (causes & BIT(ESP_SLEEP_WAKEUP_TIMER))
+    return ESP_SLEEP_WAKEUP_TIMER;
+  return ESP_SLEEP_WAKEUP_UNDEFINED;
+#else
+  return esp_sleep_get_wakeup_cause();
+#endif
+}
+
 static inline void gpio_out_init(int pin)
 {
   gpio_config_t cfg = {};
@@ -30,7 +49,10 @@ static inline void gpio_out_init(int pin)
 #ifndef DISABLE_SERIAL
 #define LOGI(str, ...) printf(str "\n", ##__VA_ARGS__)
 #else
-#define LOGI(...)
+// Dead-branch form: keeps a statement body (-Werror=empty-body), references
+// the arguments (no unused-variable warnings), still checks format strings,
+// and folds to nothing at any optimization level.
+#define LOGI(str, ...) do { if (0) printf(str "\n", ##__VA_ARGS__); } while (0)
 #endif
 
 // I2C pins — BMP390L or BMP58x must be wired to these

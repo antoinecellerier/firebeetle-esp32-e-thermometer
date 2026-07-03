@@ -21,3 +21,10 @@ CONFIG_LWIP_SNTP_MAX_SERVERS=2
 
 # WiFi DPP (QR-code onboarding, shelved feature — was sdkconfig.custom)
 CONFIG_ESP_WIFI_DPP_SUPPORT=y
+
+# IDF 6: pin newlib. PlatformIO's ulp.py doesn't forward ADD_PICOLIBC_SPECS
+# to the LP-core sub-build (unlike IDF's own ulp_embed_binary), so the default
+# picolibc breaks the C6 LP-core compile (_REENT/_mbstate_t). Newlib matches
+# the IDF 5.5 behavior we validated. Revisit picolibc (~20% smaller binaries)
+# when PlatformIO passes the flag through, or when building with idf.py only.
+CONFIG_LIBC_NEWLIB=y
