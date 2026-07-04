@@ -95,12 +95,33 @@ GPIO LOW → display powered on. GPIO HIGH / high-Z (deep sleep) → display off
 - Current measurement - https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/#reading-battery-voltage
 
 ## Sensor
+
 | Xiao ESP32C6      | BMP581 breakout |
 |-------------------|-----------------|
 | 3V3               | VCC             |
 | GND               | GND             |
 | LP I2C SDA (MTCK) | SDA             |
 | LP I2C SCL (MTDO) | SCL             |
+
+## Display
+
+D9 (GPIO20) is also SPI MISO — SPI.begin() must be called with MISO=-1 before
+GxEPD2 init to avoid the SPI peripheral stealing the D/C pin (e-paper is
+write-only so MISO is not needed). Similarly D3 (GPIO21) is SPI SS; passing
+SS=-1 prevents it claiming the BUSY pin.
+
+| Xiao ESP32C6   | DESPI-C02 |
+|-----------------|-----------|
+| 3.3V            | 3.3V      |
+| GND             | GND       |
+| MOSI/D10 (GP18) | SDI       |
+| SCK/D8 (GP19)   | SCK       |
+| D6 (GP16)       | CS        |
+| D9 (GP20)       | D/C       |
+| D2 (GP2)        | RES       |
+| D3 (GP21)       | BUSY      |
+
+D7 (GP17) for the MOSFET Gate
 
 ## Battery voltage divider (GPIO-switched)
 
@@ -136,26 +157,6 @@ that a few back-to-back reads converge. Adding a 100nF buffer cap at A0 would
 allow higher resistance values (charges in 5×R_source×100nF) but adds a
 component for no real benefit when the divider is switched off during sleep.
 
-## Display
-
-D9 (GPIO20) is also SPI MISO — SPI.begin() must be called with MISO=-1 before
-GxEPD2 init to avoid the SPI peripheral stealing the D/C pin (e-paper is
-write-only so MISO is not needed). Similarly D3 (GPIO21) is SPI SS; passing
-SS=-1 prevents it claiming the BUSY pin.
-
-| Xiao ESP32C6   | DESPI-C02 |
-|-----------------|-----------|
-| 3.3V            | 3.3V      |
-| GND             | GND       |
-| MOSI/D10 (GP18) | SDI       |
-| SCK/D8 (GP19)   | SCK       |
-| D6 (GP16)       | CS        |
-| D9 (GP20)       | D/C       |
-| D2 (GP2)        | RES       |
-| D3 (GP21)       | BUSY      |
-
-D7 (GP17) for the MOSFET Gate
-
 ## Unused pins
 
 Breakout:
@@ -170,3 +171,76 @@ EN
 MTMS
 3V3
 BOOT
+
+# Seeed ePaper Driver Board for XIAO vs DESPI-C02 (compatibility notes)
+
+Researched 2026-07-04, not yet hardware-tested. The Seeed board
+([wiki](https://wiki.seeedstudio.com/xiao_eink_expansion_board_v2/), schematic in
+`hardware/Seeed ePaper Driver Board for XIAO SCH v1.0.pdf`) is a faithful copy of
+Good Display's reference booster, so Good Display panels are what it's implicitly
+built for (Seeed's own panels are rebranded GD units).
+
+**Identical to DESPI-C02:** 24-pin 0.5mm FPC with the standard Good Display
+pinout, 3.3V logic/supply, same boost circuit down to the recommended parts
+(10µH inductor, Si1304BDL MOSFET, MBR0530-class Schottkys — B0540WS on the
+Seeed board, 4.7µF/50V boost cap).
+
+**The one real difference — RESE:** DESPI-C02 has a 0.47Ω/3Ω select switch;
+the Seeed board has a **fixed 0.47Ω** (R2, no alternate footprint). Good
+Display warns a wrong RESE "will cause the e-paper cannot be refreshed"
+(in practice a 3Ω panel on 0.47Ω often still refreshes, but with a stressed
+booster / degraded image — out of spec). Per the DESPI-C02 spec
+(`hardware/DESPI-C02 Connector Board for E-paper Display V1.1.pdf`):
+
+- **0.47Ω (fine on Seeed board):** GDEW/GDEY series (UC81xx-driven), most
+  newer panels, four-color panels — e.g. GDEW042T2, GDEW075T7
+- **3Ω (mismatched on Seeed board):** mostly older GDEH/GDEM SSD16xx panels —
+  GDEH0154D67, GDEH0213B73, GDEH029A1 — plus oddballs GDEW0583T7, GDEW075T8
+
+Naming is not a reliable guide (two GDEW panels need 3Ω) — check the
+panel datasheet's peripheral/reference circuit page for the RESE value
+before plugging in. GDEH0154Z90 (our tricolor 1.54") is in the GDEH/SSD1681
+family, so likely the 3Ω group — verify before using it on the Seeed board.
+
+**Extras on the Seeed board (not compatibility-relevant):** ETA9740 battery
+charger (0.5A) + JST-PH battery connector + power switch.
+
+**Fixed pin mapping** (firmware must match; DESPI-C02 wiring is free-form):
+
+| Signal | XIAO pin |
+|--------|----------|
+| RST    | D0       |
+| CS     | D1       |
+| BUSY   | D2       |
+| DC     | D3       |
+| SCK    | D8       |
+| MOSI   | D10      |
+
+Note this conflicts with our C6 battery-divider use of D0/D1 below. With this
+board plugged in plus LP I2C on D4/D5, no ADC-capable pin (A0–A5 = GPIO0–5)
+remains free for a battery divider.
+
+## To verify before/when trying the Seeed board (2026-07-04)
+
+- [ ] RESE for each Good Display panel we'd use: check the datasheet's
+      peripheral circuit page. GDEH0154Z90 is likely the 3Ω group (SSD1681);
+      board is fixed 0.47Ω. If mismatched, test whether refresh quality is
+      acceptable anyway.
+- [ ] Battery via the board's JST (ETA9740 path): PPK2 the sleep floor —
+      boost-IC quiescent + double conversion (BAT→5V boost→XIAO LDO→3V3) may
+      dominate our ~16µA C6 floor.
+- [ ] Battery direct on XIAO BAT pads instead: measure ETA9740 leakage with
+      its JST empty + switch off; if significant, leave the 5V header pin
+      unconnected between XIAO and shield (ETA9740 OUT ties to 5V rail).
+- [ ] Panel/booster quiescent: board has no power gate (3V3 hardwired to
+      booster/FPC). Check for DESPI-C02-style ~500µA draw; fix would be
+      interposing the FDN340P on the single 3V3 pin (bent pin or cut trace).
+- [ ] If battery monitoring is needed with this board: check whether any
+      underside pads (MTDI/MTMS) are ADC-capable — D0/D1 are taken by RST/CS.
+- [ ] Confirm the power switch (CN6) is in series between the battery JST and
+      the ETA9740 BAT pin: continuity check across JST+ and the IC side in
+      both switch positions (schematic doesn't label common vs throws).
+      Note: switch off does NOT isolate the ETA9740 from VDD_5V — its OUT pin
+      is hardwired to the XIAO 5V pin, so the IC powers up whenever USB is
+      plugged in, regardless of switch position.
+
