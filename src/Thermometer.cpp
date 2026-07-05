@@ -591,15 +591,15 @@ static void maybe_ntp_resync(time_t now)
 
 // Battery thresholds (mV).
 #if defined(ARDUINO_XIAO_ESP32C6)
-// The XIAO's 3V3 rail is a pure buck (SGM6029C): below ~3.6V VBAT it enters
-// dropout pathology (rail sag + 0.88A burst storms at 3.5V, 30Hz/480µA
-// sawtooth at 3.3V — docs/notes.md 2026-07-05 BAT-pads sweep), so shut down
-// before the electrical cliff, not at the battery's own limit. At µA drain
-// VBAT rides the OCV curve: 3.6V ≈ 5-8% SoC left, so little is abandoned.
-// PROVISIONAL until the 3.5-3.8V gap is bisected (~3.65V). Only meaningful
-// once read_battery_level() gets a real VBAT source on this board.
-const uint32_t low_battery_mv = 3750;
-const uint32_t no_battery_mv = 3650;
+// The XIAO's 3V3 rail is a pure buck (SGM6029C): at VBAT ≤3.6V it enters a
+// bootstrap-starvation sag band (rail sags ~VTH below VIN; wakes collapse it
+// into 0.5-0.9A brownout-restart storms; 30Hz sawtooth at 3.3V). Fine sweep
+// 2026-07-05 (docs/notes.md): 3.7V is the lowest verified-healthy point,
+// 3.6V is already inside the sag band — so shut down at the electrical
+// cliff, not the battery's own limit (~12-15% SoC abandoned per OCV curve).
+// Only meaningful once read_battery_level() gets a real VBAT source here.
+const uint32_t low_battery_mv = 3800;
+const uint32_t no_battery_mv = 3700;
 #else
 // https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf
 // https://www.best-microcontroller-projects.com/tp4056.html

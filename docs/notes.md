@@ -555,6 +555,42 @@ strong voltage dependence:
   reproduced twice — deterministic mode-boundary behavior, not a glitch.
   Exact edge between 3.5 V (bad) and 3.8 V (clean) unmeasured; bisect at
   ~3.65 V to place the firmware shutdown threshold just above it.
+
+Fine sweep (same evening) — full regime map, input-power lens (I×VIN):
+
+| VIN | floor | input power | regime |
+|-----|-------|-------------|--------|
+| 4.2 | 22.0 µA | 92 µW | healthy PSM |
+| 3.9 | 22.9 µA | 89 µW | healthy PSM |
+| 3.8 | 24.3 µA | 92 µW | healthy PSM |
+| 3.7 | 22.9 µA | 85 µW | healthy PSM — lowest verified-good point |
+| 3.6 | 19.2 µA | 69 µW | SAG band: quiet + recovery storms to 0.53 A |
+| 3.5 | 10.75 µA | 38 µW | deep sag + 0.88 A storms (2× repro) |
+| 3.4 | 26.2 µA | 89 µW | continuous-burst dropout: dense 5-13 mA µs-spikes, rail held, functional |
+| 3.3 | 121 µA | 400 µW | 30 Hz sag/burst sawtooth, system alive |
+| 3.2 | 304 µA | 970 µW | 0.54 A boot-loop on entry, then system dead; flat converter churn (max 320 µA, no LP spikes) |
+
+Physics: the SGM6029's NMOS high-side needs a bootstrap cap that only
+recharges when the low-side switches. Near VIN≈VOUT the hysteretic mode
+logic decides it barely needs to switch — starving the bootstrap; the
+high-side degenerates to a source follower (VOUT ≈ VIN − VTH ≈ sag to
+~2.9-3.1 V). A sagged rail LOWERS the sleeping load (leakage falls with
+VDD), which is why sag-band input power reads BELOW healthy — the load is
+being starved, not saved. Deep sleep tolerates it; any wake demanding tens
+of mA collapses the follower → brownout → restart storms at the current
+limit (di/dt ≈ VIN/0.47 µH ≈ 7 A/µs → cycle-by-cycle 0.5-0.9 A combs).
+At 3.4 V duty demand (97%) forces continuous bursting — every burst
+refreshes the bootstrap, so it's loud but healthy (89 µW). At ≤3.3 V
+conversion is impossible and the sag/burst cycle runs continuously.
+Non-monotonic vs VIN because each step lands in a different limb of the
+hysteretic "do I need to switch?" state machine.
+
+Consequence: 3.6 V is INSIDE the sag band → C6 shutdown threshold raised
+3650 → 3700 mV (lowest verified-healthy), warn 3750 → 3800 mV. Costs
+~12-15% of capacity by OCV instead of 5-8% — the real price of the pure
+buck. Evidence: xiao-c6-bat-pads-3V7-clean-floor.png, -3V9-floor-after-
+boot.png, -3V6-sag-with-storm.png, -3V4-continuous-burst.png,
+-3V2-bootloop-then-dead.png (plus earlier 4V2/3V8/3V5/3V3 shots).
 - SGM6029 datasheet vs reality: spec advertises "100% Duty Cycle Operation
   Capability" (high-side held on as battery approaches/falls below VOUT,
   VIN range 1.95-5.5 V, UVLO ~1.9 V) — no VIN>VOUT margin requirement
