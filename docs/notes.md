@@ -540,9 +540,17 @@ strong voltage dependence:
   with brownout restarts if a wake lands there. UNVERIFIED detail: probe
   the 3V3 rail (or check display/serial alive) during the quiet phase.
 - Deployment: **battery-direct is the config — 22 µA/92 µW floor — but the
-  usable window ends ~3.6-3.7 V** (~80% of Li-ion capacity). Below that:
-  dropout pathology, and 0.88 A bursts into a weak battery's ESR likely
-  boot-loop during refreshes.
+  usable window ends ~3.6-3.7 V**. Below that: dropout pathology, and
+  0.88 A bursts into a weak battery's ESR likely boot-loop during refreshes.
+  Cost of a 3.6 V shutdown is SMALL at our drain: at µA load (C/18000
+  floor, ~0.11C refresh peaks, ~10-20 mV sag) VBAT rides the OCV curve,
+  and standard LCO LiPo OCV stays ≥3.6 V until ~5-8% SoC — so we abandon
+  only ~20-30 mAh of the 400 mAh pack (~4-7% in energy; ~3-6 weeks of a
+  ~1.5 yr load-only life, comparable to what self-discharge would have
+  eaten anyway). Chemistry-generic for 3.7 V LiPo; would NOT hold for
+  LiFePO4 (3.2 V nominal — whole curve below the buck's cliff, unusable).
+  Caveat: cold raises ESR several-fold — sample VBAT during sleep, not
+  mid-refresh, or a 45 mA refresh at ~0°C sags below threshold early.
 - Reproducibility: the 3.5 V sag state (10.75 µA quiet phase + burst storm)
   reproduced twice — deterministic mode-boundary behavior, not a glitch.
   Exact edge between 3.5 V (bad) and 3.8 V (clean) unmeasured; bisect at
