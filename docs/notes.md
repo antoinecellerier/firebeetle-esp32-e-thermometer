@@ -470,3 +470,26 @@ so these numbers exclude it.
   / -deep-sleep-floor.png / -1min-overview.png.
 - Still open (see docs/wiring.md checklist): ETA9740 quiescent via the JST
   battery path, ETA9740 leakage when battery-direct on the XIAO BAT pads.
+
+### Battery path via shield JST (ETA9740) — measured, ruled out (2026-07-05)
+
+Same rig, PPK2 as battery into the shield's JST (source-meter; sidebar shows
+3.3 V — if the run was actually at 4.2 V, scale the mJ figures accordingly).
+
+- Floor: **~499 µA average** (settling from ~900 µA after plug-in) vs 25.1 µA
+  on the 3V3 rail — ~20× the whole rest of the system; would drain the
+  400 mAh pouch in ~a month at idle. The DESPI-C02's ~534 µA problem,
+  relocated to the battery side.
+- Signature: 20–83 mA pulses every ~2 s (ETA9740 load-detect/boost-refresh —
+  the sleeping system sits below its load threshold, so it pulses forever)
+  over continuous mA-scale pulse-skipping fuzz.
+- Refresh at the battery node: **17.13 mC / 3.24 s** vs 12.21 mC at the rail.
+  At 3.3 V: 56.5 mJ vs 40.3 mJ; net of ~5.3 mJ ETA9740 idle in the window,
+  double conversion (boost→5 V→XIAO LDO) is ~75–80% efficient — fine, and
+  irrelevant next to the idle draw.
+- Verdict: **JST/ETA9740 path is a non-starter for deployment** — go battery
+  direct on the XIAO BAT pads. Decisive remaining measurement: ETA9740
+  leakage in that config (JST empty, switch off).
+- Evidence:
+  xiao-seeed-esp32c6-seeed-epd-board-GDEW029I6FD-eta9740-battery-path-floor.png
+  / -eta9740-battery-path-refresh.png.

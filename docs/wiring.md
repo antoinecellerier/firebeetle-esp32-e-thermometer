@@ -229,9 +229,12 @@ remains free for a battery divider.
       → GDEW029I6FD (0.47Ω family) verified working 2026-07-05, first flash.
       GDEH0576T81 datasheet wants RESE 2.2Ω + 47µH inductor — out of spec on
       this board (0.47Ω + 10µH), untested.
-- [ ] Battery via the board's JST (ETA9740 path): PPK2 the sleep floor —
+- [x] Battery via the board's JST (ETA9740 path): PPK2 the sleep floor —
       boost-IC quiescent + double conversion (BAT→5V boost→XIAO LDO→3V3) may
       dominate our ~16µA C6 floor.
+      → Measured 2026-07-05: ~499µA floor (load-detect pulses every ~2s),
+      refresh 17.13mC vs 12.21mC at the rail (~75-80% conversion efficiency).
+      RULED OUT for deployment — go battery-direct on XIAO BAT pads. notes.md.
 - [ ] Battery direct on XIAO BAT pads instead: measure ETA9740 leakage with
       its JST empty + switch off; if significant, leave the 5V header pin
       unconnected between XIAO and shield (ETA9740 OUT ties to 5V rail).
