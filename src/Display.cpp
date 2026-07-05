@@ -9,11 +9,23 @@
 #define EPD_BUSY  26 // D3
 #define EPD_RESET 25 // D2
 #elif defined(ARDUINO_XIAO_ESP32C6)
-// Same Dx labels as Firebeetle — see docs/wiring.md for C6 GPIO mapping
+#if defined(SEEED_XIAO_EPD_BOARD)
+// Seeed ePaper Driver Board for XIAO — the shield hardwires these
+// (SCK=D8/MOSI=D10 match the DESPI wiring; see docs/wiring.md)
+#define EPD_DC    21 // D3
+#define EPD_CS     1 // D1
+#define EPD_BUSY   2 // D2
+#define EPD_RESET  0 // D0
+// The shield has no panel power gate (3V3 hardwired to booster/FPC), so
+// override a EPD_POWER_GATE left enabled in local-secrets.h.
+#undef EPD_POWER_GATE
+#else
+// DESPI-C02, same Dx labels as Firebeetle — see docs/wiring.md for C6 GPIO mapping
 #define EPD_DC    20 // D9
 #define EPD_CS    16 // D6
 #define EPD_BUSY  21 // D3
 #define EPD_RESET  2 // D2
+#endif
 #else
 #error "EPD pin mapping not defined for this board"
 #endif
