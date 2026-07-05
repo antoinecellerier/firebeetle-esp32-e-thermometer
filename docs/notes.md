@@ -591,6 +591,15 @@ Consequence: 3.6 V is INSIDE the sag band → C6 shutdown threshold raised
 buck. Evidence: xiao-c6-bat-pads-3V7-clean-floor.png, -3V9-floor-after-
 boot.png, -3V6-sag-with-storm.png, -3V4-continuous-burst.png,
 -3V2-bootloop-then-dead.png (plus earlier 4V2/3V8/3V5/3V3 shots).
+
+10 mV bisect of the sag edge (2026-07-05, short captures, floors stable):
+3.51 V = 7.98 µA, 3.52 V = 6.89 µA, 3.53 V = 7.91 µA, 3.54 V = 8.07 µA
+(all ~24-29 µW deep sag), 3.55 V = 25.13 µA (89 µW, regulating). The
+deep-sag/regulating transition is a razor-sharp comparator threshold at
+**3.545 ± 0.005 V ≈ VOUT + 245 mV** — the SGM6029's "VIN close to VOUT"
+mode detector. 3.55 V still showed one storm in a minute and 3.6 V dwells
+intermittently sagged (69 µW), so ~3.55-3.65 V is a bistable hysteresis
+band — 3700 mV shutdown stands.
 - SGM6029 datasheet vs reality: spec advertises "100% Duty Cycle Operation
   Capability" (high-side held on as battery approaches/falls below VOUT,
   VIN range 1.95-5.5 V, UVLO ~1.9 V) — no VIN>VOUT margin requirement
