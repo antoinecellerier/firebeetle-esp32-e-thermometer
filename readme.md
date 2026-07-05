@@ -15,10 +15,11 @@ Figures are config-specific — panel, sensor, and board all matter.
 |-------|-----------------|-------------|-----------------|
 | Firebeetle ESP32-E + BMP390L sensor + GDEH0154Z90 ePaper via DESPI-C02 (FDN340P power gate) | 19–20 µA | ULP bit-bang I2C every 5 s, avg ≈0 | ~112 mC (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
 | XIAO ESP32-C6 + BMP581 sensor + GDEH0576T81 ePaper via DESPI-C02 (FDN340P power gate) | 15.5–16 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC (was ~93–95 mC before light sleep) |
+| XIAO ESP32-C6 + BMP581 sensor + GDEW029I6FD ePaper via Seeed XIAO ePaper Driver Board (no power gate) | ~25 µA (+~9 µA ungated shield standby) | LP core I2C every 60 s: ~1 mA × 3 ms | ~12.2 mC |
 
 The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display
 refresh is the dominant event on a typical day. At one refresh per hour it adds
-~13 µA (C6/5.76") or ~31 µA (Z90) to the sleep floor, putting long-term averages
+~13 µA (C6/5.76"), ~31 µA (Z90), or ~3.4 µA (2.9" I6FD) to the sleep floor, putting long-term averages
 in the **~16–51 µA band depending on rig and refresh cadence** — load-only
 runtime of roughly **1–3 years on a 400 mAh LiPo**. At this current level LiPo
 self-discharge (a few %/month ≈ 15–25 µA equivalent) is comparable to the load
@@ -65,7 +66,7 @@ https://learn.adafruit.com/adafruit-1-54-eink-display-breakouts?view=all
 - Good Display GDEM0154I61 black and white flex, 200x200, 1.54" (driven via GDEY0154D67 SSD1681 driver) https://www.good-display.com/product/535.html
 - Good Display GDEH0576T81 black and white, 920x680, 5.76" HD (SSD2677, partial updates) https://www.good-display.com/product/702.html
 
-Good Display panels are driven through a DESPI-C02 adapter. Its boost converter leaks ~534 µA in deep sleep, which an FDN340P P-channel MOSFET on the adapter's 3.3 V line eliminates — see [docs/wiring.md](docs/wiring.md).
+Good Display panels are driven through a DESPI-C02 adapter, or on the XIAO through the Seeed XIAO ePaper Driver Board (same Good Display reference booster, fixed RESE 0.47 Ω — panel compatibility notes in [docs/wiring.md](docs/wiring.md)). The DESPI-C02's boost converter leaks ~534 µA in deep sleep, which an FDN340P P-channel MOSFET on the adapter's 3.3 V line eliminates; the Seeed board's ungated standby measured only ~9 µA, so it runs without a gate.
 
 ## Other components
 - FDN340P P-channel MOSFET (SOT-23) — power-gates DESPI-C02 3.3 V during deep sleep
