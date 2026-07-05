@@ -251,8 +251,14 @@ remains free for a battery divider.
       → Measured 2026-07-05 (I6FD): floor ~25.1µA vs 15.8µA gated-DESPI
       baseline = +~9.3µA ungated standby. No ~500µA problem; gate mod
       probably not worth it. See notes.md.
-- [ ] If battery monitoring is needed with this board: check whether any
+- [x] If battery monitoring is needed with this board: check whether any
       underside pads (MTDI/MTMS) are ADC-capable — D0/D1 are taken by RST/CS.
+      → YES: C6 ADC1 = GPIO0-6, so MTMS = GPIO4 = ADC1_CH4 and MTDI =
+      GPIO5 = ADC1_CH5, both free in the shield config (LP I2C is GPIO6/7).
+      Plan: GPIO-switched 100k/100k divider (see above), sense on GPIO5
+      (MTDI pad), AO3400A gate on D4 or D5 (free header pins). Firmware
+      thresholds already board-split in Thermometer.cpp (3750/3650 mV
+      provisional on C6 — bisect the 3.5-3.8V gap at ~3.65V to finalize).
 - [x] Reliable 3-way power comparison, same screen setup (C6 + BMP581 +
       Seeed board + GDEW029I6FD, release build) across all three power
       configs: (1) PPK2 3.3V into the 3V3 rail (done 2026-07-05, ~25.1µA /
