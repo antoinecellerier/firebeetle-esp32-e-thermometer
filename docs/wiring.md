@@ -243,6 +243,13 @@ remains free for a battery divider.
       probably not worth it. See notes.md.
 - [ ] If battery monitoring is needed with this board: check whether any
       underside pads (MTDI/MTMS) are ADC-capable — D0/D1 are taken by RST/CS.
+- [ ] Reliable 3-way power comparison, same screen setup (C6 + BMP581 +
+      Seeed board + GDEW029I6FD, release build) across all three power
+      configs: (1) PPK2 3.3V into the 3V3 rail (done 2026-07-05, ~25.1µA /
+      12.21mC), (2) PPK2 as battery at the shield JST — ETA9740 boost +
+      XIAO LDO double conversion, (3) PPK2 as battery on the XIAO BAT pads
+      (JST empty, switch off). Record source voltage with every figure and
+      compare in mJ, not mC — different node voltages.
 - [ ] Confirm the power switch (CN6) is in series between the battery JST and
       the ETA9740 BAT pin: continuity check across JST+ and the IC side in
       both switch positions (schematic doesn't label common vs throws).
