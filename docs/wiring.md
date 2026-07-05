@@ -235,9 +235,16 @@ remains free for a battery divider.
       → Measured 2026-07-05: ~499µA floor (load-detect pulses every ~2s),
       refresh 17.13mC vs 12.21mC at the rail (~75-80% conversion efficiency).
       RULED OUT for deployment — go battery-direct on XIAO BAT pads. notes.md.
-- [ ] Battery direct on XIAO BAT pads instead: measure ETA9740 leakage with
+- [x] Battery direct on XIAO BAT pads instead: measure ETA9740 leakage with
       its JST empty + switch off; if significant, leave the 5V header pin
       unconnected between XIAO and shield (ETA9740 OUT ties to 5V rail).
+      → Measured 2026-07-05: no observable leakage — 22µA @ 4.2V floor
+      matches the rail baseline through the XIAO's SGM6029C buck (~90%
+      efficient). THIS IS THE DEPLOYMENT CONFIG, but usable only down to
+      ~3.6-3.7V: the 3V3 rail is a pure buck, so at VBAT ≤3.5V it enters
+      dropout pathology (30Hz/480µA bootstrap sawtooth at 3.3V, rail-sag +
+      0.88A burst storms at 3.5V). Needs real VBAT sensing + ~3.5V shutdown
+      in firmware (C6 battery read is still stubbed). See notes.md sweep.
 - [x] Panel/booster quiescent: board has no power gate (3V3 hardwired to
       booster/FPC). Check for DESPI-C02-style ~500µA draw; fix would be
       interposing the FDN340P on the single 3V3 pin (bent pin or cut trace).
@@ -246,13 +253,15 @@ remains free for a battery divider.
       probably not worth it. See notes.md.
 - [ ] If battery monitoring is needed with this board: check whether any
       underside pads (MTDI/MTMS) are ADC-capable — D0/D1 are taken by RST/CS.
-- [ ] Reliable 3-way power comparison, same screen setup (C6 + BMP581 +
+- [x] Reliable 3-way power comparison, same screen setup (C6 + BMP581 +
       Seeed board + GDEW029I6FD, release build) across all three power
       configs: (1) PPK2 3.3V into the 3V3 rail (done 2026-07-05, ~25.1µA /
-      12.21mC), (2) PPK2 as battery at the shield JST — ETA9740 boost +
-      XIAO LDO double conversion, (3) PPK2 as battery on the XIAO BAT pads
-      (JST empty, switch off). Record source voltage with every figure and
-      compare in mJ, not mC — different node voltages.
+      12.21mC = 40.3mJ), (2) PPK2 as battery at the shield JST — ETA9740
+      boost + XIAO buck double conversion (done: ~327-500µA floor, ruled
+      out), (3) PPK2 as battery on the XIAO BAT pads, JST empty, switch off
+      (done: 22µA @ 4.2V, winner — see BAT-pads voltage sweep in notes.md).
+      Record source voltage with every figure and compare in mJ, not mC —
+      different node voltages. COMPLETE 2026-07-05.
 - [ ] Confirm the power switch (CN6) is in series between the battery JST and
       the ETA9740 BAT pin: continuity check across JST+ and the IC side in
       both switch positions (schematic doesn't label common vs throws).

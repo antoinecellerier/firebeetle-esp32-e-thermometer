@@ -510,3 +510,44 @@ Second run at 4.2 V (full-charge voltage):
   voltage compensating — compare in mJ.
 - Evidence: xiao-seeed-esp32c6-seeed-epd-board-GDEW029I6FD-eta9740-4V2-settling.png
   / -eta9740-4V2-settled-floor.png / -eta9740-4V2-refresh.png.
+
+### Battery direct on XIAO BAT pads — voltage sweep (2026-07-05)
+
+Same rig, PPK2 as battery on the XIAO's underside BAT pads (shield JST
+empty, switch off). Key fact from the XIAO C6 v1.0 schematic
+(`hardware/XIAO ESP32-C6 v1.0 SCH.pdf`): the 3.3 V rail is a **SGM6029C
+synchronous buck** (0.47 µH), NOT an LDO — VBAT feeds it through a P-FET
+power path (LP0404N3), VBUS through a Schottky; charger is a separate
+SGM40567-4.2 (120 mA). A pure buck making 3.3 V from a Li-ion explains the
+strong voltage dependence:
+
+| VBAT | settled floor | input power | signature |
+|------|--------------|-------------|-----------|
+| 4.2 V | 22.0 µA | 92.4 µW | clean PFM, sparse 2-8 mA narrow spikes |
+| 3.8 V | 24.3 µA | 92.3 µW | clean, same character |
+| 3.5 V | "10.75 µA" | 37.6 µW (!) | quiet sag phase, then burst storm to 0.88 A |
+| 3.3 V | 121 µA | 400 µW | continuous ~30 Hz sawtooth bursts to 480 µA |
+
+- ≥3.8 V: healthy. Input power constant at ~92 µW vs 82.9 µW at the rail →
+  **~90% buck efficiency at a 25 µA load**; battery current is LOWER than
+  rail current (the switcher giveaway).
+- 3.3 V: buck in dropout — ~100% duty with periodic high-side
+  bootstrap-refresh bursts (sag → 480 µA burst → decay, ~30 Hz), ~5× floor.
+- 3.5 V: same sag/refresh cycle stretched to ~a minute. The 10.75 µA quiet
+  phase is BELOW the sleeping system's output power — steady-state
+  impossible, so the 3V3 rail must be sagging (system coasting on output
+  caps / degraded); the 0.88 A bursts are current-limit recovery, likely
+  with brownout restarts if a wake lands there. UNVERIFIED detail: probe
+  the 3V3 rail (or check display/serial alive) during the quiet phase.
+- Deployment: **battery-direct is the config — 22 µA/92 µW floor — but the
+  usable window ends ~3.6-3.7 V** (~80% of Li-ion capacity). Below that:
+  dropout pathology, and 0.88 A bursts into a weak battery's ESR likely
+  boot-loop during refreshes.
+- Firmware gap: C6 `read_battery_level()` is stubbed (returns 4321) and
+  low/no-battery thresholds (3200/3000 mV) sit below where the hardware
+  already misbehaves — needs a real VBAT read + ~3500 mV shutdown threshold
+  on this board. Shield leaves no free ADC pin (see wiring.md checklist).
+- ETA9740 leakage in this config: none observed — the 22 µA @ 4.2 V floor
+  with the shield attached matches the rail baseline within buck efficiency.
+- Evidence: xiao-c6-bat-pads-4V2-floor(-zoom).png, -3V8-floor.png,
+  -3V5-sag-and-burst-storm.png, -3V3-dropout-sawtooth(-zoom).png.
