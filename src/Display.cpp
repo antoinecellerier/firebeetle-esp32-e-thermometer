@@ -17,7 +17,7 @@
 #define EPD_BUSY   2 // D2
 #define EPD_RESET  0 // D0
 // The shield has no panel power gate (3V3 hardwired to booster/FPC), so
-// override a EPD_POWER_GATE left enabled in local-secrets.h.
+// override an EPD_POWER_GATE left enabled in local-secrets.h.
 #undef EPD_POWER_GATE
 #else
 // DESPI-C02, same Dx labels as Firebeetle — see docs/wiring.md for C6 GPIO mapping
