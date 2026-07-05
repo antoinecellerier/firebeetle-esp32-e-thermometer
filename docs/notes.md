@@ -473,8 +473,8 @@ so these numbers exclude it.
 
 ### Battery path via shield JST (ETA9740) — measured, ruled out (2026-07-05)
 
-Same rig, PPK2 as battery into the shield's JST (source-meter; sidebar shows
-3.3 V — if the run was actually at 4.2 V, scale the mJ figures accordingly).
+Same rig, PPK2 as battery into the shield's JST (source-meter at 3.3 V,
+confirmed; a second run at 4.2 V follows below).
 
 - Floor: **~499 µA average** (settling from ~900 µA after plug-in) vs 25.1 µA
   on the 3V3 rail — ~20× the whole rest of the system; would drain the
@@ -493,3 +493,20 @@ Same rig, PPK2 as battery into the shield's JST (source-meter; sidebar shows
 - Evidence:
   xiao-seeed-esp32c6-seeed-epd-board-GDEW029I6FD-eta9740-battery-path-floor.png
   / -eta9740-battery-path-refresh.png.
+
+Second run at 4.2 V (full-charge voltage):
+
+- Floor: ~483 µA avg over the first minute, settling to **~327 µA** in the
+  second. The settling is the ETA9740 relaxing after plug-in (900 µA at
+  connect → dense pulse-skipping fuzz band → fuzz stops ~t+65 s leaving only
+  discrete load-detect bursts every ~2-5 s, some with ~100 mA restart
+  inrush). The transition roughly coincides with the first LP-core wake
+  (~60 s) but is almost certainly the IC's own standby transition — a µA/ms
+  LP read can't lower the boost duty. Even settled: ~7.9 mAh/day, verdict
+  unchanged.
+- Wake+refresh: **12.31 mC / 3.34 s at 4.2 V = 51.7 mJ** vs 40.3 mJ at the
+  3.3 V rail → ~78% double-conversion efficiency, consistent with the 3.3 V
+  battery run. The mC figure matching the rail's 12.21 mC is the higher
+  voltage compensating — compare in mJ.
+- Evidence: xiao-seeed-esp32c6-seeed-epd-board-GDEW029I6FD-eta9740-4V2-settling.png
+  / -eta9740-4V2-settled-floor.png / -eta9740-4V2-refresh.png.
