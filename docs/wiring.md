@@ -268,6 +268,13 @@ remains free for a battery divider.
       (done: 22µA @ 4.2V, winner — see BAT-pads voltage sweep in notes.md).
       Record source voltage with every figure and compare in mJ, not mC —
       different node voltages. COMPLETE 2026-07-05.
+- [ ] Buck-cliff follow-ups (voltage map itself is complete, notes.md):
+      (a) overnight soak at 3.70V with hourly refreshes — storm statistics
+      behind the 3700mV shutdown rest on one clean minute so far;
+      (b) cold test ~0°C at 3.6/3.7V — the sag edge is a VTH effect and
+      VTH rises when cold, so the 3.545V edge likely shifts UP in winter;
+      (c) one refresh on the real cell at ~3.75V OCV — battery ESR +
+      protection-PCB drop make effective VIN lower than the stiff PPK2.
 - [ ] Confirm the power switch (CN6) is in series between the battery JST and
       the ETA9740 BAT pin: continuity check across JST+ and the IC side in
       both switch positions (schematic doesn't label common vs throws).
