@@ -448,3 +448,25 @@ rig (release; the two effects were only separated on the ESP32-E above):
   config panic-looped at ~600 ms cadence and read as a "~670 µA floor with
   25 mA pings" — the e-paper retaining a stale frame (old GIT_HASH + time
   on screen) was the tell that no boot ever reached render.
+
+## Seeed XIAO ePaper Driver Board, first measurements (2026-07-05)
+
+XIAO C6 + BMP581 + Seeed ePaper Driver Board (fixed RESE 0.47Ω, no power
+gate) + GDEW029I6FD (2.9" 296x128), release build,
+`seeed_xiao_esp32c6_epaper_release`. PPK2 source-meter 3.3 V into the 3V3
+rail — the ETA9740 battery path is UNPOWERED in this setup (5V rail dead),
+so these numbers exclude it.
+
+- Deep-sleep floor: **~25.1 µA** avg (24.5–26 µA band). vs the 15.8 µA
+  DESPI-gated baseline that's **+~9.3 µA for the ungated shield standby**
+  (booster + hibernated panel + FPC) — nothing like the DESPI-C02's ~534 µA
+  ungated, so a power-gate mod is likely not worth it here
+  (+9.3 µA ≈ 0.8 C/day; one refresh/hour ≈ 3.4 µA-equivalent at this panel).
+- Full refresh event: **12.21 mC over 3.57 s**, 43.3 mA peak. First I6FD
+  datapoint — panel-specific, not comparable to the T81's 45.3 mC.
+- The ±0.7 µA fuzz on the floor at 100 ksps is normal PPK2 low-range noise,
+  not a wiring problem; the average is the meaningful number.
+- Evidence: xiao-seeed-esp32c6-seeed-epd-board-GDEW029I6FD-screen-refresh.png
+  / -deep-sleep-floor.png / -1min-overview.png.
+- Still open (see docs/wiring.md checklist): ETA9740 quiescent via the JST
+  battery path, ETA9740 leakage when battery-direct on the XIAO BAT pads.

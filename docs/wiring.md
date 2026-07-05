@@ -222,19 +222,25 @@ remains free for a battery divider.
 
 ## To verify before/when trying the Seeed board (2026-07-04)
 
-- [ ] RESE for each Good Display panel we'd use: check the datasheet's
+- [x] RESE for each Good Display panel we'd use: check the datasheet's
       peripheral circuit page. GDEH0154Z90 is likely the 3Ω group (SSD1681);
       board is fixed 0.47Ω. If mismatched, test whether refresh quality is
       acceptable anyway.
+      → GDEW029I6FD (0.47Ω family) verified working 2026-07-05, first flash.
+      GDEH0576T81 datasheet wants RESE 2.2Ω + 47µH inductor — out of spec on
+      this board (0.47Ω + 10µH), untested.
 - [ ] Battery via the board's JST (ETA9740 path): PPK2 the sleep floor —
       boost-IC quiescent + double conversion (BAT→5V boost→XIAO LDO→3V3) may
       dominate our ~16µA C6 floor.
 - [ ] Battery direct on XIAO BAT pads instead: measure ETA9740 leakage with
       its JST empty + switch off; if significant, leave the 5V header pin
       unconnected between XIAO and shield (ETA9740 OUT ties to 5V rail).
-- [ ] Panel/booster quiescent: board has no power gate (3V3 hardwired to
+- [x] Panel/booster quiescent: board has no power gate (3V3 hardwired to
       booster/FPC). Check for DESPI-C02-style ~500µA draw; fix would be
       interposing the FDN340P on the single 3V3 pin (bent pin or cut trace).
+      → Measured 2026-07-05 (I6FD): floor ~25.1µA vs 15.8µA gated-DESPI
+      baseline = +~9.3µA ungated standby. No ~500µA problem; gate mod
+      probably not worth it. See notes.md.
 - [ ] If battery monitoring is needed with this board: check whether any
       underside pads (MTDI/MTMS) are ADC-capable — D0/D1 are taken by RST/CS.
 - [ ] Confirm the power switch (CN6) is in series between the battery JST and
