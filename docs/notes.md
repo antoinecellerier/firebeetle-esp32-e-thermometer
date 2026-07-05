@@ -543,6 +543,17 @@ strong voltage dependence:
   usable window ends ~3.6-3.7 V** (~80% of Li-ion capacity). Below that:
   dropout pathology, and 0.88 A bursts into a weak battery's ESR likely
   boot-loop during refreshes.
+- Reproducibility: the 3.5 V sag state (10.75 µA quiet phase + burst storm)
+  reproduced twice — deterministic mode-boundary behavior, not a glitch.
+  Exact edge between 3.5 V (bad) and 3.8 V (clean) unmeasured; bisect at
+  ~3.65 V to place the firmware shutdown threshold just above it.
+- SGM6029 datasheet vs reality: spec advertises "100% Duty Cycle Operation
+  Capability" (high-side held on as battery approaches/falls below VOUT,
+  VIN range 1.95-5.5 V, UVLO ~1.9 V) — no VIN>VOUT margin requirement
+  stated. Measured behavior at the mode boundary is far less graceful than
+  the prose. 3.8 V appears in the datasheet only as a typical-plot test
+  condition, not a recommended minimum. Iq spec 2.3 µA (not switching) /
+  ~8.5 µA (switching, PSM) brackets the measured floors.
 - Firmware gap: C6 `read_battery_level()` is stubbed (returns 4321) and
   low/no-battery thresholds (3200/3000 mV) sit below where the hardware
   already misbehaves — needs a real VBAT read + ~3500 mV shutdown threshold
