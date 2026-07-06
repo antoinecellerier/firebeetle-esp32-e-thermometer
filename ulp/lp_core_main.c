@@ -7,17 +7,27 @@
 #ifdef __riscv
 // Sensor implementations are in separate headers, selected at compile time.
 // The LP core build does NOT inherit the main project's build_flags or include
-// paths, so sensor selection uses a #define in this file (not local-secrets.h).
+// paths, but a relative #include reaches local-secrets.h, so the mode derives
+// from the same USE_* selector the HP build uses — they can't disagree.
 //
-// Available modes:
+// Modes:
 //   LP_CORE_IDLE     — power measurement: no I2C, wakes main CPU every N loops
 //   LP_CORE_BMP390L  — BMP390L temperature polling via LP I2C
 //   LP_CORE_BMP58X   — BMP58x (BMP581/BMP585) temperature polling via LP I2C
 //
-// Uncomment exactly one:
+// Uncomment to override the sensor selection for power measurements:
 //#define LP_CORE_IDLE
-//#define LP_CORE_BMP390L
+
+#include "../include/local-secrets.h"
+#ifndef LP_CORE_IDLE
+#if defined(USE_BMP58x)
 #define LP_CORE_BMP58X
+#elif defined(USE_BMP390L)
+#define LP_CORE_BMP390L
+#else
+#define LP_CORE_IDLE // no ULP-capable sensor selected; binary embedded but never loaded
+#endif
+#endif
 
 #include <stdint.h>
 #include "ulp_lp_core_utils.h"
