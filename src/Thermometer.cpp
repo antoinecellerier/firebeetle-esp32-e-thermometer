@@ -78,7 +78,7 @@ void ulp_check_data_overlap();
 // (struct fields, buffer sizes, semantics).
 // Bump RTC_STATE_VERSION when changing operational state variables below.
 #define RTC_HISTORY_VERSION 0xDA050003
-#define RTC_STATE_VERSION   0xDA050001
+#define RTC_STATE_VERSION   0xDA050002
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -120,6 +120,20 @@ RTC_DATA_ATTR uint32_t rtc_state_version = 0;
 
 RTC_DATA_ATTR int boot_count = 0;
 RTC_DATA_ATTR int display_refresh_count = 0;
+
+// InitializeUlp() calls this power cycle. Healthy value is exactly 1 (first
+// boot); anything higher means ULP/LP state (wake counters, delta reference)
+// is being wiped in the field — rendered as "uN" in the footer when > 1.
+RTC_DATA_ATTR uint32_t ulp_reinit_count = 0;
+
+// Wakeup cause, cached before anything can light-sleep: esp_sleep reports the
+// cause of the MOST RECENT sleep, and the EPD busy-wait light sleep
+// (epd_busy_light_sleep) replaces the deep-sleep cause with its GPIO wake.
+// Querying live after a display refresh misread every refresh boot as a fresh
+// boot and reloaded the LP core each time (wiping its counters and delta
+// reference). Always use these, never app_wakeup_cause(), past setup() entry.
+static esp_sleep_wakeup_cause_t s_wake_cause = ESP_SLEEP_WAKEUP_UNDEFINED;
+static uint32_t s_wake_causes_raw = 0;
 
 RTC_DATA_ATTR time_t first_boot_time = 0;
 RTC_DATA_ATTR time_t next_clear_time = 0;
@@ -262,9 +276,8 @@ DisplayStats make_display_stats()
     : historical_data.hourly_idx;
 
   // Map ESP-IDF wake cause to a portable int for display
-  esp_sleep_wakeup_cause_t cause = app_wakeup_cause();
-  int wake = (cause == ESP_SLEEP_WAKEUP_ULP) ? 1 :
-             (cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 : 0;
+  int wake = (s_wake_cause == ESP_SLEEP_WAKEUP_ULP) ? 1 :
+             (s_wake_cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 : 0;
 
   // Compute in-progress hour entry from accumulator
   bool has_current = (historical_data.current_hour_sample_count > 0);
@@ -321,7 +334,8 @@ DisplayStats make_display_stats()
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     historical_data.temp, historical_data.temp_count,
     historical_data.hourly, historical_data.hourly_count, hourly_start,
-    historical_data.hourly_latest_time, current_entry, has_current
+    historical_data.hourly_latest_time, current_entry, has_current,
+    ulp_reinit_count, s_wake_causes_raw
   };
 }
 
@@ -929,10 +943,15 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 
   // Only (re)load the LP/ULP program on a fresh boot. On deep-sleep wakes
   // the LP core is still running with its existing configuration — reloading
-  // the binary would wipe its counters and is not needed.
+  // the binary would wipe its counters and is not needed. Must test the
+  // CACHED cause: by this point the EPD light sleeps have overwritten the
+  // live one, and querying it here re-inited the LP core on every refresh.
   if (sensor.SupportsUlp()
-      && app_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
+      && s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED)
+  {
+    ulp_reinit_count++;
     sensor.InitializeUlp();
+  }
 
   start_deep_sleep();
 }
@@ -955,6 +974,7 @@ static void reset_rtc_state()
 {
   boot_count = 0;
   display_refresh_count = 0;
+  ulp_reinit_count = 0;
   first_boot_time = 0;
   next_clear_time = 0;
   previous_temp = TEMP_NO_PREVIOUS;
@@ -976,6 +996,10 @@ static void reset_rtc_state()
 
 void setup()
 {
+  // Must run before anything that can light-sleep (see s_wake_cause).
+  s_wake_causes_raw = app_wakeup_causes_raw();
+  s_wake_cause = app_wakeup_cause();
+
   setup_serial();
 
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
@@ -1029,8 +1053,8 @@ void setup()
     }
   }
 
-  esp_sleep_wakeup_cause_t wakeup_cause = app_wakeup_cause();
-  LOGI("Wakeup caused by %d", (int)wakeup_cause);
+  esp_sleep_wakeup_cause_t wakeup_cause = s_wake_cause;
+  LOGI("Wakeup caused by %d (raw 0x%x)", (int)wakeup_cause, (unsigned)s_wake_causes_raw);
 
   uint32_t battery_mv = read_battery_level();
 

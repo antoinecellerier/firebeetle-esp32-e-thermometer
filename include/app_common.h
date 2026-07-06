@@ -37,6 +37,18 @@ static inline esp_sleep_wakeup_cause_t app_wakeup_cause(void)
 #endif
 }
 
+// Raw wakeup-cause value for diagnostics: the full IDF 6 bitmap (bit index =
+// esp_sleep_wakeup_cause_t), or the scalar cause on older IDF. Lets the
+// footer show causes app_wakeup_cause() doesn't map (rendered "w:?<hex>").
+static inline uint32_t app_wakeup_causes_raw(void)
+{
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+  return esp_sleep_get_wakeup_causes();
+#else
+  return (uint32_t)esp_sleep_get_wakeup_cause();
+#endif
+}
+
 static inline void gpio_out_init(int pin)
 {
   gpio_config_t cfg = {};

@@ -84,6 +84,13 @@ struct DisplayStats {
   // Displayed as the rightmost data point on the monthly chart.
   HourlyEntry current_hour_entry;
   bool has_current_hour;       // true if accumulator has at least one reading
+
+  // ULP re-init tracking. Healthy is exactly 1 (first boot); the footer shows
+  // "uN" when > 1, meaning LP/ULP counters are being wiped in the field.
+  uint32_t ulp_reinit_count;
+  // Raw wakeup-cause bitmap at boot (IDF 6) — rendered as "w:?<hex>" when it
+  // contains only causes app_wakeup_cause() doesn't map.
+  uint32_t wake_causes_raw;
 };
 
 // Clear the e-paper to white and hibernate.

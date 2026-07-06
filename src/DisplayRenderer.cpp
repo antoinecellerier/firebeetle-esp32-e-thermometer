@@ -977,8 +977,13 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
   int up_days = (int)(uptime / 86400);
   int up_hours = (int)((uptime % 86400) / 3600);
 
+  // Unknown-but-nonzero cause: show the raw bitmap so an unmapped wake source
+  // (new IDF cause, LP core trap, ...) is identifiable from the screen.
+  char wake_unk[12] = "?";
+  if (stats.wake_cause == 0 && stats.wake_causes_raw != 0)
+    snprintf(wake_unk, sizeof(wake_unk), "?%x", (unsigned)stats.wake_causes_raw);
   const char *wake_str = (stats.wake_cause == 1) ? "ULP" :
-                          (stats.wake_cause == 2) ? "TMR" : "?";
+                          (stats.wake_cause == 2) ? "TMR" : wake_unk;
 
   // Format first boot date if NTP-synced (epoch > 1 day means real time)
   char boot_date[12] = "";
@@ -1024,6 +1029,8 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
               (unsigned)stats.lp_wake_count);
   if (stats.lp_error_count > 0)
     gfx.printf(" e%u", (unsigned)stats.lp_error_count);
+  if (stats.ulp_reinit_count > 1)
+    gfx.printf(" u%u", (unsigned)stats.ulp_reinit_count);
   gfx.printf(" %s w:%s mx%.1fV",
               uptime_str, wake_str,
               stats.max_battery_mv / 1000.0f);
