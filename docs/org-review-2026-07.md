@@ -112,12 +112,16 @@ submodule-update workflow depends on them being intact.
   chip-id bring-up is done.
 - **`.h` vs `.hpp`** mixed (`Sensor.hpp`, `sensors/*.hpp` vs everything else
   `.h`). Cosmetic; unify only in a sweep, or never.
-- **Redundant `board =` in derived envs** (platformio.ini): `extends` DOES
-  inherit `board` (unlike `build_flags`), so 6 of the 8 declarations are
-  defensive duplication. Harmless; droppable.
-- **Base envs are buildable, not abstract**: `pio run -e seeed_xiao_esp32c6`
-  produces a half-configured build (no build_type, no `DISABLE_SERIAL`).
-  Masked by `default_envs`. Foot-gun only for CI-style "build all envs".
+- **platformio.ini env structure** — DONE 2026-07-06: the `[env:debug]` /
+  `[env:release]` / `[env:<board>]` mixins were converted to plain (non-env:)
+  base sections. That removed the half-configured buildable base envs AND made
+  `extends` inherit board/build_type/build_flags reliably, collapsing the
+  per-env re-declarations. Resolved configs verified with `pio project config`
+  for all six envs; both debug envs rebuilt clean.
+- **Regroup board pin defs into one header** (`board_pins.h`, code analog of
+  docs/wiring.md): agreed good idea but deferred — no clear value until a
+  third board or a re-pin; EPD pins next to the GxEPD2 instantiation is good
+  locality today.
 
 ## Verified fine (checked — do not re-flag)
 
