@@ -7,10 +7,15 @@
 
 #include "esp_sleep.h"
 #include "esp_log.h"
+#include "esp_system.h"  // esp_reset_reason
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include <math.h>
+#include <string.h>
+#ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+#include "esp_core_dump.h"
+#endif
 #ifndef DISABLE_WIFI
 #include "esp_wifi.h"
 #include "esp_netif.h"
@@ -18,7 +23,6 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "freertos/event_groups.h"
-#include <string.h>
 #endif
 
 #include "Display.h"
@@ -66,8 +70,13 @@ void ulp_check_data_overlap();
 
 // --- RTC memory layout ---
 // RTC memory survives deep sleep but NOT power-on reset (firmware upload,
-// battery swap, reset button). RTC_NOINIT_ATTR doesn't help — the FireBeetle
-// board's reset circuit causes a full RTC power cycle on every reset.
+// battery swap, reset button). More precisely: the bootloader reloads
+// .rtc.data and startup zeroes .rtc.bss on ANY reset that isn't a deep-sleep
+// wake (esp_image_format.c / cpu_start.c) — so RTC_DATA_ATTR state, including
+// boot_count and all history, does not survive a panic/WDT/brownout reset
+// either. .rtc_noinit is exempt from both, which is what CrashLog (below)
+// relies on; it dies only with the RTC power domain (battery swap, or the
+// FireBeetle's reset button, whose circuit power-cycles RTC).
 //
 // History is grouped in a struct with a version tag and self_addr field.
 // The self_addr detects if the linker moved the struct (e.g. due to
@@ -134,6 +143,113 @@ RTC_DATA_ATTR uint32_t ulp_reinit_count = 0;
 // reference). Always use these, never app_wakeup_cause(), past setup() entry.
 static esp_sleep_wakeup_cause_t s_wake_cause = ESP_SLEEP_WAKEUP_UNDEFINED;
 static uint32_t s_wake_causes_raw = 0;
+
+// --- Crash forensics -------------------------------------------------------
+// Lives in .rtc_noinit: the only RTC storage that survives panic/WDT/brownout
+// resets (see RTC memory layout comment above). Breadcrumbs (stage,
+// cur_boot_count, cur_time) are stamped while running; the first boot after
+// an abnormal reset copies them into the last_* fields and, when a flash
+// coredump is present, harvests the exception PC + task name. Garbage after a
+// true power-on — guarded by the magic word. Rendered by the "! <reason>"
+// status indicator until the next RTC power cycle.
+#define CRASH_LOG_MAGIC 0xC0DEB008  // bump when CrashLog layout changes
+struct CrashLog {
+  uint32_t magic;
+  // Live breadcrumbs, stamped as the current wake progresses
+  uint8_t  stage;            // CrashStage checkpoint (Display.h)
+  uint8_t  unused0;
+  uint16_t unused1;
+  int32_t  cur_boot_count;
+  uint32_t cur_time;         // epoch, stamped once wall clock is known
+  // Harvested on the first boot after an abnormal reset
+  uint8_t  crash_count;      // abnormal resets since RTC power-on
+  uint8_t  last_reason;      // esp_reset_reason_t
+  uint8_t  last_stage;
+  uint8_t  unused2;
+  int32_t  last_boot_count;
+  uint32_t last_time;
+  uint32_t pc;               // coredump exception PC (0 = none)
+  char     task[16];         // coredump crashed task name
+  char     elf_sha[9];       // first 8 hex chars of the crashing app's ELF
+                             // SHA256 — identifies which build to addr2line
+};
+RTC_NOINIT_ATTR static CrashLog crash_log;
+
+static const char *reset_reason_str(uint8_t r)
+{
+  switch (r)
+  {
+    case ESP_RST_SW:         return "SW";
+    case ESP_RST_PANIC:      return "PANIC";
+    case ESP_RST_INT_WDT:    return "IWDT";
+    case ESP_RST_TASK_WDT:   return "TWDT";
+    case ESP_RST_WDT:        return "WDT";
+    case ESP_RST_BROWNOUT:   return "BROWN";
+    case ESP_RST_EFUSE:      return "EFUSE";
+    case ESP_RST_PWR_GLITCH: return "GLITCH";
+    case ESP_RST_CPU_LOCKUP: return "LOCKUP";
+    default:                 return "RST";
+  }
+}
+
+// Copy PC + task name out of a flash coredump into crash_log, then erase the
+// dump so a stale one is never re-harvested after a later dump-less reset
+// (e.g. RTC WDT, where the panic handler never ran).
+static void harvest_coredump_summary()
+{
+  crash_log.pc = 0;
+  crash_log.task[0] = '\0';
+  crash_log.elf_sha[0] = '\0';
+#ifdef CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+  esp_core_dump_summary_t *sum =
+      (esp_core_dump_summary_t *)calloc(1, sizeof(*sum));
+  if (sum == NULL)
+    return;
+  if (esp_core_dump_get_summary(sum) == ESP_OK)
+  {
+    crash_log.pc = sum->exc_pc;
+    memcpy(crash_log.task, sum->exc_task, sizeof(crash_log.task));
+    crash_log.task[sizeof(crash_log.task) - 1] = '\0';
+    // Already a hex string in the summary; keep the first 8 chars
+    size_t sha_n = strnlen((const char *)sum->app_elf_sha256,
+                           sizeof(crash_log.elf_sha) - 1);
+    memcpy(crash_log.elf_sha, sum->app_elf_sha256, sha_n);
+    crash_log.elf_sha[sha_n] = '\0';
+    esp_core_dump_image_erase();
+  }
+  free(sum);
+#endif
+}
+
+// Detect and record an abnormal reset. Must run before RTC state is used in
+// anger, but after setup_serial() so the LOGI is visible.
+static void crash_forensics_on_boot()
+{
+  esp_reset_reason_t rr = esp_reset_reason();
+  if (crash_log.magic != CRASH_LOG_MAGIC)
+  {
+    // True power-on (or first firmware with CrashLog): noinit RAM is garbage
+    memset(&crash_log, 0, sizeof(crash_log));
+    crash_log.magic = CRASH_LOG_MAGIC;
+  }
+  else if (rr != ESP_RST_DEEPSLEEP && rr != ESP_RST_POWERON &&
+           rr != ESP_RST_USB && rr != ESP_RST_JTAG && rr != ESP_RST_SDIO)
+  {
+    // USB/JTAG/SDIO excluded: flash-tool resets, not field crashes
+    if (crash_log.crash_count < 255)
+      crash_log.crash_count++;
+    crash_log.last_reason     = (uint8_t)rr;
+    crash_log.last_stage      = crash_log.stage;
+    crash_log.last_boot_count = crash_log.cur_boot_count;
+    crash_log.last_time       = crash_log.cur_time;
+    harvest_coredump_summary();
+    LOGI("Abnormal reset #%u: %s at boot %d stage %d pc 0x%x %s",
+         (unsigned)crash_log.crash_count, reset_reason_str(crash_log.last_reason),
+         (int)crash_log.last_boot_count, (int)crash_log.last_stage,
+         (unsigned)crash_log.pc, crash_log.task);
+  }
+  crash_log.stage = STAGE_BOOT;
+}
 
 RTC_DATA_ATTR time_t first_boot_time = 0;
 RTC_DATA_ATTR time_t next_clear_time = 0;
@@ -308,7 +424,7 @@ DisplayStats make_display_stats()
   }
 #endif
 
-  return {
+  DisplayStats s = {
     boot_count, previous_boot_count, display_refresh_count,
     lp_wakes, lp_errors, lp_last_err, lp_last_op,
     first_boot_time, next_clear_time, max_battery_mv, bad_pin27_count,
@@ -335,8 +451,19 @@ DisplayStats make_display_stats()
     historical_data.temp, historical_data.temp_count,
     historical_data.hourly, historical_data.hourly_count, hourly_start,
     historical_data.hourly_latest_time, current_entry, has_current,
-    ulp_reinit_count, s_wake_causes_raw
+    ulp_reinit_count, s_wake_causes_raw,
+    0, 0, "", 0, 0, 0, "", ""  // crash fields, assigned below
   };
+  s.crash_count = crash_log.crash_count;
+  s.crash_stage = crash_log.last_stage;
+  snprintf(s.crash_reason, sizeof(s.crash_reason), "%s",
+           reset_reason_str(crash_log.last_reason));
+  s.crash_boot_count = crash_log.last_boot_count;
+  s.crash_time = crash_log.last_time;
+  s.crash_pc = crash_log.pc;
+  memcpy(s.crash_task, crash_log.task, sizeof(s.crash_task));
+  memcpy(s.crash_elf_sha, crash_log.elf_sha, sizeof(s.crash_elf_sha));
+  return s;
 }
 
 void setup_serial()
@@ -368,6 +495,7 @@ void start_deep_sleep()
   }
   fflush(stdout);
   PPK2_CPU_ACTIVE_LOW();
+  crash_log.stage = STAGE_SLEEP;
   esp_deep_sleep_start();
 }
 
@@ -902,10 +1030,12 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   get_time(&now, &nowtm);
 
 #ifndef DISABLE_WIFI
+  crash_log.stage = STAGE_NTP;
   maybe_ntp_resync(now);
   // Re-read time after potential resync correction
   get_time(&now, &nowtm);
 #endif
+  crash_log.cur_time = (uint32_t)now;
 
   update_temp_extremes(temp);
   update_hourly_history(now, &nowtm, temp);
@@ -917,6 +1047,9 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   // distort the chart Y-axis (DummySensor returns a constant 12.3°C)
   temp = 22.3f;
 #endif
+  // RENDER covers both the periodic clear and the refresh below — either can
+  // die mid-EPD-write (SPI, busy-wait light sleep, panel power)
+  crash_log.stage = STAGE_RENDER;
   bool should_refresh = periodic_display_clear(now, nowtm) ||
                          fabsf(temp - previous_temp) >= DISPLAY_TEMP_DELTA;
   if (!should_refresh)
@@ -949,6 +1082,7 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   if (sensor.SupportsUlp()
       && s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED)
   {
+    crash_log.stage = STAGE_LP_INIT;
     ulp_reinit_count++;
     sensor.InitializeUlp();
   }
@@ -1001,6 +1135,7 @@ void setup()
   s_wake_cause = app_wakeup_cause();
 
   setup_serial();
+  crash_forensics_on_boot();
 
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
   ulp_check_data_overlap();  // abort immediately if ULP data overlaps RTC variables
@@ -1034,6 +1169,7 @@ void setup()
   }
 
   boot_count++;
+  crash_log.cur_boot_count = boot_count;
   // CPU frequency is fixed at 80 MHz at build time (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
   // — replaces the Arduino-era setCpuFrequencyMhz(80) on non-first boots.
 
@@ -1064,6 +1200,7 @@ void setup()
       && sensor.SupportsUlp())
   {
     float temp;
+    crash_log.stage = STAGE_ULP_READ;
     if (sensor.ReadUlpTemperature(&temp, previous_temp))
     {
       last_sensor_ok = true;
@@ -1095,6 +1232,7 @@ void setup()
   }
 #endif
 
+  crash_log.stage = STAGE_SENSOR;
   float temp = read_temperature();
   refresh_and_sleep(battery_mv, temp);
 }

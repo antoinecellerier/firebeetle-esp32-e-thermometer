@@ -227,7 +227,7 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.clock_drift_ms = 0;
   stats.drift_interval_s = 0;
   stats.last_sync_time = now - 7200;  // 2h ago
-  stats.ulp_reinit_count = 3;   // > 1 to exercise the "uN" footer field
+  stats.ulp_reinit_count = 1;   // healthy: exactly one init since power-on
   stats.wake_causes_raw = 1u << 6;  // BIT(ESP_SLEEP_WAKEUP_ULP)
   stats.previous_temp = 22.1f;
   stats.min_temp = 18.5f;

@@ -159,6 +159,23 @@ int main(int argc, char **argv)
     render_empty_battery(canvas, cfg.w, cfg.h,
                           2950, now, stats);
     save_and_convert(cfg.name, "_empty", canvas);
+
+    // Scenario 6: Crash forensics indicator + uN footer field
+    canvas.fillScreen(0xFFFF);
+    DisplayStats crash_stats = stats;
+    crash_stats.ulp_reinit_count = 3;
+    crash_stats.crash_count = 2;
+    snprintf(crash_stats.crash_reason, sizeof(crash_stats.crash_reason), "PANIC");
+    crash_stats.crash_stage = STAGE_RENDER;
+    crash_stats.crash_boot_count = 273;
+    crash_stats.crash_time = (uint32_t)(now - 3 * 3600);
+    crash_stats.crash_pc = 0x42008a3c;
+    snprintf(crash_stats.crash_task, sizeof(crash_stats.crash_task), "main");
+    snprintf(crash_stats.crash_elf_sha, sizeof(crash_stats.crash_elf_sha), "ab12cd34");
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, crash_stats);
+    save_and_convert(cfg.name, "_crash", canvas);
   }
 
   return 0;

@@ -57,6 +57,7 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | F2 | c6_release | — | 27.3%*** | 39840 | — | — | +46KB vs IDF 5.5 |
 | G -Os (was -Og) | esp32e_release | 937632 | 22.9%*** | 47604 | — | — | −77KB bin; CONFIG_COMPILER_OPTIMIZATION_SIZE, wake active phase 22.5→20.6mC |
 | G | c6_release | 983178 | 24.2%*** | 49460 | — | — | −97KB bin; with skip-validate: refresh 56.25→45.3mC |
+| H crash forensics | c6_release | 998400 | 24.6%*** | — | — | — | +15KB bin: espcoredump-to-flash + task-WDT-panic + RTC_NOINIT CrashLog (48B) + on-screen diag |
 
 *** Stage F correction: through stages C-D the ACTUAL flashed partition table was
 PlatformIO's default 1MB single-app (PIO ignores the sdkconfig partition choice) —

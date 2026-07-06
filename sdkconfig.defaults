@@ -41,3 +41,12 @@ CONFIG_ESP_WIFI_DPP_SUPPORT=y
 # the IDF 5.5 behavior we validated. Revisit picolibc (~20% smaller binaries)
 # when PlatformIO passes the flag through, or when building with idf.py only.
 CONFIG_LIBC_NEWLIB=y
+
+# Crash forensics: on panic, dump core to the 64KB "coredump" partition
+# (already in partitions.csv); the next boot renders task/PC on screen and
+# erases the dump (see harvest_coredump_summary). Task-WDT escalates to panic
+# so hangs leave a dump too instead of just logging to a console nobody reads.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_CRC32=y
+CONFIG_ESP_TASK_WDT_PANIC=y

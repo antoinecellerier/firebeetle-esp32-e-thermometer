@@ -26,6 +26,21 @@ struct HourlyEntry {
 #define TEMP_HISTORY_SIZE 320
 #define HOURLY_HISTORY_SIZE 720  // 30 days × 24 hours/day
 
+// Breadcrumb checkpoints for crash forensics. Thermometer.cpp stamps the
+// current stage into RTC_NOINIT as the wake progresses; after an abnormal
+// reset the surviving value says what the firmware was doing when it died.
+// Order matters only for the renderer's name table.
+enum CrashStage : uint8_t {
+  STAGE_NONE = 0,
+  STAGE_BOOT,      // early setup, first-boot init
+  STAGE_ULP_READ,  // reading the ULP/LP core sample
+  STAGE_SENSOR,    // digital sensor read
+  STAGE_NTP,       // WiFi/NTP resync
+  STAGE_RENDER,    // display clear/refresh (incl. busy-wait light sleep)
+  STAGE_LP_INIT,   // (re)loading the ULP/LP program
+  STAGE_SLEEP,     // entering deep sleep
+};
+
 // Sentinel value for hours with no readings (e.g., gap after device restart).
 // Check with: entry.min_x10 == HOURLY_NO_DATA
 #define HOURLY_NO_DATA ((int16_t)0x8000)
@@ -91,6 +106,19 @@ struct DisplayStats {
   // Raw wakeup-cause bitmap at boot (IDF 6) — rendered as "w:?<hex>" when it
   // contains only causes app_wakeup_cause() doesn't map.
   uint32_t wake_causes_raw;
+
+  // Crash forensics, from the RTC_NOINIT CrashLog (survives panic/WDT/
+  // brownout resets — unlike RTC_DATA, which the bootloader reinitializes
+  // on any reset that isn't a deep-sleep wake). All zero when healthy.
+  uint8_t  crash_count;        // abnormal resets since power-on
+  uint8_t  crash_stage;        // CrashStage reached before the latest death
+  char     crash_reason[8];    // short reset-reason name ("PANIC", "TWDT", ...)
+  int32_t  crash_boot_count;   // boot_count of the boot that died
+  uint32_t crash_time;         // epoch stamped shortly before death (0 = unknown)
+  uint32_t crash_pc;           // coredump exception PC (0 = no dump harvested)
+  char     crash_task[16];     // coredump crashed task name
+  char     crash_elf_sha[9];   // first 8 hex chars of the crashing build's
+                               // ELF SHA256 — pairs the PC with the right ELF
 };
 
 // Clear the e-paper to white and hibernate.

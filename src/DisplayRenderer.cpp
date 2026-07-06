@@ -1046,7 +1046,7 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
 // --- Status indicators (top-left corner of temp zone) ---
 
 static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
-                                       const DisplayStats &stats)
+                                       const DisplayStats &stats, time_t now)
 {
   // Only render when there's an issue — no clutter when things are normal
   bool significant_drift = abs(stats.clock_drift_ms) >= 60000;  // >= 1 minute
@@ -1058,7 +1058,7 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
                              && stats.lp_error_count * 10 >= stats.lp_wake_count;
   if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
       && !stats.dummy_sensor && !stats.mock_data && !significant_drift
-      && !debug_build && !lp_errors_significant)
+      && !debug_build && !lp_errors_significant && stats.crash_count == 0)
     return;
 
   bool large = (L.dh >= 400 || L.dw >= 600);
@@ -1110,6 +1110,40 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
              op_str, (unsigned)stats.last_lp_error);
     gfx.print(lp_str);
   }
+
+  if (stats.crash_count > 0)
+  {
+    // Crash forensics, e.g. "! PANIC x2 @#273/render 3h pc:42008a3c main".
+    // The boot counter restarts after every crash (RTC_DATA is wiped), so
+    // @#N is relative to the crashed boot's own power-on epoch.
+    static const char *stage_names[] = {
+      "?", "boot", "ulp", "sensor", "ntp", "render", "lpinit", "sleep"};
+    uint8_t st = (stats.crash_stage < sizeof(stage_names) / sizeof(stage_names[0]))
+                 ? stats.crash_stage : 0;
+    char rst_str[80];
+    int pos = snprintf(rst_str, sizeof(rst_str), "! %s", stats.crash_reason);
+    if (stats.crash_count > 1)
+      pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " x%u",
+                      (unsigned)stats.crash_count);
+    pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " @#%d/%s",
+                    (int)stats.crash_boot_count, stage_names[st]);
+    if (stats.crash_time > 0 && now > (time_t)stats.crash_time)
+    {
+      time_t age = now - (time_t)stats.crash_time;
+      if (age < 3600)
+        pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " %dm", (int)(age / 60));
+      else if (age < 86400)
+        pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " %dh", (int)(age / 3600));
+      else
+        pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " %dd", (int)(age / 86400));
+    }
+    if (stats.crash_pc != 0)
+      pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " pc:%x@%s %s",
+                      (unsigned)stats.crash_pc, stats.crash_elf_sha,
+                      stats.crash_task);
+    gfx.print(rst_str);
+    gfx.print(' ');
+  }
 }
 
 // --- Full dashboard render ---
@@ -1122,7 +1156,7 @@ void render_dashboard(Adafruit_GFX &gfx, int16_t w, int16_t h,
   Layout L = compute_layout(w, h);
 
   render_temperature(gfx, L, temp, stats);
-  render_status_indicators(gfx, L, stats);
+  render_status_indicators(gfx, L, stats, now);
   render_sparkline(gfx, L.spark, stats, now);
   render_monthly_chart(gfx, L.month, stats, now);
 
