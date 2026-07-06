@@ -1050,6 +1050,25 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   // RENDER covers both the periodic clear and the refresh below — either can
   // die mid-EPD-write (SPI, busy-wait light sleep, panel power)
   crash_log.stage = STAGE_RENDER;
+
+#ifdef CRASH_TEST_BOOT
+  // Deliberate crash to exercise the forensics path on hardware — flash with
+  //   PLATFORMIO_BUILD_FLAGS="-DCRASH_TEST_BOOT=3" pio run -e <env> -t upload
+  // (add -DCRASH_TEST_HANG to test the task-WDT→panic path instead of a null
+  // deref). Fires on the first wake at/after that boot count, once per RTC
+  // power cycle: the crash_count guard stops a crash loop, and also means a
+  // second test needs a power cycle (which clears the CrashLog) first.
+  if (boot_count >= CRASH_TEST_BOOT && crash_log.crash_count == 0)
+  {
+    LOGI("CRASH_TEST_BOOT: deliberately crashing at boot %d", boot_count);
+    fflush(stdout);
+#ifdef CRASH_TEST_HANG
+    while (true) {}                    // starve idle task → TWDT → panic
+#else
+    *(volatile uint32_t *)0 = 0xdead;  // store to NULL → panic + coredump
+#endif
+  }
+#endif
   bool should_refresh = periodic_display_clear(now, nowtm) ||
                          fabsf(temp - previous_temp) >= DISPLAY_TEMP_DELTA;
   if (!should_refresh)
