@@ -9,6 +9,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "soc/soc_caps.h" // SOC_ULP_FSM_SUPPORTED / SOC_LP_CORE_SUPPORTED guards
+
+// SoC has a ULP FSM (ESP32-E) or LP core (C6) and NO_ULP isn't set. Defined
+// here — not in per-sensor headers — so every TU sees the same value
+// regardless of include order.
+#if (!defined(NO_ULP)) && (defined(SOC_ULP_FSM_SUPPORTED) || (defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED))
+#define HAS_ULP_SUPPORT 1
+#endif
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
