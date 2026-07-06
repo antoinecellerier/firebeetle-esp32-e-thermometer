@@ -142,22 +142,7 @@ void ulp_build_and_load_program()
                     I2C_BB_SCL, I2C_BB_SDA, BMP58X_I2C_ADDR),
   };
 
-  size_t program_size = sizeof(program) / sizeof(ulp_insn_t);
-  esp_err_t load_err = ulp_process_macros_and_load(0, program, &program_size);
-  if (load_err != ESP_OK)
-  {
-    // Degrade instead of abort-looping: without the ULP the safety-net timer
-    // still wakes the host hourly. program_size holds the word count on
-    // ESP_ERR_ULP_SIZE_TOO_BIG (limit = CONFIG_ULP_COPROC_RESERVE_MEM / 4).
-    LOGI("ERROR: ULP program load failed (0x%x, %u words, limit %u)",
-         load_err, (unsigned)program_size, (unsigned)(CONFIG_ULP_COPROC_RESERVE_MEM / 4));
-    return;
-  }
-  LOGI("ULP program loaded: %u/%u words", (unsigned)program_size,
-       (unsigned)(CONFIG_ULP_COPROC_RESERVE_MEM / 4));
-
-  for (int i = 0; i < ULP_VAR_COUNT; i++)
-    RTC_SLOW_MEM[ULP_DATA_BASE + i] = 0;
+  ulp_load_program(program, sizeof(program) / sizeof(ulp_insn_t));
 }
 
 #endif

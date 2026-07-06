@@ -16,6 +16,7 @@
 #if !defined(NO_ULP) && defined(SOC_ULP_FSM_SUPPORTED)
 #include <stdint.h>
 #include <stddef.h>
+#include "esp32/ulp.h" // ulp_insn_t
 
 // ULP wakeup period in microseconds
 #define ULP_WAKEUP_PERIOD_US (SLEEP_INTERVAL_S * 1000000ULL)
@@ -57,6 +58,11 @@ void ulp_check_data_overlap();
 void ulp_configure_i2c_bitbang();
 void ulp_build_and_load_program();
 void ulp_start();
+
+// Assemble + load a ulp_insn_t program at RTC_SLOW_MEM[0] and zero the shared
+// variable area. Degrades (logs, returns) instead of aborting on failure —
+// the safety-net timer still wakes the host without the ULP.
+void ulp_load_program(const ulp_insn_t *program, size_t insn_count);
 
 // Read/write ULP variables in RTC slow memory.
 uint16_t ulp_read_var(size_t data_offset, enum ulp_var_offset var);
