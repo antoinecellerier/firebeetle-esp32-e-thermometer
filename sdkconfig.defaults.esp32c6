@@ -1,11 +1,9 @@
 # XIAO ESP32-C6: 4MB flash, LP core ULP, USB-Serial-JTAG console
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
-CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
 
-# LP core coprocessor (temperature polling during deep sleep).
+# LP core coprocessor (COPROC_ENABLED is in the common defaults).
 # 8KB reservation shared with RTC_DATA_ATTR — see post_build_check_rtc.py
 # and ulp_check_data_overlap().
-CONFIG_ULP_COPROC_ENABLED=y
 CONFIG_ULP_COPROC_TYPE_LP_CORE=y
 CONFIG_ULP_COPROC_RESERVE_MEM=8192
 

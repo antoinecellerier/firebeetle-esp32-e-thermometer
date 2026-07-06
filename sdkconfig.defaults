@@ -3,6 +3,14 @@
 
 CONFIG_FREERTOS_HZ=1000
 
+# CPU fixed at 80MHz on both boards (project-wide invariant — wake path is
+# flash-bound, higher clocks measured no better; see docs/notes.md).
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_80=y
+
+# Both boards run a ULP coprocessor for temperature polling during deep
+# sleep; the type (FSM vs LP core) and RESERVE_MEM are per-target.
+CONFIG_ULP_COPROC_ENABLED=y
+
 # app_main's task runs everything including display rendering;
 # IDF default (3584) would overflow
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
