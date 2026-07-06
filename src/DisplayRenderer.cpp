@@ -979,8 +979,10 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
 
   // Unknown-but-nonzero cause: show the raw bitmap so an unmapped wake source
   // (new IDF cause, LP core trap, ...) is identifiable from the screen.
+  // BIT(0) is excluded — that's just IDF's "undefined" marker, set on every
+  // boot that isn't a deep-sleep wake (power-on, flash, crash reset).
   char wake_unk[12] = "?";
-  if (stats.wake_cause == 0 && stats.wake_causes_raw != 0)
+  if (stats.wake_cause == 0 && (stats.wake_causes_raw & ~1u) != 0)
     snprintf(wake_unk, sizeof(wake_unk), "?%x", (unsigned)stats.wake_causes_raw);
   const char *wake_str = (stats.wake_cause == 1) ? "ULP" :
                           (stats.wake_cause == 2) ? "TMR" : wake_unk;
