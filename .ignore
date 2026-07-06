@@ -1,0 +1,6 @@
+# Search-tool ignore (ripgrep, fd, most IDE indexers) — NOT a .gitignore.
+# The vendored submodule working trees are 84% of the files in the checkout
+# (gxepd2 bitmaps alone are ~362k lines) but only a handful compile; keep
+# them out of search results. git grep already skips submodules.
+# Use `rg --no-ignore` to search them deliberately.
+components/*/upstream/
