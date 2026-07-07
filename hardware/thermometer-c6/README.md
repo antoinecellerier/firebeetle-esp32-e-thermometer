@@ -140,9 +140,13 @@ DigiKey/Mouser or hand-place from a Fermion breakout donor).
 
 DESPI-C02 §4.5 requires an FPC socket with "contact at up side or both
 side" — hence the dual-contact FPC-05FB (the bottom-contact-only
-FPC-05F-24PH20 C2856805 must NOT be substituted). The KiCad footprint field
-currently points at the Hirose FH12-24S drawing; re-derive the footprint
-from the XUNPU FPC-05FB drawing at layout time.
+FPC-05F-24PH20 C2856805 must NOT be substituted). J4 uses the hand-drawn
+`local:XUNPU_FPC-05FB-24PH20` footprint, transcribed from the XUNPU
+FPC-05FB-NPH20 manufacture drawing (pads 0.3×1.2 @0.5mm, tabs 2.0×1.8 at
+±7.3/+1.625 center-to-center) and cross-checked against the EasyEDA/JLC
+C2856831 land pattern — the two agree exactly. Cable enters from the
+pad-row side; the actuator flips up at the rear; pin 1 is on the right
+viewed with cable entry pointing up (silk dot marks it).
 
 ## Alternate sensor: BMP585 (U6, DNP by default)
 
@@ -183,9 +187,9 @@ against circuit.py (anonymous `~` nets matched by pin set).
    floats pins when the panel is gated off) — veto?
 5. **JST-PH polarity**: silk will mark +; verify against your pigtails
    before first battery plug (JST vs Adafruit convention differs).
-6. **FPC footprint**: schematic references the Hirose FH12-24S footprint as
-   a stand-in; draw the XUNPU FPC-05FB-24PH20 footprint from its drawing at
-   layout time (pinout identical, mechanicals differ slightly).
+6. **FPC footprint**: done — hand-drawn `local:XUNPU_FPC-05FB-24PH20`
+   (see BOM section). Remaining: confirm pin-1 direction against a physical
+   panel cable before ordering.
 7. **32k crystal populated by default** — ~0.1–0.5µA for real timekeeping;
    DNP it if vetoed (firmware falls back to internal RC).
 8. Old `hardware/kicad/` Copilot draft: delete or archive — your call.

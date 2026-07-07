@@ -226,8 +226,8 @@ COMPONENTS = [
 
     # ---- H: FPC connector + panel-side caps (DESPI C1/C2/C6..C12 roles) ----
     dict(ref="J4", lib_id="Connector_Generic:Conn_01x24", value="EPD FPC24 0.5mm",
-         footprint="Connector_FFC-FPC:Hirose_FH12-24S-0.5SH_1x24-1MP_P0.50mm_Horizontal",
-         lcsc="C2856831", zone="H: EPD FPC"),  # XUNPU FPC-05FB-24PH20 (dual contact); footprint verify at layout
+         footprint="local:XUNPU_FPC-05FB-24PH20",
+         lcsc="C2856831", zone="H: EPD FPC"),  # dual contact; land from XUNPU FPC-05FB-NPH20 drawing, cross-checked vs EasyEDA C2856831
     dict(ref="C19", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
          lcsc="C1779", zone="H: EPD FPC"),  # VGL
     dict(ref="C20", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
