@@ -100,6 +100,60 @@ def effects(size=1.27, justify=None, hide=False):
     return e
 
 
+# ---- text collision model --------------------------------------------------
+
+CHAR_W = 1.05  # average glyph advance at the default 1.27 mm font
+
+
+def bbox_label(text, pos, angle):
+    """Approximate bounding box of a global label incl. its shape outline."""
+    length = len(text) * CHAR_W + 2.8
+    x, y = pos
+    if angle == 0:
+        return (x, y - 1.4, x + length, y + 1.4)
+    if angle == 180:
+        return (x - length, y - 1.4, x, y + 1.4)
+    if angle == 90:
+        return (x - 1.4, y - length, x + 1.4, y)
+    return (x - 1.4, y, x + 1.4, y + length)
+
+
+def bbox_text(text, x, y, justify=None):
+    w = len(text) * CHAR_W
+    if justify == "left":
+        return (x, y - 1.0, x + w, y + 1.0)
+    if justify == "right":
+        return (x - w, y - 1.0, x, y + 1.0)
+    return (x - w / 2, y - 1.0, x + w / 2, y + 1.0)
+
+
+def bbox_overlap(a, b, pad=0.2):
+    return not (a[2] + pad <= b[0] or b[2] + pad <= a[0]
+                or a[3] + pad <= b[1] or b[3] + pad <= a[1])
+
+
+def seg_bbox(a, b, half=0.15):
+    return (min(a[0], b[0]) - half, min(a[1], b[1]) - half,
+            max(a[0], b[0]) + half, max(a[1], b[1]) + half)
+
+
+def body_bbox(pl):
+    """Symbol body extent estimated from pin base points (tip + length
+    toward the body), padded for the graphic's width."""
+    import math
+    xs, ys = [], []
+    for p in pl.symbol.pins:
+        a = math.radians(p.angle)
+        bx = p.x + p.length * math.cos(a)
+        by = p.y + p.length * math.sin(a)
+        dx, dy = xform(bx, by, pl.rot)
+        xs.append(pl.x + dx)
+        ys.append(pl.y + dy)
+    if not xs:
+        xs, ys = [pl.x], [pl.y]
+    return (min(xs) - 1.4, min(ys) - 1.4, max(xs) + 1.4, max(ys) + 1.4)
+
+
 def build_schematic(circuit, layout):
     comps = circuit.COMPONENTS
     nets = circuit.NETS
@@ -344,6 +398,92 @@ def build_schematic(circuit, layout):
         if branches >= 3:
             junctions.add(p)
 
+    # ---- field autoplacement (Reference/Value) ------------------------------
+    # Greedy collision-aware placement: try above / right / below / left of
+    # each symbol body, scored against wires, bodies, labels, power symbols
+    # and previously placed fields. First zero-collision candidate wins.
+    obstacles = []
+    for net_, a_, b_ in wire_segments:
+        obstacles.append(seg_bbox(a_, b_))
+    bodies = {}
+    for ref_, pl_ in placed.items():
+        bodies[ref_] = body_bbox(pl_)
+        obstacles.append(bodies[ref_])
+    label_boxes = []  # (net, bbox)
+    for net_, tip_, end_, d_ in fallback:
+        if net_ in power_syms:
+            obstacles.append((end_[0] - 2.0, end_[1] - 6.0, end_[0] + 2.0, end_[1] + 6.0))
+        else:
+            label_boxes.append((net_, bbox_label(net_, end_, d_)))
+    for net_, pos_, angle_ in label_placements:
+        label_boxes.append((net_, bbox_label(net_, pos_, angle_)))
+    for lib_id_, net_, pos_, rot_ in power_placements:
+        obstacles.append((pos_[0] - 2.0, pos_[1] - 6.0, pos_[0] + 2.0, pos_[1] + 6.0))
+    obstacles.extend(b for _, b in label_boxes)
+
+    field_layout = {}
+    for c in comps:
+        ref = c["ref"]
+        bx1, by1, bx2, by2 = bodies[ref]
+        cx, cy = (bx1 + bx2) / 2, (by1 + by2) / 2
+        cands = [
+            ((cx, by1 - 3.5, None), (cx, by1 - 1.3, None)),          # above
+            ((bx2 + 0.8, cy - 1.2, "left"), (bx2 + 0.8, cy + 1.2, "left")),   # right
+            ((cx, by2 + 1.3, None), (cx, by2 + 3.5, None)),          # below
+            ((bx1 - 0.8, cy - 1.2, "right"), (bx1 - 0.8, cy + 1.2, "right")),  # left
+        ]
+        if ref in layout.FIELD_POS:
+            (orx, ory, orj), (ovx, ovy, ovj) = layout.FIELD_POS[ref]
+            pl_ = placed[ref]
+            cands.insert(0, ((pl_.x + orx, pl_.y + ory, orj),
+                             (pl_.x + ovx, pl_.y + ovy, ovj)))
+        best, best_score = None, None
+        for cand in cands:
+            (rx, ry, rj), (vx, vy, vj) = cand
+            boxes = [bbox_text(ref, rx, ry, rj), bbox_text(c["value"], vx, vy, vj)]
+            score = 0
+            for tb in boxes:
+                for ob in obstacles:
+                    if ob is bodies[ref]:
+                        continue
+                    if bbox_overlap(tb, ob):
+                        score += 1
+            if best_score is None or score < best_score:
+                best, best_score = cand, score
+            if score == 0:
+                break
+        field_layout[ref] = best
+        (rx, ry, rj), (vx, vy, vj) = best
+        obstacles.append(bbox_text(ref, rx, ry, rj))
+        obstacles.append(bbox_text(c["value"], vx, vy, vj))
+
+    # ---- readability warnings (non-fatal) -----------------------------------
+    warns = []
+    def _on_seg(q, a, b):
+        return (min(a[0], b[0]) - 1e-6 <= q[0] <= max(a[0], b[0]) + 1e-6
+                and min(a[1], b[1]) - 1e-6 <= q[1] <= max(a[1], b[1]) + 1e-6
+                and (a[0] == b[0] == q[0] or a[1] == b[1] == q[1]))
+
+    for net_, a_, b_ in wire_segments:
+        sb = seg_bbox(a_, b_, 0.05)
+        for ref_, bb in bodies.items():
+            own = any(_on_seg(placed[ref_].pin_pos(p.number), a_, b_)
+                      for p in placed[ref_].symbol.pins)
+            if own:
+                continue
+            inner = (bb[0] + 1.2, bb[1] + 1.2, bb[2] - 1.2, bb[3] - 1.2)
+            if inner[0] < inner[2] and inner[1] < inner[3] and bbox_overlap(sb, inner, 0):
+                warns.append(f"wire {net_} {a_}-{b_} crosses body of {ref_}")
+    for lnet, lb in label_boxes:
+        for ref_, bb in bodies.items():
+            inner = (bb[0] + 1.0, bb[1] + 1.0, bb[2] - 1.0, bb[3] - 1.0)
+            if inner[0] < inner[2] and inner[1] < inner[3] and bbox_overlap(lb, inner, 0):
+                warns.append(f"label {lnet} overlaps body of {ref_}")
+    if warns:
+        print(f"LAYOUT WARNINGS ({len(set(warns))}):")
+        for w in sorted(set(warns)):
+            print("  " + w)
+
     # ---- emit --------------------------------------------------------------
     sch = ["kicad_sch",
            ["version", 20231120],
@@ -410,11 +550,16 @@ def build_schematic(circuit, layout):
         pwr_seq[0] += 1
         pref = ("#FLG%03d" if lib_id == "power:PWR_FLAG" else "#PWR%03d") % pwr_seq[0]
         key = f"{net}/{pos}"
+        # value text sits past the symbol graphic: GND's graphic hangs below
+        # its pin (value below), the others point up (value above) — flipped
+        # by rotation
+        below = (net == "GND") == (rot == 0)
+        vdy = 4.4 if below else -4.4
         body.append(["symbol", ["lib_id", Q(lib_id)], ["at", px, py, rot], ["unit", 1],
                      ["exclude_from_sim", "no"], ["in_bom", "no"], ["on_board", "yes"],
                      ["dnp", "no"], ["uuid", Q(uid("pwr/" + key))],
                      ["property", Q("Reference"), Q(pref), ["at", px, py, 0], effects(hide=True)],
-                     ["property", Q("Value"), Q(net), ["at", px, py + 3.5, 0], effects()],
+                     ["property", Q("Value"), Q(net), ["at", px, round(py + vdy, 4), 0], effects()],
                      ["property", Q("Footprint"), Q(""), ["at", px, py, 0], effects(hide=True)],
                      ["property", Q("Datasheet"), Q(""), ["at", px, py, 0], effects(hide=True)],
                      ["pin", Q(ppin.number), ["uuid", Q(uid("pwrpin/" + key))]],
@@ -468,18 +613,16 @@ def build_schematic(circuit, layout):
         pl = placed[c["ref"]]
         s = symbols[c["lib_id"]]
         x, y, rot = pl.x, pl.y, pl.rot
-        fields = layout.FIELD_POS.get(c["ref"], {})
-        rx, ry = fields.get("ref_offset", (0, -_top_of(s, rot) - 4.6))
-        vx_, vy_ = fields.get("value_offset", (0, -_top_of(s, rot) - 2.1))
+        (rx, ry, rj), (vx_, vy_, vj) = field_layout[c["ref"]]
         node = ["symbol", ["lib_id", Q(c["lib_id"])], ["at", x, y, rot], ["unit", 1],
                 ["exclude_from_sim", "no"],
                 ["in_bom", "no" if c.get("dnp") else "yes"], ["on_board", "yes"],
                 ["dnp", "yes" if c.get("dnp") else "no"],
                 ["uuid", Q(uid("sym/" + c["ref"]))],
                 ["property", Q("Reference"), Q(c["ref"]),
-                 ["at", round(x + rx, 4), round(y + ry, 4), 0], effects()],
+                 ["at", round(rx, 4), round(ry, 4), 0], effects(justify=rj)],
                 ["property", Q("Value"), Q(c["value"]),
-                 ["at", round(x + vx_, 4), round(y + vy_, 4), 0], effects()],
+                 ["at", round(vx_, 4), round(vy_, 4), 0], effects(justify=vj)],
                 ["property", Q("Footprint"), Q(c.get("footprint", "")),
                  ["at", x, y, 0], effects(hide=True)],
                 ["property", Q("Datasheet"), Q(c.get("datasheet", "~")),

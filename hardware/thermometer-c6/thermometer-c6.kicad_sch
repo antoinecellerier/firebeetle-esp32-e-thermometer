@@ -11380,14 +11380,14 @@
   )
   (global_label "VSYS"
     (shape input)
-    (at 270.51 38.1 0)
+    (at 270.51 43.18 270)
     (effects
       (font
         (size 1.27 1.27)
       )
-      (justify left)
+      (justify right)
     )
-    (uuid "ffc53fc7-c54e-5d12-8adc-77688dbc3c69")
+    (uuid "82894309-0cb2-53ed-a8d3-fa4df93701e7")
   )
   (global_label "VBAT"
     (shape input)
@@ -11661,7 +11661,7 @@
       )
     )
     (property "Value" "GND"
-      (at 34.29 30.17 0)
+      (at 34.29 22.27 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -11717,7 +11717,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 163.83 32.71 0)
+      (at 163.83 24.81 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -11773,7 +11773,7 @@
       )
     )
     (property "Value" "VBUS"
-      (at 227.33 23.82 0)
+      (at 227.33 15.92 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -11829,7 +11829,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 476.25 160.98 0)
+      (at 476.25 153.08 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -11885,7 +11885,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 524.51 160.98 0)
+      (at 524.51 153.08 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -11941,7 +11941,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 355.6 35.25 0)
+      (at 355.6 27.35 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -11997,7 +11997,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 375.92 100.02 0)
+      (at 375.92 92.12 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12053,7 +12053,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 382.27 100.02 0)
+      (at 382.27 92.12 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12109,7 +12109,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 421.64 35.25 0)
+      (at 421.64 27.35 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12165,7 +12165,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 421.64 67 0)
+      (at 421.64 59.1 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12221,7 +12221,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 518.16 153.36 0)
+      (at 518.16 145.46 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12277,7 +12277,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 513.08 150.82 0)
+      (at 513.08 142.92 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12333,7 +12333,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 485.14 191.46 0)
+      (at 485.14 183.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12389,7 +12389,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 500.38 191.46 0)
+      (at 500.38 183.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12445,7 +12445,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 533.4 191.46 0)
+      (at 533.4 183.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12501,7 +12501,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 548.64 191.46 0)
+      (at 548.64 183.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12557,7 +12557,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 308.61 157.17 0)
+      (at 308.61 149.27 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12613,7 +12613,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 321.31 152.09 0)
+      (at 321.31 144.19 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12669,7 +12669,7 @@
       )
     )
     (property "Value" "+3V3"
-      (at 502.92 36.52 0)
+      (at 502.92 28.62 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12725,7 +12725,7 @@
       )
     )
     (property "Value" "GND"
-      (at 73.66 53.03 0)
+      (at 73.66 53.93 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12781,7 +12781,7 @@
       )
     )
     (property "Value" "GND"
-      (at 81.28 53.03 0)
+      (at 81.28 53.93 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12837,7 +12837,7 @@
       )
     )
     (property "Value" "GND"
-      (at 137.16 51.76 0)
+      (at 137.16 52.66 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12893,7 +12893,7 @@
       )
     )
     (property "Value" "GND"
-      (at 115.57 53.03 0)
+      (at 115.57 53.93 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -12949,7 +12949,7 @@
       )
     )
     (property "Value" "GND"
-      (at 121.92 53.03 0)
+      (at 121.92 53.93 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13005,7 +13005,7 @@
       )
     )
     (property "Value" "GND"
-      (at 152.4 53.03 0)
+      (at 152.4 53.93 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13061,7 +13061,7 @@
       )
     )
     (property "Value" "GND"
-      (at 158.75 53.03 0)
+      (at 158.75 53.93 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13117,7 +13117,7 @@
       )
     )
     (property "Value" "GND"
-      (at 203.2 83.51 0)
+      (at 203.2 84.41 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13173,7 +13173,7 @@
       )
     )
     (property "Value" "GND"
-      (at 195.58 83.51 0)
+      (at 195.58 84.41 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13229,7 +13229,7 @@
       )
     )
     (property "Value" "GND"
-      (at 231.14 30.17 0)
+      (at 231.14 22.27 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13285,7 +13285,7 @@
       )
     )
     (property "Value" "GND"
-      (at 236.22 30.17 0)
+      (at 236.22 22.27 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13341,7 +13341,7 @@
       )
     )
     (property "Value" "GND"
-      (at 243.84 68.27 0)
+      (at 243.84 69.17 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13397,7 +13397,7 @@
       )
     )
     (property "Value" "GND"
-      (at 284.48 46.68 0)
+      (at 284.48 47.58 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13453,7 +13453,7 @@
       )
     )
     (property "Value" "GND"
-      (at 233.68 91.13 0)
+      (at 233.68 92.03 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13509,7 +13509,7 @@
       )
     )
     (property "Value" "GND"
-      (at 248.92 92.4 0)
+      (at 248.92 93.3 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13565,7 +13565,7 @@
       )
     )
     (property "Value" "GND"
-      (at 218.44 96.21 0)
+      (at 218.44 97.11 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13621,7 +13621,7 @@
       )
     )
     (property "Value" "GND"
-      (at 261.62 68.27 0)
+      (at 261.62 69.17 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13677,7 +13677,7 @@
       )
     )
     (property "Value" "GND"
-      (at 375.92 115.26 0)
+      (at 375.92 116.16 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13733,7 +13733,7 @@
       )
     )
     (property "Value" "GND"
-      (at 382.27 115.26 0)
+      (at 382.27 116.16 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13789,7 +13789,7 @@
       )
     )
     (property "Value" "GND"
-      (at 427.99 63.19 0)
+      (at 427.99 64.09 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13845,7 +13845,7 @@
       )
     )
     (property "Value" "GND"
-      (at 434.34 64.46 0)
+      (at 434.34 65.36 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13901,7 +13901,7 @@
       )
     )
     (property "Value" "GND"
-      (at 434.34 96.21 0)
+      (at 434.34 97.11 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -13957,7 +13957,7 @@
       )
     )
     (property "Value" "GND"
-      (at 330.2 122.88 0)
+      (at 330.2 123.78 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14013,7 +14013,7 @@
       )
     )
     (property "Value" "GND"
-      (at 360.68 122.88 0)
+      (at 360.68 123.78 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14069,7 +14069,7 @@
       )
     )
     (property "Value" "GND"
-      (at 421.64 117.8 0)
+      (at 421.64 118.7 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14125,7 +14125,7 @@
       )
     )
     (property "Value" "GND"
-      (at 490.22 191.46 0)
+      (at 490.22 192.36 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14181,7 +14181,7 @@
       )
     )
     (property "Value" "GND"
-      (at 492.76 191.46 0)
+      (at 492.76 192.36 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14237,7 +14237,7 @@
       )
     )
     (property "Value" "GND"
-      (at 495.3 191.46 0)
+      (at 495.3 192.36 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14293,7 +14293,7 @@
       )
     )
     (property "Value" "GND"
-      (at 476.25 178.76 0)
+      (at 476.25 179.66 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14349,7 +14349,7 @@
       )
     )
     (property "Value" "GND"
-      (at 485.14 206.7 0)
+      (at 485.14 207.6 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14405,7 +14405,7 @@
       )
     )
     (property "Value" "GND"
-      (at 500.38 206.7 0)
+      (at 500.38 207.6 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14461,7 +14461,7 @@
       )
     )
     (property "Value" "GND"
-      (at 524.51 178.76 0)
+      (at 524.51 179.66 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14517,7 +14517,7 @@
       )
     )
     (property "Value" "GND"
-      (at 541.02 191.46 0)
+      (at 541.02 192.36 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14573,7 +14573,7 @@
       )
     )
     (property "Value" "GND"
-      (at 533.4 206.7 0)
+      (at 533.4 207.6 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14629,7 +14629,7 @@
       )
     )
     (property "Value" "GND"
-      (at 548.64 206.7 0)
+      (at 548.64 207.6 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14685,7 +14685,7 @@
       )
     )
     (property "Value" "GND"
-      (at 313.69 190.19 0)
+      (at 313.69 191.09 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14741,7 +14741,7 @@
       )
     )
     (property "Value" "GND"
-      (at 320.04 190.19 0)
+      (at 320.04 191.09 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14797,7 +14797,7 @@
       )
     )
     (property "Value" "GND"
-      (at 44.45 186.38 0)
+      (at 44.45 187.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14853,7 +14853,7 @@
       )
     )
     (property "Value" "GND"
-      (at 41.91 215.59 0)
+      (at 41.91 216.49 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14909,7 +14909,7 @@
       )
     )
     (property "Value" "GND"
-      (at 49.53 215.59 0)
+      (at 49.53 216.49 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14965,7 +14965,7 @@
       )
     )
     (property "Value" "GND"
-      (at 57.15 215.59 0)
+      (at 57.15 216.49 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15021,7 +15021,7 @@
       )
     )
     (property "Value" "GND"
-      (at 63.5 187.65 0)
+      (at 63.5 188.55 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15077,7 +15077,7 @@
       )
     )
     (property "Value" "GND"
-      (at 81.28 152.09 0)
+      (at 81.28 144.19 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15133,7 +15133,7 @@
       )
     )
     (property "Value" "GND"
-      (at 81.28 185.11 0)
+      (at 81.28 186.01 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15189,7 +15189,7 @@
       )
     )
     (property "Value" "GND"
-      (at 193.04 178.76 0)
+      (at 193.04 179.66 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15245,7 +15245,7 @@
       )
     )
     (property "Value" "GND"
-      (at 193.04 201.62 0)
+      (at 193.04 202.52 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15301,7 +15301,7 @@
       )
     )
     (property "Value" "GND"
-      (at 180.34 168.6 0)
+      (at 180.34 169.5 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15357,7 +15357,7 @@
       )
     )
     (property "Value" "GND"
-      (at 177.8 171.14 0)
+      (at 177.8 172.04 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15413,7 +15413,7 @@
       )
     )
     (property "Value" "GND"
-      (at 180.34 204.16 0)
+      (at 180.34 205.06 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15469,7 +15469,7 @@
       )
     )
     (property "Value" "GND"
-      (at 177.8 206.7 0)
+      (at 177.8 207.6 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15525,7 +15525,7 @@
       )
     )
     (property "Value" "GND"
-      (at 180.34 209.24 0)
+      (at 180.34 210.14 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15581,7 +15581,7 @@
       )
     )
     (property "Value" "GND"
-      (at 177.8 214.32 0)
+      (at 177.8 215.22 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15637,7 +15637,7 @@
       )
     )
     (property "Value" "GND"
-      (at 180.34 219.4 0)
+      (at 180.34 220.3 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15693,7 +15693,7 @@
       )
     )
     (property "Value" "GND"
-      (at 415.29 183.84 0)
+      (at 415.29 184.74 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15749,7 +15749,7 @@
       )
     )
     (property "Value" "GND"
-      (at 402.59 206.7 0)
+      (at 402.59 207.6 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15805,7 +15805,7 @@
       )
     )
     (property "Value" "GND"
-      (at 388.62 197.81 0)
+      (at 388.62 198.71 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15861,7 +15861,7 @@
       )
     )
     (property "Value" "GND"
-      (at 502.92 39.06 0)
+      (at 502.92 39.96 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15917,7 +15917,7 @@
       )
     )
     (property "Value" "GND"
-      (at 502.92 56.84 0)
+      (at 502.92 57.74 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15973,7 +15973,7 @@
       )
     )
     (property "Value" "GND"
-      (at 355.6 93.67 0)
+      (at 355.6 94.57 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16029,7 +16029,7 @@
       )
     )
     (property "Value" "VBUS"
-      (at 243.84 47.95 0)
+      (at 243.84 40.05 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16085,7 +16085,7 @@
       )
     )
     (property "Value" "VBUS"
-      (at 233.68 68.27 0)
+      (at 233.68 60.37 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16141,7 +16141,7 @@
       )
     )
     (property "Value" "VBUS"
-      (at 284.48 31.44 0)
+      (at 284.48 23.54 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16197,7 +16197,7 @@
       )
     )
     (property "Value" "VBUS"
-      (at 276.86 31.44 0)
+      (at 276.86 23.54 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16415,7 +16415,7 @@
     (dnp no)
     (uuid "3d04e5c1-d7b7-5f22-a9c7-7edd6d03db85")
     (property "Reference" "J1"
-      (at 27.94 25.88 0)
+      (at 29.21 35.72 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16423,7 +16423,7 @@
       )
     )
     (property "Value" "JST-PH-2 BAT"
-      (at 27.94 28.38 0)
+      (at 29.21 37.92 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16482,7 +16482,7 @@
     (dnp no)
     (uuid "9ac43feb-4f57-557b-ae1b-e72836289200")
     (property "Reference" "JP1"
-      (at 45.72 28.42 0)
+      (at 45.72 28.12 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16490,7 +16490,7 @@
       )
     )
     (property "Value" "MEAS"
-      (at 45.72 30.92 0)
+      (at 45.72 30.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16549,7 +16549,7 @@
     (dnp yes)
     (uuid "2fec8db9-f8be-5152-8513-f53601107e0e")
     (property "Reference" "J2"
-      (at 48.26 41.12 0)
+      (at 46.99 40.82 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16557,7 +16557,7 @@
       )
     )
     (property "Value" "MEAS_HDR"
-      (at 48.26 43.62 0)
+      (at 46.99 43.02 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16616,7 +16616,7 @@
     (dnp no)
     (uuid "b278556e-9c48-53c4-b4c4-cb542085487b")
     (property "Reference" "TP1"
-      (at 64.77 28.42 0)
+      (at 64.77 25.58 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16624,7 +16624,7 @@
       )
     )
     (property "Value" "VBAT"
-      (at 64.77 30.92 0)
+      (at 64.77 27.78 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16680,7 +16680,7 @@
     (dnp no)
     (uuid "dafb2a78-5e11-53a9-a436-b1b50eb62022")
     (property "Reference" "TP2"
-      (at 73.66 41.12 0)
+      (at 73.66 38.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16688,7 +16688,7 @@
       )
     )
     (property "Value" "GND"
-      (at 73.66 43.62 0)
+      (at 73.66 40.48 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16744,7 +16744,7 @@
     (dnp no)
     (uuid "bba345d4-e708-5e75-b0a7-b516b89ad4ca")
     (property "Reference" "TP3"
-      (at 81.28 41.12 0)
+      (at 81.28 38.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16752,7 +16752,7 @@
       )
     )
     (property "Value" "GND"
-      (at 81.28 43.62 0)
+      (at 81.28 40.48 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16808,7 +16808,7 @@
     (dnp no)
     (uuid "6f595ea9-a966-5d3c-b928-eca9c2c43c44")
     (property "Reference" "U2"
-      (at 137.16 28.42 0)
+      (at 137.16 28.12 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16816,7 +16816,7 @@
       )
     )
     (property "Value" "RT9080-33GJ5"
-      (at 137.16 30.92 0)
+      (at 137.16 30.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16884,19 +16884,21 @@
     (dnp no)
     (uuid "73a1c7f3-ff17-558c-b014-bc5970ed3c35")
     (property "Reference" "C1"
-      (at 115.57 33.5 0)
+      (at 113.37 40.71 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "10uF"
-      (at 115.57 36 0)
+      (at 113.37 43.11 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
@@ -16951,19 +16953,21 @@
     (dnp no)
     (uuid "a15f2448-8a0e-554a-8cc4-195c34eace8e")
     (property "Reference" "C2"
-      (at 121.92 33.5 0)
+      (at 124.12 40.71 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "22uF/25V"
-      (at 121.92 36 0)
+      (at 124.12 43.11 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
@@ -17018,19 +17022,21 @@
     (dnp no)
     (uuid "ebae18d1-37c0-58e8-b5f1-1c44eea08634")
     (property "Reference" "C3"
-      (at 152.4 33.5 0)
+      (at 150.2 40.71 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "10uF"
-      (at 152.4 36 0)
+      (at 150.2 43.11 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
@@ -17085,19 +17091,21 @@
     (dnp no)
     (uuid "6457035b-8a0e-525a-a482-59f59beac47a")
     (property "Reference" "C4"
-      (at 158.75 33.5 0)
+      (at 160.95 40.71 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100nF"
-      (at 158.75 36 0)
+      (at 160.95 43.11 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -17152,19 +17160,21 @@
     (dnp no)
     (uuid "1b4c661c-f9a6-5e04-9843-5580831f5b5c")
     (property "Reference" "TP4"
-      (at 163.83 28.42 0)
+      (at 166.03 29.28 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "3V3"
-      (at 163.83 30.92 0)
+      (at 166.03 31.68 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
@@ -17216,7 +17226,7 @@
     (dnp no)
     (uuid "555ee4ce-daa8-5a48-b92e-abc0dce4a61a")
     (property "Reference" "J3"
-      (at 203.2 33.5 0)
+      (at 204.47 33.2 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17224,7 +17234,7 @@
       )
     )
     (property "Value" "USB-C"
-      (at 203.2 36 0)
+      (at 204.47 35.4 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17328,19 +17338,21 @@
     (dnp no)
     (uuid "8ffbd83c-a63b-56a4-a15e-eb7a4b259630")
     (property "Reference" "R1"
-      (at 231.14 25.88 0)
+      (at 228.94 33.09 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "5.1k"
-      (at 231.14 28.38 0)
+      (at 228.94 35.49 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -17395,19 +17407,21 @@
     (dnp no)
     (uuid "328143a8-2b8e-5339-94ef-1a3cbbd890eb")
     (property "Reference" "R2"
-      (at 236.22 25.88 0)
+      (at 238.42 33.09 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "5.1k"
-      (at 236.22 28.38 0)
+      (at 238.42 35.49 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -17462,19 +17476,21 @@
     (dnp no)
     (uuid "c104034f-c600-5410-bf34-607faf55b9ff")
     (property "Reference" "U3"
-      (at 243.84 43.66 0)
+      (at 239.1 53.41 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "USBLC6-2SC6"
-      (at 243.84 46.16 0)
+      (at 239.1 55.81 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Package_TO_SOT_SMD:SOT-23-6"
@@ -17541,19 +17557,21 @@
     (dnp no)
     (uuid "1dde4970-d220-54ab-b552-72b03e98a95d")
     (property "Reference" "C5"
-      (at 284.48 27.15 0)
+      (at 286.68 34.36 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 284.48 29.65 0)
+      (at 286.68 36.76 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
@@ -17608,19 +17626,21 @@
     (dnp no)
     (uuid "c19a3862-35f2-5ae8-8ebc-ad6960ca1e01")
     (property "Reference" "U4"
-      (at 233.68 63.98 0)
+      (at 223.86 75 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "MCP73831-2"
-      (at 233.68 66.48 0)
+      (at 223.86 77.4 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Package_TO_SOT_SMD:SOT-23-5"
@@ -17684,19 +17704,21 @@
     (dnp no)
     (uuid "5d5c85d0-baf4-547f-9fc6-68c59591d901")
     (property "Reference" "R3"
-      (at 218.44 76.68 0)
+      (at 220.64 83.89 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "10k"
-      (at 218.44 79.18 0)
+      (at 220.64 86.29 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -17751,19 +17773,21 @@
     (dnp no)
     (uuid "e947f440-9fd1-572c-8f4a-483229a23d40")
     (property "Reference" "C6"
-      (at 248.92 72.87 0)
+      (at 251.12 80.08 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 248.92 75.37 0)
+      (at 251.12 82.48 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
@@ -17818,19 +17842,21 @@
     (dnp no)
     (uuid "7bd13384-42f6-5fd8-b8a1-05d486073430")
     (property "Reference" "R4"
-      (at 276.86 27.15 0)
+      (at 279.06 34.36 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "1k"
-      (at 276.86 29.65 0)
+      (at 279.06 36.76 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -17885,19 +17911,21 @@
     (dnp no)
     (uuid "d6e44a7f-8c05-5c0a-961f-cf97231efc3a")
     (property "Reference" "D1"
-      (at 276.86 37.31 0)
+      (at 279.06 44.52 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "CHG red"
-      (at 276.86 39.81 0)
+      (at 279.06 46.92 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "LED_SMD:LED_0603_1608Metric"
@@ -17952,7 +17980,7 @@
     (dnp no)
     (uuid "78244978-917e-5742-9b36-60bd7983aa1a")
     (property "Reference" "D2"
-      (at 261.62 28.42 0)
+      (at 261.62 28.12 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17960,7 +17988,7 @@
       )
     )
     (property "Value" "SS14"
-      (at 261.62 30.92 0)
+      (at 261.62 30.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18019,7 +18047,7 @@
     (dnp no)
     (uuid "5aa262d1-f935-5d72-8391-171f7eeb8e7d")
     (property "Reference" "Q1"
-      (at 261.62 38.58 0)
+      (at 261.62 38.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18027,7 +18055,7 @@
       )
     )
     (property "Value" "AO3401A"
-      (at 261.62 41.08 0)
+      (at 261.62 40.48 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18089,19 +18117,21 @@
     (dnp no)
     (uuid "f59a167d-ab31-58b3-b19d-7a388628714a")
     (property "Reference" "R5"
-      (at 261.62 48.74 0)
+      (at 263.82 55.95 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100k"
-      (at 261.62 51.24 0)
+      (at 263.82 58.35 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -18156,7 +18186,7 @@
     (dnp no)
     (uuid "6aef81f9-634b-5d93-b81b-7e6617341880")
     (property "Reference" "U1"
-      (at 355.6 30.96 0)
+      (at 355.6 33.2 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18164,7 +18194,7 @@
       )
     )
     (property "Value" "ESP32-C6-MINI-1-N4"
-      (at 355.6 33.46 0)
+      (at 355.6 35.4 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18376,19 +18406,21 @@
     (dnp no)
     (uuid "16f5ada8-aded-5ba4-88bd-2cd9baf17926")
     (property "Reference" "C7"
-      (at 375.92 95.73 0)
+      (at 373.72 102.94 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "10uF"
-      (at 375.92 98.23 0)
+      (at 373.72 105.34 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
@@ -18443,19 +18475,21 @@
     (dnp no)
     (uuid "ad570a39-35ea-5fa7-8387-2540cd378fd4")
     (property "Reference" "C8"
-      (at 382.27 95.73 0)
+      (at 384.47 102.94 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100nF"
-      (at 382.27 98.23 0)
+      (at 384.47 105.34 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -18510,19 +18544,21 @@
     (dnp no)
     (uuid "2f15d042-3d87-52bd-b27b-8c5aaaa3ac77")
     (property "Reference" "R6"
-      (at 421.64 30.96 0)
+      (at 423.84 38.17 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "10k"
-      (at 421.64 33.46 0)
+      (at 423.84 40.57 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -18577,19 +18613,21 @@
     (dnp no)
     (uuid "a9dfdf7d-5403-5b67-968e-f851f0f5a641")
     (property "Reference" "C9"
-      (at 427.99 43.66 0)
+      (at 425.79 50.87 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "1uF"
-      (at 427.99 46.16 0)
+      (at 425.79 53.27 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -18644,19 +18682,21 @@
     (dnp no)
     (uuid "ade0951c-f701-5212-9343-146529b6a430")
     (property "Reference" "SW1"
-      (at 434.34 42.39 0)
+      (at 436.54 50.87 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "RESET"
-      (at 434.34 44.89 0)
+      (at 436.54 53.27 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "local:SW_TS-1187A"
@@ -18711,19 +18751,21 @@
     (dnp no)
     (uuid "311be395-326a-5d43-a0be-1eaeaa4bc1d9")
     (property "Reference" "SW2"
-      (at 434.34 74.14 0)
+      (at 436.54 82.62 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "BOOT"
-      (at 434.34 76.64 0)
+      (at 436.54 85.02 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "local:SW_TS-1187A"
@@ -18778,19 +18820,21 @@
     (dnp no)
     (uuid "ddb9869c-fef4-5add-8948-6fd6bc55e797")
     (property "Reference" "R7"
-      (at 421.64 62.71 0)
+      (at 423.84 69.92 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "10k"
-      (at 421.64 65.21 0)
+      (at 423.84 72.32 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -18845,19 +18889,21 @@
     (dnp no)
     (uuid "c00acb22-b9c8-5d64-b408-07f3da2e67d4")
     (property "Reference" "D3"
-      (at 421.64 98.27 0)
+      (at 423.84 105.48 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "STATUS green"
-      (at 421.64 100.77 0)
+      (at 423.84 107.88 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "LED_SMD:LED_0603_1608Metric"
@@ -18912,19 +18958,21 @@
     (dnp no)
     (uuid "a18e0ae2-8397-56ba-b508-86af888110c2")
     (property "Reference" "R8"
-      (at 421.64 88.11 0)
+      (at 423.84 95.32 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "1k"
-      (at 421.64 90.61 0)
+      (at 423.84 97.72 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -18979,7 +19027,7 @@
     (dnp no)
     (uuid "7f9c8131-fc3a-5823-a991-20fe2e25abe3")
     (property "Reference" "Y1"
-      (at 345.44 99.54 0)
+      (at 345.44 99.24 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18987,7 +19035,7 @@
       )
     )
     (property "Value" "32.768kHz FC-135"
-      (at 345.44 102.04 0)
+      (at 345.44 101.44 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19046,19 +19094,21 @@
     (dnp no)
     (uuid "f8de6d9d-d2c8-5aec-9169-b4e49b35c65c")
     (property "Reference" "C10"
-      (at 330.2 103.35 0)
+      (at 328 110.56 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "20pF"
-      (at 330.2 105.85 0)
+      (at 328 112.96 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -19113,19 +19163,21 @@
     (dnp no)
     (uuid "74dca2e7-1896-5bed-8685-ac6c44cbb8af")
     (property "Reference" "C11"
-      (at 360.68 103.35 0)
+      (at 362.88 110.56 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "20pF"
-      (at 360.68 105.85 0)
+      (at 362.88 112.96 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -19180,7 +19232,7 @@
     (dnp yes)
     (uuid "bda7e976-443c-5197-a769-4633218560f1")
     (property "Reference" "R9"
-      (at 339.09 112.24 0)
+      (at 339.09 111.94 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19188,7 +19240,7 @@
       )
     )
     (property "Value" "10M"
-      (at 339.09 114.74 0)
+      (at 339.09 114.14 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19247,7 +19299,7 @@
     (dnp no)
     (uuid "3ad71bb4-ed67-504d-b10b-9fb1a043888d")
     (property "Reference" "U5"
-      (at 492.76 157.96 0)
+      (at 492.76 157.66 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19255,7 +19307,7 @@
       )
     )
     (property "Value" "BMP581"
-      (at 492.76 160.46 0)
+      (at 492.76 159.86 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19338,7 +19390,7 @@
     (dnp no)
     (uuid "ddbeedb4-48f1-5ed8-a221-0222fb962225")
     (property "Reference" "R10"
-      (at 518.16 149.07 0)
+      (at 518.16 150.04 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19346,7 +19398,7 @@
       )
     )
     (property "Value" "4.7k"
-      (at 518.16 151.57 0)
+      (at 518.16 152.24 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19405,19 +19457,21 @@
     (dnp no)
     (uuid "401bdbea-eb6a-5ab5-8fe7-356725576267")
     (property "Reference" "R11"
-      (at 513.08 146.53 0)
+      (at 510.88 153.74 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "4.7k"
-      (at 513.08 149.03 0)
+      (at 510.88 156.14 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -19472,19 +19526,21 @@
     (dnp no)
     (uuid "825c34bf-f3c6-5843-9804-e805dcc46630")
     (property "Reference" "C12"
-      (at 485.14 187.17 0)
+      (at 482.94 194.38 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "100nF"
-      (at 485.14 189.67 0)
+      (at 482.94 196.78 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -19539,19 +19595,21 @@
     (dnp no)
     (uuid "2d5e5c2f-b6c0-5063-803c-9d1afac2bc5b")
     (property "Reference" "C13"
-      (at 500.38 187.17 0)
+      (at 502.58 194.38 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100nF"
-      (at 500.38 189.67 0)
+      (at 502.58 196.78 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -19606,7 +19664,7 @@
     (dnp yes)
     (uuid "30ae88a3-381b-5556-8d8d-2fdb9df6c335")
     (property "Reference" "U6"
-      (at 541.02 157.96 0)
+      (at 541.02 157.66 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19614,7 +19672,7 @@
       )
     )
     (property "Value" "BMP585"
-      (at 541.02 160.46 0)
+      (at 541.02 159.86 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -19694,19 +19752,21 @@
     (dnp yes)
     (uuid "4862caa1-745e-50ec-85cd-92131c13b16b")
     (property "Reference" "C26"
-      (at 533.4 187.17 0)
+      (at 535.6 194.38 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100nF"
-      (at 533.4 189.67 0)
+      (at 535.6 196.78 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -19761,19 +19821,21 @@
     (dnp yes)
     (uuid "658c0e8b-adb8-501e-a0cd-e7e3537d5707")
     (property "Reference" "C27"
-      (at 548.64 187.17 0)
+      (at 550.84 194.38 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100nF"
-      (at 548.64 189.67 0)
+      (at 550.84 196.78 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -19828,19 +19890,21 @@
     (dnp no)
     (uuid "739a215d-e99c-5a1f-acb5-81f6fc5c2820")
     (property "Reference" "Q2"
-      (at 311.15 152.88 0)
+      (at 306.41 161.36 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "AO3401A"
-      (at 311.15 155.38 0)
+      (at 306.41 163.76 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Package_TO_SOT_SMD:SOT-23"
@@ -19898,19 +19962,21 @@
     (dnp no)
     (uuid "46fde3c2-3bc4-5ad6-a4da-2b126d6ac342")
     (property "Reference" "R12"
-      (at 321.31 147.8 0)
+      (at 323.51 155.01 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "10k"
-      (at 321.31 150.3 0)
+      (at 323.51 157.41 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -19965,19 +20031,21 @@
     (dnp no)
     (uuid "0db5c84e-8b81-553f-8a0c-3f78f953b421")
     (property "Reference" "C14"
-      (at 313.69 170.66 0)
+      (at 311.49 177.87 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "10uF"
-      (at 313.69 173.16 0)
+      (at 311.49 180.27 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
@@ -20032,19 +20100,21 @@
     (dnp no)
     (uuid "dd13b905-08f0-5e31-9750-0d195646d63b")
     (property "Reference" "C15"
-      (at 320.04 170.66 0)
+      (at 322.24 177.87 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100nF"
-      (at 320.04 173.16 0)
+      (at 322.24 180.27 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
@@ -20099,7 +20169,7 @@
     (dnp no)
     (uuid "1ee43105-84be-5ab6-ba6b-7bc3f43431d1")
     (property "Reference" "TP5"
-      (at 326.39 168.12 0)
+      (at 326.39 165.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20107,7 +20177,7 @@
       )
     )
     (property "Value" "EPD_VCC"
-      (at 326.39 170.62 0)
+      (at 326.39 167.48 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20163,7 +20233,7 @@
     (dnp no)
     (uuid "c5f84954-873d-50e6-a15d-02e37e5d475e")
     (property "Reference" "L1"
-      (at 43.18 155.42 0)
+      (at 43.18 155.12 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20171,7 +20241,7 @@
       )
     )
     (property "Value" "10uH SWPA4030S"
-      (at 43.18 157.92 0)
+      (at 43.18 157.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20230,7 +20300,7 @@
     (dnp no)
     (uuid "7e9dc03b-8d88-5a00-9420-237abac50038")
     (property "Reference" "Q3"
-      (at 55.88 160.5 0)
+      (at 55.88 164.01 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20238,7 +20308,7 @@
       )
     )
     (property "Value" "Si1308EDL"
-      (at 55.88 163 0)
+      (at 55.88 166.21 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20300,7 +20370,7 @@
     (dnp no)
     (uuid "ab82f0f0-1924-5baa-a5b3-2bd217c2f3b3")
     (property "Reference" "R13"
-      (at 44.45 166.85 0)
+      (at 44.45 167.82 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20308,7 +20378,7 @@
       )
     )
     (property "Value" "10k"
-      (at 44.45 169.35 0)
+      (at 44.45 170.02 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20367,19 +20437,21 @@
     (dnp no)
     (uuid "2f03ef50-94ba-54bf-8754-cb0fbfa336a3")
     (property "Reference" "R14"
-      (at 41.91 183.36 0)
+      (at 39.71 190.57 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "0.47R 1%"
-      (at 41.91 185.86 0)
+      (at 39.71 192.97 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0805_2012Metric"
@@ -20434,19 +20506,21 @@
     (dnp no)
     (uuid "43cf4360-b4df-5fd5-ad51-8076a83c7283")
     (property "Reference" "R15"
-      (at 49.53 183.36 0)
+      (at 51.73 190.57 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "2.2R 1%"
-      (at 49.53 185.86 0)
+      (at 51.73 192.97 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0805_2012Metric"
@@ -20501,19 +20575,21 @@
     (dnp no)
     (uuid "574537e6-31c7-5fd4-bb69-ed2fe9a0382c")
     (property "Reference" "R16"
-      (at 57.15 183.36 0)
+      (at 59.35 190.57 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "3.0R 1%"
-      (at 57.15 185.86 0)
+      (at 59.35 192.97 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0805_2012Metric"
@@ -20568,19 +20644,21 @@
     (dnp no)
     (uuid "260f6344-40e4-5dc1-aae3-1c14732c1d45")
     (property "Reference" "JP2"
-      (at 41.91 193.52 0)
+      (at 39.71 202 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "RESE 0.47R"
-      (at 41.91 196.02 0)
+      (at 39.71 204.4 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm"
@@ -20635,19 +20713,21 @@
     (dnp no)
     (uuid "df150983-2c40-50d4-a769-1acbaf0b98a6")
     (property "Reference" "JP3"
-      (at 49.53 193.52 0)
+      (at 51.73 202 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "RESE 2.2R"
-      (at 49.53 196.02 0)
+      (at 51.73 204.4 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm"
@@ -20702,19 +20782,21 @@
     (dnp no)
     (uuid "e4db35ba-c209-5e00-bc2b-5de71f0c7864")
     (property "Reference" "JP4"
-      (at 57.15 193.52 0)
+      (at 59.35 202 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "RESE 3R"
-      (at 57.15 196.02 0)
+      (at 59.35 204.4 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm"
@@ -20769,7 +20851,7 @@
     (dnp no)
     (uuid "a4b13cb1-e979-55fd-b1c2-2c68f691d95c")
     (property "Reference" "D4"
-      (at 73.66 155.42 0)
+      (at 73.66 155.12 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20777,7 +20859,7 @@
       )
     )
     (property "Value" "MBR0530"
-      (at 73.66 157.92 0)
+      (at 73.66 157.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20836,19 +20918,21 @@
     (dnp no)
     (uuid "61a51c5a-1a8e-5015-ae03-a5f9d8f942b3")
     (property "Reference" "D5"
-      (at 63.5 168.12 0)
+      (at 65.7 175.33 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "MBR0530"
-      (at 63.5 170.62 0)
+      (at 65.7 177.73 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Diode_SMD:D_SOD-123"
@@ -20903,7 +20987,7 @@
     (dnp no)
     (uuid "f82e3f7b-1a6e-58ee-8903-a6bac2dbaebf")
     (property "Reference" "D6"
-      (at 71.12 165.58 0)
+      (at 71.12 165.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20911,7 +20995,7 @@
       )
     )
     (property "Value" "MBR0530"
-      (at 71.12 168.08 0)
+      (at 71.12 167.48 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -20970,19 +21054,21 @@
     (dnp no)
     (uuid "9774fd5e-ad63-5653-801d-83f7fd93888d")
     (property "Reference" "C16"
-      (at 63.5 157.96 0)
+      (at 65.7 165.17 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 63.5 160.46 0)
+      (at 65.7 167.57 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
@@ -21037,7 +21123,7 @@
     (dnp no)
     (uuid "ea19f29e-35af-5a38-8628-d86e5c1aaf24")
     (property "Reference" "C17"
-      (at 81.28 147.8 0)
+      (at 81.28 159.926 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21045,7 +21131,7 @@
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 81.28 150.3 0)
+      (at 81.28 162.126 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21104,19 +21190,21 @@
     (dnp no)
     (uuid "7b570c9e-36b0-57c8-9fe8-0a5f379991b2")
     (property "Reference" "C18"
-      (at 81.28 165.58 0)
+      (at 83.48 172.79 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 81.28 168.08 0)
+      (at 83.48 175.19 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
@@ -21171,7 +21259,7 @@
     (dnp no)
     (uuid "bd099183-6df6-584e-a262-0e871e46a253")
     (property "Reference" "TP6"
-      (at 87.63 155.42 0)
+      (at 87.63 152.58 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21179,7 +21267,7 @@
       )
     )
     (property "Value" "PREVGH"
-      (at 87.63 157.92 0)
+      (at 87.63 154.78 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21235,7 +21323,7 @@
     (dnp no)
     (uuid "0a1a726f-beb8-5f10-ab81-148e612f6991")
     (property "Reference" "TP7"
-      (at 87.63 165.58 0)
+      (at 87.63 162.74 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21243,7 +21331,7 @@
       )
     )
     (property "Value" "PREVGL"
-      (at 87.63 168.08 0)
+      (at 87.63 164.94 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21299,7 +21387,7 @@
     (dnp no)
     (uuid "5f921015-4700-5ddc-a98a-f79204ce0c6f")
     (property "Reference" "TP8"
-      (at 39.37 166.85 0)
+      (at 39.37 164.01 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21307,7 +21395,7 @@
       )
     )
     (property "Value" "GDR"
-      (at 39.37 169.35 0)
+      (at 39.37 166.21 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21363,7 +21451,7 @@
     (dnp no)
     (uuid "d77525a6-68cd-5127-9ecb-d5e879bb4b01")
     (property "Reference" "TP9"
-      (at 36.83 180.82 0)
+      (at 36.83 177.98 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21371,7 +21459,7 @@
       )
     )
     (property "Value" "RESE"
-      (at 36.83 183.32 0)
+      (at 36.83 180.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21427,7 +21515,7 @@
     (dnp no)
     (uuid "3aa15086-f35a-541e-a4dc-5dfa949ab7af")
     (property "Reference" "J4"
-      (at 201.93 152.88 0)
+      (at 200.66 152.58 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21435,7 +21523,7 @@
       )
     )
     (property "Value" "EPD FPC24 0.5mm"
-      (at 201.93 155.38 0)
+      (at 200.66 154.78 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21560,7 +21648,7 @@
     (dnp no)
     (uuid "100223a8-63ef-57c6-b111-354f86b95b23")
     (property "Reference" "C19"
-      (at 187.96 160.5 0)
+      (at 187.96 160.2 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21568,7 +21656,7 @@
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 187.96 163 0)
+      (at 187.96 162.4 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21627,7 +21715,7 @@
     (dnp no)
     (uuid "60fac123-6420-5f9d-946a-66be8030d630")
     (property "Reference" "C20"
-      (at 185.42 163.04 0)
+      (at 185.42 170.34 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21635,7 +21723,7 @@
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 185.42 165.54 0)
+      (at 185.42 172.54 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21694,7 +21782,7 @@
     (dnp no)
     (uuid "98d73c6d-a2e6-526d-9f1e-976e4b3b376b")
     (property "Reference" "C21"
-      (at 187.96 196.06 0)
+      (at 187.96 195.76 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21702,7 +21790,7 @@
       )
     )
     (property "Value" "1uF/50V"
-      (at 187.96 198.56 0)
+      (at 187.96 197.96 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21761,7 +21849,7 @@
     (dnp no)
     (uuid "b61da80d-83f5-5fbd-b61f-a8f79067962d")
     (property "Reference" "C22"
-      (at 185.42 198.6 0)
+      (at 185.42 198.3 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21769,7 +21857,7 @@
       )
     )
     (property "Value" "1uF/50V"
-      (at 185.42 201.1 0)
+      (at 185.42 200.5 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21828,7 +21916,7 @@
     (dnp no)
     (uuid "38acd7b5-73f3-5a48-a7b6-941c24e5c295")
     (property "Reference" "C23"
-      (at 187.96 201.14 0)
+      (at 187.96 208.44 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21836,7 +21924,7 @@
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 187.96 203.64 0)
+      (at 187.96 210.64 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21895,7 +21983,7 @@
     (dnp no)
     (uuid "a64ed916-4a7a-55c3-97ea-940469c9d9d5")
     (property "Reference" "C24"
-      (at 185.42 206.22 0)
+      (at 185.42 213.52 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21903,7 +21991,7 @@
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 185.42 208.72 0)
+      (at 185.42 215.72 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21962,7 +22050,7 @@
     (dnp no)
     (uuid "560efeda-b855-5139-8d4a-a2971c89aab4")
     (property "Reference" "C25"
-      (at 187.96 211.3 0)
+      (at 187.96 218.6 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21970,7 +22058,7 @@
       )
     )
     (property "Value" "1uF/50V"
-      (at 187.96 213.8 0)
+      (at 187.96 220.8 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -22029,19 +22117,21 @@
     (dnp no)
     (uuid "4baf48c7-a302-50a4-8721-f95f36f7980e")
     (property "Reference" "R17"
-      (at 248.92 161.77 0)
+      (at 251.12 168.98 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "10k"
-      (at 248.92 164.27 0)
+      (at 251.12 171.38 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -22088,7 +22178,7 @@
   )
   (symbol
     (lib_id "Connector:TestPoint")
-    (at 194.31 215.9 0)
+    (at 194.31 215.9 180)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -22096,7 +22186,7 @@
     (dnp no)
     (uuid "6028bb86-4952-5a56-8c50-05a7b8a592d5")
     (property "Reference" "TP10"
-      (at 194.31 211.3 0)
+      (at 194.31 221.14 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -22104,7 +22194,7 @@
       )
     )
     (property "Value" "VCOM"
-      (at 194.31 213.8 0)
+      (at 194.31 223.34 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -22160,19 +22250,21 @@
     (dnp no)
     (uuid "c48e2ed8-7449-5d0e-877d-45597d44214d")
     (property "Reference" "Q4"
-      (at 391.16 150.34 0)
+      (at 386.42 158.82 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "AO3401A"
-      (at 391.16 152.84 0)
+      (at 386.42 161.22 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "Package_TO_SOT_SMD:SOT-23"
@@ -22230,19 +22322,21 @@
     (dnp no)
     (uuid "5b927844-8b56-5e9d-9977-ad7f7f965f37")
     (property "Reference" "Q5"
-      (at 412.75 161.77 0)
+      (at 417.49 170.25 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "2N7002"
-      (at 412.75 164.27 0)
+      (at 417.49 172.65 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Package_TO_SOT_SMD:SOT-23"
@@ -22300,7 +22394,7 @@
     (dnp no)
     (uuid "e22fac31-0903-52d4-b08b-ad0c15ed5f6e")
     (property "Reference" "R18"
-      (at 402.59 145.26 0)
+      (at 402.59 146.23 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -22308,7 +22402,7 @@
       )
     )
     (property "Value" "100k"
-      (at 402.59 147.76 0)
+      (at 402.59 148.43 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -22367,19 +22461,21 @@
     (dnp no)
     (uuid "5e9e922b-147d-5288-9a68-9a2c11a0a581")
     (property "Reference" "R19"
-      (at 402.59 187.17 0)
+      (at 404.79 194.38 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100k"
-      (at 402.59 189.67 0)
+      (at 404.79 196.78 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -22434,19 +22530,21 @@
     (dnp no)
     (uuid "4e1a8a0e-5e90-5654-91eb-63eac025a4f0")
     (property "Reference" "R20"
-      (at 388.62 164.31 0)
+      (at 390.82 171.52 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100k 1%"
-      (at 388.62 166.81 0)
+      (at 390.82 173.92 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -22501,19 +22599,21 @@
     (dnp no)
     (uuid "75b54b89-4f5e-565c-9fb5-189f573b0cae")
     (property "Reference" "R21"
-      (at 388.62 178.28 0)
+      (at 390.82 185.49 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Value" "100k 1%"
-      (at 388.62 180.78 0)
+      (at 390.82 187.89 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
@@ -22568,19 +22668,21 @@
     (dnp no)
     (uuid "72c18b4c-9d18-5780-b1ce-9c11a56fde55")
     (property "Reference" "TP11"
-      (at 388.62 174.47 0)
+      (at 386.42 175.33 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Value" "VBAT_ADC"
-      (at 388.62 176.97 0)
+      (at 386.42 177.73 0)
       (effects
         (font
           (size 1.27 1.27)
         )
+        (justify right)
       )
     )
     (property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
@@ -22632,7 +22734,7 @@
     (dnp yes)
     (uuid "f0c2a432-21e0-5e4a-859e-031a3454ef7b")
     (property "Reference" "J5"
-      (at 511.81 25.88 0)
+      (at 510.54 25.58 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -22640,7 +22742,7 @@
       )
     )
     (property "Value" "DEBUG"
-      (at 511.81 28.38 0)
+      (at 510.54 27.78 0)
       (effects
         (font
           (size 1.27 1.27)
