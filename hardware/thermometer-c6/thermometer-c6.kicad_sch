@@ -8118,35 +8118,35 @@
   (wire
     (pts
       (xy 218.44 38.1)
-      (xy 220.98 38.1)
+      (xy 223.52 38.1)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "b2349e97-b672-5fb6-be8c-d49a4f21e646")
+    (uuid "2f4cdffc-2d07-50ab-bbb1-38a1827e5f81")
   )
   (wire
     (pts
-      (xy 220.98 38.1)
-      (xy 220.98 40.64)
+      (xy 223.52 38.1)
+      (xy 223.52 40.64)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "39ad699a-a416-538c-80ae-81cec8e932bd")
+    (uuid "7c02c4bf-aa5f-5520-861e-f74828017a0f")
   )
   (wire
     (pts
-      (xy 220.98 40.64)
-      (xy 220.98 38.1)
+      (xy 223.52 40.64)
+      (xy 223.52 38.1)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "bff4d7fc-cc3d-58f9-9b95-b0f79687679c")
+    (uuid "ad18921a-2760-5ef6-9727-fba756331e07")
   )
   (wire
     (pts
@@ -8348,25 +8348,69 @@
   )
   (wire
     (pts
-      (xy 298.45 39.37)
-      (xy 298.45 43.18)
+      (xy 302.26 39.37)
+      (xy 302.26 43.18)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "63634135-ecca-5246-bd4c-edfc19fc08f4")
+    (uuid "ca91c36d-1cb9-5dd9-8e81-ac32036d97c5")
   )
   (wire
     (pts
-      (xy 298.45 43.18)
-      (xy 303.53 43.18)
+      (xy 289.56 31.75)
+      (xy 289.56 27.94)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "9d432e06-a63e-5b85-932b-9fc12eddbd87")
+    (uuid "adc60530-23e4-5098-9f5a-cc630aea7aa6")
+  )
+  (wire
+    (pts
+      (xy 289.56 27.94)
+      (xy 302.26 27.94)
+    )
+    (stroke
+      (width 0)
+      (type default)
+    )
+    (uuid "fcc77a76-1c04-594c-a256-d6b3889104be")
+  )
+  (wire
+    (pts
+      (xy 295.91 31.75)
+      (xy 295.91 27.94)
+    )
+    (stroke
+      (width 0)
+      (type default)
+    )
+    (uuid "d7c1d59a-d60f-5d20-8e48-72b8b2ca3111")
+  )
+  (wire
+    (pts
+      (xy 302.26 31.75)
+      (xy 302.26 27.94)
+    )
+    (stroke
+      (width 0)
+      (type default)
+    )
+    (uuid "408c78e2-75a0-5c5b-a3cb-9c54316ec0b1")
+  )
+  (wire
+    (pts
+      (xy 302.26 43.18)
+      (xy 307.34 43.18)
+    )
+    (stroke
+      (width 0)
+      (type default)
+    )
+    (uuid "720c7b07-47f7-5024-8163-3a4fb76ffffd")
   )
   (wire
     (pts
@@ -8437,24 +8481,24 @@
   (wire
     (pts
       (xy 243.84 73.66)
-      (xy 257.81 73.66)
+      (xy 265.43 73.66)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "c64f5339-91d2-5bf9-a3b7-8e3c5f7293ff")
+    (uuid "a33a6e47-763f-5c8d-8b50-8dedde18578a")
   )
   (wire
     (pts
-      (xy 255.27 77.47)
-      (xy 255.27 73.66)
+      (xy 262.89 77.47)
+      (xy 262.89 73.66)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "ca696949-1188-5d04-ba3c-23bbae394ae1")
+    (uuid "f08a1281-8435-5772-b3d6-624c56e95661")
   )
   (wire
     (pts
@@ -8470,24 +8514,24 @@
   (wire
     (pts
       (xy 276.86 49.53)
-      (xy 276.86 78.74)
+      (xy 276.86 60.96)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "4c238ff5-aad0-5634-85a4-fd75bf4fb5fa")
+    (uuid "8c3942f8-ea19-59fc-bfec-66b0987ac450")
   )
   (wire
     (pts
-      (xy 276.86 78.74)
       (xy 243.84 78.74)
+      (xy 247.65 78.74)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "db81fb55-bffb-578c-9ce5-fe76a1e442fb")
+    (uuid "a50bf9a3-2f37-5ea6-8f80-ba65ff00bffc")
   )
   (wire
     (pts
@@ -9225,6 +9269,39 @@
       (type default)
     )
     (uuid "abe0d60f-f71c-5bb6-a541-13dbbea11684")
+  )
+  (wire
+    (pts
+      (xy 44.45 179.07)
+      (xy 44.45 180.34)
+    )
+    (stroke
+      (width 0)
+      (type default)
+    )
+    (uuid "90d62487-b5a8-5517-b4a2-61bf67cb2b45")
+  )
+  (wire
+    (pts
+      (xy 44.45 180.34)
+      (xy 21.59 180.34)
+    )
+    (stroke
+      (width 0)
+      (type default)
+    )
+    (uuid "9b2791cf-dfbc-5738-967b-5c92db2f8912")
+  )
+  (wire
+    (pts
+      (xy 21.59 180.34)
+      (xy 21.59 189.23)
+    )
+    (stroke
+      (width 0)
+      (type default)
+    )
+    (uuid "2de7d677-7f22-5d96-ae56-00c6c736dae9")
   )
   (wire
     (pts
@@ -10372,14 +10449,14 @@
   )
   (wire
     (pts
-      (xy 290.83 39.37)
-      (xy 290.83 43.18)
+      (xy 289.56 39.37)
+      (xy 289.56 43.18)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "60585a6e-b75a-5946-992d-6aff82a5163a")
+    (uuid "e2c4d392-4797-51bb-82cc-168df024b066")
   )
   (wire
     (pts
@@ -10394,14 +10471,14 @@
   )
   (wire
     (pts
-      (xy 255.27 85.09)
-      (xy 255.27 88.9)
+      (xy 262.89 85.09)
+      (xy 262.89 88.9)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "af7298e6-5d92-55ad-865a-fe7da23693c6")
+    (uuid "8d21de73-45c3-5845-b074-f9d8a60374af")
   )
   (wire
     (pts
@@ -10592,17 +10669,6 @@
   )
   (wire
     (pts
-      (xy 44.45 179.07)
-      (xy 44.45 182.88)
-    )
-    (stroke
-      (width 0)
-      (type default)
-    )
-    (uuid "dd4f01f6-5dfe-5825-921e-7de86c004d6f")
-  )
-  (wire
-    (pts
       (xy 39.37 208.28)
       (xy 39.37 212.09)
     )
@@ -10713,14 +10779,14 @@
   )
   (wire
     (pts
-      (xy 298.45 50.8)
-      (xy 298.45 54.61)
+      (xy 302.26 50.8)
+      (xy 302.26 54.61)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "97de3a39-63b3-5974-aafc-87d28ed15e62")
+    (uuid "ca48571a-ed36-57dd-98cd-dd4a7d951973")
   )
   (wire
     (pts
@@ -10735,14 +10801,14 @@
   )
   (wire
     (pts
-      (xy 294.64 39.37)
-      (xy 294.64 43.18)
+      (xy 295.91 39.37)
+      (xy 295.91 43.18)
     )
     (stroke
       (width 0)
       (type default)
     )
-    (uuid "d6ea6d1b-d763-5aef-b7ba-f5ef0ba63deb")
+    (uuid "9e56fd59-1567-5e0c-834a-91477548fe99")
   )
   (wire
     (pts
@@ -10845,17 +10911,6 @@
   )
   (wire
     (pts
-      (xy 290.83 31.75)
-      (xy 290.83 27.94)
-    )
-    (stroke
-      (width 0)
-      (type default)
-    )
-    (uuid "16a506a9-c59d-5648-9d2b-1c42b38c090b")
-  )
-  (wire
-    (pts
       (xy 276.86 31.75)
       (xy 276.86 27.94)
     )
@@ -10864,28 +10919,6 @@
       (type default)
     )
     (uuid "a64943af-3a15-5e0d-a8e1-2ac85e3fd11a")
-  )
-  (wire
-    (pts
-      (xy 298.45 31.75)
-      (xy 298.45 27.94)
-    )
-    (stroke
-      (width 0)
-      (type default)
-    )
-    (uuid "6f6d1139-c12c-5b0b-a954-45d1840a5285")
-  )
-  (wire
-    (pts
-      (xy 294.64 31.75)
-      (xy 294.64 27.94)
-    )
-    (stroke
-      (width 0)
-      (type default)
-    )
-    (uuid "81b70bd6-5452-5fb4-bf2c-5db24951b5d7")
   )
   (wire
     (pts
@@ -11147,10 +11180,10 @@
     (uuid "e10d8429-3fa0-5cb1-8723-b266669c4424")
   )
   (junction
-    (at 220.98 38.1)
+    (at 223.52 38.1)
     (diameter 0)
     (color 0 0 0 0)
-    (uuid "dd2693c6-7636-535f-8b3b-56cc318411eb")
+    (uuid "63e83c87-ea07-50c5-8fb1-8fb88b086b5f")
   )
   (junction
     (at 227.33 20.32)
@@ -11171,12 +11204,6 @@
     (uuid "f52de37f-fae6-5d19-812a-6512147c49d0")
   )
   (junction
-    (at 255.27 73.66)
-    (diameter 0)
-    (color 0 0 0 0)
-    (uuid "42cd98ad-ae65-5fde-abd5-957ff0c4dba8")
-  )
-  (junction
     (at 260.35 20.32)
     (diameter 0)
     (color 0 0 0 0)
@@ -11189,16 +11216,28 @@
     (uuid "4ef7df18-8176-54dc-8a4d-3d06a2e56a1e")
   )
   (junction
+    (at 262.89 73.66)
+    (diameter 0)
+    (color 0 0 0 0)
+    (uuid "00e9e067-d3f3-5960-a812-4811a2c7e815")
+  )
+  (junction
     (at 265.43 50.8)
     (diameter 0)
     (color 0 0 0 0)
     (uuid "72d208ab-d937-50b3-a81f-90f386ceaab3")
   )
   (junction
-    (at 298.45 43.18)
+    (at 295.91 27.94)
     (diameter 0)
     (color 0 0 0 0)
-    (uuid "cb009f6a-80bb-5548-9ac7-0e01e775563e")
+    (uuid "564a0e56-35a7-5768-b387-7561b37395ad")
+  )
+  (junction
+    (at 302.26 43.18)
+    (diameter 0)
+    (color 0 0 0 0)
+    (uuid "1a9ee402-f766-51fb-a756-75a809e0da32")
   )
   (junction
     (at 313.69 175.26)
@@ -11927,25 +11966,47 @@
   )
   (global_label "VBUS_SENSE"
     (shape input)
-    (at 303.53 43.18 0)
+    (at 307.34 43.18 0)
     (effects
       (font
         (size 1.27 1.27)
       )
       (justify left)
     )
-    (uuid "6ddad33d-faba-5ea4-be43-281f36adbf70")
+    (uuid "b8002c0a-1009-5ab4-9d51-db0d3ef88de4")
+  )
+  (global_label "CHG_STAT"
+    (shape input)
+    (at 276.86 60.96 0)
+    (effects
+      (font
+        (size 1.27 1.27)
+      )
+      (justify left)
+    )
+    (uuid "4d6b28cd-0482-5539-aa93-2c90eb1d9a36")
+  )
+  (global_label "CHG_STAT"
+    (shape input)
+    (at 247.65 78.74 0)
+    (effects
+      (font
+        (size 1.27 1.27)
+      )
+      (justify left)
+    )
+    (uuid "e7ca70b4-4a7e-5de1-802e-ca21c8b98cf0")
   )
   (global_label "VBAT"
     (shape input)
-    (at 257.81 73.66 0)
+    (at 265.43 73.66 0)
     (effects
       (font
         (size 1.27 1.27)
       )
       (justify left)
     )
-    (uuid "74c7cd4d-3489-5f0e-a079-4338ee50ea07")
+    (uuid "7ee7ff7e-2d87-5449-a656-fd2ee7914133")
   )
   (global_label "EN"
     (shape input)
@@ -12369,6 +12430,62 @@
     )
   )
   (symbol
+    (lib_id "power:VBUS")
+    (at 295.91 27.94 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom no)
+    (on_board yes)
+    (dnp no)
+    (uuid "11e52dec-d875-545e-960b-c59718f4f527")
+    (property "Reference" "#PWR004"
+      (at 295.91 27.94 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "Value" "VBUS"
+      (at 295.91 23.54 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+      )
+    )
+    (property "Footprint" ""
+      (at 295.91 27.94 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "Datasheet" ""
+      (at 295.91 27.94 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (pin "1"
+      (uuid "60a1d994-190f-581b-9d82-8b70e7bac1a7")
+    )
+    (instances
+      (project "thermometer-c6"
+        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
+          (reference "#PWR004")
+          (unit 1)
+        )
+      )
+    )
+  )
+  (symbol
     (lib_id "power:+3V3")
     (at 476.25 157.48 0)
     (unit 1)
@@ -12377,7 +12494,7 @@
     (on_board yes)
     (dnp no)
     (uuid "3496c6ef-9c27-5a54-9ae7-a9d405a66ffa")
-    (property "Reference" "#PWR004"
+    (property "Reference" "#PWR005"
       (at 476.25 157.48 0)
       (effects
         (font
@@ -12418,7 +12535,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR004")
+          (reference "#PWR005")
           (unit 1)
         )
       )
@@ -12433,7 +12550,7 @@
     (on_board yes)
     (dnp no)
     (uuid "b49418a0-8031-52df-89d8-43b88f45e1fc")
-    (property "Reference" "#PWR005"
+    (property "Reference" "#PWR006"
       (at 532.13 157.48 0)
       (effects
         (font
@@ -12474,7 +12591,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR005")
+          (reference "#PWR006")
           (unit 1)
         )
       )
@@ -12489,7 +12606,7 @@
     (on_board yes)
     (dnp no)
     (uuid "ce7a2103-bb96-5053-85bb-21d69fe275aa")
-    (property "Reference" "#PWR006"
+    (property "Reference" "#PWR007"
       (at 492.76 186.69 0)
       (effects
         (font
@@ -12530,7 +12647,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR006")
+          (reference "#PWR007")
           (unit 1)
         )
       )
@@ -12545,7 +12662,7 @@
     (on_board yes)
     (dnp no)
     (uuid "fda29061-e2ee-5d7e-88d1-4c571b8ba8ff")
-    (property "Reference" "#PWR007"
+    (property "Reference" "#PWR008"
       (at 181.61 224.79 0)
       (effects
         (font
@@ -12586,7 +12703,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR007")
+          (reference "#PWR008")
           (unit 1)
         )
       )
@@ -12601,7 +12718,7 @@
     (on_board yes)
     (dnp no)
     (uuid "0059929d-a790-5670-bc11-4cc3dbc6ceb9")
-    (property "Reference" "#PWR008"
+    (property "Reference" "#PWR009"
       (at 500.38 26.67 0)
       (effects
         (font
@@ -12642,7 +12759,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR008")
+          (reference "#PWR009")
           (unit 1)
         )
       )
@@ -12657,7 +12774,7 @@
     (on_board yes)
     (dnp no)
     (uuid "867141f4-5f52-5339-bdaa-c2562580dd09")
-    (property "Reference" "#PWR009"
+    (property "Reference" "#PWR010"
       (at 495.3 26.67 0)
       (effects
         (font
@@ -12698,7 +12815,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR009")
+          (reference "#PWR010")
           (unit 1)
         )
       )
@@ -12713,7 +12830,7 @@
     (on_board yes)
     (dnp no)
     (uuid "19257af2-aff5-5cae-a492-6d0465d5c44b")
-    (property "Reference" "#PWR010"
+    (property "Reference" "#PWR011"
       (at 497.84 58.42 0)
       (effects
         (font
@@ -12754,7 +12871,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR010")
+          (reference "#PWR011")
           (unit 1)
         )
       )
@@ -12769,7 +12886,7 @@
     (on_board yes)
     (dnp no)
     (uuid "3bcd409e-d60d-531b-aae4-21dcfbe6732e")
-    (property "Reference" "#PWR011"
+    (property "Reference" "#PWR012"
       (at 328.93 156.21 0)
       (effects
         (font
@@ -12810,7 +12927,63 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR011")
+          (reference "#PWR012")
+          (unit 1)
+        )
+      )
+    )
+  )
+  (symbol
+    (lib_id "power:GND")
+    (at 21.59 189.23 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom no)
+    (on_board yes)
+    (dnp no)
+    (uuid "76b170e2-52e1-5b69-853d-a5e744471356")
+    (property "Reference" "#PWR013"
+      (at 21.59 189.23 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "Value" "GND"
+      (at 21.59 193.63 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+      )
+    )
+    (property "Footprint" ""
+      (at 21.59 189.23 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "Datasheet" ""
+      (at 21.59 189.23 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (pin "1"
+      (uuid "fbf29d9e-4835-58f7-8cad-6f2994966bbf")
+    )
+    (instances
+      (project "thermometer-c6"
+        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
+          (reference "#PWR013")
           (unit 1)
         )
       )
@@ -12825,7 +12998,7 @@
     (on_board yes)
     (dnp no)
     (uuid "0be0b99f-512a-5f25-9c22-ffce440b3a0f")
-    (property "Reference" "#PWR012"
+    (property "Reference" "#PWR014"
       (at 355.6 31.75 0)
       (effects
         (font
@@ -12866,7 +13039,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR012")
+          (reference "#PWR014")
           (unit 1)
         )
       )
@@ -12881,7 +13054,7 @@
     (on_board yes)
     (dnp no)
     (uuid "08837804-ca07-588f-a932-14ecccd5fb62")
-    (property "Reference" "#PWR013"
+    (property "Reference" "#PWR015"
       (at 375.92 96.52 0)
       (effects
         (font
@@ -12922,7 +13095,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR013")
+          (reference "#PWR015")
           (unit 1)
         )
       )
@@ -12937,7 +13110,7 @@
     (on_board yes)
     (dnp no)
     (uuid "59f4554a-894d-518b-904c-f13c476648fe")
-    (property "Reference" "#PWR014"
+    (property "Reference" "#PWR016"
       (at 382.27 96.52 0)
       (effects
         (font
@@ -12978,7 +13151,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR014")
+          (reference "#PWR016")
           (unit 1)
         )
       )
@@ -12993,7 +13166,7 @@
     (on_board yes)
     (dnp no)
     (uuid "f956ec31-95b1-573b-8ee6-7d9b25817f8a")
-    (property "Reference" "#PWR015"
+    (property "Reference" "#PWR017"
       (at 421.64 31.75 0)
       (effects
         (font
@@ -13034,7 +13207,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR015")
+          (reference "#PWR017")
           (unit 1)
         )
       )
@@ -13049,7 +13222,7 @@
     (on_board yes)
     (dnp no)
     (uuid "0ef1d4d4-a970-5e50-9dcc-5a52ecb4101d")
-    (property "Reference" "#PWR016"
+    (property "Reference" "#PWR018"
       (at 421.64 63.5 0)
       (effects
         (font
@@ -13090,7 +13263,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR016")
+          (reference "#PWR018")
           (unit 1)
         )
       )
@@ -13105,7 +13278,7 @@
     (on_board yes)
     (dnp no)
     (uuid "bdedbd12-1164-58da-b6c1-d052cd591553")
-    (property "Reference" "#PWR017"
+    (property "Reference" "#PWR019"
       (at 523.24 146.05 0)
       (effects
         (font
@@ -13146,7 +13319,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR017")
+          (reference "#PWR019")
           (unit 1)
         )
       )
@@ -13161,7 +13334,7 @@
     (on_board yes)
     (dnp no)
     (uuid "bdb80078-9dc9-5303-8d66-d0da2192b1c4")
-    (property "Reference" "#PWR018"
+    (property "Reference" "#PWR020"
       (at 515.62 146.05 0)
       (effects
         (font
@@ -13202,7 +13375,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR018")
+          (reference "#PWR020")
           (unit 1)
         )
       )
@@ -13217,7 +13390,7 @@
     (on_board yes)
     (dnp no)
     (uuid "76d02ed9-683e-5b7f-8fa5-d2264ebdfce1")
-    (property "Reference" "#PWR019"
+    (property "Reference" "#PWR021"
       (at 485.14 187.96 0)
       (effects
         (font
@@ -13258,7 +13431,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR019")
+          (reference "#PWR021")
           (unit 1)
         )
       )
@@ -13273,7 +13446,7 @@
     (on_board yes)
     (dnp no)
     (uuid "1c8f7dd1-0e70-56a6-9b2c-1db748bbb562")
-    (property "Reference" "#PWR020"
+    (property "Reference" "#PWR022"
       (at 500.38 187.96 0)
       (effects
         (font
@@ -13314,7 +13487,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR020")
+          (reference "#PWR022")
           (unit 1)
         )
       )
@@ -13329,7 +13502,7 @@
     (on_board yes)
     (dnp no)
     (uuid "9448fe96-bf60-5510-bc8b-47c9fa5a4bf7")
-    (property "Reference" "#PWR021"
+    (property "Reference" "#PWR023"
       (at 541.02 187.96 0)
       (effects
         (font
@@ -13370,7 +13543,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR021")
+          (reference "#PWR023")
           (unit 1)
         )
       )
@@ -13385,7 +13558,7 @@
     (on_board yes)
     (dnp no)
     (uuid "b8ad8c71-670e-5dbd-8653-12362913e4c0")
-    (property "Reference" "#PWR022"
+    (property "Reference" "#PWR024"
       (at 556.26 187.96 0)
       (effects
         (font
@@ -13426,7 +13599,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR022")
+          (reference "#PWR024")
           (unit 1)
         )
       )
@@ -13441,7 +13614,7 @@
     (on_board yes)
     (dnp no)
     (uuid "2c0b1111-5294-5f6c-b245-146aea6ca702")
-    (property "Reference" "#PWR023"
+    (property "Reference" "#PWR025"
       (at 308.61 156.21 0)
       (effects
         (font
@@ -13482,7 +13655,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR023")
+          (reference "#PWR025")
           (unit 1)
         )
       )
@@ -13497,7 +13670,7 @@
     (on_board yes)
     (dnp no)
     (uuid "11ddb43f-c209-563a-bede-aab0fe9f0333")
-    (property "Reference" "#PWR024"
+    (property "Reference" "#PWR026"
       (at 78.74 54.61 0)
       (effects
         (font
@@ -13538,7 +13711,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR024")
+          (reference "#PWR026")
           (unit 1)
         )
       )
@@ -13553,7 +13726,7 @@
     (on_board yes)
     (dnp no)
     (uuid "0555c664-bc97-5a93-8798-9d7622e6cd4a")
-    (property "Reference" "#PWR025"
+    (property "Reference" "#PWR027"
       (at 86.36 54.61 0)
       (effects
         (font
@@ -13594,7 +13767,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR025")
+          (reference "#PWR027")
           (unit 1)
         )
       )
@@ -13609,7 +13782,7 @@
     (on_board yes)
     (dnp no)
     (uuid "f40a97a7-9fde-57e7-9ab0-0dbb0a7dec61")
-    (property "Reference" "#PWR026"
+    (property "Reference" "#PWR028"
       (at 137.16 48.26 0)
       (effects
         (font
@@ -13650,7 +13823,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR026")
+          (reference "#PWR028")
           (unit 1)
         )
       )
@@ -13665,7 +13838,7 @@
     (on_board yes)
     (dnp no)
     (uuid "c0764e4b-f1a9-5da4-b0ed-bc2d10229923")
-    (property "Reference" "#PWR027"
+    (property "Reference" "#PWR029"
       (at 115.57 49.53 0)
       (effects
         (font
@@ -13706,7 +13879,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR027")
+          (reference "#PWR029")
           (unit 1)
         )
       )
@@ -13721,7 +13894,7 @@
     (on_board yes)
     (dnp no)
     (uuid "004b4fe8-aabf-5f61-bee6-a76478d34eee")
-    (property "Reference" "#PWR028"
+    (property "Reference" "#PWR030"
       (at 121.92 49.53 0)
       (effects
         (font
@@ -13762,7 +13935,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR028")
+          (reference "#PWR030")
           (unit 1)
         )
       )
@@ -13777,7 +13950,7 @@
     (on_board yes)
     (dnp no)
     (uuid "74fa492f-8015-5313-a097-306c2f2722ec")
-    (property "Reference" "#PWR029"
+    (property "Reference" "#PWR031"
       (at 152.4 49.53 0)
       (effects
         (font
@@ -13818,7 +13991,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR029")
+          (reference "#PWR031")
           (unit 1)
         )
       )
@@ -13833,7 +14006,7 @@
     (on_board yes)
     (dnp no)
     (uuid "a5be2bff-3ba0-5e6a-9d28-0492235b5d9a")
-    (property "Reference" "#PWR030"
+    (property "Reference" "#PWR032"
       (at 158.75 49.53 0)
       (effects
         (font
@@ -13874,7 +14047,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR030")
+          (reference "#PWR032")
           (unit 1)
         )
       )
@@ -13889,7 +14062,7 @@
     (on_board yes)
     (dnp no)
     (uuid "f380576f-3fce-5cf8-8513-ad8e7eab815e")
-    (property "Reference" "#PWR031"
+    (property "Reference" "#PWR033"
       (at 203.2 80.01 0)
       (effects
         (font
@@ -13930,7 +14103,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR031")
+          (reference "#PWR033")
           (unit 1)
         )
       )
@@ -13945,7 +14118,7 @@
     (on_board yes)
     (dnp no)
     (uuid "89917413-51c7-5d13-b465-0f365ec46b2f")
-    (property "Reference" "#PWR032"
+    (property "Reference" "#PWR034"
       (at 195.58 80.01 0)
       (effects
         (font
@@ -13986,7 +14159,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR032")
+          (reference "#PWR034")
           (unit 1)
         )
       )
@@ -14001,7 +14174,7 @@
     (on_board yes)
     (dnp no)
     (uuid "ea0372ef-0a68-555a-bffb-5a6bfd232342")
-    (property "Reference" "#PWR033"
+    (property "Reference" "#PWR035"
       (at 231.14 26.67 0)
       (effects
         (font
@@ -14042,7 +14215,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR033")
+          (reference "#PWR035")
           (unit 1)
         )
       )
@@ -14057,7 +14230,7 @@
     (on_board yes)
     (dnp no)
     (uuid "3634636d-df00-5448-84ef-3c3bb415760c")
-    (property "Reference" "#PWR034"
+    (property "Reference" "#PWR036"
       (at 236.22 26.67 0)
       (effects
         (font
@@ -14098,7 +14271,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR034")
+          (reference "#PWR036")
           (unit 1)
         )
       )
@@ -14113,7 +14286,7 @@
     (on_board yes)
     (dnp no)
     (uuid "f97d23e1-0c9a-5e32-99a9-e0c03ba108ff")
-    (property "Reference" "#PWR035"
+    (property "Reference" "#PWR037"
       (at 243.84 62.23 0)
       (effects
         (font
@@ -14154,7 +14327,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR035")
+          (reference "#PWR037")
           (unit 1)
         )
       )
@@ -14162,15 +14335,15 @@
   )
   (symbol
     (lib_id "power:GND")
-    (at 290.83 43.18 0)
+    (at 289.56 43.18 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
     (on_board yes)
     (dnp no)
-    (uuid "e88b1e68-2975-5ce3-a91e-40edd40d5bf5")
-    (property "Reference" "#PWR036"
-      (at 290.83 43.18 0)
+    (uuid "e8333856-af12-5c09-b4a1-e2d4563784c1")
+    (property "Reference" "#PWR038"
+      (at 289.56 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14179,7 +14352,7 @@
       )
     )
     (property "Value" "GND"
-      (at 290.83 47.58 0)
+      (at 289.56 47.58 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14187,7 +14360,7 @@
       )
     )
     (property "Footprint" ""
-      (at 290.83 43.18 0)
+      (at 289.56 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14196,7 +14369,7 @@
       )
     )
     (property "Datasheet" ""
-      (at 290.83 43.18 0)
+      (at 289.56 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14205,12 +14378,12 @@
       )
     )
     (pin "1"
-      (uuid "7eced1d2-a6ff-5829-9990-42f170267175")
+      (uuid "51a74b17-0f80-5fc5-a2d3-e9946f9969bd")
     )
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR036")
+          (reference "#PWR038")
           (unit 1)
         )
       )
@@ -14225,7 +14398,7 @@
     (on_board yes)
     (dnp no)
     (uuid "b163fe9b-8356-5b50-ae7c-cdba9bcd72da")
-    (property "Reference" "#PWR037"
+    (property "Reference" "#PWR039"
       (at 233.68 87.63 0)
       (effects
         (font
@@ -14266,7 +14439,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR037")
+          (reference "#PWR039")
           (unit 1)
         )
       )
@@ -14274,15 +14447,15 @@
   )
   (symbol
     (lib_id "power:GND")
-    (at 255.27 88.9 0)
+    (at 262.89 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
     (on_board yes)
     (dnp no)
-    (uuid "d1a43b06-d544-5ef8-a211-6c054166d910")
-    (property "Reference" "#PWR038"
-      (at 255.27 88.9 0)
+    (uuid "8b655367-8ab1-5bdb-aef2-d94e281381c8")
+    (property "Reference" "#PWR040"
+      (at 262.89 88.9 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14291,7 +14464,7 @@
       )
     )
     (property "Value" "GND"
-      (at 255.27 93.3 0)
+      (at 262.89 93.3 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14299,7 +14472,7 @@
       )
     )
     (property "Footprint" ""
-      (at 255.27 88.9 0)
+      (at 262.89 88.9 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14308,7 +14481,7 @@
       )
     )
     (property "Datasheet" ""
-      (at 255.27 88.9 0)
+      (at 262.89 88.9 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -14317,12 +14490,12 @@
       )
     )
     (pin "1"
-      (uuid "34020203-75d9-53b7-b8b5-72578949391f")
+      (uuid "48857f19-072f-55ba-9a12-8547db372924")
     )
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR038")
+          (reference "#PWR040")
           (unit 1)
         )
       )
@@ -14337,7 +14510,7 @@
     (on_board yes)
     (dnp no)
     (uuid "1043ba75-766e-535c-9a1b-38d44178550c")
-    (property "Reference" "#PWR039"
+    (property "Reference" "#PWR041"
       (at 218.44 92.71 0)
       (effects
         (font
@@ -14378,7 +14551,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR039")
+          (reference "#PWR041")
           (unit 1)
         )
       )
@@ -14393,7 +14566,7 @@
     (on_board yes)
     (dnp no)
     (uuid "255d7fb7-10c5-5c85-83d3-5fbd8dc25420")
-    (property "Reference" "#PWR040"
+    (property "Reference" "#PWR042"
       (at 265.43 64.77 0)
       (effects
         (font
@@ -14434,7 +14607,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR040")
+          (reference "#PWR042")
           (unit 1)
         )
       )
@@ -14449,7 +14622,7 @@
     (on_board yes)
     (dnp no)
     (uuid "5d486d62-5e1e-585b-a1bc-9cd2a857ce82")
-    (property "Reference" "#PWR041"
+    (property "Reference" "#PWR043"
       (at 375.92 111.76 0)
       (effects
         (font
@@ -14490,7 +14663,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR041")
+          (reference "#PWR043")
           (unit 1)
         )
       )
@@ -14505,7 +14678,7 @@
     (on_board yes)
     (dnp no)
     (uuid "0691cfc1-898f-5346-b71b-3543d00b2ea9")
-    (property "Reference" "#PWR042"
+    (property "Reference" "#PWR044"
       (at 382.27 111.76 0)
       (effects
         (font
@@ -14546,7 +14719,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR042")
+          (reference "#PWR044")
           (unit 1)
         )
       )
@@ -14561,7 +14734,7 @@
     (on_board yes)
     (dnp no)
     (uuid "4ee8fdae-3a17-5f6e-b562-36de2842e900")
-    (property "Reference" "#PWR043"
+    (property "Reference" "#PWR045"
       (at 427.99 59.69 0)
       (effects
         (font
@@ -14602,7 +14775,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR043")
+          (reference "#PWR045")
           (unit 1)
         )
       )
@@ -14617,7 +14790,7 @@
     (on_board yes)
     (dnp no)
     (uuid "d67ece76-b1d0-52f5-83f5-3a1ae6754eb7")
-    (property "Reference" "#PWR044"
+    (property "Reference" "#PWR046"
       (at 434.34 60.96 0)
       (effects
         (font
@@ -14658,7 +14831,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR044")
+          (reference "#PWR046")
           (unit 1)
         )
       )
@@ -14673,7 +14846,7 @@
     (on_board yes)
     (dnp no)
     (uuid "2ac8afe3-f9e9-55b6-8749-28f25cd50c84")
-    (property "Reference" "#PWR045"
+    (property "Reference" "#PWR047"
       (at 434.34 92.71 0)
       (effects
         (font
@@ -14714,7 +14887,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR045")
+          (reference "#PWR047")
           (unit 1)
         )
       )
@@ -14729,7 +14902,7 @@
     (on_board yes)
     (dnp no)
     (uuid "3ca663dd-25a6-5c3a-bc3d-ee016a3f8d60")
-    (property "Reference" "#PWR046"
+    (property "Reference" "#PWR048"
       (at 330.2 119.38 0)
       (effects
         (font
@@ -14770,7 +14943,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR046")
+          (reference "#PWR048")
           (unit 1)
         )
       )
@@ -14785,7 +14958,7 @@
     (on_board yes)
     (dnp no)
     (uuid "168b8d21-a29c-556e-88ec-a1bc54f906ba")
-    (property "Reference" "#PWR047"
+    (property "Reference" "#PWR049"
       (at 360.68 119.38 0)
       (effects
         (font
@@ -14826,7 +14999,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR047")
+          (reference "#PWR049")
           (unit 1)
         )
       )
@@ -14841,7 +15014,7 @@
     (on_board yes)
     (dnp no)
     (uuid "636359e8-1e00-5668-9460-0fc7adfcfb76")
-    (property "Reference" "#PWR048"
+    (property "Reference" "#PWR050"
       (at 421.64 114.3 0)
       (effects
         (font
@@ -14882,7 +15055,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR048")
+          (reference "#PWR050")
           (unit 1)
         )
       )
@@ -14897,7 +15070,7 @@
     (on_board yes)
     (dnp no)
     (uuid "b7ff4581-18e7-51c6-8f52-0475c2721f0c")
-    (property "Reference" "#PWR049"
+    (property "Reference" "#PWR051"
       (at 485.14 203.2 0)
       (effects
         (font
@@ -14938,7 +15111,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR049")
+          (reference "#PWR051")
           (unit 1)
         )
       )
@@ -14953,7 +15126,7 @@
     (on_board yes)
     (dnp no)
     (uuid "108264d2-f0ee-5507-bfd9-7f287203f549")
-    (property "Reference" "#PWR050"
+    (property "Reference" "#PWR052"
       (at 500.38 203.2 0)
       (effects
         (font
@@ -14994,7 +15167,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR050")
+          (reference "#PWR052")
           (unit 1)
         )
       )
@@ -15009,7 +15182,7 @@
     (on_board yes)
     (dnp no)
     (uuid "bc6694f9-513b-59af-a51c-574b6f2753a2")
-    (property "Reference" "#PWR051"
+    (property "Reference" "#PWR053"
       (at 548.64 187.96 0)
       (effects
         (font
@@ -15050,7 +15223,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR051")
+          (reference "#PWR053")
           (unit 1)
         )
       )
@@ -15065,7 +15238,7 @@
     (on_board yes)
     (dnp no)
     (uuid "bfa99eaa-871f-529f-ad8c-da3f1631e002")
-    (property "Reference" "#PWR052"
+    (property "Reference" "#PWR054"
       (at 541.02 203.2 0)
       (effects
         (font
@@ -15106,7 +15279,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR052")
+          (reference "#PWR054")
           (unit 1)
         )
       )
@@ -15121,7 +15294,7 @@
     (on_board yes)
     (dnp no)
     (uuid "01d4c962-0bae-56f8-a8e8-8100f20a1f85")
-    (property "Reference" "#PWR053"
+    (property "Reference" "#PWR055"
       (at 556.26 203.2 0)
       (effects
         (font
@@ -15162,7 +15335,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR053")
+          (reference "#PWR055")
           (unit 1)
         )
       )
@@ -15177,7 +15350,7 @@
     (on_board yes)
     (dnp no)
     (uuid "c0a22886-f036-5145-84bd-92917e12611d")
-    (property "Reference" "#PWR054"
+    (property "Reference" "#PWR056"
       (at 313.69 189.23 0)
       (effects
         (font
@@ -15218,7 +15391,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR054")
+          (reference "#PWR056")
           (unit 1)
         )
       )
@@ -15233,7 +15406,7 @@
     (on_board yes)
     (dnp no)
     (uuid "95db6bb4-1af5-5521-915b-ca65093d98a0")
-    (property "Reference" "#PWR055"
+    (property "Reference" "#PWR057"
       (at 320.04 189.23 0)
       (effects
         (font
@@ -15274,63 +15447,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR055")
-          (unit 1)
-        )
-      )
-    )
-  )
-  (symbol
-    (lib_id "power:GND")
-    (at 44.45 182.88 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom no)
-    (on_board yes)
-    (dnp no)
-    (uuid "9377b3d1-6c29-5751-a93d-00d57af85dde")
-    (property "Reference" "#PWR056"
-      (at 44.45 182.88 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Value" "GND"
-      (at 44.45 187.28 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-      )
-    )
-    (property "Footprint" ""
-      (at 44.45 182.88 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Datasheet" ""
-      (at 44.45 182.88 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (pin "1"
-      (uuid "11ed6078-7092-5d10-ad34-0270bd9f97ad")
-    )
-    (instances
-      (project "thermometer-c6"
-        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR056")
+          (reference "#PWR057")
           (unit 1)
         )
       )
@@ -15345,7 +15462,7 @@
     (on_board yes)
     (dnp no)
     (uuid "814226b0-19e1-555b-8ab3-7c6370caed32")
-    (property "Reference" "#PWR057"
+    (property "Reference" "#PWR058"
       (at 39.37 212.09 0)
       (effects
         (font
@@ -15386,7 +15503,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR057")
+          (reference "#PWR058")
           (unit 1)
         )
       )
@@ -15401,7 +15518,7 @@
     (on_board yes)
     (dnp no)
     (uuid "104484a4-6626-5bea-afa8-238c1132b989")
-    (property "Reference" "#PWR058"
+    (property "Reference" "#PWR059"
       (at 49.53 212.09 0)
       (effects
         (font
@@ -15442,7 +15559,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR058")
+          (reference "#PWR059")
           (unit 1)
         )
       )
@@ -15457,7 +15574,7 @@
     (on_board yes)
     (dnp no)
     (uuid "1637a642-180c-522c-8f53-572e9aceb10b")
-    (property "Reference" "#PWR059"
+    (property "Reference" "#PWR060"
       (at 59.69 212.09 0)
       (effects
         (font
@@ -15498,7 +15615,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR059")
+          (reference "#PWR060")
           (unit 1)
         )
       )
@@ -15513,7 +15630,7 @@
     (on_board yes)
     (dnp no)
     (uuid "1a0c88be-8945-55c5-9312-937f194c7e8f")
-    (property "Reference" "#PWR060"
+    (property "Reference" "#PWR061"
       (at 68.58 186.69 0)
       (effects
         (font
@@ -15554,7 +15671,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR060")
+          (reference "#PWR061")
           (unit 1)
         )
       )
@@ -15569,7 +15686,7 @@
     (on_board yes)
     (dnp no)
     (uuid "53dd1ddd-0ef0-5360-89a3-107f5917de08")
-    (property "Reference" "#PWR061"
+    (property "Reference" "#PWR062"
       (at 86.36 148.59 0)
       (effects
         (font
@@ -15610,7 +15727,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR061")
+          (reference "#PWR062")
           (unit 1)
         )
       )
@@ -15625,7 +15742,7 @@
     (on_board yes)
     (dnp no)
     (uuid "3eb0b7dc-da10-5c08-9e52-9da9bdc90f0e")
-    (property "Reference" "#PWR062"
+    (property "Reference" "#PWR063"
       (at 95.25 184.15 0)
       (effects
         (font
@@ -15666,7 +15783,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR062")
+          (reference "#PWR063")
           (unit 1)
         )
       )
@@ -15681,7 +15798,7 @@
     (on_board yes)
     (dnp no)
     (uuid "dec9961a-5337-5e55-8f97-6105ef26265b")
-    (property "Reference" "#PWR063"
+    (property "Reference" "#PWR064"
       (at 420.37 180.34 0)
       (effects
         (font
@@ -15722,7 +15839,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR063")
+          (reference "#PWR064")
           (unit 1)
         )
       )
@@ -15737,7 +15854,7 @@
     (on_board yes)
     (dnp no)
     (uuid "a8d96fb6-404a-5eba-8c36-50f3ddbecd4f")
-    (property "Reference" "#PWR064"
+    (property "Reference" "#PWR065"
       (at 412.75 203.2 0)
       (effects
         (font
@@ -15778,7 +15895,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR064")
+          (reference "#PWR065")
           (unit 1)
         )
       )
@@ -15793,7 +15910,7 @@
     (on_board yes)
     (dnp no)
     (uuid "167b192b-2758-5ad7-9d07-0359d932a2d6")
-    (property "Reference" "#PWR065"
+    (property "Reference" "#PWR066"
       (at 388.62 194.31 0)
       (effects
         (font
@@ -15834,7 +15951,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR065")
+          (reference "#PWR066")
           (unit 1)
         )
       )
@@ -15849,7 +15966,7 @@
     (on_board yes)
     (dnp no)
     (uuid "e38efff5-698d-5516-b555-a7758bee8e19")
-    (property "Reference" "#PWR066"
+    (property "Reference" "#PWR067"
       (at 40.64 49.53 0)
       (effects
         (font
@@ -15890,7 +16007,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR066")
+          (reference "#PWR067")
           (unit 1)
         )
       )
@@ -15898,15 +16015,15 @@
   )
   (symbol
     (lib_id "power:GND")
-    (at 298.45 54.61 0)
+    (at 302.26 54.61 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
     (on_board yes)
     (dnp no)
-    (uuid "2acadcc4-d9e3-5475-b0c5-4bc5f6cd966b")
-    (property "Reference" "#PWR067"
-      (at 298.45 54.61 0)
+    (uuid "ac80a9fa-68a6-5fb7-bbab-6ea1c137f42a")
+    (property "Reference" "#PWR068"
+      (at 302.26 54.61 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15915,7 +16032,7 @@
       )
     )
     (property "Value" "GND"
-      (at 298.45 59.01 0)
+      (at 302.26 59.01 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15923,7 +16040,7 @@
       )
     )
     (property "Footprint" ""
-      (at 298.45 54.61 0)
+      (at 302.26 54.61 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15932,7 +16049,7 @@
       )
     )
     (property "Datasheet" ""
-      (at 298.45 54.61 0)
+      (at 302.26 54.61 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -15941,12 +16058,12 @@
       )
     )
     (pin "1"
-      (uuid "633c7391-fd82-5ee7-b866-f4b7792b51fc")
+      (uuid "5d7c36a7-33c9-5810-9555-688eeb9ec0f4")
     )
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR067")
+          (reference "#PWR068")
           (unit 1)
         )
       )
@@ -15961,7 +16078,7 @@
     (on_board yes)
     (dnp no)
     (uuid "7926ab41-d02f-59cf-865f-baff3d39e6ab")
-    (property "Reference" "#PWR068"
+    (property "Reference" "#PWR069"
       (at 396.24 193.04 0)
       (effects
         (font
@@ -16002,7 +16119,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR068")
+          (reference "#PWR069")
           (unit 1)
         )
       )
@@ -16010,15 +16127,15 @@
   )
   (symbol
     (lib_id "power:GND")
-    (at 294.64 43.18 0)
+    (at 295.91 43.18 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
     (on_board yes)
     (dnp no)
-    (uuid "0c652afc-d0bd-5294-91d1-c0f12ad3b474")
-    (property "Reference" "#PWR069"
-      (at 294.64 43.18 0)
+    (uuid "8e5eb862-1ab1-5351-93b1-332d2f23b0a7")
+    (property "Reference" "#PWR070"
+      (at 295.91 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16027,7 +16144,7 @@
       )
     )
     (property "Value" "GND"
-      (at 294.64 47.58 0)
+      (at 295.91 47.58 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16035,7 +16152,7 @@
       )
     )
     (property "Footprint" ""
-      (at 294.64 43.18 0)
+      (at 295.91 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16044,7 +16161,7 @@
       )
     )
     (property "Datasheet" ""
-      (at 294.64 43.18 0)
+      (at 295.91 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16053,12 +16170,12 @@
       )
     )
     (pin "1"
-      (uuid "fdae8c44-f956-5e11-b3f6-e8aaca5eae78")
+      (uuid "8f336bb7-48b7-59ec-8883-1c97465af431")
     )
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR069")
+          (reference "#PWR070")
           (unit 1)
         )
       )
@@ -16073,7 +16190,7 @@
     (on_board yes)
     (dnp no)
     (uuid "bd263cf1-00dd-5b6c-8ae5-e06514e34fd0")
-    (property "Reference" "#PWR070"
+    (property "Reference" "#PWR071"
       (at 355.6 90.17 0)
       (effects
         (font
@@ -16114,7 +16231,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR070")
+          (reference "#PWR071")
           (unit 1)
         )
       )
@@ -16129,7 +16246,7 @@
     (on_board yes)
     (dnp no)
     (uuid "6114bef9-8e20-5105-a5fb-25136037cd63")
-    (property "Reference" "#PWR071"
+    (property "Reference" "#PWR072"
       (at 243.84 41.91 0)
       (effects
         (font
@@ -16170,7 +16287,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR071")
+          (reference "#PWR072")
           (unit 1)
         )
       )
@@ -16185,7 +16302,7 @@
     (on_board yes)
     (dnp no)
     (uuid "c9d4678d-042d-5568-9315-d6c90aeccdc0")
-    (property "Reference" "#PWR072"
+    (property "Reference" "#PWR073"
       (at 233.68 64.77 0)
       (effects
         (font
@@ -16222,62 +16339,6 @@
     )
     (pin "1"
       (uuid "e0f0ac75-3de1-5aeb-913d-082c8af86f72")
-    )
-    (instances
-      (project "thermometer-c6"
-        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR072")
-          (unit 1)
-        )
-      )
-    )
-  )
-  (symbol
-    (lib_id "power:VBUS")
-    (at 290.83 27.94 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom no)
-    (on_board yes)
-    (dnp no)
-    (uuid "e02115cc-59a0-5a8c-8181-367726dae27e")
-    (property "Reference" "#PWR073"
-      (at 290.83 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Value" "VBUS"
-      (at 290.83 23.54 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-      )
-    )
-    (property "Footprint" ""
-      (at 290.83 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Datasheet" ""
-      (at 290.83 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (pin "1"
-      (uuid "333210ea-64c4-5c76-ad3f-ac47a9fdfd17")
     )
     (instances
       (project "thermometer-c6"
@@ -16345,128 +16406,16 @@
     )
   )
   (symbol
-    (lib_id "power:VBUS")
-    (at 298.45 27.94 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom no)
-    (on_board yes)
-    (dnp no)
-    (uuid "08f21084-3174-5539-bb79-b762953a4f5e")
-    (property "Reference" "#PWR075"
-      (at 298.45 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Value" "VBUS"
-      (at 298.45 23.54 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-      )
-    )
-    (property "Footprint" ""
-      (at 298.45 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Datasheet" ""
-      (at 298.45 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (pin "1"
-      (uuid "4d8aa9d8-4d28-5a67-b300-610e69593256")
-    )
-    (instances
-      (project "thermometer-c6"
-        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR075")
-          (unit 1)
-        )
-      )
-    )
-  )
-  (symbol
-    (lib_id "power:VBUS")
-    (at 294.64 27.94 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom no)
-    (on_board yes)
-    (dnp no)
-    (uuid "bd58af46-eab2-5ef6-b7a4-125cb08afdb0")
-    (property "Reference" "#PWR076"
-      (at 294.64 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Value" "VBUS"
-      (at 294.64 23.54 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-      )
-    )
-    (property "Footprint" ""
-      (at 294.64 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (property "Datasheet" ""
-      (at 294.64 27.94 0)
-      (effects
-        (font
-          (size 1.27 1.27)
-        )
-        (hide yes)
-      )
-    )
-    (pin "1"
-      (uuid "44b23640-acad-565a-84ab-6d06868ab775")
-    )
-    (instances
-      (project "thermometer-c6"
-        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#PWR076")
-          (unit 1)
-        )
-      )
-    )
-  )
-  (symbol
     (lib_id "power:PWR_FLAG")
-    (at 34.29 31.75 0)
+    (at 497.84 53.34 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "377ff41e-c493-5eee-98cc-0df768c3cc0c")
-    (property "Reference" "#FLG077"
-      (at 34.29 31.75 0)
+    (property "Reference" "#FLG075"
+      (at 497.84 53.34 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16475,7 +16424,7 @@
       )
     )
     (property "Value" "PWR_FLAG"
-      (at 34.29 29.75 0)
+      (at 497.84 51.34 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16484,7 +16433,7 @@
       )
     )
     (property "Footprint" ""
-      (at 34.29 31.75 0)
+      (at 497.84 53.34 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16493,7 +16442,7 @@
       )
     )
     (property "Datasheet" ""
-      (at 34.29 31.75 0)
+      (at 497.84 53.34 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16507,7 +16456,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#FLG077")
+          (reference "#FLG075")
           (unit 1)
         )
       )
@@ -16515,15 +16464,15 @@
   )
   (symbol
     (lib_id "power:PWR_FLAG")
-    (at 227.33 20.32 0)
+    (at 223.52 20.32 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "8689be47-c0fe-55e8-80f1-30bb757c70ff")
-    (property "Reference" "#FLG078"
-      (at 227.33 20.32 0)
+    (property "Reference" "#FLG076"
+      (at 223.52 20.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16532,7 +16481,7 @@
       )
     )
     (property "Value" "PWR_FLAG"
-      (at 227.33 18.32 0)
+      (at 223.52 18.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16541,7 +16490,7 @@
       )
     )
     (property "Footprint" ""
-      (at 227.33 20.32 0)
+      (at 223.52 20.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16550,7 +16499,7 @@
       )
     )
     (property "Datasheet" ""
-      (at 227.33 20.32 0)
+      (at 223.52 20.32 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16564,7 +16513,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#FLG078")
+          (reference "#FLG076")
           (unit 1)
         )
       )
@@ -16572,15 +16521,15 @@
   )
   (symbol
     (lib_id "power:PWR_FLAG")
-    (at 125.73 33.02 0)
+    (at 270.51 43.18 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "b56440ae-9ca3-508a-9626-a47db98197cb")
-    (property "Reference" "#FLG079"
-      (at 125.73 33.02 0)
+    (property "Reference" "#FLG077"
+      (at 270.51 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16589,7 +16538,7 @@
       )
     )
     (property "Value" "PWR_FLAG"
-      (at 125.73 31.02 0)
+      (at 270.51 41.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16598,7 +16547,7 @@
       )
     )
     (property "Footprint" ""
-      (at 125.73 33.02 0)
+      (at 270.51 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16607,7 +16556,7 @@
       )
     )
     (property "Datasheet" ""
-      (at 125.73 33.02 0)
+      (at 270.51 43.18 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -16621,7 +16570,7 @@
     (instances
       (project "thermometer-c6"
         (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
-          (reference "#FLG079")
+          (reference "#FLG077")
           (unit 1)
         )
       )
@@ -17447,7 +17396,7 @@
   )
   (symbol
     (lib_id "Connector:TestPoint")
-    (at 163.83 33.02 0)
+    (at 163.83 33.02 180)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -17455,21 +17404,21 @@
     (dnp no)
     (uuid "1b4c661c-f9a6-5e04-9843-5580831f5b5c")
     (property "Reference" "TP4"
-      (at 166.792 28.518 0)
+      (at 166.792 35.122 0)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify left)
+        (justify right)
       )
     )
     (property "Value" "3V3"
-      (at 166.792 30.918 0)
+      (at 166.792 37.522 0)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify left)
+        (justify right)
         (hide yes)
       )
     )
@@ -17634,7 +17583,7 @@
     (dnp no)
     (uuid "8ffbd83c-a63b-56a4-a15e-eb7a4b259630")
     (property "Reference" "R1"
-      (at 227.924 39.53 0)
+      (at 227.924 33.09 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17643,7 +17592,7 @@
       )
     )
     (property "Value" "5.1k"
-      (at 227.924 41.73 0)
+      (at 227.924 35.49 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17845,7 +17794,7 @@
   )
   (symbol
     (lib_id "Device:C")
-    (at 290.83 35.56 0)
+    (at 289.56 35.56 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -17853,7 +17802,7 @@
     (dnp no)
     (uuid "1dde4970-d220-54ab-b552-72b03e98a95d")
     (property "Reference" "C5"
-      (at 288.63 39.276 0)
+      (at 287.36 39.276 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17862,7 +17811,7 @@
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 288.63 41.476 0)
+      (at 287.36 41.476 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17871,7 +17820,7 @@
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-      (at 290.83 35.56 0)
+      (at 289.56 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17880,7 +17829,7 @@
       )
     )
     (property "Datasheet" "~"
-      (at 290.83 35.56 0)
+      (at 289.56 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -17889,7 +17838,7 @@
       )
     )
     (property "LCSC" "C1779"
-      (at 290.83 35.56 0)
+      (at 289.56 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18061,7 +18010,7 @@
   )
   (symbol
     (lib_id "Device:C")
-    (at 255.27 81.28 0)
+    (at 262.89 81.28 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -18069,7 +18018,7 @@
     (dnp no)
     (uuid "e947f440-9fd1-572c-8f4a-483229a23d40")
     (property "Reference" "C6"
-      (at 257.47 82.58 0)
+      (at 265.09 80.08 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18078,7 +18027,7 @@
       )
     )
     (property "Value" "4.7uF/25V"
-      (at 257.47 84.98 0)
+      (at 265.09 82.48 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18087,7 +18036,7 @@
       )
     )
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-      (at 255.27 81.28 0)
+      (at 262.89 81.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18096,7 +18045,7 @@
       )
     )
     (property "Datasheet" "~"
-      (at 255.27 81.28 0)
+      (at 262.89 81.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18105,7 +18054,7 @@
       )
     )
     (property "LCSC" "C1779"
-      (at 255.27 81.28 0)
+      (at 262.89 81.28 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18474,7 +18423,7 @@
   )
   (symbol
     (lib_id "Device:R")
-    (at 298.45 35.56 0)
+    (at 302.26 35.56 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -18482,7 +18431,7 @@
     (dnp no)
     (uuid "f1beff89-fb97-5348-b2e5-996172d88e95")
     (property "Reference" "R22"
-      (at 301.666 34.36 0)
+      (at 305.476 34.36 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18491,7 +18440,7 @@
       )
     )
     (property "Value" "100k"
-      (at 301.666 36.76 0)
+      (at 305.476 36.76 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18500,7 +18449,7 @@
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 298.45 35.56 0)
+      (at 302.26 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18509,7 +18458,7 @@
       )
     )
     (property "Datasheet" "~"
-      (at 298.45 35.56 0)
+      (at 302.26 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18518,7 +18467,7 @@
       )
     )
     (property "LCSC" "C25741"
-      (at 298.45 35.56 0)
+      (at 302.26 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18543,7 +18492,7 @@
   )
   (symbol
     (lib_id "Device:R")
-    (at 298.45 46.99 0)
+    (at 302.26 46.99 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -18551,7 +18500,7 @@
     (dnp no)
     (uuid "de07af26-1876-537d-afab-5162581d7a98")
     (property "Reference" "R23"
-      (at 301.666 45.79 0)
+      (at 305.476 45.79 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18560,7 +18509,7 @@
       )
     )
     (property "Value" "100k"
-      (at 301.666 48.19 0)
+      (at 305.476 48.19 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18569,7 +18518,7 @@
       )
     )
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 298.45 46.99 0)
+      (at 302.26 46.99 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18578,7 +18527,7 @@
       )
     )
     (property "Datasheet" "~"
-      (at 298.45 46.99 0)
+      (at 302.26 46.99 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18587,7 +18536,7 @@
       )
     )
     (property "LCSC" "C25741"
-      (at 298.45 46.99 0)
+      (at 302.26 46.99 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18612,7 +18561,7 @@
   )
   (symbol
     (lib_id "Device:D_TVS")
-    (at 294.64 35.56 270)
+    (at 295.91 35.56 270)
     (unit 1)
     (exclude_from_sim no)
     (in_bom no)
@@ -18620,25 +18569,25 @@
     (dnp yes)
     (uuid "47f191f5-5a0d-5873-afea-8b790131ada0")
     (property "Reference" "D7"
-      (at 296.84 36.86 90)
+      (at 293.71 29.39 90)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify left)
+        (justify right)
       )
     )
     (property "Value" "SMF5.0A"
-      (at 296.84 39.26 90)
+      (at 293.71 31.59 90)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify left)
+        (justify right)
       )
     )
     (property "Footprint" "Diode_SMD:D_SOD-123F"
-      (at 294.64 35.56 0)
+      (at 295.91 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18647,7 +18596,7 @@
       )
     )
     (property "Datasheet" "~"
-      (at 294.64 35.56 0)
+      (at 295.91 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -18656,7 +18605,7 @@
       )
     )
     (property "LCSC" ""
-      (at 294.64 35.56 0)
+      (at 295.91 35.56 0)
       (effects
         (font
           (size 1.27 1.27)
@@ -21357,21 +21306,19 @@
     (dnp no)
     (uuid "43cf4360-b4df-5fd5-ad51-8076a83c7283")
     (property "Reference" "R15"
-      (at 52.746 190.57 0)
+      (at 49.53 181.83 0)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify left)
       )
     )
     (property "Value" "2.2R 1%"
-      (at 52.746 192.97 0)
+      (at 49.53 184.03 0)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify left)
       )
     )
     (property "Footprint" "Resistor_SMD:R_0805_2012Metric"
@@ -22307,21 +22254,21 @@
     (dnp no)
     (uuid "d77525a6-68cd-5127-9ecb-d5e879bb4b01")
     (property "Reference" "TP9"
-      (at 33.868 180.918 0)
+      (at 39.792 183.418 0)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify right)
+        (justify left)
       )
     )
     (property "Value" "RESE"
-      (at 33.868 183.318 0)
+      (at 39.792 185.818 0)
       (effects
         (font
           (size 1.27 1.27)
         )
-        (justify right)
+        (justify left)
         (hide yes)
       )
     )
@@ -23808,7 +23755,7 @@
   )
   (rectangle
     (start 184.69 12.32)
-    (end 318.83 100.71)
+    (end 322.64 100.71)
     (stroke
       (width 0.1)
       (type dash)

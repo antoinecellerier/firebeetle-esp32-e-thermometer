@@ -688,10 +688,17 @@ def build_schematic(circuit, layout):
     flagged = set()
     for net in sorted(circuit.PWR_FLAG_NETS):
         pos = None
-        for l_, n_, p_, r_, z_ in power_placements:
-            if n_ == net:
-                pos = p_
-                break
+        if net in getattr(layout, "FLAGS", {}):
+            fz, fx, fy = layout.FLAGS[net]
+            fox, foy = layout.ZONES[fz]["origin"]
+            pos = (check_grid(fox + fx, "flag x"), check_grid(foy + fy, "flag y"))
+            if not on_net_geometry(net, pos):
+                raise SystemExit(f"FLAGS anchor for {net} at {pos} touches no {net} wire")
+        if pos is None:
+            for l_, n_, p_, r_, z_ in power_placements:
+                if n_ == net:
+                    pos = p_
+                    break
         if pos is None:
             for n_, tip, end, d in fallback:
                 if n_ == net:
