@@ -145,8 +145,12 @@ FPC-05F-24PH20 C2856805 must NOT be substituted). J4 uses the hand-drawn
 FPC-05FB-NPH20 manufacture drawing (pads 0.3×1.2 @0.5mm, tabs 2.0×1.8 at
 ±7.3/+1.625 center-to-center) and cross-checked against the EasyEDA/JLC
 C2856831 land pattern — the two agree exactly. Cable enters from the
-pad-row side; the actuator flips up at the rear; pin 1 is on the right
-viewed with cable entry pointing up (silk dot marks it).
+pad-row side; the actuator flips up at the rear; pin 1 is on the left
+viewed with cable entry pointing up (silk dot marks it). Pin-1 direction
+is verified against the DESPI-C02 manual photos (P1 silk: "1" and "24"
+end markers, "24" at the P1-refdes end) — with components up and the
+cable exiting east, panel pin 1 is at the north end. Note the DESPI "P1"
+silk next to the pin-24 marker is the connector refdes, not pin 1.
 
 ## Alternate sensor: BMP585 (U6, DNP by default)
 
@@ -188,8 +192,8 @@ against circuit.py (anonymous `~` nets matched by pin set).
 5. **JST-PH polarity**: silk will mark +; verify against your pigtails
    before first battery plug (JST vs Adafruit convention differs).
 6. **FPC footprint**: done — hand-drawn `local:XUNPU_FPC-05FB-24PH20`
-   (see BOM section). Remaining: confirm pin-1 direction against a physical
-   panel cable before ordering.
+   (see BOM section). Pin-1 direction confirmed against the DESPI-C02
+   manual photos (2026-07-08); numbering flipped accordingly.
 7. **32k crystal populated by default** — ~0.1–0.5µA for real timekeeping;
    DNP it if vetoed (firmware falls back to internal RC).
 8. Old `hardware/kicad/` Copilot draft: delete or archive — your call.

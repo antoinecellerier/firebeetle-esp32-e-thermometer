@@ -20859,7 +20859,7 @@
 		(layer "F.Cu")
 		(uuid "79ab696d-4130-508d-89b5-e1ea6cf1c329")
 		(at 144.6 116.8 -90)
-		(descr "XUNPU FPC-05FB-24PH20, 24-pin 0.5mm FPC, H2.0 rear-flip, dual (top+bottom) contact, LCSC C2856831; land per XUNPU FPC-05FB-NPH20 drawing (pads 0.3x1.2 @0.5mm, tabs 2.0x1.8 at +/-7.3/+1.625); cable enters from pad-row side (y-), actuator flips up at rear (y+); pin 1 on the right viewed with cable entry up")
+		(descr "XUNPU FPC-05FB-24PH20, 24-pin 0.5mm FPC, H2.0 rear-flip, dual (top+bottom) contact, LCSC C2856831; land per XUNPU FPC-05FB-NPH20 drawing (pads 0.3x1.2 @0.5mm, tabs 2.0x1.8 at +/-7.3/+1.625); cable enters from pad-row side (y-), actuator flips up at rear (y+); pin 1 on the left viewed with cable entry up (matches DESPI-C02 P1 mating orientation: panel cable pin 1 lands here; DESPI silk shows 1/24 with 24 at the P1-refdes end)")
 		(tags "FPC FFC XUNPU 24 0.5mm dual-contact")
 		(property "Reference" "J4"
 			(at 0 -3.2 270)
@@ -20991,8 +20991,8 @@
 			(uuid "b854d376-3075-5ee9-9c2e-b447757fd038")
 		)
 		(fp_circle
-			(center 5.75 -2.6)
-			(end 5.85 -2.6)
+			(center -5.75 -2.6)
+			(end -5.65 -2.6)
 			(stroke
 				(width 0.15)
 				(type solid)
@@ -21092,7 +21092,7 @@
 			(uuid "d62d004a-0123-58af-89bf-df9882986348")
 		)
 		(pad "1" smd rect
-			(at 5.75 -1.625 270)
+			(at -5.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "unconnected-(J4-Pin_1-Pad1)")
@@ -21100,7 +21100,7 @@
 			(uuid "085a72f3-6348-5bf5-8a41-20ba5935800c")
 		)
 		(pad "2" smd rect
-			(at 5.25 -1.625 270)
+			(at -5.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_GDR")
@@ -21108,7 +21108,7 @@
 			(uuid "1518d1c8-0336-5ca7-b3ed-6e9219d3e78b")
 		)
 		(pad "3" smd rect
-			(at 4.75 -1.625 270)
+			(at -4.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_RESE")
@@ -21116,7 +21116,7 @@
 			(uuid "d3df1b42-4968-5119-85c7-b1f594fae686")
 		)
 		(pad "4" smd rect
-			(at 4.25 -1.625 270)
+			(at -4.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "Net-(J4-Pin_4)")
@@ -21124,7 +21124,7 @@
 			(uuid "43a9a389-c881-5e72-bbc8-cbff91ad600a")
 		)
 		(pad "5" smd rect
-			(at 3.75 -1.625 270)
+			(at -3.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "Net-(J4-Pin_5)")
@@ -21132,7 +21132,7 @@
 			(uuid "c4005e05-009a-534b-ab1a-1ed1126d8040")
 		)
 		(pad "6" smd rect
-			(at 3.25 -1.625 270)
+			(at -3.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "unconnected-(J4-Pin_6-Pad6)")
@@ -21140,7 +21140,7 @@
 			(uuid "b5783448-29ca-514f-b0ea-e4dc67c9baa9")
 		)
 		(pad "7" smd rect
-			(at 2.75 -1.625 270)
+			(at -2.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "unconnected-(J4-Pin_7-Pad7)")
@@ -21148,7 +21148,7 @@
 			(uuid "ad6a0216-96e8-52ab-9e6a-ab764c2e27ef")
 		)
 		(pad "8" smd rect
-			(at 2.25 -1.625 270)
+			(at -2.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "GND")
@@ -21156,7 +21156,7 @@
 			(uuid "d3279bb0-ca5a-5393-bc08-7acb70002d27")
 		)
 		(pad "9" smd rect
-			(at 1.75 -1.625 270)
+			(at -1.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_BUSY")
@@ -21164,7 +21164,7 @@
 			(uuid "248c256a-1291-5639-bcc8-daaec6c76481")
 		)
 		(pad "10" smd rect
-			(at 1.25 -1.625 270)
+			(at -1.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_RST")
@@ -21172,7 +21172,7 @@
 			(uuid "c25b7a52-73cb-5030-8573-aa8ffa74a750")
 		)
 		(pad "11" smd rect
-			(at 0.75 -1.625 270)
+			(at -0.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_DC")
@@ -21180,7 +21180,7 @@
 			(uuid "905e8256-c317-59e2-b2bc-331fa13929c5")
 		)
 		(pad "12" smd rect
-			(at 0.25 -1.625 270)
+			(at -0.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_CS")
@@ -21188,7 +21188,7 @@
 			(uuid "f0e27059-332c-51ab-8834-464953011752")
 		)
 		(pad "13" smd rect
-			(at -0.25 -1.625 270)
+			(at 0.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_SCK")
@@ -21196,7 +21196,7 @@
 			(uuid "1151c1e8-71be-580f-9da9-deaa170a5c7f")
 		)
 		(pad "14" smd rect
-			(at -0.75 -1.625 270)
+			(at 0.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_MOSI")
@@ -21204,7 +21204,7 @@
 			(uuid "bf0a25e8-5216-5ee0-9576-7d647e39a7ff")
 		)
 		(pad "15" smd rect
-			(at -1.25 -1.625 270)
+			(at 1.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_VCC")
@@ -21212,7 +21212,7 @@
 			(uuid "9e635ab3-3a44-5e5a-a701-e5f8c34d37dc")
 		)
 		(pad "16" smd rect
-			(at -1.75 -1.625 270)
+			(at 1.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_VCC")
@@ -21220,7 +21220,7 @@
 			(uuid "825f2c7f-479a-5325-837d-d91263dd850f")
 		)
 		(pad "17" smd rect
-			(at -2.25 -1.625 270)
+			(at 2.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "GND")
@@ -21228,7 +21228,7 @@
 			(uuid "2cc0a680-35c9-5724-9ac1-8630bb7e66f6")
 		)
 		(pad "18" smd rect
-			(at -2.75 -1.625 270)
+			(at 2.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "Net-(J4-Pin_18)")
@@ -21236,7 +21236,7 @@
 			(uuid "51d95b71-8265-5d7b-bb5f-37d4995c7a75")
 		)
 		(pad "19" smd rect
-			(at -3.25 -1.625 270)
+			(at 3.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "Net-(J4-Pin_19)")
@@ -21244,7 +21244,7 @@
 			(uuid "c2bdf406-15a5-52d1-ac2e-872190fc91c3")
 		)
 		(pad "20" smd rect
-			(at -3.75 -1.625 270)
+			(at 3.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "Net-(J4-Pin_20)")
@@ -21252,7 +21252,7 @@
 			(uuid "15d99ef7-a356-5bce-a25a-67ee5d515d20")
 		)
 		(pad "21" smd rect
-			(at -4.25 -1.625 270)
+			(at 4.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_PREVGH")
@@ -21260,7 +21260,7 @@
 			(uuid "e439c7d4-7f20-5f6b-91e8-a18cd54ff017")
 		)
 		(pad "22" smd rect
-			(at -4.75 -1.625 270)
+			(at 4.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "Net-(J4-Pin_22)")
@@ -21268,7 +21268,7 @@
 			(uuid "417c109a-9a43-55ce-a617-851d50fdbfc8")
 		)
 		(pad "23" smd rect
-			(at -5.25 -1.625 270)
+			(at 5.25 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "EPD_PREVGL")
@@ -21276,7 +21276,7 @@
 			(uuid "869e559a-6cad-51a5-a56e-751c71c8d6d7")
 		)
 		(pad "24" smd rect
-			(at -5.75 -1.625 270)
+			(at 5.75 -1.625 270)
 			(size 0.3 1.2)
 			(layers "F.Cu" "F.Mask" "F.Paste")
 			(net "Net-(J4-Pin_24)")
