@@ -133,8 +133,11 @@ def add_footprints(board, netinfo, pad_net):
         board.Add(fp)
         if ref not in pl.PLACE:
             raise SystemExit(f"pcb: {ref} missing from pcb_layout.PLACE")
-        x, y, rot = pl.PLACE[ref]
+        place = pl.PLACE[ref]
+        x, y, rot = place[:3]
         fp.SetPosition(bmm(x, y))
+        if len(place) > 3 and place[3] == "B":
+            fp.Flip(fp.GetPosition(), False)  # bottom side (bench-access copper)
         fp.SetOrientationDegrees(rot)
         fp.SetPath(pcbnew.KIID_PATH("/" + ROOT_UUID + "/" + uid("sym/" + ref)))
         fp.SetDNP(bool(c.get("dnp")))
@@ -274,7 +277,7 @@ def design_settings(board):
     ds.m_TrackMinWidth = FromMM(0.15)
     ds.m_ViasMinSize = FromMM(0.5)
     ds.m_MinThroughDrill = FromMM(0.3)
-    ds.m_CopperEdgeClearance = FromMM(0.3)
+    ds.m_CopperEdgeClearance = FromMM(0.2)  # JLC min; USB-C edge pads sit at 0.31
 
 
 def write_dru(alias):
@@ -287,6 +290,14 @@ def write_dru(alias):
         f.write("(rule hv-clearance\n"
                 f"  (condition \"{cond(HV_NETS)}\")\n"
                 "  (constraint clearance (min 0.3mm)))\n")
+        # later rules take precedence: relax inside the FPC fan-out area and
+        # between J4's own 0.5mm-pitch pads (0.2mm gaps are intrinsic there)
+        f.write("(rule hv-clearance-fanout\n"
+                f"  (condition \"({cond(HV_NETS)}) && A.insideArea('fpc-fanout')\")\n"
+                "  (constraint clearance (min 0.18mm)))\n")
+        f.write("(rule hv-clearance-j4\n"
+                "  (condition \"A.memberOfFootprint('J4') && B.memberOfFootprint('J4')\")\n"
+                "  (constraint clearance (min 0.18mm)))\n")
         f.write("(rule power-track-width\n"
                 f"  (condition \"{cond(POWER_NETS)}\")\n"
                 "  (constraint track_width (min 0.5mm)))\n")
