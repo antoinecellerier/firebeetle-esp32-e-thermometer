@@ -58,6 +58,12 @@ configure; GIT_HASH shows the fallback outside PlatformIO).
 - **ULP and RTC_DATA_ATTR share the same 8KB** at `0x50000000`. `ULP_DATA_BASE` must be past all `.rtc.data`/`.rtc.force_slow` sections. The post-build script `post_build_check_rtc.py` verifies this; a runtime check in `ulp_check_data_overlap()` also aborts on overlap. `time_t` is 8 bytes on both ESP32 and C6 with ESP-IDF 5.x. On ESP32-E, `CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout ULP_DATA_BASE assumes.
 - **Footprint & build-time ledger**: `docs/footprint.md` — append a row after significant changes.
 
+## Custom PCB (hardware/thermometer-c6)
+
+Scoped rules live in `hardware/thermometer-c6/CLAUDE.md` — generated
+KiCad schematic (`make check` gates everything), never hand-edit the
+`.kicad_sch`. Next phase: `hardware/thermometer-c6/LAYOUT-PLAN.md`.
+
 ## Code conventions
 
 - Board-specific code: `#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)` / `#elif defined(ARDUINO_XIAO_ESP32C6)` / `#else #error`
