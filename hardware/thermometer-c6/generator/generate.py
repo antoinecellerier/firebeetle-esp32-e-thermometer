@@ -138,8 +138,8 @@ def seg_bbox(a, b, half=0.15):
 
 
 def body_bbox(pl):
-    """Symbol body extent estimated from pin base points (tip + length
-    toward the body), padded for the graphic's width."""
+    """Symbol body extent: union of pin base points (tip + length toward the
+    body) and the symbol's drawn rectangles, padded for stroke width."""
     import math
     xs, ys = [], []
     for p in pl.symbol.pins:
@@ -149,6 +149,11 @@ def body_bbox(pl):
         dx, dy = xform(bx, by, pl.rot)
         xs.append(pl.x + dx)
         ys.append(pl.y + dy)
+    for (x1, y1, x2, y2) in pl.symbol.rects:
+        for cx_, cy_ in ((x1, y1), (x2, y2)):
+            dx, dy = xform(cx_, cy_, pl.rot)
+            xs.append(pl.x + dx)
+            ys.append(pl.y + dy)
     if not xs:
         xs, ys = [pl.x], [pl.y]
     return (min(xs) - 1.4, min(ys) - 1.4, max(xs) + 1.4, max(ys) + 1.4)
@@ -409,6 +414,27 @@ def build_schematic(circuit, layout):
     for ref_, pl_ in placed.items():
         bodies[ref_] = body_bbox(pl_)
         obstacles.append(bodies[ref_])
+    # zone titles are 2.54mm text — keep fields out of the title band
+    for z_, zdef_ in layout.ZONES.items():
+        ox_, oy_ = zdef_["origin"]
+        obstacles.append((ox_ + 1.27, oy_ + 1.5, ox_ + 1.27 + len(z_) * 2.1, oy_ + 5.5))
+    # pin number/name texts render along the pin outside the body outline —
+    # keep fields away from the pin stems of multi-pin parts (passives hide
+    # their pin numbers, so only >=3-pin symbols need this)
+    import math as _math
+    for ref_, pl_ in placed.items():
+        if len(pl_.symbol.pins) < 3:
+            continue
+        for p_ in pl_.symbol.pins:
+            a_ = _math.radians(p_.angle)
+            bx_ = p_.x + (p_.length + 0.5) * _math.cos(a_)
+            by_ = p_.y + (p_.length + 0.5) * _math.sin(a_)
+            dx1, dy1 = xform(p_.x, p_.y, pl_.rot)
+            dx2, dy2 = xform(bx_, by_, pl_.rot)
+            x1_, y1_ = pl_.x + dx1, pl_.y + dy1
+            x2_, y2_ = pl_.x + dx2, pl_.y + dy2
+            obstacles.append((min(x1_, x2_) - 1.3, min(y1_, y2_) - 1.3,
+                              max(x1_, x2_) + 1.3, max(y1_, y2_) + 1.3))
     label_boxes = []  # (net, bbox)
     for net_, tip_, end_, d_ in fallback:
         if net_ in power_syms:
@@ -424,6 +450,9 @@ def build_schematic(circuit, layout):
     field_layout = {}
     for c in comps:
         ref = c["ref"]
+        # test points hide their Value (it would duplicate the adjacent net
+        # label); only the Reference needs a spot
+        tp_only = c["lib_id"] == "Connector:TestPoint"
         bx1, by1, bx2, by2 = bodies[ref]
         cx, cy = (bx1 + bx2) / 2, (by1 + by2) / 2
         cands = [
@@ -431,6 +460,18 @@ def build_schematic(circuit, layout):
             ((bx2 + 0.8, cy - 1.2, "left"), (bx2 + 0.8, cy + 1.2, "left")),   # right
             ((cx, by2 + 1.3, None), (cx, by2 + 3.5, None)),          # below
             ((bx1 - 0.8, cy - 1.2, "right"), (bx1 - 0.8, cy + 1.2, "right")),  # left
+            # far variants clear one wire/text lane beyond the near spots
+            ((cx, by1 - 6.0, None), (cx, by1 - 3.8, None)),          # above-far
+            ((cx, by2 + 3.8, None), (cx, by2 + 6.0, None)),          # below-far
+            ((bx2 + 0.8, cy - 3.7, "left"), (bx2 + 0.8, cy - 1.3, "left")),   # right-high
+            ((bx2 + 0.8, cy + 1.3, "left"), (bx2 + 0.8, cy + 3.7, "left")),   # right-low
+            ((cx, by1 - 8.5, None), (cx, by1 - 6.3, None)),          # above-far2
+            ((cx, by2 + 6.3, None), (cx, by2 + 8.5, None)),          # below-far2
+            # diagonal quadrants — free space often lives in the corners
+            ((bx1 - 0.8, by1 - 3.5, "right"), (bx1 - 0.8, by1 - 1.3, "right")),
+            ((bx2 + 0.8, by1 - 3.5, "left"), (bx2 + 0.8, by1 - 1.3, "left")),
+            ((bx1 - 0.8, by2 + 1.3, "right"), (bx1 - 0.8, by2 + 3.5, "right")),
+            ((bx2 + 0.8, by2 + 1.3, "left"), (bx2 + 0.8, by2 + 3.5, "left")),
         ]
         if ref in layout.FIELD_POS:
             (orx, ory, orj), (ovx, ovy, ovj) = layout.FIELD_POS[ref]
@@ -440,7 +481,9 @@ def build_schematic(circuit, layout):
         best, best_score = None, None
         for cand in cands:
             (rx, ry, rj), (vx, vy, vj) = cand
-            boxes = [bbox_text(ref, rx, ry, rj), bbox_text(c["value"], vx, vy, vj)]
+            boxes = [bbox_text(ref, rx, ry, rj)]
+            if not tp_only:
+                boxes.append(bbox_text(c["value"], vx, vy, vj))
             score = 0
             for tb in boxes:
                 for ob in obstacles:
@@ -455,7 +498,8 @@ def build_schematic(circuit, layout):
         field_layout[ref] = best
         (rx, ry, rj), (vx, vy, vj) = best
         obstacles.append(bbox_text(ref, rx, ry, rj))
-        obstacles.append(bbox_text(c["value"], vx, vy, vj))
+        if not tp_only:
+            obstacles.append(bbox_text(c["value"], vx, vy, vj))
 
     # ---- readability warnings (non-fatal) -----------------------------------
     warns = []
@@ -614,15 +658,27 @@ def build_schematic(circuit, layout):
         s = symbols[c["lib_id"]]
         x, y, rot = pl.x, pl.y, pl.rot
         (rx, ry, rj), (vx_, vy_, vj) = field_layout[c["ref"]]
+        # property text renders at symbol_rotation + property_angle, so
+        # counter-rotate 90/270 instances to keep fields horizontal (180 is
+        # already normalized to readable by KiCad — counter-rotating it
+        # would double-flip the text upside down). At effective 180 KiCad
+        # mirrors the justification while normalizing, so swap it to get the
+        # placement the autoplacer scored.
+        pa = (360 - rot) % 360 if rot in (90, 270) else 0
+        swap = {"left": "right", "right": "left", None: None}
+        hide_value = c["lib_id"] == "Connector:TestPoint"
         node = ["symbol", ["lib_id", Q(c["lib_id"])], ["at", x, y, rot], ["unit", 1],
                 ["exclude_from_sim", "no"],
                 ["in_bom", "no" if c.get("dnp") else "yes"], ["on_board", "yes"],
                 ["dnp", "yes" if c.get("dnp") else "no"],
                 ["uuid", Q(uid("sym/" + c["ref"]))],
                 ["property", Q("Reference"), Q(c["ref"]),
-                 ["at", round(rx, 4), round(ry, 4), 0], effects(justify=rj)],
+                 ["at", round(rx, 4), round(ry, 4), pa],
+                 effects(justify=swap[rj] if rot == 180 else rj)],
                 ["property", Q("Value"), Q(c["value"]),
-                 ["at", round(vx_, 4), round(vy_, 4), 0], effects(justify=vj)],
+                 ["at", round(vx_, 4), round(vy_, 4), pa],
+                 effects(justify=swap[vj] if rot == 180 else vj,
+                         hide=hide_value)],
                 ["property", Q("Footprint"), Q(c.get("footprint", "")),
                  ["at", x, y, 0], effects(hide=True)],
                 ["property", Q("Datasheet"), Q(c.get("datasheet", "~")),

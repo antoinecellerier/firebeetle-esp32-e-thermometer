@@ -84,7 +84,7 @@ def main():
           N("R8", 1) == N("U1", 20) and N("D3", 2) == N("R8", 2)
           and N("D3", 1) == "GND")
     check("GPIO8 (pin 22) carries nothing but the high-Z debug header",
-          nets.get(N("U1", 22), set()) == {("U1", "22"), ("J5", "9")})
+          nets.get(N("U1", 22), set()) == {("U1", "22"), ("J5", "8")})
 
     # --- sensor ---------------------------------------------------------
     check("BMP581 on LP I2C: SDA=GPIO6 (pin 15), SCL=GPIO7 (pin 16)",
@@ -169,12 +169,13 @@ def main():
           and unconnected("J4", 6) and unconnected("J4", 7))
 
     # --- debug header -----------------------------------------------------
-    check("Debug header carries VBAT,3V3,GND,EN,TXD0,RXD0,IO4,IO5,IO8,GND",
-          N("J5", 1) == N("U4", 3) and N("J5", 2) == "+3V3" and N("J5", 3) == "GND"
-          and N("J5", 4) == N("U1", 8) and N("J5", 5) == N("U1", 31)
-          and N("J5", 6) == N("U1", 30) and N("J5", 7) == N("U1", 9)
-          and N("J5", 8) == N("U1", 10) and N("J5", 9) == N("U1", 22)
-          and N("J5", 10) == "GND")
+    check("Debug header: GND,3V3,EN,TXD0,RXD0,IO4,IO5,IO8,GND,GND — no VBAT "
+          "next to 3V3 (one-pin-offset plug must not back-drive the LDO)",
+          N("J5", 1) == "GND" and N("J5", 2) == "+3V3"
+          and N("J5", 3) == N("U1", 8) and N("J5", 4) == N("U1", 31)
+          and N("J5", 5) == N("U1", 30) and N("J5", 6) == N("U1", 9)
+          and N("J5", 7) == N("U1", 10) and N("J5", 8) == N("U1", 22)
+          and N("J5", 9) == "GND" and N("J5", 10) == "GND")
 
     print()
     if FAIL:

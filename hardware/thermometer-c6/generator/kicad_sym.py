@@ -34,10 +34,11 @@ class Pin:
 
 
 class Symbol:
-    def __init__(self, lib_id, node, pins):
+    def __init__(self, lib_id, node, pins, rects=()):
         self.lib_id = lib_id  # e.g. "Device:R"
         self.node = node      # full sexp node, ready to embed in lib_symbols
         self.pins = pins      # list[Pin]
+        self.rects = list(rects)  # body rectangles [(x1, y1, x2, y2)] symbol space
 
     def pin(self, number):
         for p in self.pins:
@@ -113,6 +114,25 @@ def _extract_pins(sym_node):
     return pins
 
 
+def _extract_rects(sym_node):
+    """Body graphic extents: rectangles and circles (transistor bodies)."""
+    rects = []
+    for sub in sexp.children(sym_node, "symbol"):
+        for r in sexp.children(sub, "rectangle"):
+            s = sexp.child(r, "start")
+            e = sexp.child(r, "end")
+            rects.append((min(s[1], e[1]), min(s[2], e[2]),
+                          max(s[1], e[1]), max(s[2], e[2])))
+        for c in sexp.children(sub, "circle"):
+            ctr = sexp.child(c, "center")
+            end = sexp.child(c, "end")
+            rad = sexp.atom_after(c, "radius")
+            if rad is None:
+                rad = ((ctr[1] - end[1]) ** 2 + (ctr[2] - end[2]) ** 2) ** 0.5
+            rects.append((ctr[1] - rad, ctr[2] - rad, ctr[1] + rad, ctr[2] + rad))
+    return rects
+
+
 def load_symbol(lib_id, local_lib_path=None):
     """lib_id is "LibName:SymbolName"; LibName "local" resolves to local_lib_path."""
     libname, _, symname = lib_id.partition(":")
@@ -125,6 +145,7 @@ def load_symbol(lib_id, local_lib_path=None):
     syms = _load_library(path)
     node = copy.deepcopy(_resolve_extends(syms, symname))
     pins = _extract_pins(node)
+    rects = _extract_rects(node)
     # Embedded lib_symbols entries use the full "Lib:Name" id
     node[1] = sexp.Quoted(lib_id)
-    return Symbol(lib_id, node, pins)
+    return Symbol(lib_id, node, pins, rects)

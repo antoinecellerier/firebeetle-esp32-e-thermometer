@@ -172,13 +172,13 @@ COMPONENTS = [
          lcsc="C17521", zone="G: EPD booster"),
     dict(ref="R16", lib_id="Device:R", value="3.0R 1%", footprint=R0805,
          lcsc="C17660", zone="G: EPD booster"),
-    dict(ref="JP2", lib_id="Jumper:SolderJumper_2_Bridged", value="RESE 0.47R",
+    dict(ref="JP2", lib_id="Jumper:SolderJumper_2_Bridged", value="0.47R",
          footprint="Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm",
          lcsc="", zone="G: EPD booster"),
-    dict(ref="JP3", lib_id="Jumper:SolderJumper_2_Open", value="RESE 2.2R",
+    dict(ref="JP3", lib_id="Jumper:SolderJumper_2_Open", value="2.2R",
          footprint="Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm",
          lcsc="", zone="G: EPD booster"),
-    dict(ref="JP4", lib_id="Jumper:SolderJumper_2_Open", value="RESE 3R",
+    dict(ref="JP4", lib_id="Jumper:SolderJumper_2_Open", value="3R",
          footprint="Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm",
          lcsc="", zone="G: EPD booster"),
     dict(ref="D4", lib_id="Diode:MBR0530", value="MBR0530",
@@ -255,7 +255,7 @@ NETS = {
     # power tree
     "~VBAT_RAW": [("J1", 1), ("JP1", 1), ("J2", 1)],
     "VBAT": [("JP1", 2), ("J2", 2), ("U4", 3), ("C6", 1), ("Q1", 3),
-             ("Q4", 2), ("R18", 1), ("TP1", 1), ("J5", 1)],
+             ("Q4", 2), ("R18", 1), ("TP1", 1)],
     "VSYS": [("D2", 1), ("Q1", 2), ("U2", 1), ("U2", 3), ("C1", 1), ("C2", 1)],
     "+3V3": [("U2", 5), ("C3", 1), ("C4", 1), ("TP4", 1),
              ("U1", 3), ("C7", 1), ("C8", 1), ("R6", 1), ("R7", 1),
@@ -283,7 +283,7 @@ NETS = {
              ("C19", 2), ("C20", 2), ("C21", 2), ("C22", 2), ("C23", 2),
              ("C24", 2), ("C25", 2),
              ("Q5", 2), ("R19", 2), ("R21", 2),
-             ("J5", 3), ("J5", 10)]
+             ("J5", 1), ("J5", 9), ("J5", 10)]
             + [("U1", n) for n in _MINI_GND_PINS]),
 
     # USB
@@ -303,7 +303,7 @@ NETS = {
     "~CHG_PROG": [("U4", 5), ("R3", 1)],
 
     # MCU support
-    "EN": [("U1", 8), ("R6", 2), ("C9", 1), ("SW1", 1), ("J5", 4)],
+    "EN": [("U1", 8), ("R6", 2), ("C9", 1), ("SW1", 1), ("J5", 3)],
     "BOOT": [("U1", 23), ("R7", 2), ("SW2", 1)],
     "XTAL_32K_P": [("U1", 12), ("Y1", 1), ("C10", 1), ("R9", 1)],
     "XTAL_32K_N": [("U1", 13), ("Y1", 2), ("C11", 1), ("R9", 2)],
@@ -321,11 +321,11 @@ NETS = {
     "~VDIV_PGATE": [("Q4", 1), ("R18", 2), ("Q5", 3)],
 
     # debug header spares + UART
-    "DBG_TX": [("U1", 31), ("J5", 5)],
-    "DBG_RX": [("U1", 30), ("J5", 6)],
-    "DBG_IO4": [("U1", 9), ("J5", 7)],
-    "DBG_IO5": [("U1", 10), ("J5", 8)],
-    "DBG_IO8": [("U1", 22), ("J5", 9)],
+    "DBG_TX": [("U1", 31), ("J5", 4)],
+    "DBG_RX": [("U1", 30), ("J5", 5)],
+    "DBG_IO4": [("U1", 9), ("J5", 6)],
+    "DBG_IO5": [("U1", 10), ("J5", 7)],
+    "DBG_IO8": [("U1", 22), ("J5", 8)],
 
     # EPD power gate
     "EPD_PWR_EN": [("U1", 19), ("R12", 2), ("Q2", 1)],
