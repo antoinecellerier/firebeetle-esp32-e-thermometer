@@ -37,20 +37,22 @@ def main():
     netlist_path = sys.argv[1]
     actual = load_netlist(netlist_path)
 
+    # Nets named "~..." in circuit.py carry no label on the sheet; KiCad
+    # auto-names them. They are matched by exact pin set instead of by name.
     expected = {}
+    anon = {}
     for name, pins in circuit.NETS.items():
-        expected[name] = {(ref, str(pin)) for ref, pin in pins}
+        pinset = {(ref, str(pin)) for ref, pin in pins}
+        if name.startswith("~"):
+            anon[name] = pinset
+        else:
+            expected[name] = pinset
 
-    # Power-symbol and PWR_FLAG pseudo components (#PWR_*, #FLG*) appear in
-    # netlists as nodes only if kicad-cli includes them; it does not — power
-    # symbols merely name nets. Nothing to strip.
     failures = []
 
     # KiCad names a net after its label; power nets keep the label name.
     for name, pins in sorted(expected.items()):
         if name not in actual:
-            # net might exist under a different name only if all its labels
-            # were lost — that IS a failure.
             failures.append(f"MISSING NET: {name} (expected pins {sorted(pins)})")
             continue
         got = actual[name]
@@ -65,6 +67,7 @@ def main():
             failures.append("\n".join(msg))
 
     expected_names = set(expected)
+    remaining = {}
     for name, pins in sorted(actual.items()):
         if name in expected_names:
             continue
@@ -75,6 +78,20 @@ def main():
                 if rp not in ncset:
                     failures.append(f"PIN ON UNCONNECTED NET (not declared NC): {rp} in {name}")
             continue
+        remaining[name] = pins
+
+    for name, pins in sorted(anon.items()):
+        hit = None
+        for aname, apins in remaining.items():
+            if apins == pins:
+                hit = aname
+                break
+        if hit is None:
+            failures.append(f"ANONYMOUS NET {name} NOT FOUND: expected pins {sorted(pins)}")
+        else:
+            del remaining[hit]
+
+    for name, pins in sorted(remaining.items()):
         failures.append(f"UNEXPECTED NET: {name} with pins {sorted(pins)}")
 
     if failures:
@@ -82,8 +99,10 @@ def main():
         for f_ in failures:
             print(f_)
         sys.exit(1)
-    print(f"check_netlist: OK — {len(expected)} nets match exactly, "
-          f"{sum(len(p) for p in expected.values())} pin connections verified")
+    print(f"check_netlist: OK — {len(expected)} named + {len(anon)} anonymous "
+          f"nets match exactly, "
+          f"{sum(len(p) for p in expected.values()) + sum(len(p) for p in anon.values())} "
+          f"pin connections verified")
 
 
 if __name__ == "__main__":

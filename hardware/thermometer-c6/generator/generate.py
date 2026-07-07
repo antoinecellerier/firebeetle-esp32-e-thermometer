@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
-"""Generate thermometer-c6.kicad_sch (+ .kicad_pro, BOM CSV) from circuit.py.
+"""Generate thermometer-c6.kicad_sch (+ .kicad_pro, BOM CSV) from circuit.py
+placed per layout.py.
 
-Connectivity is computed, never drawn: every pin of every component either
-appears in exactly one net (rendered as a wire stub + global label / power
-symbol placed at the pin's exact connection point) or in the NC list
-(rendered as a no_connect marker). The generator aborts on any pin left over
-or any net referencing a nonexistent pin. All symbol instances are placed at
-rotation 0, unmirrored, so pin transforms are exact by construction:
-sheet = (origin_x + pin_x, origin_y - pin_y).
+Connectivity is computed, never drawn free-hand: circuit.py holds the net
+map; layout.py holds per-component placement (zone, x, y, rotation) and
+authored wire routes between pins. The generator:
+  - resolves every route node ("REF.PIN" or an (x,y) waypoint) to exact
+    coordinates, auto-inserting one L-bend for unaligned nodes,
+  - refuses any route whose pin nodes span more than one net,
+  - falls back to a wire stub + global label (or power symbol) for pins no
+    route covers — cross-zone signals stay label-style like any datasheet,
+  - places junction dots wherever >=3 same-net branches meet,
+  - aborts on any cross-net geometric coincidence (point-on-point or
+    point-on-segment): a silent KiCad net merge cannot survive generation,
+and verify/ then re-checks the exported netlist against circuit.py.
+
+Empirically derived instance transform (see git history for the probe):
+symbol-space (px, py) -> sheet offset  rot0: (px, -py)   rot90: (-py, -px)
+                                       rot180: (-px, py) rot270: (py, px)
 """
 
 import csv
@@ -27,16 +37,12 @@ LOCAL_LIB = os.path.join(HERE, "symbols", "local.kicad_sym")
 NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 ROOT_UUID = str(uuid.uuid5(NAMESPACE, "thermometer-c6-root"))
 
-GRID = 1.27  # mil50 grid
-STUB = 3.81  # wire stub length from pin, mm
+GRID = 1.27
+STUB = 3.81
 
 
 def uid(key):
     return str(uuid.uuid5(NAMESPACE, "thermometer-c6/" + key))
-
-
-def snap(v):
-    return round(round(v / GRID) * GRID, 4)
 
 
 def check_grid(v, what):
@@ -45,31 +51,44 @@ def check_grid(v, what):
     return round(v, 4)
 
 
+def xform(px, py, rot):
+    if rot == 0:
+        return (px, -py)
+    if rot == 90:
+        return (-py, -px)
+    if rot == 180:
+        return (-px, py)
+    if rot == 270:
+        return (py, px)
+    raise SystemExit(f"unsupported rotation {rot}")
+
+
+_DIR_VEC = {0: (1, 0), 90: (0, -1), 180: (-1, 0), 270: (0, 1)}
+_VEC_DIR = {v: k for k, v in _DIR_VEC.items()}
+
+
 class Placed:
-    def __init__(self, comp, symbol, x, y):
+    def __init__(self, comp, symbol, x, y, rot):
         self.comp = comp
         self.symbol = symbol
         self.x = x
         self.y = y
+        self.rot = rot
 
     def pin_pos(self, number):
         p = self.symbol.pin(number)
-        return (round(self.x + p.x, 4), round(self.y - p.y, 4))
+        dx, dy = xform(p.x, p.y, self.rot)
+        return (round(self.x + dx, 4), round(self.y + dy, 4))
 
     def pin_dir(self, number):
-        """Outward direction (away from body) in sheet space, degrees
-        (0=right, 90=screen-up, 180=left, 270=screen-down).
-
-        Symbol-space pin angle a points from the connection tip toward the
-        body; outward is a+180. The Y flip into sheet space negates the sine
-        component, and with this dict convention (90 -> -y) the outward
-        vector (cos(a+180), -sin(a+180)) is exactly the vector of sheet
-        angle a+180. (Using 180-a instead coincides for horizontal pins but
-        inverts vertical ones — the probe only had horizontal-pin ICs, so
-        the collision checker is what caught it.)
-        """
+        """Outward (away from body) direction on the sheet, degrees
+        (0=right, 90=screen-up, 180=left, 270=screen-down)."""
         p = self.symbol.pin(number)
-        return (p.angle + 180) % 360
+        import math
+        a = math.radians((p.angle + 180) % 360)
+        vx, vy = round(math.cos(a)), round(math.sin(a))
+        dx, dy = xform(vx, vy, self.rot)
+        return _VEC_DIR[(round(dx), round(dy))]
 
 
 def effects(size=1.27, justify=None, hide=False):
@@ -81,13 +100,12 @@ def effects(size=1.27, justify=None, hide=False):
     return e
 
 
-def build_schematic(circuit):
+def build_schematic(circuit, layout):
     comps = circuit.COMPONENTS
     nets = circuit.NETS
-    nc = set(circuit.NC)
-    power_syms = circuit.POWER_SYMBOLS  # net -> power lib_id
+    nc = set((r, str(p)) for r, p in circuit.NC)
+    power_syms = circuit.POWER_SYMBOLS
 
-    # ---- load symbols -------------------------------------------------
     symbols = {}
     for c in comps:
         if c["lib_id"] not in symbols:
@@ -99,247 +117,369 @@ def build_schematic(circuit):
     if len(by_ref) != len(comps):
         raise SystemExit("duplicate references in COMPONENTS")
 
-    # ---- coverage check: every pin in exactly one net or NC -----------
-    want = {}
+    # ---- pin -> net coverage bookkeeping --------------------------------
+    net_of_pin = {}
     for name, pins in nets.items():
         if len(pins) < 2:
             raise SystemExit(f"net {name} has fewer than 2 pins")
         for ref, pin in pins:
             key = (ref, str(pin))
-            if key in want:
-                raise SystemExit(f"pin {key} in nets {want[key]} and {name}")
-            want[key] = name
+            if key in net_of_pin:
+                raise SystemExit(f"pin {key} in two nets")
+            net_of_pin[key] = name
     for key in nc:
-        key = (key[0], str(key[1]))
-        if key in want:
-            raise SystemExit(f"pin {key} both in net {want[key]} and NC")
-        want[key] = None
+        if key in net_of_pin:
+            raise SystemExit(f"pin {key} both in net and NC")
+        net_of_pin[key] = None
 
     have = set()
     for c in comps:
         for p in symbols[c["lib_id"]].pins:
             have.add((c["ref"], p.number))
-    want_keys = set(want)
-    missing = want_keys - have
-    uncovered = have - want_keys
+    missing = set(net_of_pin) - have
+    uncovered = have - set(net_of_pin)
     if missing:
         raise SystemExit(f"nets reference nonexistent pins: {sorted(missing)}")
     if uncovered:
         raise SystemExit(f"pins not assigned to any net or NC: {sorted(uncovered)}")
 
-    # ---- placement -----------------------------------------------------
-    # Zones laid out on a coarse grid; components within a zone flow in rows.
+    # ---- placement -------------------------------------------------------
     placed = {}
-    zone_boxes = {}
-    sheet_w = 900.0
-    margin = 20.0
-    cursor_x, cursor_y = margin, margin
-    row_h = 0.0
+    unplaced = [c["ref"] for c in comps if c["ref"] not in layout.PLACE]
+    if unplaced:
+        raise SystemExit(f"components missing from layout.PLACE: {unplaced}")
+    for ref, (zone, rx, ry, rot) in layout.PLACE.items():
+        if ref not in by_ref:
+            raise SystemExit(f"layout.PLACE has unknown ref {ref}")
+        ox, oy = layout.ZONES[zone]["origin"]
+        x = check_grid(ox + rx, f"{ref} x")
+        y = check_grid(oy + ry, f"{ref} y")
+        placed[ref] = Placed(by_ref[ref], symbols[by_ref[ref]["lib_id"]], x, y, rot)
 
-    zones = []
-    for c in comps:
-        if c["zone"] not in zones:
-            zones.append(c["zone"])
+    # ---- authored wires --------------------------------------------------
+    # route node: "REF.PIN" | (x, y) zone-relative waypoint
+    wire_segments = []  # (net, p1, p2)
+    routed_pins = set()
 
-    zone_origin = {}
-    zx, zy = margin, margin
-    zone_col_h = 0.0
-    for z in zones:
-        zcomps = [c for c in comps if c["zone"] == z]
-        # estimate zone size from symbol bounding boxes
-        boxes = []
-        for c in zcomps:
-            s = symbols[c["lib_id"]]
-            xs = [p.x for p in s.pins] or [0]
-            ys = [p.y for p in s.pins] or [0]
-            w = max(xs) - min(xs) + 2 * STUB + 26
-            h = max(ys) - min(ys) + 2 * STUB + 16
-            boxes.append((c, w, h, -min(xs), max(ys)))
-        # flow rows inside the zone, max zone width 240
-        zone_w_max = 250.0
-        cx, cy = 0.0, 8.0
-        rh = 0.0
-        zone_w = 0.0
-        for c, w, h, offx, offy in boxes:
-            if cx + w > zone_w_max and cx > 0:
-                cx = 0.0
-                cy += rh
-                rh = 0.0
-            c["_rel"] = (cx + offx + STUB + 10, cy + offy + STUB + 8)
-            cx += w
-            rh = max(rh, h)
-            zone_w = max(zone_w, cx)
-        zone_h = cy + rh + 6
-        if zx + zone_w > sheet_w - margin and zx > margin:
-            zx = margin
-            zy += zone_col_h + 14
-            zone_col_h = 0.0
-        zone_origin[z] = (zx, zy)
-        zone_boxes[z] = (zx - 4, zy - 2, zx + zone_w + 4, zy + zone_h + 2)
-        zx += zone_w + 16
-        zone_col_h = max(zone_col_h, zone_h)
+    def resolve(node, zone):
+        if isinstance(node, str):
+            ref, _, pin = node.partition(".")
+            if ref not in placed:
+                raise SystemExit(f"route references unknown component {ref}")
+            return placed[ref].pin_pos(pin), (ref, pin)
+        ox, oy = layout.ZONES[zone]["origin"]
+        return (check_grid(ox + node[0], "wp x"), check_grid(oy + node[1], "wp y")), None
 
-    for c in comps:
-        ox, oy = zone_origin[c["zone"]]
-        rx, ry = c.pop("_rel")
-        placed[c["ref"]] = Placed(c, symbols[c["lib_id"]],
-                                  snap(ox + rx), snap(oy + ry))
+    for zone, route in layout.WIRES:
+        pts = []
+        pin_nets = set()
+        for node in route:
+            pos, pinkey = resolve(node, zone)
+            if pinkey:
+                if pinkey not in net_of_pin:
+                    raise SystemExit(f"route pin {pinkey} unknown")
+                pin_nets.add(net_of_pin[pinkey])
+                routed_pins.add(pinkey)
+            pts.append(pos)
+        if len(pin_nets) != 1 or None in pin_nets:
+            raise SystemExit(f"route {route} spans nets {pin_nets}")
+        net = pin_nets.pop()
+        for a, b in zip(pts, pts[1:]):
+            if a == b:
+                continue
+            if a[0] != b[0] and a[1] != b[1]:
+                corner = (b[0], a[1])  # horizontal, then vertical
+                wire_segments.append((net, a, corner))
+                wire_segments.append((net, corner, b))
+            else:
+                wire_segments.append((net, a, b))
 
-    # ---- emit ----------------------------------------------------------
+    # coverage by coordinate: stacked pins (MINI-1 GND, USB VBUS pairs) are
+    # covered when any pin at the same point is routed
+    routed_points = {}
+    for ref, pin in routed_pins:
+        routed_points.setdefault(placed[ref].pin_pos(pin), set()).add(net_of_pin[(ref, pin)])
+    for (ref, pin), net in net_of_pin.items():
+        if net is None or (ref, pin) in routed_pins:
+            continue
+        pos = placed[ref].pin_pos(pin)
+        if pos in routed_points:
+            if net not in routed_points[pos]:
+                raise SystemExit(f"stacked pin {ref}.{pin} at {pos} belongs to "
+                                 f"{net} but point is routed as {routed_points[pos]}")
+            routed_pins.add((ref, pin))
+
+    # ---- authored power symbols and labels -------------------------------
+    power_placements = []  # (lib_id, net, pos, rot)
+    for entry in layout.POWER:
+        zone, net, rx, ry = entry[:4]
+        rot = entry[4] if len(entry) > 4 else 0
+        ox, oy = layout.ZONES[zone]["origin"]
+        pos = (check_grid(ox + rx, "pwr x"), check_grid(oy + ry, "pwr y"))
+        lib_id = power_syms.get(net)
+        if lib_id is None:
+            raise SystemExit(f"POWER entry for net {net} has no power symbol mapping")
+        power_placements.append((lib_id, net, pos, rot))
+
+    label_placements = []  # (net, pos, angle)
+    for zone, net, rx, ry, angle in layout.LABELS:
+        ox, oy = layout.ZONES[zone]["origin"]
+        pos = (check_grid(ox + rx, "lbl x"), check_grid(oy + ry, "lbl y"))
+        if net not in nets:
+            raise SystemExit(f"LABELS references unknown net {net}")
+        label_placements.append((net, pos, angle))
+
+    # ---- fallback stubs for unrouted pins ---------------------------------
+    # nets named "~..." are anonymous (KiCad auto-names them; check_netlist
+    # matches them by pin set) — they may not fall back, since the fallback
+    # label would leak the "~" name onto the sheet.
+    fallback = []  # (net, tip, end, dir)
+    seen_fb = set()
+    for name, pins in sorted(nets.items()):
+        for ref, pin in pins:
+            pin = str(pin)
+            if (ref, pin) in routed_pins:
+                continue
+            if name.startswith("~"):
+                raise SystemExit(f"anonymous net {name} has unrouted pin {ref}.{pin}")
+            pl = placed[ref]
+            tip = pl.pin_pos(pin)
+            if (name, tip) in seen_fb:
+                continue  # stacked pins (module GND, USB VBUS pairs): one stub
+            seen_fb.add((name, tip))
+            d = pl.pin_dir(pin)
+            vx, vy = _DIR_VEC[d]
+            end = (round(tip[0] + vx * STUB, 4), round(tip[1] + vy * STUB, 4))
+            fallback.append((name, tip, end, d))
+            wire_segments.append((name, tip, end))
+
+    # ---- validation: power/label anchors must touch their net -------------
+    def on_net_geometry(net, pos):
+        for n, a, b in wire_segments:
+            if n != net:
+                continue
+            if min(a[0], b[0]) - 1e-6 <= pos[0] <= max(a[0], b[0]) + 1e-6 and \
+               min(a[1], b[1]) - 1e-6 <= pos[1] <= max(a[1], b[1]) + 1e-6 and \
+               (a[0] == b[0] == pos[0] or a[1] == b[1] == pos[1] or pos in (a, b)):
+                return True
+        return False
+
+    for lib_id, net, pos, rot in power_placements:
+        if not on_net_geometry(net, pos):
+            raise SystemExit(f"power symbol {net} at {pos} touches no {net} wire")
+    for net, pos, angle in label_placements:
+        if not on_net_geometry(net, pos):
+            raise SystemExit(f"label {net} at {pos} touches no {net} wire")
+
+    # every named net must carry at least one name source (label or power
+    # symbol); anonymous "~" nets are named by KiCad automatically
+    named = {net for _, net, _, _ in power_placements}
+    named |= {net for net, _, _ in label_placements}
+    named |= {f for f, _, _, d in fallback}
+    for name in nets:
+        if name not in named and not name.startswith("~"):
+            raise SystemExit(f"net {name} has no label or power symbol anywhere")
+
+    # ---- collision check ---------------------------------------------------
+    net_points = {}
+
+    def add_point(net, p):
+        net_points.setdefault(p, set()).add(net)
+
+    for net, a, b in wire_segments:
+        add_point(net, a)
+        add_point(net, b)
+    for (ref, pin), net in net_of_pin.items():
+        add_point(net if net else f"<NC {ref}.{pin}>", placed[ref].pin_pos(pin))
+
+    merges = []
+    for p, names in net_points.items():
+        if len(names) > 1:
+            merges.append(f"point {p} shared by nets {sorted(names)}")
+    for net, a, b in wire_segments:
+        (x1, y1), (x2, y2) = a, b
+        for q, qnames in net_points.items():
+            if q == a or q == b:
+                continue
+            for qn in qnames:
+                if qn == net:
+                    continue
+                qx, qy = q
+                if x1 == x2 == qx and min(y1, y2) - 1e-6 < qy < max(y1, y2) + 1e-6:
+                    merges.append(f"net {qn} point {q} lies on {net} wire {a}-{b}")
+                elif y1 == y2 == qy and min(x1, x2) - 1e-6 < qx < max(x1, x2) + 1e-6:
+                    merges.append(f"net {qn} point {q} lies on {net} wire {a}-{b}")
+    if merges:
+        raise SystemExit("GEOMETRIC NET MERGES:\n  " + "\n  ".join(sorted(set(merges))))
+
+    # ---- junctions ---------------------------------------------------------
+    # authored power-symbol pins count as branches too: a pin lying
+    # mid-segment only connects in KiCad when a junction dot is present
+    for lib_id, net, pos, rot in power_placements:
+        add_point(net, pos)
+    junctions = set()
+    for p, names in net_points.items():
+        net = next(iter(names))
+        branches = 0
+        for n, a, b in wire_segments:
+            if n != net:
+                continue
+            if p == a or p == b:
+                branches += 1
+            elif (a[0] == b[0] == p[0] and min(a[1], b[1]) < p[1] < max(a[1], b[1])) or \
+                 (a[1] == b[1] == p[1] and min(a[0], b[0]) < p[0] < max(a[0], b[0])):
+                branches += 2
+        # pins at this point add branches too
+        pin_count = 0
+        for (ref, pin), n in net_of_pin.items():
+            if n == net and placed[ref].pin_pos(str(pin)) == p:
+                pin_count = 1  # stacked pins count once
+                break
+        if not pin_count:
+            for lib_id, n_, pos, rot in power_placements:
+                if n_ == net and pos == p:
+                    pin_count = 1
+                    break
+        branches += pin_count
+        if branches >= 3:
+            junctions.add(p)
+
+    # ---- emit --------------------------------------------------------------
     sch = ["kicad_sch",
            ["version", 20231120],
            ["generator", Q("thermometer-c6-generate")],
            ["uuid", Q(ROOT_UUID)],
-           ["paper", Q("A1")],
+           ["paper", Q("A2")],
            ["title_block",
             ["title", Q("ESP32-C6 Ultra-Low-Power E-Paper Thermometer")],
             ["rev", Q("A")],
-            ["company", Q("")],
             ["comment", 1, Q("Universal 24-pin Good Display EPD, gated booster, RESE 0.47/2.2/3 solder-select")],
             ["comment", 2, Q("LDO power tree (buck-cliff avoidance), load-sharing USB-C, high-side switched battery divider")],
-            ["comment", 3, Q("Generated by generator/generate.py from circuit.py - do not edit by hand")]]]
+            ["comment", 3, Q("Generated by generator/generate.py from circuit.py + layout.py - do not edit by hand")]]]
 
     lib_block = ["lib_symbols"]
     for lib_id in sorted(symbols):
         lib_block.append(symbols[lib_id].node)
     sch.append(lib_block)
 
-    wires = []
-    labels = []
-    noconnects = []
-    extra_syms = []
+    body = []
+    seg_seen = {}
+    for net, a, b in wire_segments:
+        k = f"{net}/{a}/{b}"
+        seg_seen[k] = seg_seen.get(k, 0) + 1
+        if seg_seen[k] > 1:
+            k += f"/{seg_seen[k]}"
+        body.append(["wire", ["pts", ["xy", a[0], a[1]], ["xy", b[0], b[1]]],
+                     ["stroke", ["width", 0], ["type", "default"]],
+                     ["uuid", Q(uid("wire/" + k))]])
+    for p in sorted(junctions):
+        body.append(["junction", ["at", p[0], p[1]], ["diameter", 0],
+                     ["color", 0, 0, 0, 0], ["uuid", Q(uid(f"junc/{p}"))]])
+    for ref, pin in sorted(nc):
+        pos = placed[ref].pin_pos(pin)
+        body.append(["no_connect", ["at", pos[0], pos[1]],
+                     ["uuid", Q(uid(f"nc/{ref}.{pin}"))]])
 
-    def emit_wire(p1, p2, key):
-        wires.append(["wire", ["pts", ["xy", p1[0], p1[1]], ["xy", p2[0], p2[1]]],
-                      ["stroke", ["width", 0], ["type", "default"]],
-                      ["uuid", Q(uid("wire/" + key))]])
+    just_of = {0: "left", 90: "left", 180: "right", 270: "right"}
+    for net, tip, end, d in fallback:
+        if net in power_syms:
+            # GND graphic hangs below its anchor, others point up: flip when
+            # the stub arrives from the wrong side
+            if net == "GND":
+                rot = 180 if d == 90 else 0
+            else:
+                rot = 180 if d == 270 else 0
+            power_placements.append((power_syms[net], net, end, rot))
+        else:
+            body.append(["global_label", Q(net), ["shape", "input"],
+                         ["at", end[0], end[1], d],
+                         effects(justify=just_of[d]),
+                         ["uuid", Q(uid(f"label/{net}/{tip}"))]])
+    for net, pos, angle in label_placements:
+        body.append(["global_label", Q(net), ["shape", "input"],
+                     ["at", pos[0], pos[1], angle],
+                     effects(justify=just_of[angle]),
+                     ["uuid", Q(uid(f"albl/{net}/{pos}"))]])
 
     pwr_seq = [0]
-
-    def emit_power(lib_id, net, pos, key):
+    for lib_id, net, pos, rot in power_placements:
         s = symbols[lib_id]
         ppin = s.pins[0]
+        dx, dy = xform(ppin.x, ppin.y, rot)
+        px, py = round(pos[0] - dx, 4), round(pos[1] - dy, 4)
         pwr_seq[0] += 1
-        pref = "#FLG%03d" % pwr_seq[0] if lib_id == "power:PWR_FLAG" \
-            else "#PWR%03d" % pwr_seq[0]
-        # place so the power pin's connection point lands exactly on pos
-        px, py = pos[0] - ppin.x, pos[1] + ppin.y
-        node = ["symbol", ["lib_id", Q(lib_id)], ["at", px, py, 0], ["unit", 1],
-                ["exclude_from_sim", "no"], ["in_bom", "no"], ["on_board", "yes"],
-                ["dnp", "no"], ["uuid", Q(uid("pwr/" + key))],
-                ["property", Q("Reference"), Q(pref),
-                 ["at", px, py, 0], effects(hide=True)],
-                ["property", Q("Value"), Q(net), ["at", px, py + 3.5, 0], effects()],
-                ["property", Q("Footprint"), Q(""), ["at", px, py, 0], effects(hide=True)],
-                ["property", Q("Datasheet"), Q(""), ["at", px, py, 0], effects(hide=True)],
-                ["pin", Q(ppin.number), ["uuid", Q(uid("pwrpin/" + key))]],
-                ["instances", ["project", Q(PROJECT_NAME),
-                               ["path", Q("/" + ROOT_UUID),
-                                ["reference", Q(pref)],
-                                ["unit", 1]]]]]
-        extra_syms.append(node)
+        pref = ("#FLG%03d" if lib_id == "power:PWR_FLAG" else "#PWR%03d") % pwr_seq[0]
+        key = f"{net}/{pos}"
+        body.append(["symbol", ["lib_id", Q(lib_id)], ["at", px, py, rot], ["unit", 1],
+                     ["exclude_from_sim", "no"], ["in_bom", "no"], ["on_board", "yes"],
+                     ["dnp", "no"], ["uuid", Q(uid("pwr/" + key))],
+                     ["property", Q("Reference"), Q(pref), ["at", px, py, 0], effects(hide=True)],
+                     ["property", Q("Value"), Q(net), ["at", px, py + 3.5, 0], effects()],
+                     ["property", Q("Footprint"), Q(""), ["at", px, py, 0], effects(hide=True)],
+                     ["property", Q("Datasheet"), Q(""), ["at", px, py, 0], effects(hide=True)],
+                     ["pin", Q(ppin.number), ["uuid", Q(uid("pwrpin/" + key))]],
+                     ["instances", ["project", Q(PROJECT_NAME),
+                                    ["path", Q("/" + ROOT_UUID),
+                                     ["reference", Q(pref)], ["unit", 1]]]]])
 
-    def emit_label(net, pos, angle, key):
-        justify = {0: "left", 90: "left", 180: "right", 270: "right"}[angle]
-        labels.append(["global_label", Q(net), ["shape", "input"],
-                       ["at", pos[0], pos[1], angle],
-                       effects(justify=justify),
-                       ["uuid", Q(uid("label/" + key))]])
-
-    pwr_flagged = set()
-    for name, pins in sorted(nets.items()):
-        for ref, pin in pins:
-            pin = str(pin)
-            pl = placed[ref]
-            tip = pl.pin_pos(pin)
-            d = pl.pin_dir(pin)
-            dx, dy = {0: (STUB, 0), 90: (0, -STUB), 180: (-STUB, 0), 270: (0, STUB)}[d % 360]
-            end = (round(tip[0] + dx, 4), round(tip[1] + dy, 4))
-            key = f"{name}/{ref}.{pin}"
-            emit_wire(tip, end, key)
-            if name in power_syms:
-                emit_power(power_syms[name], name, end, key)
-            else:
-                emit_label(name, end, int(d % 360), key)
-        # PWR_FLAG on power nets that need one (declared in circuit.py)
-        if name in circuit.PWR_FLAG_NETS and name not in pwr_flagged:
-            pwr_flagged.add(name)
-            ref0, pin0 = pins[0]
-            pl = placed[ref0]
-            tip = pl.pin_pos(str(pin0))
-            d = pl.pin_dir(str(pin0))
-            dx, dy = {0: (STUB, 0), 90: (0, -STUB), 180: (-STUB, 0), 270: (0, STUB)}[d % 360]
-            end = (round(tip[0] + dx, 4), round(tip[1] + dy, 4))
-            emit_power("power:PWR_FLAG", name, end, "flag/" + name)
-
-    for ref, pin in sorted(nc):
-        pos = placed[ref].pin_pos(str(pin))
-        noconnects.append(["no_connect", ["at", pos[0], pos[1]],
-                           ["uuid", Q(uid(f"nc/{ref}.{pin}"))]])
-
-    # geometric self-check: every wire endpoint sits on-grid... pins of ICs
-    # are on the symbol grid; origins snapped, so tips are on-grid too.
-    for w in wires:
-        for xy in sexp.children(w[1], "xy"):
-            check_grid(xy[1], "wire x")
-            check_grid(xy[2], "wire y")
-
-    # collision check: KiCad connects anything whose electrical point
-    # coincides with another net's point or lies on its wire segment. Every
-    # such cross-net coincidence is a silent net merge — abort on any.
-    net_points = {}   # (x, y) -> set of net names
-    net_segments = []  # (net, p1, p2) axis-aligned stubs
-
-    def add_point(net, p):
-        net_points.setdefault(p, set()).add(net)
-
-    for name, pins in nets.items():
-        for ref, pin in pins:
-            pl = placed[ref]
-            tip = pl.pin_pos(str(pin))
-            d = pl.pin_dir(str(pin))
-            dx, dy = {0: (STUB, 0), 90: (0, -STUB), 180: (-STUB, 0), 270: (0, STUB)}[d % 360]
-            end = (round(tip[0] + dx, 4), round(tip[1] + dy, 4))
-            add_point(name, tip)
-            add_point(name, end)
-            net_segments.append((name, tip, end))
-    for ref, pin in nc:
-        add_point(f"<NC {ref}.{pin}>", placed[ref].pin_pos(str(pin)))
-    # unconnected graphic pins of power symbols have no electrical presence;
-    # power symbol pins coincide with stub ends of their own net by design.
-
-    merges = []
-    for p, names in net_points.items():
-        if len(names) > 1:
-            merges.append(f"point {p} shared by nets {sorted(names)}")
-    for name, p1, p2 in net_segments:
-        (x1, y1), (x2, y2) = p1, p2
-        for q, qnames in net_points.items():
-            for qn in qnames:
-                if qn == name:
-                    continue
-                qx, qy = q
-                if x1 == x2 == qx and min(y1, y2) - 1e-6 <= qy <= max(y1, y2) + 1e-6:
-                    merges.append(f"net {qn} point {q} lies on {name} stub {p1}-{p2}")
-                elif y1 == y2 == qy and min(x1, x2) - 1e-6 <= qx <= max(x1, x2) + 1e-6:
-                    merges.append(f"net {qn} point {q} lies on {name} stub {p1}-{p2}")
-    if merges:
-        raise SystemExit("GEOMETRIC NET MERGES:\n  " + "\n  ".join(sorted(set(merges))))
+    # PWR_FLAGs: one per declared net, attached at the first fallback/authored
+    # point of that net
+    flagged = set()
+    for net in sorted(circuit.PWR_FLAG_NETS):
+        pos = None
+        for l_, n_, p_, r_ in power_placements:
+            if n_ == net:
+                pos = p_
+                break
+        if pos is None:
+            for n_, tip, end, d in fallback:
+                if n_ == net:
+                    pos = end
+                    break
+        if pos is None:
+            for n_, a, b in wire_segments:
+                if n_ == net:
+                    pos = a
+                    break
+        if pos is None:
+            raise SystemExit(f"PWR_FLAG net {net} has no attachment point")
+        if net in flagged:
+            continue
+        flagged.add(net)
+        s = symbols["power:PWR_FLAG"]
+        ppin = s.pins[0]
+        px, py = round(pos[0] - ppin.x, 4), round(pos[1] + ppin.y, 4)
+        pwr_seq[0] += 1
+        pref = "#FLG%03d" % pwr_seq[0]
+        body.append(["symbol", ["lib_id", Q("power:PWR_FLAG")], ["at", px, py, 0], ["unit", 1],
+                     ["exclude_from_sim", "no"], ["in_bom", "no"], ["on_board", "yes"],
+                     ["dnp", "no"], ["uuid", Q(uid("flag/" + net))],
+                     ["property", Q("Reference"), Q(pref), ["at", px, py, 0], effects(hide=True)],
+                     ["property", Q("Value"), Q("PWR_FLAG"), ["at", px, py - 2, 0], effects(hide=True)],
+                     ["property", Q("Footprint"), Q(""), ["at", px, py, 0], effects(hide=True)],
+                     ["property", Q("Datasheet"), Q(""), ["at", px, py, 0], effects(hide=True)],
+                     ["pin", Q(ppin.number), ["uuid", Q(uid("flagpin/" + net))]],
+                     ["instances", ["project", Q(PROJECT_NAME),
+                                    ["path", Q("/" + ROOT_UUID),
+                                     ["reference", Q(pref)], ["unit", 1]]]]])
 
     # component instances
     for c in comps:
         pl = placed[c["ref"]]
         s = symbols[c["lib_id"]]
-        x, y = pl.x, pl.y
-        node = ["symbol", ["lib_id", Q(c["lib_id"])], ["at", x, y, 0], ["unit", 1],
+        x, y, rot = pl.x, pl.y, pl.rot
+        fields = layout.FIELD_POS.get(c["ref"], {})
+        rx, ry = fields.get("ref_offset", (0, -_top_of(s, rot) - 4.6))
+        vx_, vy_ = fields.get("value_offset", (0, -_top_of(s, rot) - 2.1))
+        node = ["symbol", ["lib_id", Q(c["lib_id"])], ["at", x, y, rot], ["unit", 1],
                 ["exclude_from_sim", "no"],
                 ["in_bom", "no" if c.get("dnp") else "yes"], ["on_board", "yes"],
                 ["dnp", "yes" if c.get("dnp") else "no"],
                 ["uuid", Q(uid("sym/" + c["ref"]))],
                 ["property", Q("Reference"), Q(c["ref"]),
-                 ["at", x, y - _top_of(s) - 4.5, 0], effects()],
+                 ["at", round(x + rx, 4), round(y + ry, 4), 0], effects()],
                 ["property", Q("Value"), Q(c["value"]),
-                 ["at", x, y - _top_of(s) - 2.0, 0], effects()],
+                 ["at", round(x + vx_, 4), round(y + vy_, 4), 0], effects()],
                 ["property", Q("Footprint"), Q(c.get("footprint", "")),
                  ["at", x, y, 0], effects(hide=True)],
                 ["property", Q("Datasheet"), Q(c.get("datasheet", "~")),
@@ -351,31 +491,33 @@ def build_schematic(circuit):
         node.append(["instances", ["project", Q(PROJECT_NAME),
                                    ["path", Q("/" + ROOT_UUID),
                                     ["reference", Q(c["ref"])], ["unit", 1]]]])
-        extra_syms.append(node)
+        body.append(node)
 
     # zone titles + boxes
-    texts = []
-    for z, (x1, y1, x2, y2) in zone_boxes.items():
-        texts.append(["text", Q(z), ["exclude_from_sim", "no"],
-                      ["at", snap(x1 + 1.27), snap(y1 + 1.27), 0],
-                      effects(size=2.54, justify="left"),
-                      ["uuid", Q(uid("ztext/" + z))]])
-        texts.append(["rectangle", ["start", snap(x1), snap(y1)], ["end", snap(x2), snap(y2)],
-                      ["stroke", ["width", 0.1], ["type", "dash"]],
-                      ["fill", ["type", "none"]],
-                      ["uuid", Q(uid("zbox/" + z))]])
+    for z, zdef in layout.ZONES.items():
+        ox, oy = zdef["origin"]
+        w, h = zdef["size"]
+        body.append(["text", Q(z), ["exclude_from_sim", "no"],
+                     ["at", round(ox + 1.27, 4), round(oy + 3.5, 4), 0],
+                     effects(size=2.54, justify="left"),
+                     ["uuid", Q(uid("ztext/" + z))]])
+        body.append(["rectangle", ["start", round(ox, 4), round(oy, 4)],
+                     ["end", round(ox + w, 4), round(oy + h, 4)],
+                     ["stroke", ["width", 0.1], ["type", "dash"]],
+                     ["fill", ["type", "none"]],
+                     ["uuid", Q(uid("zbox/" + z))]])
 
-    sch.extend(noconnects)
-    sch.extend(wires)
-    sch.extend(labels)
-    sch.extend(texts)
-    sch.extend(extra_syms)
+    sch.extend(body)
     sch.append(["sheet_instances", ["path", Q("/"), ["page", Q("1")]]])
     return sch
 
 
-def _top_of(symbol):
-    return max((p.y for p in symbol.pins), default=0)
+def _top_of(symbol, rot):
+    ys = []
+    for p in symbol.pins:
+        _, dy = xform(p.x, p.y, rot)
+        ys.append(-dy)
+    return max(ys, default=0)
 
 
 def write_project():
@@ -406,7 +548,8 @@ def write_bom(circuit):
 def main():
     sys.path.insert(0, HERE)
     import circuit
-    sch = build_schematic(circuit)
+    import layout
+    sch = build_schematic(circuit, layout)
     out = os.path.join(PROJECT_DIR, PROJECT_NAME + ".kicad_sch")
     with open(out, "w") as f:
         f.write(sexp.dumps(sch))

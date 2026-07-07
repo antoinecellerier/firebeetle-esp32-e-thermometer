@@ -59,10 +59,13 @@ def main():
           N("J3", "A5") == N("R1", 1) and N("J3", "B5") == N("R2", 1)
           and N("R1", 2) == "GND" and N("R2", 2) == "GND"
           and N("J3", "A5") != N("J3", "B5"))
-    check("USB D- goes to GPIO12 (module pin 17) through ESD pins 1/6",
-          N("J3", "A7") == N("U3", 1) == N("U3", 6) == N("U1", 17))
-    check("USB D+ goes to GPIO13 (module pin 18) through ESD pins 3/4",
-          N("J3", "A6") == N("U3", 3) == N("U3", 4) == N("U1", 18))
+    check("USB D-: connector pins A7/B7 into ESD pin 1; ESD pin 6 to GPIO12 "
+          "(flow-through — the USBLC6 symbol joins the line internally)",
+          N("J3", "A7") == N("J3", "B7") == N("U3", 1)
+          and N("U3", 6) == N("U1", 17) and N("U3", 1) != N("U3", 6))
+    check("USB D+: connector pins A6/B6 into ESD pin 3; ESD pin 4 to GPIO13",
+          N("J3", "A6") == N("J3", "B6") == N("U3", 3)
+          and N("U3", 4) == N("U1", 18) and N("U3", 3) != N("U3", 4))
     check("Charge LED powered from VBUS (not battery)",
           N("R4", 1) == N("J3", "A4") and N("D1", 1) == N("U4", 1))
 
@@ -95,6 +98,13 @@ def main():
           N("U5", 7) == "GND")
     check("BMP581 supplies on always-on 3V3 (LP core reads during deep sleep)",
           N("U5", 1) == "+3V3" and N("U5", 10) == "+3V3")
+    check("BMP585 alternate shares the LP I2C bus: SDX=GPIO6, SCX=GPIO7",
+          N("U6", 2) == N("U1", 15) and N("U6", 1) == N("U1", 16))
+    check("BMP585 straps for 0x47 like the 581: SDO and CSB to VDDIO rail",
+          N("U6", 3) == "+3V3" and N("U6", 7) == "+3V3")
+    check("BMP585 supplies on 3V3, INT and VSS on GND",
+          N("U6", 4) == "+3V3" and N("U6", 8) == "+3V3"
+          and N("U6", 5) == "GND" and N("U6", 6) == "GND")
 
     # --- battery sense (high-side switched) ------------------------------
     check("Divider is high-side switched: P-FET source on VBAT, drain feeds top 100k",

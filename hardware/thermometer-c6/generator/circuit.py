@@ -111,14 +111,14 @@ COMPONENTS = [
     dict(ref="R8", lib_id="Device:R", value="1k", footprint=R0402,
          lcsc="C11702", zone="D: ESP32-C6"),
     # 32.768 kHz crystal (GPIO0/1 = XTAL_32K_P/N)
-    dict(ref="Y1", lib_id="Device:Crystal", value="FC-135 32.768kHz 12.5pF",
+    dict(ref="Y1", lib_id="Device:Crystal", value="32.768kHz FC-135",
          footprint="Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm", lcsc="C32346",
          zone="D: ESP32-C6"),
     dict(ref="C10", lib_id="Device:C", value="20pF", footprint=C0402,
          lcsc="C1554", zone="D: ESP32-C6"),  # CL=12.5pF -> 2*(CL-Cstray)
     dict(ref="C11", lib_id="Device:C", value="20pF", footprint=C0402,
          lcsc="C1554", zone="D: ESP32-C6"),
-    dict(ref="R9", lib_id="Device:R", value="10M (DNP)", footprint=R0402,
+    dict(ref="R9", lib_id="Device:R", value="10M", footprint=R0402,
          lcsc="", dnp=True, zone="D: ESP32-C6"),  # crystal bias, populate if startup issues
 
     # ---- E: BMP581 (LP I2C, sleep-time reads by LP core) ----
@@ -133,6 +133,17 @@ COMPONENTS = [
          lcsc="C1525", zone="E: BMP581"),  # VDD
     dict(ref="C13", lib_id="Device:C", value="100nF", footprint=C0402,
          lcsc="C1525", zone="E: BMP581"),  # VDDIO
+    # Alternate sensor: BMP585 (media-resistant, LGA-9 3.25mm). Same LP I2C
+    # bus, same addr 0x47 strapping, same register map (chip-ID differs;
+    # firmware BMP58x driver handles both). POPULATE EXACTLY ONE of U5/U6 —
+    # both strap SDO high, so populating both collides at 0x47.
+    dict(ref="U6", lib_id="local:BMP585", value="BMP585",
+         footprint="local:Bosch_LGA-9_3.25x3.25mm", lcsc="C18184976",
+         dnp=True, zone="E: BMP581"),
+    dict(ref="C26", lib_id="Device:C", value="100nF", footprint=C0402,
+         lcsc="C1525", dnp=True, zone="E: BMP581"),  # U6 VDD
+    dict(ref="C27", lib_id="Device:C", value="100nF", footprint=C0402,
+         lcsc="C1525", dnp=True, zone="E: BMP581"),  # U6 VDDIO
 
     # ---- F: EPD power gate ----
     dict(ref="Q2", lib_id="Transistor_FET:AO3401A", value="AO3401A", footprint=SOT23,
@@ -147,7 +158,7 @@ COMPONENTS = [
          lcsc="", zone="F: EPD power gate"),
 
     # ---- G: EPD booster (DESPI-C02 reference, on gated EPD_VCC) ----
-    dict(ref="L1", lib_id="Device:L", value="10uH (alt 47uH SWPA4030S470MT)",
+    dict(ref="L1", lib_id="Device:L", value="10uH SWPA4030S",
          footprint="Inductor_SMD:L_Sunlord_SWPA4030S", lcsc="C38117",
          zone="G: EPD booster"),
     dict(ref="Q3", lib_id="local:Si1308EDL", value="Si1308EDL",
@@ -242,14 +253,16 @@ _MINI_GND_PINS = [1, 2, 11, 14] + list(range(36, 54))
 
 NETS = {
     # power tree
-    "VBAT_RAW": [("J1", 1), ("JP1", 1), ("J2", 1)],
+    "~VBAT_RAW": [("J1", 1), ("JP1", 1), ("J2", 1)],
     "VBAT": [("JP1", 2), ("J2", 2), ("U4", 3), ("C6", 1), ("Q1", 3),
              ("Q4", 2), ("R18", 1), ("TP1", 1), ("J5", 1)],
     "VSYS": [("D2", 1), ("Q1", 2), ("U2", 1), ("U2", 3), ("C1", 1), ("C2", 1)],
     "+3V3": [("U2", 5), ("C3", 1), ("C4", 1), ("TP4", 1),
              ("U1", 3), ("C7", 1), ("C8", 1), ("R6", 1), ("R7", 1),
              ("U5", 1), ("U5", 10), ("U5", 5), ("U5", 6),
+             ("U6", 3), ("U6", 4), ("U6", 7), ("U6", 8),
              ("R10", 1), ("R11", 1), ("C12", 1), ("C13", 1),
+             ("C26", 1), ("C27", 1),
              ("Q2", 2), ("R12", 1), ("J5", 2)],
     "VBUS": [("J3", "A4"), ("J3", "B4"), ("J3", "A9"), ("J3", "B9"),
              ("U3", 5), ("U4", 4), ("C5", 1), ("R4", 1), ("D2", 2),
@@ -262,6 +275,7 @@ NETS = {
              ("C7", 2), ("C8", 2), ("C9", 2), ("SW1", 2), ("SW2", 2),
              ("C10", 2), ("C11", 2), ("D3", 1),
              ("U5", 3), ("U5", 8), ("U5", 9), ("U5", 7), ("C12", 2), ("C13", 2),
+             ("U6", 5), ("U6", 6), ("C26", 2), ("C27", 2),
              ("C14", 2), ("C15", 2),
              ("R13", 2), ("JP2", 2), ("JP3", 2), ("JP4", 2), ("D5", 1),
              ("C17", 2), ("C18", 2),
@@ -273,15 +287,20 @@ NETS = {
             + [("U1", n) for n in _MINI_GND_PINS]),
 
     # USB
-    "USB_CC1": [("J3", "A5"), ("R1", 1)],
-    "USB_CC2": [("J3", "B5"), ("R2", 1)],
-    "USB_D-": [("J3", "A7"), ("J3", "B7"), ("U3", 1), ("U3", 6), ("U1", 17)],
-    "USB_D+": [("J3", "A6"), ("J3", "B6"), ("U3", 3), ("U3", 4), ("U1", 18)],
+    "~USB_CC1": [("J3", "A5"), ("R1", 1)],
+    "~USB_CC2": [("J3", "B5"), ("R2", 1)],
+    # USBLC6 flow-through: the symbol does not join its two I/O1 (or I/O2)
+    # pins, so connector side and MCU side are distinct nets that meet
+    # inside the chip — mirrors the recommended flow-through PCB routing.
+    "~USB_DM_CONN": [("J3", "A7"), ("J3", "B7"), ("U3", 1)],
+    "~USB_DP_CONN": [("J3", "A6"), ("J3", "B6"), ("U3", 3)],
+    "USB_D-": [("U3", 6), ("U1", 17)],
+    "USB_D+": [("U3", 4), ("U1", 18)],
 
     # charger
-    "CHG_STAT": [("U4", 1), ("D1", 1)],
-    "CHG_LED_A": [("R4", 2), ("D1", 2)],
-    "CHG_PROG": [("U4", 5), ("R3", 1)],
+    "~CHG_STAT": [("U4", 1), ("D1", 1)],
+    "~CHG_LED_A": [("R4", 2), ("D1", 2)],
+    "~CHG_PROG": [("U4", 5), ("R3", 1)],
 
     # MCU support
     "EN": [("U1", 8), ("R6", 2), ("C9", 1), ("SW1", 1), ("J5", 4)],
@@ -289,17 +308,17 @@ NETS = {
     "XTAL_32K_P": [("U1", 12), ("Y1", 1), ("C10", 1), ("R9", 1)],
     "XTAL_32K_N": [("U1", 13), ("Y1", 2), ("C11", 1), ("R9", 2)],
     "LED_STATUS": [("U1", 20), ("R8", 1)],
-    "LED_A": [("R8", 2), ("D3", 2)],
+    "~LED_A": [("R8", 2), ("D3", 2)],
 
     # sensor (LP I2C — GPIO6/7 fixed by silicon)
-    "SDA": [("U1", 15), ("U5", 4), ("R10", 2)],
-    "SCL": [("U1", 16), ("U5", 2), ("R11", 2)],
+    "SDA": [("U1", 15), ("U5", 4), ("U6", 2), ("R10", 2)],
+    "SCL": [("U1", 16), ("U5", 2), ("U6", 1), ("R11", 2)],
 
     # battery sense
     "VBAT_ADC": [("U1", 5), ("R20", 2), ("R21", 1), ("TP11", 1)],
     "VDIV_EN": [("U1", 6), ("Q5", 1), ("R19", 1)],
-    "VDIV_TOP": [("Q4", 3), ("R20", 1)],
-    "VDIV_PGATE": [("Q4", 1), ("R18", 2), ("Q5", 3)],
+    "~VDIV_TOP": [("Q4", 3), ("R20", 1)],
+    "~VDIV_PGATE": [("Q4", 1), ("R18", 2), ("Q5", 3)],
 
     # debug header spares + UART
     "DBG_TX": [("U1", 31), ("J5", 5)],
@@ -318,10 +337,10 @@ NETS = {
     "EPD_GDR": [("Q3", 1), ("R13", 1), ("J4", 2), ("TP8", 1)],
     "EPD_RESE": [("Q3", 2), ("J4", 3), ("R14", 1), ("R15", 1), ("R16", 1),
                  ("TP9", 1)],
-    "RESE_A": [("R14", 2), ("JP2", 1)],
-    "RESE_B": [("R15", 2), ("JP3", 1)],
-    "RESE_C": [("R16", 2), ("JP4", 1)],
-    "EPD_PUMP": [("C16", 2), ("D5", 2), ("D6", 1)],
+    "~RESE_A": [("R14", 2), ("JP2", 1)],
+    "~RESE_B": [("R15", 2), ("JP3", 1)],
+    "~RESE_C": [("R16", 2), ("JP4", 1)],
+    "~EPD_PUMP": [("C16", 2), ("D5", 2), ("D6", 1)],
     "EPD_PREVGH": [("D4", 1), ("C17", 1), ("J4", 21), ("TP6", 1)],
     "EPD_PREVGL": [("D6", 2), ("C18", 1), ("J4", 23), ("TP7", 1)],
 
@@ -336,18 +355,20 @@ NETS = {
     "EPD_MOSI": [("U1", 24), ("J4", 14)],
 
     # panel-side storage caps
-    "EPD_VGL": [("J4", 4), ("C19", 1)],
-    "EPD_VGH": [("J4", 5), ("C20", 1)],
-    "EPD_VDD": [("J4", 18), ("C21", 1)],
-    "EPD_VPP": [("J4", 19), ("C22", 1)],
-    "EPD_VSH": [("J4", 20), ("C23", 1)],
-    "EPD_VSL": [("J4", 22), ("C24", 1)],
-    "EPD_VCOM": [("J4", 24), ("C25", 1), ("TP10", 1)],
+    "~EPD_VGL": [("J4", 4), ("C19", 1)],
+    "~EPD_VGH": [("J4", 5), ("C20", 1)],
+    "~EPD_VDD": [("J4", 18), ("C21", 1)],
+    "~EPD_VPP": [("J4", 19), ("C22", 1)],
+    "~EPD_VSH": [("J4", 20), ("C23", 1)],
+    "~EPD_VSL": [("J4", 22), ("C24", 1)],
+    "~EPD_VCOM": [("J4", 24), ("C25", 1), ("TP10", 1)],
 }
 
 NC = [
     # MINI-1 NC pins
     ("U1", 4), ("U1", 7), ("U1", 21), ("U1", 32), ("U1", 33), ("U1", 34), ("U1", 35),
+    # BMP585 laser-mark pad (solder-resist covered, no connection possible)
+    ("U6", 9),
     # LDO pin 4
     ("U2", 4),
     # USB SBU
