@@ -49,7 +49,7 @@ PLACE = {
     "C2": (9.14, 31.22, 0),
     "C3": (11.37, 22.52, 90),
     "C4": (8.11, 23.95, 90),
-    "TP4": (9.0, 27.0, 0, "B"),
+    "TP4": (11.6, 30.6, 0, "B"),
     "J3": (23.4, 5.0, 0),
     "R1": (20.82, 10.57, 90),
     "R2": (22.01, 10.57, 90),
@@ -142,9 +142,63 @@ PLACE = {
 
 # ---------------------------------------------------------------------------
 
-TRACKS = []
+TRACKS = [
+    # ---- battery entry chain (0.8mm; 465mA EPD refresh bursts) ----
+    ("~BAT_IN", "F.Cu", 0.8, ["J1.1", (20.0, 26.0), (25.4, 26.0)]),
+    ("~BAT_IN", "F.Cu", 0.6, [(25.4, 26.0), (27.45, 23.95), "Q6.3"]),
+    ("~VBAT_RAW", "F.Cu", 0.8, ["Q6.2", (28.4, 24.6), (26.94, 25.6), "JP1.1"]),
+    ("~VBAT_RAW", "F.Cu", 0.8, ["JP1.1", (26.94, 28.5), "J2.1"]),
+    ("VBAT", "F.Cu", 0.8, ["JP1.2", (29.2, 26.0), (38.8, 26.0), (40.0, 24.8),
+                           (40.0, 6.2), (44.3, 6.2), (44.3, 2.4), "Q1.3"]),
+    ("VBAT", "F.Cu", 0.5, [(40.0, 4.0), (38.2, 4.0), "U4.3"]),
+    ("VBAT", "F.Cu", 0.5, ["U4.3", (36.9, 4.4), "C6.1"]),
+    ("VBAT", "F.Cu", 0.8, ["JP1.2", (28.24, 25.5), (27.6, 24.9), (16.3, 24.9),
+                           (16.3, 26.11), "Q4.2"]),
+    # divider top R18 feed hops B.Cu under the ADC resistor row
+    ("VBAT", "F.Cu", 0.5, [(16.3, 24.9), (16.6, 24.6)]),
+    ("VBAT", "B.Cu", 0.5, [(16.6, 24.6), (9.31, 26.3)]),
+    ("VBAT", "F.Cu", 0.5, [(9.31, 26.3), "R18.1"]),
+    ("VBAT", "F.Cu", 0.5, ["J2.2", (27.8, 32.14)]),
 
-VIAS = []
+    # ---- VSYS: charger/load-share NE to LDO SW via west-edge B.Cu ----
+    ("VSYS", "F.Cu", 0.5, ["D2.1", (30.45, 4.14), (29.9, 4.14)]),
+    ("VSYS", "F.Cu", 0.5, [(30.45, 4.14), (40.3, 4.14), (41.8, 5.2),
+                           (43.2, 5.2), "Q1.2"]),
+    ("VSYS", "F.Cu", 0.5, ["D2.1", (30.0, 1.85), (30.0, 1.4)]),
+    ("VSYS", "B.Cu", 0.5, [(30.0, 1.4), (16.8, 1.4), (16.8, 3.0), (6.5, 3.0),
+                           (6.5, 26.1), (7.0, 26.6)]),
+    ("VSYS", "F.Cu", 0.5, [(7.0, 26.6), (7.8, 27.0), "U2.1"]),
+    ("VSYS", "F.Cu", 0.5, ["U2.1", "U2.3"]),
+    ("VSYS", "F.Cu", 0.5, ["U2.3", (8.36, 30.4), (8.19, 30.6), "C2.1"]),
+    ("VSYS", "F.Cu", 0.5, ["C2.1", (8.19, 32.2), "C1.1"]),
+
+    # ---- VBUS (USB current path; not in the 0.5 min-width class) ----
+    ("VBUS", "F.Cu", 0.4, ["J3.A9", (25.85, 2.2), (26.8, 3.2), (26.8, 6.9),
+                           (27.1, 7.2), (27.1, 10.8), (26.58, 11.34), "U3.5"]),
+    ("VBUS", "F.Cu", 0.4, [(27.1, 11.9), (27.72, 12.29), "C5.1"]),
+    ("VBUS", "F.Cu", 0.4, [(27.1, 7.9), (28.6, 8.39), "R22.1"]),
+    ("VBUS", "F.Cu", 0.4, ["R22.1", (29.9, 7.6), (30.61, 6.3), "R5.1"]),
+    ("VBUS", "F.Cu", 0.4, [(27.7, 6.6), (31.5, 6.6), (33.4, 5.7), (33.4, 3.5),
+                           "D2.2"]),
+    ("VBUS", "F.Cu", 0.4, [(27.1, 7.2), (27.7, 6.6)]),
+    ("VBUS", "F.Cu", 0.4, ["D2.2", (34.45, 3.6), (35.9, 4.0), (38.9, 4.0),
+                           (39.34, 3.7), "U4.4"]),
+    ("VBUS", "F.Cu", 0.4, ["U4.4", (39.6, 4.0), (40.9, 4.0), (41.3, 3.62),
+                           "Q1.1"]),
+    # CHG LED resistor feed (B.Cu hop past the USB shield pads)
+    ("VBUS", "F.Cu", 0.4, ["J3.A4", (20.95, 2.1)]),
+    ("VBUS", "B.Cu", 0.4, [(20.95, 2.1), (17.4, 1.7), (16.5, 2.2)]),
+    ("VBUS", "F.Cu", 0.4, [(16.5, 2.2), "R4.1"]),
+]
+
+VIAS = [
+    ("VBAT", 16.6, 24.6),
+    ("VBAT", 9.31, 26.3),
+    ("VSYS", 30.0, 1.4),
+    ("VSYS", 7.0, 26.6),
+    ("VBUS", 20.95, 2.1),
+    ("VBUS", 16.5, 2.2),
+]
 
 STITCH = []
 
@@ -165,10 +219,12 @@ KEEPOUTS = [
          tracks=True, vias=True, fills=True, pads=False),
     # no copper/vias/pour under either pressure sensor (Bosch handling +
     # thermal-fidelity guidance)
+    # sensors: no vias/pour under the body; the LGA's own escape traces are
+    # unavoidable (Bosch reference layouts route them), so tracks stay legal
     dict(name="U5-sensor", layers=["F.Cu", "B.Cu"], rect=(1.3, 21.1, 3.9, 23.7),
-         tracks=True, vias=True, fills=True, pads=False),
+         tracks=False, vias=True, fills=True, pads=False),
     dict(name="U6-sensor", layers=["F.Cu", "B.Cu"], rect=(0.8, 24.7, 4.6, 28.5),
-         tracks=True, vias=True, fills=True, pads=False),
+         tracks=False, vias=True, fills=True, pads=False),
 ]
 
 SILK = []

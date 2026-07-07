@@ -268,8 +268,8 @@ COMPONENTS = [
 
     # ---- J: Debug header ----
     dict(ref="J5", lib_id="Connector_Generic:Conn_01x10", value="DEBUG",
-         footprint="Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical",
-         lcsc="", dnp=True, zone="J: Debug"),
+         footprint="Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical",
+         lcsc="", dnp=True, zone="J: Debug"),  # 2x5 = 12.7mm vs 25.4mm inline (board is pouch-sized); same pin numbers
     # M2 mounting holes (NPTH, no pad) — on the schematic so the PCB stays in
     # exact schematic parity (no board-only footprints)
     dict(ref="H1", lib_id="Mechanical:MountingHole", value="M2",

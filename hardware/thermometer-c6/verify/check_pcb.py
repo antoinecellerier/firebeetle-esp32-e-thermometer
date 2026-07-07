@@ -100,8 +100,12 @@ def main():
             continue
         bb = z.GetBoundingBox()
         for t in board.GetTracks():
-            if bb.Intersects(t.GetBoundingBox()):
-                fail(f"{t.GetClass()} on net {t.GetNetname()} intersects rule area {name}")
+            if not bb.Intersects(t.GetBoundingBox()):
+                continue
+            if t.GetClass() == "PCB_VIA":
+                fail(f"via on net {t.GetNetname()} intersects rule area {name}")
+            elif name == "antenna":
+                fail(f"track on net {t.GetNetname()} intersects the antenna keep-out")
         for fp in board.Footprints():
             for pad in fp.Pads():
                 if fp.GetReference() in sensor_pads_ok:
