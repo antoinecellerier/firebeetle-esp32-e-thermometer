@@ -100,7 +100,8 @@ COMPONENTS = [
 
     # ---- D: MCU ----
     dict(ref="U1", lib_id="RF_Module:ESP32-C6-MINI-1", value="ESP32-C6-MINI-1-N4",
-         footprint="RF_Module:ESP32-C6-MINI-1", lcsc="C5736265", zone="D: ESP32-C6"),
+         footprint="local:ESP32-C6-MINI-1",  # body-sized courtyard for edge placement (stock keep-out courtyard spans 43x32mm)
+         lcsc="C5736265", zone="D: ESP32-C6"),
     dict(ref="C7", lib_id="Device:C", value="10uF", footprint=C0603,
          lcsc="C19702", zone="D: ESP32-C6"),
     dict(ref="C8", lib_id="Device:C", value="100nF", footprint=C0402,
@@ -269,6 +270,14 @@ COMPONENTS = [
     dict(ref="J5", lib_id="Connector_Generic:Conn_01x10", value="DEBUG",
          footprint="Connector_PinHeader_2.54mm:PinHeader_1x10_P2.54mm_Vertical",
          lcsc="", dnp=True, zone="J: Debug"),
+    # M2 mounting holes (NPTH, no pad) — on the schematic so the PCB stays in
+    # exact schematic parity (no board-only footprints)
+    dict(ref="H1", lib_id="Mechanical:MountingHole", value="M2",
+         footprint="MountingHole:MountingHole_2.2mm_M2",
+         lcsc="", zone="J: Debug"),
+    dict(ref="H2", lib_id="Mechanical:MountingHole", value="M2",
+         footprint="MountingHole:MountingHole_2.2mm_M2",
+         lcsc="", zone="J: Debug"),
 ]
 
 # ---------------------------------------------------------------------------

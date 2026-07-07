@@ -4170,6 +4170,105 @@
       )
       (embedded_fonts no)
     )
+    (symbol "Mechanical:MountingHole"
+      (pin_names
+        (offset 1.016)
+      )
+      (exclude_from_sim no)
+      (in_bom no)
+      (on_board yes)
+      (in_pos_files yes)
+      (duplicate_pin_numbers_are_jumpers no)
+      (property "Reference" "H"
+        (at 0 5.08 0)
+        (show_name no)
+        (do_not_autoplace no)
+        (effects
+          (font
+            (size 1.27 1.27)
+          )
+        )
+      )
+      (property "Value" "MountingHole"
+        (at 0 3.175 0)
+        (show_name no)
+        (do_not_autoplace no)
+        (effects
+          (font
+            (size 1.27 1.27)
+          )
+        )
+      )
+      (property "Footprint" ""
+        (at 0 0 0)
+        (show_name no)
+        (do_not_autoplace no)
+        (hide yes)
+        (effects
+          (font
+            (size 1.27 1.27)
+          )
+        )
+      )
+      (property "Datasheet" ""
+        (at 0 0 0)
+        (show_name no)
+        (do_not_autoplace no)
+        (hide yes)
+        (effects
+          (font
+            (size 1.27 1.27)
+          )
+        )
+      )
+      (property "Description" "Mounting Hole without connection"
+        (at 0 0 0)
+        (show_name no)
+        (do_not_autoplace no)
+        (hide yes)
+        (effects
+          (font
+            (size 1.27 1.27)
+          )
+        )
+      )
+      (property "ki_keywords" "mounting hole"
+        (at 0 0 0)
+        (show_name no)
+        (do_not_autoplace no)
+        (hide yes)
+        (effects
+          (font
+            (size 1.27 1.27)
+          )
+        )
+      )
+      (property "ki_fp_filters" "MountingHole*"
+        (at 0 0 0)
+        (show_name no)
+        (do_not_autoplace no)
+        (hide yes)
+        (effects
+          (font
+            (size 1.27 1.27)
+          )
+        )
+      )
+      (symbol "MountingHole_0_1"
+        (circle
+          (center 0 0)
+          (radius 1.27)
+          (stroke
+            (width 1.27)
+            (type default)
+          )
+          (fill
+            (type none)
+          )
+        )
+      )
+      (embedded_fonts no)
+    )
     (symbol "Power_Protection:USBLC6-2SC6"
       (pin_names
         (hide yes)
@@ -16718,7 +16817,7 @@
     (at 55.88 38.1 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "9ac43feb-4f57-557b-ae1b-e72836289200")
@@ -16852,7 +16951,7 @@
     (at 71.12 38.1 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "b278556e-9c48-53c4-b4c4-cb542085487b")
@@ -16917,7 +17016,7 @@
     (at 78.74 50.8 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "dafb2a78-5e11-53a9-a436-b1b50eb62022")
@@ -16982,7 +17081,7 @@
     (at 86.36 50.8 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "bba345d4-e708-5e75-b0a7-b516b89ad4ca")
@@ -17399,7 +17498,7 @@
     (at 163.83 33.02 180)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "1b4c661c-f9a6-5e04-9843-5580831f5b5c")
@@ -18655,7 +18754,7 @@
         (justify right)
       )
     )
-    (property "Footprint" "RF_Module:ESP32-C6-MINI-1"
+    (property "Footprint" "local:ESP32-C6-MINI-1"
       (at 355.6 60.96 0)
       (effects
         (font
@@ -20756,7 +20855,7 @@
     (at 326.39 175.26 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "1ee43105-84be-5ab6-ba6b-7bc3f43431d1")
@@ -20957,7 +21056,7 @@
     (at 52.07 160.02 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "fe4624ee-cd4f-5ee1-b2aa-bf53276fc8c9")
@@ -21024,7 +21123,7 @@
     (at 52.07 165.1 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "ce5a3d52-7023-5af5-8d4f-3e12712bd4e8")
@@ -21435,7 +21534,7 @@
     (at 39.37 203.2 270)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "260f6344-40e4-5dc1-aae3-1c14732c1d45")
@@ -21504,7 +21603,7 @@
     (at 49.53 203.2 270)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "df150983-2c40-50d4-a769-1acbaf0b98a6")
@@ -21573,7 +21672,7 @@
     (at 59.69 203.2 270)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "e4db35ba-c209-5e00-bc2b-5de71f0c7864")
@@ -22050,7 +22149,7 @@
     (at 92.71 160.02 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "bd099183-6df6-584e-a262-0e871e46a253")
@@ -22115,7 +22214,7 @@
     (at 90.17 172.72 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "0a1a726f-beb8-5f10-ab81-148e612f6991")
@@ -22182,7 +22281,7 @@
     (at 39.37 171.45 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "5f921015-4700-5ddc-a98a-f79204ce0c6f")
@@ -22249,7 +22348,7 @@
     (at 36.83 185.42 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "d77525a6-68cd-5127-9ecb-d5e879bb4b01")
@@ -22991,7 +23090,7 @@
     (at 207.01 215.9 180)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "6028bb86-4952-5a56-8c50-05a7b8a592d5")
@@ -23545,7 +23644,7 @@
     (at 393.7 179.07 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom yes)
+    (in_bom no)
     (on_board yes)
     (dnp no)
     (uuid "72c18b4c-9d18-5780-b1ce-9c11a56fde55")
@@ -23696,6 +23795,128 @@
       )
     )
   )
+  (symbol
+    (lib_id "Mechanical:MountingHole")
+    (at 534.67 30.48 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom no)
+    (on_board yes)
+    (dnp no)
+    (uuid "a171e3d1-381d-5d6f-8e9a-018975de7450")
+    (property "Reference" "H1"
+      (at 534.67 24.31 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+      )
+    )
+    (property "Value" "M2"
+      (at 534.67 26.51 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+      )
+    )
+    (property "Footprint" "MountingHole:MountingHole_2.2mm_M2"
+      (at 534.67 30.48 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "Datasheet" "~"
+      (at 534.67 30.48 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "LCSC" ""
+      (at 534.67 30.48 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (instances
+      (project "thermometer-c6"
+        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
+          (reference "H1")
+          (unit 1)
+        )
+      )
+    )
+  )
+  (symbol
+    (lib_id "Mechanical:MountingHole")
+    (at 544.83 30.48 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom no)
+    (on_board yes)
+    (dnp no)
+    (uuid "ab7879de-de4a-509e-be08-66599ee6deff")
+    (property "Reference" "H2"
+      (at 544.83 24.31 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+      )
+    )
+    (property "Value" "M2"
+      (at 544.83 26.51 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+      )
+    )
+    (property "Footprint" "MountingHole:MountingHole_2.2mm_M2"
+      (at 544.83 30.48 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "Datasheet" "~"
+      (at 544.83 30.48 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (property "LCSC" ""
+      (at 544.83 30.48 0)
+      (effects
+        (font
+          (size 1.27 1.27)
+        )
+        (hide yes)
+      )
+    )
+    (instances
+      (project "thermometer-c6"
+        (path "/0f155dae-a0e5-543a-be87-8caf78dad21b"
+          (reference "H2")
+          (unit 1)
+        )
+      )
+    )
+  )
   (text "A: Battery + PPK2 break"
     (exclude_from_sim no)
     (at 16.51 23.82 0)
@@ -23801,7 +24022,7 @@
   )
   (rectangle
     (start 485.68 14.74)
-    (end 516.48 66.42)
+    (end 549.5 66.42)
     (stroke
       (width 0.1)
       (type dash)

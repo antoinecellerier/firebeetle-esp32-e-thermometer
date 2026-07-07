@@ -8,6 +8,7 @@
   (lib (name "Package_TO_SOT_SMD") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Package_TO_SOT_SMD.pretty") (options "") (descr ""))
   (lib (name "Package_SON") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Package_SON.pretty") (options "") (descr ""))
   (lib (name "Package_LGA") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Package_LGA.pretty") (options "") (descr ""))
+  (lib (name "MountingHole") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/MountingHole.pretty") (options "") (descr ""))
   (lib (name "RF_Module") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/RF_Module.pretty") (options "") (descr ""))
   (lib (name "Connector_USB") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Connector_USB.pretty") (options "") (descr ""))
   (lib (name "Connector_JST") (type "KiCad") (uri "${KICAD10_FOOTPRINT_DIR}/Connector_JST.pretty") (options "") (descr ""))

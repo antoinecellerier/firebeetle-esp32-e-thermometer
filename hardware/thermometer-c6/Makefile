@@ -1,7 +1,8 @@
 SCH  := thermometer-c6.kicad_sch
+PCB  := thermometer-c6.kicad_pcb
 OUT  := out
 
-.PHONY: all gen erc netlist check invariants pdf svg bom clean
+.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb drc pcb-img
 
 all: check pdf
 
@@ -26,6 +27,22 @@ invariants: netlist
 check: erc netlist invariants
 	python3 verify/check_footprints.py
 	@echo "ALL CHECKS PASSED"
+
+pcb: netlist
+	python3 generator/pcb.py
+
+drc: pcb | $(OUT)
+	kicad-cli pcb drc --severity-all --exit-code-violations --schematic-parity --refill-zones \
+		--format json -o $(OUT)/drc.json $(PCB) \
+		|| (python3 -c "import json;d=json.load(open('$(OUT)/drc.json'));\
+[print(v['severity'],v['type'],'-',v['description'],[i.get('description') for i in v.get('items',[])]) \
+for k in ('violations','unconnected_items','schematic_parity') for v in d.get(k,[])]" | head -80; exit 1)
+	@echo "DRC: clean"
+
+pcb-img: pcb | $(OUT)
+	kicad-cli pcb export svg --mode-multi --layers F.Cu,B.Cu,Edge.Cuts,F.SilkS,F.Fab -o $(OUT)/pcb-svg $(PCB)
+	kicad-cli pcb render --side top -o $(OUT)/pcb-top.png $(PCB)
+	kicad-cli pcb render --side bottom -o $(OUT)/pcb-bottom.png $(PCB)
 
 pdf: gen | $(OUT)
 	kicad-cli sch export pdf -o $(OUT)/$(basename $(SCH)).pdf $(SCH)

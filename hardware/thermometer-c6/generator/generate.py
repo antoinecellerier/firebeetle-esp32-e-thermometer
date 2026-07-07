@@ -748,7 +748,10 @@ def build_schematic(circuit, layout):
         hide_value = c["lib_id"] == "Connector:TestPoint"
         node = ["symbol", ["lib_id", Q(c["lib_id"])], ["at", x, y, rot], ["unit", 1],
                 ["exclude_from_sim", "no"],
-                ["in_bom", "no" if c.get("dnp") else "yes"], ["on_board", "yes"],
+                # not-in-BOM: DNP parts and copper-only/mechanical parts with
+                # no orderable LCSC number (TPs, solder jumpers, holes)
+                ["in_bom", "no" if (c.get("dnp") or not c.get("lcsc")) else "yes"],
+                ["on_board", "yes"],
                 ["dnp", "yes" if c.get("dnp") else "no"],
                 ["uuid", Q(uid("sym/" + c["ref"]))],
                 ["property", Q("Reference"), Q(c["ref"]),

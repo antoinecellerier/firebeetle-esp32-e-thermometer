@@ -1,0 +1,406 @@
+#!/usr/bin/env python3
+"""Render thermometer-c6.kicad_pcb from circuit.py + pcb_layout.py.
+
+Mechanism only — all authored data lives in pcb_layout.py. The netlist
+exported by kicad-cli (out/netlist.net, already verified against circuit.py
+by verify/check_netlist.py) is the net-name source: PCB pads must carry the
+EXPORTED names (anonymous "~" nets become "Net-(J1-Pad1)" style, no-connect
+pins become "unconnected-(...)") for `kicad-cli pcb drc --schematic-parity`
+to pass. Never invent net names here.
+
+pcbnew API notes (KiCad 10):
+- Add the footprint to the board BEFORE assigning pad nets; SetNet on an
+  orphaned pad silently no-ops.
+- Iterate fp.Pads() rather than FindPadByNumber — J3 (USB-C) repeats pad
+  numbers (A1/B1/SH) and MP pads share a number by design.
+- SaveBoard writes fresh random UUIDs each run; the deterministic post-pass
+  below rewrites them in file order so regeneration is byte-stable.
+- ZONE_FILLER.Fill SEGFAULTS on a CreateEmptyBoard board (no project
+  attached). The board must be saved and re-loaded with LoadBoard (which
+  attaches a project) before filling — hence the save/reload/fill/save
+  sequence in main().
+"""
+
+import os
+import re
+import sys
+import uuid
+
+import pcbnew
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PROJECT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(PROJECT, "verify"))
+
+import circuit  # noqa: E402
+import pcb_layout as pl  # noqa: E402
+from generate import NAMESPACE, ROOT_UUID, uid  # noqa: E402
+from check_netlist import load_netlist  # noqa: E402
+
+SYSTEM_FP = "/usr/share/kicad/footprints"
+BOARD_PATH = os.path.join(PROJECT, "thermometer-c6.kicad_pcb")
+DRU_PATH = os.path.join(PROJECT, "thermometer-c6.kicad_dru")
+NETLIST = os.path.join(PROJECT, "out", "netlist.net")
+
+FromMM = pcbnew.FromMM
+V = lambda x, y: pcbnew.VECTOR2I(FromMM(x), FromMM(y))  # noqa: E731
+
+ORIGIN = pl.BOARD["origin"]
+
+LAYER = {"F.Cu": pcbnew.F_Cu, "B.Cu": pcbnew.B_Cu}
+
+# Nets that see the EPD booster's +/-20V-class rails -> 0.3mm clearance rule
+HV_NETS = ["EPD_PREVGH", "EPD_PREVGL", "~EPD_VGH", "~EPD_VGL",
+           "~EPD_VSH", "~EPD_VSL", "~EPD_VCOM", "~EPD_VPP"]
+# Full-current paths (465mA EPD refresh bursts) -> 0.5mm min track width rule
+POWER_NETS = ["VBAT", "VSYS", "+3V3", "EPD_VCC", "~VBAT_RAW", "~BAT_IN"]
+
+
+def bmm(x, y):
+    """Board-relative mm -> absolute VECTOR2I."""
+    return V(ORIGIN[0] + x, ORIGIN[1] + y)
+
+
+def resolve_fp_dir(lib):
+    for base in (os.path.join(SYSTEM_FP, lib + ".pretty"),
+                 os.path.join(PROJECT, lib + ".pretty")):
+        if os.path.isdir(base):
+            return base
+    raise SystemExit(f"pcb: footprint library not found: {lib}")
+
+
+def build_net_maps():
+    """exported netlist -> pad_net {(ref,pad): exported_name} and
+    alias {circuit_name: exported_name} (named + anonymous)."""
+    exported = load_netlist(NETLIST)
+    pad_net = {}
+    for name, pins in exported.items():
+        for rp in pins:
+            pad_net[rp] = name
+    alias = {}
+    unmatched = dict(exported)
+    for cname, pins in circuit.NETS.items():
+        ps = {(r, str(p)) for r, p in pins}
+        if not cname.startswith("~"):
+            if cname not in exported or exported[cname] != ps:
+                raise SystemExit(f"pcb: net {cname} missing/mismatched in netlist "
+                                 f"(run `make netlist` first)")
+            alias[cname] = cname
+            unmatched.pop(cname, None)
+        else:
+            hits = [n for n, ep in unmatched.items() if ep == ps]
+            if len(hits) != 1:
+                raise SystemExit(f"pcb: anonymous net {cname}: {len(hits)} pin-set "
+                                 f"matches in netlist")
+            alias[cname] = hits[0]
+            unmatched.pop(hits[0])
+    return exported, pad_net, alias
+
+
+def add_outline(board):
+    w, h = pl.BOARD["size"]
+    pts = [(0, 0), (w, 0), (w, h), (0, h)]
+    for i in range(4):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % 4]
+        s = pcbnew.PCB_SHAPE(board)
+        s.SetShape(pcbnew.SHAPE_T_SEGMENT)
+        s.SetStart(bmm(x1, y1))
+        s.SetEnd(bmm(x2, y2))
+        s.SetLayer(pcbnew.Edge_Cuts)
+        s.SetWidth(FromMM(0.1))
+        board.Add(s)
+
+
+def add_footprints(board, netinfo, pad_net):
+    pads_by_key = {}
+    for c in circuit.COMPONENTS:
+        ref = c["ref"]
+        lib, _, name = c["footprint"].partition(":")
+        fp = pcbnew.FootprintLoad(resolve_fp_dir(lib), name)
+        if fp is None:
+            raise SystemExit(f"pcb: cannot load footprint {c['footprint']} for {ref}")
+        fp.SetReference(ref)
+        fp.SetValue(c["value"])
+        # FootprintLoad drops the library nickname; restore it or the
+        # schematic-parity DRC flags every footprint as substituted.
+        fp.SetFPIDAsString(c["footprint"])
+        fp.SetField("LCSC", c.get("lcsc", ""))
+        for f in fp.GetFields():
+            if f.GetName() == "LCSC":
+                f.SetVisible(False)
+        board.Add(fp)
+        if ref not in pl.PLACE:
+            raise SystemExit(f"pcb: {ref} missing from pcb_layout.PLACE")
+        x, y, rot = pl.PLACE[ref]
+        fp.SetPosition(bmm(x, y))
+        fp.SetOrientationDegrees(rot)
+        fp.SetPath(pcbnew.KIID_PATH("/" + ROOT_UUID + "/" + uid("sym/" + ref)))
+        fp.SetDNP(bool(c.get("dnp")))
+        if c.get("dnp") or not c.get("lcsc"):
+            fp.SetExcludedFromBOM(True)  # mirrors generate.py's in_bom rule
+        if ref.startswith(("TP", "JP", "H")):
+            fp.SetExcludedFromPosFiles(True)  # copper-only / mechanical
+        for pad in fp.Pads():
+            key = (ref, str(pad.GetNumber()))
+            net = pad_net.get(key)
+            if net is not None:
+                pad.SetNet(netinfo[net])
+            pads_by_key.setdefault(key, pad)
+    return pads_by_key
+
+
+def node_pos(node, pads):
+    if isinstance(node, str):
+        ref, _, num = node.partition(".")
+        pad = pads.get((ref, num))
+        if pad is None:
+            raise SystemExit(f"pcb: track node {node}: no such pad")
+        return pad.GetPosition(), pad
+    x, y = node
+    return bmm(x, y), None
+
+
+def expand_dogleg(a, b):
+    """One 45-degree dogleg (diagonal leg first) between unaligned points."""
+    dx, dy = b.x - a.x, b.y - a.y
+    if dx == 0 or dy == 0 or abs(dx) == abs(dy):
+        return [a, b]
+    d = min(abs(dx), abs(dy))
+    mid = pcbnew.VECTOR2I(a.x + (d if dx > 0 else -d), a.y + (d if dy > 0 else -d))
+    return [a, mid, b]
+
+
+def add_tracks(board, netinfo, alias, pads):
+    for net, layer, width, nodes in pl.TRACKS:
+        exp = alias.get(net)
+        if exp is None:
+            raise SystemExit(f"pcb: TRACKS references unknown net {net}")
+        ni = netinfo[exp]
+        pts = []
+        for node in nodes:
+            pos, pad = node_pos(node, pads)
+            if pad is not None and pad.GetNetname() != exp:
+                raise SystemExit(f"pcb: track node {node} is on net "
+                                 f"'{pad.GetNetname()}', not '{net}' ({exp})")
+            pts.append(pos)
+        path = []
+        for i in range(len(pts) - 1):
+            seg = expand_dogleg(pts[i], pts[i + 1])
+            path.extend(seg if not path else seg[1:])
+        for i in range(len(path) - 1):
+            if path[i] == path[i + 1]:
+                continue
+            t = pcbnew.PCB_TRACK(board)
+            t.SetStart(path[i])
+            t.SetEnd(path[i + 1])
+            t.SetWidth(FromMM(width))
+            t.SetLayer(LAYER[layer])
+            t.SetNet(ni)
+            board.Add(t)
+
+
+def add_vias(board, netinfo, alias):
+    def one(net, x, y):
+        v = pcbnew.PCB_VIA(board)
+        v.SetPosition(bmm(x, y))
+        v.SetDrill(FromMM(pl.DEFAULT_VIA["drill"]))
+        v.SetWidth(FromMM(pl.DEFAULT_VIA["diameter"]))
+        v.SetViaType(pcbnew.VIATYPE_THROUGH)
+        v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        v.SetNet(netinfo[alias[net]])
+        board.Add(v)
+
+    for net, x, y in pl.VIAS:
+        one(net, x, y)
+    for x, y in pl.STITCH:
+        one("GND", x, y)
+
+
+def add_zones(board, netinfo, alias):
+    for prio, (net, layer, corners) in enumerate(pl.COPPER_ZONES):
+        z = pcbnew.ZONE(board)
+        z.SetLayer(LAYER[layer])
+        z.SetNet(netinfo[alias[net]])
+        chain = pcbnew.SHAPE_LINE_CHAIN()
+        for x, y in corners:
+            chain.Append(bmm(x, y))
+        chain.SetClosed(True)
+        z.Outline().AddOutline(chain)
+        z.SetMinThickness(FromMM(0.2))
+        z.SetAssignedPriority(prio)
+        board.Add(z)
+
+
+def add_keepouts(board):
+    for k in pl.KEEPOUTS:
+        z = pcbnew.ZONE(board)
+        z.SetIsRuleArea(True)
+        z.SetZoneName(k["name"])
+        lset = pcbnew.LSET()
+        for layer in k["layers"]:
+            lset.AddLayer(LAYER[layer])
+        z.SetLayerSet(lset)
+        x1, y1, x2, y2 = k["rect"]
+        chain = pcbnew.SHAPE_LINE_CHAIN()
+        for x, y in ((x1, y1), (x2, y1), (x2, y2), (x1, y2)):
+            chain.Append(bmm(x, y))
+        chain.SetClosed(True)
+        z.Outline().AddOutline(chain)
+        z.SetDoNotAllowTracks(k.get("tracks", True))
+        z.SetDoNotAllowVias(k.get("vias", True))
+        z.SetDoNotAllowZoneFills(k.get("fills", True))
+        z.SetDoNotAllowPads(k.get("pads", False))
+        z.SetDoNotAllowFootprints(False)
+        board.Add(z)
+
+
+def add_silk(board):
+    for text, x, y, size, rot in pl.SILK:
+        t = pcbnew.PCB_TEXT(board)
+        t.SetText(text)
+        t.SetPosition(bmm(x, y))
+        t.SetLayer(pcbnew.F_SilkS)
+        t.SetTextSize(pcbnew.VECTOR2I(FromMM(size), FromMM(size)))
+        t.SetTextThickness(FromMM(round(size * 0.15, 2)))
+        t.SetTextAngleDegrees(rot)
+        board.Add(t)
+
+
+def design_settings(board):
+    ds = board.GetDesignSettings()
+    ds.m_MinClearance = FromMM(0.15)
+    ds.m_TrackMinWidth = FromMM(0.15)
+    ds.m_ViasMinSize = FromMM(0.5)
+    ds.m_MinThroughDrill = FromMM(0.3)
+    ds.m_CopperEdgeClearance = FromMM(0.3)
+
+
+def write_dru(alias):
+    def cond(nets):
+        return " || ".join(f"A.NetName == '{alias[n]}'" for n in nets)
+
+    with open(DRU_PATH, "w") as f:
+        f.write("(version 1)\n")
+        f.write("# generated by generator/pcb.py - do not edit\n")
+        f.write("(rule hv-clearance\n"
+                f"  (condition \"{cond(HV_NETS)}\")\n"
+                "  (constraint clearance (min 0.3mm)))\n")
+        f.write("(rule power-track-width\n"
+                f"  (condition \"{cond(POWER_NETS)}\")\n"
+                "  (constraint track_width (min 0.5mm)))\n")
+
+
+# pcbnew saves same-type items sorted by their (random) UUIDs, so both the
+# uuids AND the block order change every run. Normalize: sort same-type
+# top-level blocks by uuid-stripped content, then rewrite every uuid in file
+# order with uuid5 — regeneration is byte-stable.
+SORTABLE = {"footprint", "segment", "arc", "via", "zone", "group",
+            "gr_line", "gr_rect", "gr_arc", "gr_circle", "gr_poly", "gr_text"}
+
+
+def top_level_blocks(text):
+    """Yield (start, end, type) spans of the root node's children."""
+    depth = 0
+    i = 0
+    n = len(text)
+    in_str = False
+    start = None
+    while i < n:
+        ch = text[i]
+        if in_str:
+            if ch == '"' and text[i - 1] != "\\":
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch == "(":
+            depth += 1
+            if depth == 2:
+                start = i
+        elif ch == ")":
+            if depth == 2 and start is not None:
+                j = start + 1
+                k = j
+                while k < n and (text[k].isalnum() or text[k] == "_"):
+                    k += 1
+                yield start, i + 1, text[j:k]
+                start = None
+            depth -= 1
+        i += 1
+
+
+UUID_RE = re.compile(r'\(uuid "[0-9a-fA-F-]{36}"\)')
+
+
+TYPE_ORDER = ["gr_line", "gr_rect", "gr_arc", "gr_circle", "gr_poly",
+              "gr_text", "footprint", "segment", "arc", "via", "zone", "group"]
+
+
+def normalize_board_file(path):
+    text = open(path).read()
+    blocks = list(top_level_blocks(text))
+    head_end = blocks[0][0] if blocks else len(text)
+    fixed = []      # header/setup/net blocks, original order
+    sortable = []   # (type, text) blocks whose save order follows random uuids
+    for s, e, t in blocks:
+        if t in SORTABLE:
+            sortable.append((t, text[s:e]))
+        else:
+            fixed.append(text[s:e])
+    sortable.sort(key=lambda b: (TYPE_ORDER.index(b[0]), UUID_RE.sub("", b[1])))
+    body = "".join("\n\t" + b for b in fixed)
+    body += "".join("\n\t" + b for _, b in sortable)
+    text = text[:head_end].rstrip("\n\t ") + body + "\n)\n"
+
+    counter = [0]
+
+    def rep(_m):
+        counter[0] += 1
+        return '(uuid "%s")' % uuid.uuid5(NAMESPACE, "thermometer-c6-pcb/%d" % counter[0])
+
+    text = UUID_RE.sub(rep, text)
+    open(path, "w").write(text)
+
+
+def main():
+    if not os.path.exists(NETLIST):
+        raise SystemExit("pcb: out/netlist.net missing - run `make netlist` first")
+    exported, pad_net, alias = build_net_maps()
+
+    board = pcbnew.CreateEmptyBoard()
+    design_settings(board)
+
+    netinfo = {}
+    for name in sorted(exported):
+        ni = pcbnew.NETINFO_ITEM(board, name)
+        board.Add(ni)
+        netinfo[name] = ni
+
+    add_outline(board)
+    pads = add_footprints(board, netinfo, pad_net)
+    add_keepouts(board)
+    add_tracks(board, netinfo, alias, pads)
+    add_vias(board, netinfo, alias)
+    add_zones(board, netinfo, alias)
+    add_silk(board)
+
+    write_dru(alias)
+    pcbnew.SaveBoard(BOARD_PATH, board)
+
+    # Fill zones on a re-loaded board (see module docstring: ZONE_FILLER
+    # crashes without a project attached).
+    board2 = pcbnew.LoadBoard(BOARD_PATH)
+    if board2.Zones():
+        if not pcbnew.ZONE_FILLER(board2).Fill(board2.Zones()):
+            raise SystemExit("pcb: zone fill failed")
+    pcbnew.SaveBoard(BOARD_PATH, board2)
+
+    normalize_board_file(BOARD_PATH)
+    n_tracks = len([t for t in board2.GetTracks()])
+    print(f"pcb: {len(circuit.COMPONENTS)} footprints, {len(exported)} nets, "
+          f"{n_tracks} track segments/vias -> {os.path.basename(BOARD_PATH)}")
+
+
+if __name__ == "__main__":
+    main()
