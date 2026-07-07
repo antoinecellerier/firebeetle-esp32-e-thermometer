@@ -16,8 +16,11 @@ charging, LDO power tree. Design driven by the PPK2 measurement campaign in
 | Switched 100k/100k battery divider | Always-on 200k divider ≈ 10µA (~⅔ of the sleep floor); 1M/1M biases the C6 SAR ADC low (~300ns sample window) (wiring.md) |
 | High-side divider switch | Low-side switch leaves the sense node at VBAT through the top 100k → pin ESD diode clamps into 3V3 above ~3.7V (~5µA at 4.2V) |
 | Load-sharing USB path | Without it, no-battery USB operation is limited to the 100mA charge current — EPD refresh peaks at ~465mA |
+| Reverse-battery P-FET (Q6) | JST vs Adafruit pigtail polarity is a real supply-chain trap; MCP73831 abs-max is −0.3V — one AO3401A makes it survivable |
+| EPD gate soft-start (R24/C28) | GPIO14 slamming Q2 on charge-shares 10µF against the rail faster than the LDO loop — ~100µs ramp kills the brownout risk |
+| VBUS sense (R22/R23 → GPIO4) | Firmware needs to know USB is present: VBAT_ADC reads the charger CV node while charging, and SoC logic must ignore it; zero draw with USB absent |
+| Jumper-selected inductor (JP5/JP6) | 10µH proven on all panels; 47µH per the GDEH0576T81 datasheet (with 2.2Ω RESE) — jumpers sit on the switch-node side so the unselected coil idles on the DC rail |
 | 32.768kHz crystal | C6 on internal RC runs hours fast over weeks (memory: project_c6_clock_drift) |
-| 10µH booster inductor | Proven on all six panels incl. GDEH0576T81 via DESPI-C02 (which is 10µH); T81 datasheet's 47µH is available as alternate value on the same footprint |
 
 ## Reference transcription: DESPI-C02 V1.0 (Good Display, 2018-07-06)
 
@@ -63,7 +66,8 @@ Transcribed from `hardware/DESPI-C02_SCH V1.0.pdf` (visual + embedded netlist),
 | 0 / 1 | XTAL_32K_P / N | FC-135 32.768kHz + 20pF; R9 10M bias DNP — the C6's 32k oscillator amplifier runs at very low gm, so startup margin depends on crystal ESR spread (≤70kΩ allowed, rises when cold) and stray C; the parallel bias resistor (Espressif HDG checklist) gives the inverter a DC feedback path if a given board/batch won't start |
 | 2 | VBAT_ADC (ADC1_CH2) | sense node of switched divider; 0V when divider off |
 | 3 | VDIV_EN | 100k pull-down → divider hard-off in deep sleep |
-| 4, 5 | spares → J5 debug header | strap-adjacent (SDIO clock-edge only at default eFuses) — keep high-Z |
+| 4 | VBUS_SENSE (100k/100k from VBUS) | USB-presence detect; divider is dead (0V, zero drain) with USB unplugged |
+| 5 | spare → J5 debug header | strap-adjacent (SDIO clock-edge only at default eFuses) — keep high-Z |
 | 6 / 7 | LP I2C SDA / SCL | fixed by silicon; BMP581; 4.7k pull-ups to 3V3 |
 | 8 | spare → J5 | STRAP: must be free to pull high for download boot — header only |
 | 9 | BOOT button | strap, its intended use; 10k pull-up |
@@ -75,12 +79,28 @@ Transcribed from `hardware/DESPI-C02_SCH V1.0.pdf` (visual + embedded netlist),
 | 22 | EPD RST | 10k pull-up to **EPD_VCC** (gated) |
 | 23 | EPD BUSY (input) | |
 
+## Charging rule (product decision, 2026-07-07)
+
+**Charge indoors only (0–45°C).** The MCP73831 has no thermistor input;
+charging LiPo below 0°C plates lithium. The board will get a silkscreen
+note at layout. Related: don't leave USB permanently attached — the
+charger float-cycles the cell between ~3.95V and 4.2V indefinitely.
+Firmware should also refuse to advertise "charge OK" below 0°C using the
+BMP58x temperature (belt and braces; it cannot stop the charger).
+
+## Inductor solder jumpers (JP5/JP6) — bridge exactly one
+
+| Bridge | L | Pair with |
+|---|---|---|
+| JP5 (default) | L1 10µH | RESE 0.47Ω or 3Ω — the proven DESPI-C02 config for all six panels |
+| JP6 | L2 47µH | RESE 2.2Ω (JP3) — the GDEH0576T81 datasheet booster spec |
+
 ## RESE solder jumpers (JP2/JP3/JP4) — bridge exactly one
 
 | Bridge | Rsense | Panel family |
 |---|---|---|
 | JP2 (default) | 0.47Ω | GDEW/GDEY (UC81xx): GDEW0154M09, GDEW0213M21, GDEW029I6FD, GDEM0154I61; proven with GDEH0576T81 too (DESPI-C02 heritage) |
-| JP3 | 2.2Ω | GDEH0576T81 per its datasheet (with L1 = 47µH SWPA4030S470MT, same footprint) |
+| JP3 | 2.2Ω | GDEH0576T81 per its datasheet (bridge JP6 to select L2 47µH with it) |
 | JP4 | 3Ω | GDEH/GDEM SSD16xx: GDEH0154Z90 (tri-color), GDEH0154D67, GDEH0213B73, GDEH029A1 |
 
 ## Bench procedures
@@ -94,6 +114,17 @@ Transcribed from `hardware/DESPI-C02_SCH V1.0.pdf` (visual + embedded netlist),
   TP4 (3V3) is probe-only.
 - Charge current: R3 10k → 100mA (0.25C for a 400–500mAh pouch). 4.99k →
   200mA if a bigger pack is fitted.
+- If C29 (DNP sampling cap on VBAT_ADC) is fitted: enable the divider
+  ~5ms before reading (τ = 50k × 10n = 0.5ms).
+- BMP58x INT pins are unconnected: firmware must configure int_en=1,
+  int_od=0, pad_int_drv=0 per the Bosch datasheets.
+- The 3700mV shutdown threshold inherited from the XIAO buck rig should be
+  re-derived (~3.4–3.5V defensible) after first-article PPK2 measurement —
+  the LDO tree degrades gracefully where the buck cliffed.
+- First-article PPK2 items: SS14 reverse leakage at temperature (swap to
+  PMEG6010 class if the hot floor drifts), EPD_VCC ramp with the soft-start
+  fitted, 32k crystal cold start (a 7pF FC-135 variant is the mitigation
+  if marginal).
 - While charging, the board self-heats slightly — BMP581 temperature reads
   high until it cools; log accordingly.
 

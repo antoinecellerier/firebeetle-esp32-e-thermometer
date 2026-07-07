@@ -269,7 +269,7 @@ def build_schematic(circuit, layout):
             routed_pins.add((ref, pin))
 
     # ---- authored power symbols and labels -------------------------------
-    power_placements = []  # (lib_id, net, pos, rot)
+    power_placements = []  # (lib_id, net, pos, rot, zone)
     for entry in layout.POWER:
         zone, net, rx, ry = entry[:4]
         rot = entry[4] if len(entry) > 4 else 0
@@ -278,7 +278,7 @@ def build_schematic(circuit, layout):
         lib_id = power_syms.get(net)
         if lib_id is None:
             raise SystemExit(f"POWER entry for net {net} has no power symbol mapping")
-        power_placements.append((lib_id, net, pos, rot))
+        power_placements.append((lib_id, net, pos, rot, zone))
 
     label_placements = []  # (net, pos, angle)
     for zone, net, rx, ry, angle in layout.LABELS:
@@ -323,7 +323,7 @@ def build_schematic(circuit, layout):
                 return True
         return False
 
-    for lib_id, net, pos, rot in power_placements:
+    for lib_id, net, pos, rot, zone_ in power_placements:
         if not on_net_geometry(net, pos):
             raise SystemExit(f"power symbol {net} at {pos} touches no {net} wire")
     for net, pos, angle in label_placements:
@@ -332,7 +332,7 @@ def build_schematic(circuit, layout):
 
     # every named net must carry at least one name source (label or power
     # symbol); anonymous "~" nets are named by KiCad automatically
-    named = {net for _, net, _, _ in power_placements}
+    named = {net for _, net, _, _, _ in power_placements}
     named |= {net for net, _, _ in label_placements}
     named |= {f for f, _, _, d in fallback}
     for name in nets:
@@ -374,7 +374,7 @@ def build_schematic(circuit, layout):
     # ---- junctions ---------------------------------------------------------
     # authored power-symbol pins count as branches too: a pin lying
     # mid-segment only connects in KiCad when a junction dot is present
-    for lib_id, net, pos, rot in power_placements:
+    for lib_id, net, pos, rot, zone_ in power_placements:
         add_point(net, pos)
     junctions = set()
     for p, names in net_points.items():
@@ -395,7 +395,7 @@ def build_schematic(circuit, layout):
                 pin_count = 1  # stacked pins count once
                 break
         if not pin_count:
-            for lib_id, n_, pos, rot in power_placements:
+            for lib_id, n_, pos, rot, zone_ in power_placements:
                 if n_ == net and pos == p:
                     pin_count = 1
                     break
@@ -443,7 +443,7 @@ def build_schematic(circuit, layout):
             label_boxes.append((net_, bbox_label(net_, end_, d_)))
     for net_, pos_, angle_ in label_placements:
         label_boxes.append((net_, bbox_label(net_, pos_, angle_)))
-    for lib_id_, net_, pos_, rot_ in power_placements:
+    for lib_id_, net_, pos_, rot_, zone_ in power_placements:
         obstacles.append((pos_[0] - 2.0, pos_[1] - 6.0, pos_[0] + 2.0, pos_[1] + 6.0))
     obstacles.extend(b for _, b in label_boxes)
 
@@ -523,10 +523,80 @@ def build_schematic(circuit, layout):
             inner = (bb[0] + 1.0, bb[1] + 1.0, bb[2] - 1.0, bb[3] - 1.0)
             if inner[0] < inner[2] and inner[1] < inner[3] and bbox_overlap(lb, inner, 0):
                 warns.append(f"label {lnet} overlaps body of {ref_}")
+        # a label's text box must not lie along ANY wire (its own included —
+        # mid-wire anchors read ambiguously); the -0.6 pad tolerates the
+        # unavoidable touch at the anchor point itself
+        for net_, a_, b_ in wire_segments:
+            if bbox_overlap(lb, seg_bbox(a_, b_, 0.05), -0.6):
+                warns.append(f"label {lnet} box {tuple(round(v, 1) for v in lb)} "
+                             f"lies on {net_} wire {a_}-{b_}")
     if warns:
-        print(f"LAYOUT WARNINGS ({len(set(warns))}):")
+        print(f"LAYOUT ERRORS ({len(set(warns))}):")
         for w in sorted(set(warns)):
             print("  " + w)
+        raise SystemExit("clean-by-design layout check failed")
+
+    # ---- crossing report (informational) ------------------------------------
+    crossings = []
+    for i, (n1, a1, b1) in enumerate(wire_segments):
+        for n2, a2, b2 in wire_segments[i + 1:]:
+            if n1 == n2:
+                continue
+            # perpendicular mid-mid intersections only (touching cases are
+            # already fatal in the collision check)
+            if a1[0] == b1[0] and a2[1] == b2[1]:
+                v, h = (a1, b1), (a2, b2)
+            elif a1[1] == b1[1] and a2[0] == b2[0]:
+                v, h = (a2, b2), (a1, b1)
+            else:
+                continue
+            vx = v[0][0]
+            hy = h[0][1]
+            if min(h[0][0], h[1][0]) < vx < max(h[0][0], h[1][0]) and \
+               min(v[0][1], v[1][1]) < hy < max(v[0][1], v[1][1]):
+                crossings.append(f"{n1} x {n2} at ({vx}, {hy})")
+    if crossings:
+        print(f"wire crossings (no connection, informational): {len(crossings)}")
+        for c_ in sorted(set(crossings)):
+            print("  " + c_)
+
+    # ---- zone frames auto-fit around their content ---------------------------
+    zone_ext = {}
+
+    def grow(zone, bb):
+        cur = zone_ext.get(zone)
+        zone_ext[zone] = bb if cur is None else (min(cur[0], bb[0]), min(cur[1], bb[1]),
+                                                 max(cur[2], bb[2]), max(cur[3], bb[3]))
+
+    for z_, zdef_ in layout.ZONES.items():
+        ox_, oy_ = zdef_["origin"]
+        grow(z_, (ox_ + 1.27, oy_ + 1.5, ox_ + 1.27 + len(z_) * 2.1, oy_ + 5.5))
+    for c in comps:
+        grow(c["zone"], bodies[c["ref"]])
+        (rx_, ry_, rj_), (vx_, vy_, vj_) = field_layout[c["ref"]]
+        grow(c["zone"], bbox_text(c["ref"], rx_, ry_, rj_))
+        if c["lib_id"] != "Connector:TestPoint":
+            grow(c["zone"], bbox_text(c["value"], vx_, vy_, vj_))
+    for zone, route in layout.WIRES:
+        pts = []
+        for node in route:
+            pos, pk = resolve(node, zone)
+            pts.append(pos)
+        for a, b in zip(pts, pts[1:]):
+            grow(zone, seg_bbox(a, b, 0.5))
+    for net, tip, end, d in fallback:
+        ref0 = [r for r, p in nets[net] if placed[r].pin_pos(str(p)) == tip][0]
+        z_ = placed[ref0].comp["zone"]
+        grow(z_, seg_bbox(tip, end, 0.5))
+        if net in power_syms:
+            grow(z_, (end[0] - 2.0, end[1] - 6.0, end[0] + 2.0, end[1] + 6.0))
+        else:
+            grow(z_, bbox_label(net, end, d))
+    for lib_id, net, pos, rot, zone_ in power_placements:
+        grow(zone_, (pos[0] - 2.0, pos[1] - 6.0, pos[0] + 2.0, pos[1] + 6.0))
+    for zone, net, rx, ry, angle in layout.LABELS:
+        ox_, oy_ = layout.ZONES[zone]["origin"]
+        grow(zone, bbox_label(net, (ox_ + rx, oy_ + ry), angle))
 
     # ---- emit --------------------------------------------------------------
     sch = ["kicad_sch",
@@ -573,7 +643,9 @@ def build_schematic(circuit, layout):
                 rot = 180 if d == 90 else 0
             else:
                 rot = 180 if d == 270 else 0
-            power_placements.append((power_syms[net], net, end, rot))
+            power_placements.append((power_syms[net], net, end, rot,
+                                     placed[[r for r, p in nets[net]
+                                             if placed[r].pin_pos(str(p)) == tip][0]].comp["zone"]))
         else:
             body.append(["global_label", Q(net), ["shape", "input"],
                          ["at", end[0], end[1], d],
@@ -586,7 +658,7 @@ def build_schematic(circuit, layout):
                      ["uuid", Q(uid(f"albl/{net}/{pos}"))]])
 
     pwr_seq = [0]
-    for lib_id, net, pos, rot in power_placements:
+    for lib_id, net, pos, rot, zone_ in power_placements:
         s = symbols[lib_id]
         ppin = s.pins[0]
         dx, dy = xform(ppin.x, ppin.y, rot)
@@ -616,7 +688,7 @@ def build_schematic(circuit, layout):
     flagged = set()
     for net in sorted(circuit.PWR_FLAG_NETS):
         pos = None
-        for l_, n_, p_, r_ in power_placements:
+        for l_, n_, p_, r_, z_ in power_placements:
             if n_ == net:
                 pos = p_
                 break
@@ -692,16 +764,16 @@ def build_schematic(circuit, layout):
                                     ["reference", Q(c["ref"])], ["unit", 1]]]])
         body.append(node)
 
-    # zone titles + boxes
+    # zone titles + frames sized to proven content extents
     for z, zdef in layout.ZONES.items():
         ox, oy = zdef["origin"]
-        w, h = zdef["size"]
+        x1, y1, x2, y2 = zone_ext[z]
         body.append(["text", Q(z), ["exclude_from_sim", "no"],
                      ["at", round(ox + 1.27, 4), round(oy + 3.5, 4), 0],
                      effects(size=2.54, justify="left"),
                      ["uuid", Q(uid("ztext/" + z))]])
-        body.append(["rectangle", ["start", round(ox, 4), round(oy, 4)],
-                     ["end", round(ox + w, 4), round(oy + h, 4)],
+        body.append(["rectangle", ["start", round(x1 - 2, 4), round(y1 - 2, 4)],
+                     ["end", round(x2 + 2, 4), round(y2 + 2, 4)],
                      ["stroke", ["width", 0.1], ["type", "dash"]],
                      ["fill", ["type", "none"]],
                      ["uuid", Q(uid("zbox/" + z))]])

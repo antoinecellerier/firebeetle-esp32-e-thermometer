@@ -30,6 +30,8 @@ COMPONENTS = [
     dict(ref="J1", lib_id="Connector_Generic:Conn_01x02", value="JST-PH-2 BAT",
          footprint="Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
          lcsc="C295747", zone="A: Battery + PPK2 break"),
+    dict(ref="Q6", lib_id="Transistor_FET:AO3401A", value="AO3401A", footprint=SOT23,
+         lcsc="C15127", zone="A: Battery + PPK2 break"),  # reverse-battery protect
     dict(ref="JP1", lib_id="Jumper:SolderJumper_2_Bridged", value="MEAS",
          footprint="Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm",
          lcsc="", zone="A: Battery + PPK2 break"),
@@ -88,6 +90,13 @@ COMPONENTS = [
          lcsc="C15127", zone="C: USB-C + charger"),
     dict(ref="R5", lib_id="Device:R", value="100k", footprint=R0402,
          lcsc="C25741", zone="C: USB-C + charger"),
+    dict(ref="R22", lib_id="Device:R", value="100k", footprint=R0402,
+         lcsc="C25741", zone="C: USB-C + charger"),  # VBUS sense top
+    dict(ref="R23", lib_id="Device:R", value="100k", footprint=R0402,
+         lcsc="C25741", zone="C: USB-C + charger"),  # VBUS sense bottom
+    dict(ref="D7", lib_id="Device:D_TVS", value="SMF5.0A",
+         footprint="Diode_SMD:D_SOD-123F", lcsc="", dnp=True,
+         zone="C: USB-C + charger"),  # VBUS surge clamp, populate if hot-plug ring proves real
 
     # ---- D: MCU ----
     dict(ref="U1", lib_id="RF_Module:ESP32-C6-MINI-1", value="ESP32-C6-MINI-1-N4",
@@ -150,6 +159,10 @@ COMPONENTS = [
          lcsc="C15127", zone="F: EPD power gate"),
     dict(ref="R12", lib_id="Device:R", value="10k", footprint=R0402,
          lcsc="C25744", zone="F: EPD power gate"),  # gate pull-up: default OFF
+    dict(ref="R24", lib_id="Device:R", value="10k", footprint=R0402,
+         lcsc="C25744", zone="F: EPD power gate"),  # gate series: ~100us EPD_VCC ramp
+    dict(ref="C28", lib_id="Device:C", value="10nF", footprint=C0402,
+         lcsc="C15195", zone="F: EPD power gate"),  # gate-source, sets the ramp
     dict(ref="C14", lib_id="Device:C", value="10uF", footprint=C0603,
          lcsc="C19702", zone="F: EPD power gate"),
     dict(ref="C15", lib_id="Device:C", value="100nF", footprint=C0402,
@@ -161,6 +174,15 @@ COMPONENTS = [
     dict(ref="L1", lib_id="Device:L", value="10uH SWPA4030S",
          footprint="Inductor_SMD:L_Sunlord_SWPA4030S", lcsc="C38117",
          zone="G: EPD booster"),
+    dict(ref="L2", lib_id="Device:L", value="47uH SWPA4030S",
+         footprint="Inductor_SMD:L_Sunlord_SWPA4030S", lcsc="C54731",
+         zone="G: EPD booster"),  # GDEH0576T81 datasheet pairing (with 2.2R RESE)
+    dict(ref="JP5", lib_id="Jumper:SolderJumper_2_Bridged", value="L 10uH",
+         footprint="Jumper:SolderJumper-2_P1.3mm_Bridged_RoundedPad1.0x1.5mm",
+         lcsc="", zone="G: EPD booster"),
+    dict(ref="JP6", lib_id="Jumper:SolderJumper_2_Open", value="L 47uH",
+         footprint="Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm",
+         lcsc="", zone="G: EPD booster"),
     dict(ref="Q3", lib_id="local:Si1308EDL", value="Si1308EDL",
          footprint="Package_TO_SOT_SMD:SOT-323_SC-70", lcsc="C469327",
          zone="G: EPD booster"),
@@ -238,6 +260,8 @@ COMPONENTS = [
          lcsc="C25741", zone="I: Battery sense"),  # divider top
     dict(ref="R21", lib_id="Device:R", value="100k 1%", footprint=R0402,
          lcsc="C25741", zone="I: Battery sense"),  # divider bottom
+    dict(ref="C29", lib_id="Device:C", value="10nF", footprint=C0402,
+         lcsc="", dnp=True, zone="I: Battery sense"),  # ADC reservoir; enable divider ~5ms before reading if fitted
     dict(ref="TP11", lib_id="Connector:TestPoint", value="VBAT_ADC", footprint=TP,
          lcsc="", zone="I: Battery sense"),
 
@@ -253,7 +277,9 @@ _MINI_GND_PINS = [1, 2, 11, 14] + list(range(36, 54))
 
 NETS = {
     # power tree
-    "~VBAT_RAW": [("J1", 1), ("JP1", 1), ("J2", 1)],
+    # reverse battery: body diode blocks, Vgs goes positive -> FET off
+    "~BAT_IN": [("J1", 1), ("Q6", 3)],
+    "~VBAT_RAW": [("Q6", 2), ("JP1", 1), ("J2", 1)],
     "VBAT": [("JP1", 2), ("J2", 2), ("U4", 3), ("C6", 1), ("Q1", 3),
              ("Q4", 2), ("R18", 1), ("TP1", 1)],
     "VSYS": [("D2", 1), ("Q1", 2), ("U2", 1), ("U2", 3), ("C1", 1), ("C2", 1)],
@@ -263,10 +289,10 @@ NETS = {
              ("U6", 3), ("U6", 4), ("U6", 7), ("U6", 8),
              ("R10", 1), ("R11", 1), ("C12", 1), ("C13", 1),
              ("C26", 1), ("C27", 1),
-             ("Q2", 2), ("R12", 1), ("J5", 2)],
+             ("Q2", 2), ("R12", 1), ("C28", 1), ("J5", 2)],
     "VBUS": [("J3", "A4"), ("J3", "B4"), ("J3", "A9"), ("J3", "B9"),
              ("U3", 5), ("U4", 4), ("C5", 1), ("R4", 1), ("D2", 2),
-             ("Q1", 1), ("R5", 1)],
+             ("Q1", 1), ("R5", 1), ("R22", 1), ("D7", 1)],
     "GND": ([("J1", 2), ("TP2", 1), ("TP3", 1),
              ("U2", 2), ("C1", 2), ("C2", 2), ("C3", 2), ("C4", 2),
              ("J3", "A1"), ("J3", "B1"), ("J3", "A12"), ("J3", "B12"), ("J3", "SH"),
@@ -274,15 +300,16 @@ NETS = {
              ("R3", 2), ("R5", 2),
              ("C7", 2), ("C8", 2), ("C9", 2), ("SW1", 2), ("SW2", 2),
              ("C10", 2), ("C11", 2), ("D3", 1),
-             ("U5", 3), ("U5", 8), ("U5", 9), ("U5", 7), ("C12", 2), ("C13", 2),
-             ("U6", 5), ("U6", 6), ("C26", 2), ("C27", 2),
+             ("U5", 3), ("U5", 8), ("U5", 9), ("C12", 2), ("C13", 2),
+             ("U6", 6), ("C26", 2), ("C27", 2),
              ("C14", 2), ("C15", 2),
              ("R13", 2), ("JP2", 2), ("JP3", 2), ("JP4", 2), ("D5", 1),
              ("C17", 2), ("C18", 2),
              ("J4", 8), ("J4", 17),
              ("C19", 2), ("C20", 2), ("C21", 2), ("C22", 2), ("C23", 2),
              ("C24", 2), ("C25", 2),
-             ("Q5", 2), ("R19", 2), ("R21", 2),
+             ("Q5", 2), ("R19", 2), ("R21", 2), ("Q6", 1), ("R23", 2),
+             ("C29", 2), ("D7", 2),
              ("J5", 1), ("J5", 9), ("J5", 10)]
             + [("U1", n) for n in _MINI_GND_PINS]),
 
@@ -315,7 +342,7 @@ NETS = {
     "SCL": [("U1", 16), ("U5", 2), ("U6", 1), ("R11", 2)],
 
     # battery sense
-    "VBAT_ADC": [("U1", 5), ("R20", 2), ("R21", 1), ("TP11", 1)],
+    "VBAT_ADC": [("U1", 5), ("R20", 2), ("R21", 1), ("TP11", 1), ("C29", 1)],
     "VDIV_EN": [("U1", 6), ("Q5", 1), ("R19", 1)],
     "~VDIV_TOP": [("Q4", 3), ("R20", 1)],
     "~VDIV_PGATE": [("Q4", 1), ("R18", 2), ("Q5", 3)],
@@ -323,17 +350,22 @@ NETS = {
     # debug header spares + UART
     "DBG_TX": [("U1", 31), ("J5", 4)],
     "DBG_RX": [("U1", 30), ("J5", 5)],
-    "DBG_IO4": [("U1", 9), ("J5", 6)],
+    "VBUS_SENSE": [("U1", 9), ("R22", 2), ("R23", 1), ("J5", 6)],
     "DBG_IO5": [("U1", 10), ("J5", 7)],
     "DBG_IO8": [("U1", 22), ("J5", 8)],
 
     # EPD power gate
-    "EPD_PWR_EN": [("U1", 19), ("R12", 2), ("Q2", 1)],
+    "EPD_PWR_EN": [("U1", 19), ("R24", 2)],
+    "~EPD_GATE": [("Q2", 1), ("R12", 2), ("C28", 2), ("R24", 1)],
     "EPD_VCC": [("Q2", 3), ("C14", 1), ("C15", 1), ("TP5", 1),
-                ("L1", 1), ("J4", 15), ("J4", 16), ("R17", 1)],
+                ("L1", 1), ("L2", 1), ("J4", 15), ("J4", 16), ("R17", 1)],
 
     # EPD booster (DESPI-C02 topology)
-    "EPD_SW": [("L1", 2), ("Q3", 3), ("D4", 2), ("C16", 1)],
+    # jumpers on the switch-node side: the unselected coil idles on the DC
+    # rail instead of dangling from the switching node
+    "~SW_10U": [("L1", 2), ("JP5", 1)],
+    "~SW_47U": [("L2", 2), ("JP6", 1)],
+    "EPD_SW": [("JP5", 2), ("JP6", 2), ("Q3", 3), ("D4", 2), ("C16", 1)],
     "EPD_GDR": [("Q3", 1), ("R13", 1), ("J4", 2), ("TP8", 1)],
     "EPD_RESE": [("Q3", 2), ("J4", 3), ("R14", 1), ("R15", 1), ("R16", 1),
                  ("TP9", 1)],
@@ -367,6 +399,10 @@ NETS = {
 NC = [
     # MINI-1 NC pins
     ("U1", 4), ("U1", 7), ("U1", 21), ("U1", 32), ("U1", 33), ("U1", 34), ("U1", 35),
+    # BMP58x INT pins unconnected: firmware must set int_en=1, int_od=0,
+    # pad_int_drv=0 per datasheet (protects against future int_en=push-pull
+    # into a hard short that a grounded pad would have been)
+    ("U5", 7), ("U6", 5),
     # BMP585 laser-mark pad (solder-resist covered, no connection possible)
     ("U6", 9),
     # LDO pin 4

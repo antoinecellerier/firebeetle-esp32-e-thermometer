@@ -38,9 +38,16 @@ def main():
     def N(ref, pin):
         return net_of(nets, ref, pin)
 
+    def unconnected(ref, pin):
+        n = N(ref, pin)
+        return n is None or n.startswith("unconnected-")
+
     # --- power tree -----------------------------------------------------
-    check("PPK2 break: JST+ reaches system VBAT only through JP1/J2 (nets differ)",
-          N("J1", 1) != N("JP1", 2) and N("J1", 1) == N("JP1", 1) == N("J2", 1))
+    check("Reverse-battery P-FET: JST+ on drain, system on source, gate grounded",
+          N("J1", 1) == N("Q6", 3) and N("Q6", 2) == N("JP1", 1)
+          and N("Q6", 1) == "GND" and N("J1", 1) != N("JP1", 1))
+    check("PPK2 break: protected battery reaches system VBAT only through JP1/J2",
+          N("Q6", 2) != N("JP1", 2) and N("Q6", 2) == N("JP1", 1) == N("J2", 1))
     check("LDO input is VSYS (load-share node), not raw battery",
           N("U2", 1) == N("Q1", 2) == N("D2", 1) and N("U2", 1) != N("J1", 1))
     check("LDO EN tied to VIN", N("U2", 3) == N("U2", 1))
@@ -68,6 +75,12 @@ def main():
           and N("U3", 4) == N("U1", 18) and N("U3", 3) != N("U3", 4))
     check("Charge LED powered from VBUS (not battery)",
           N("R4", 1) == N("J3", "A4") and N("D1", 1) == N("U4", 1))
+    check("VBUS sense: 100k/100k from VBUS to GPIO4 (pin 9) and debug header, "
+          "zero drain with USB absent",
+          N("R22", 1) == N("J3", "A4") and N("R22", 2) == N("R23", 1) == N("U1", 9)
+          and N("U1", 9) == N("J5", 6) and N("R23", 2) == "GND")
+    check("VBUS TVS (DNP) clamps VBUS to GND",
+          N("D7", 1) == N("J3", "A4") and N("D7", 2) == "GND")
 
     # --- MCU support ----------------------------------------------------
     check("EN has pull-up to 3V3, RC cap to GND, reset button to GND",
@@ -94,24 +107,25 @@ def main():
           and N("R10", 1) == "+3V3" and N("R11", 1) == "+3V3")
     check("BMP581 addr 0x47 strapping: SDO and CSB tied to VDDIO rail (3V3)",
           N("U5", 5) == "+3V3" and N("U5", 6) == "+3V3")
-    check("BMP581 INT tied to GND (datasheet: don't float)",
-          N("U5", 7) == "GND")
+    check("BMP581 INT unconnected (firmware: int_en=1, int_od=0, drv=0)",
+          unconnected("U5", 7))
     check("BMP581 supplies on always-on 3V3 (LP core reads during deep sleep)",
           N("U5", 1) == "+3V3" and N("U5", 10) == "+3V3")
     check("BMP585 alternate shares the LP I2C bus: SDX=GPIO6, SCX=GPIO7",
           N("U6", 2) == N("U1", 15) and N("U6", 1) == N("U1", 16))
     check("BMP585 straps for 0x47 like the 581: SDO and CSB to VDDIO rail",
           N("U6", 3) == "+3V3" and N("U6", 7) == "+3V3")
-    check("BMP585 supplies on 3V3, INT and VSS on GND",
+    check("BMP585 supplies on 3V3, VSS on GND, INT unconnected",
           N("U6", 4) == "+3V3" and N("U6", 8) == "+3V3"
-          and N("U6", 5) == "GND" and N("U6", 6) == "GND")
+          and unconnected("U6", 5) and N("U6", 6) == "GND")
 
     # --- battery sense (high-side switched) ------------------------------
     check("Divider is high-side switched: P-FET source on VBAT, drain feeds top 100k",
           N("Q4", 2) == N("U4", 3) and N("Q4", 3) == N("R20", 1))
-    check("Sense node: top 100k + bottom 100k + GPIO2 (pin 5) + test point, nothing else",
+    check("Sense node: top 100k + bottom 100k + GPIO2 (pin 5) + TP + DNP "
+          "sampling cap, nothing else",
           nets.get(N("U1", 5), set()) ==
-          {("U1", "5"), ("R20", "2"), ("R21", "1"), ("TP11", "1")})
+          {("U1", "5"), ("R20", "2"), ("R21", "1"), ("TP11", "1"), ("C29", "1")})
     check("Bottom 100k grounds the divider directly (pin at 0V when off)",
           N("R21", 2) == "GND")
     check("P-gate pulled to VBAT (off) and pulled low by 2N7002 drain",
@@ -121,18 +135,25 @@ def main():
           and N("Q5", 2) == "GND")
 
     # --- EPD gate + booster ----------------------------------------------
-    check("EPD gate P-FET: source 3V3, drain EPD_VCC, gate GPIO14 (pin 19)",
+    check("EPD gate P-FET: source 3V3, drain EPD_VCC; GPIO14 drives through "
+          "the R24/C28 soft-start (~100us ramp)",
           N("Q2", 2) == "+3V3" and N("Q2", 3) == N("L1", 1)
-          and N("Q2", 1) == N("U1", 19))
+          and N("Q2", 1) == N("R24", 1) == N("C28", 2)
+          and N("R24", 2) == N("U1", 19) and N("C28", 1) == "+3V3"
+          and N("Q2", 1) != N("U1", 19))
     check("Gate pull-up 10k to 3V3 -> panel OFF at reset/deep-sleep",
           N("R12", 2) == N("Q2", 1) and N("R12", 1) == "+3V3")
     check("Panel RST pull-up goes to EPD_VCC, NOT 3V3",
           N("R17", 1) == N("Q2", 3) and N("R17", 2) == N("J4", 10)
           and N("R17", 1) != "+3V3")
-    check("Booster runs from gated EPD_VCC: inductor + panel VDDIO/VCI",
-          N("L1", 1) == N("J4", 15) == N("J4", 16) == N("Q2", 3))
-    check("Boost switch: FET drain on SW node with inductor, D4 anode, pump cap",
-          N("Q3", 3) == N("L1", 2) == N("D4", 2) == N("C16", 1))
+    check("Booster runs from gated EPD_VCC: both inductors + panel VDDIO/VCI",
+          N("L1", 1) == N("L2", 1) == N("J4", 15) == N("J4", 16) == N("Q2", 3))
+    check("Inductor select: each coil through its own solder jumper onto the "
+          "switch node (10uH default-bridged, 47uH open)",
+          N("L1", 2) == N("JP5", 1) and N("L2", 2) == N("JP6", 1)
+          and N("JP5", 2) == N("JP6", 2) == N("Q3", 3))
+    check("Boost switch: FET drain on SW node with jumpers, D4 anode, pump cap",
+          N("Q3", 3) == N("D4", 2) == N("C16", 1))
     check("GDR drives boost FET gate, 10k bleed to GND, panel pin 2",
           N("Q3", 1) == N("J4", 2) == N("R13", 1) and N("R13", 2) == "GND")
     check("RESE: FET source to panel pin 3 and three jumpered legs",
@@ -160,10 +181,6 @@ def main():
           and N("J4", 18) == N("C21", 1) and N("J4", 19) == N("C22", 1)
           and N("J4", 20) == N("C23", 1) and N("J4", 22) == N("C24", 1)
           and N("J4", 24) == N("C25", 1))
-    def unconnected(ref, pin):
-        n = N(ref, pin)
-        return n is None or n.startswith("unconnected-")
-
     check("Panel VSS (17) on GND; pins 1,6,7 unconnected",
           N("J4", 17) == "GND" and unconnected("J4", 1)
           and unconnected("J4", 6) and unconnected("J4", 7))
