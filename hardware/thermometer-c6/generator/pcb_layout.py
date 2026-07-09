@@ -298,6 +298,18 @@ TRACKS = [
     ("EPD_PREVGH", "F.Cu", 0.3, ["D4.1", (38.05, 21.55), "C17.1"]),
     ("EPD_PREVGL", "F.Cu", 0.3, ["D6.2", (35.22, 25.55), "C18.1"]),
 
+    # ---- U1 north-row escapes ----
+    # Six EPD signals and both UART lines have to cross the 2.5mm band north of
+    # U1 (SW2's pads above, the 0.8mm-pitch north row below), and each F.Cu
+    # approach fences the next pad. Drop straight through the pad instead: the
+    # module's paddle is nine F.Cu pads, so B.Cu under the body is untouched.
+    # The lanes fan out east at 0.6mm pitch and surface in the flank.
+    # (each lane drops clear of its neighbour's via before turning east:
+    # a 45-degree exit straight off the pad grazes it by 0.06mm)
+    ("EPD_CS", "B.Cu", 0.25, ["U1.26", (15.0, 8.45), (17.55, 8.8)]),
+    ("EPD_DC", "B.Cu", 0.25, ["U1.27", (14.2, 9.05), (17.55, 9.4)]),
+    ("EPD_BUSY", "B.Cu", 0.25, ["U1.29", (12.6, 9.65), (17.55, 10.0)]),
+
     # ---- +3V3 trunk: LDO/U1 -> Q2 source (the only 465mA stretch) ----
     # Pinned, not autorouted: left to itself the router reaches Q2.2 from the
     # south-east and lays a 0.5mm B.Cu diagonal across the whole south of the
@@ -323,15 +335,23 @@ TRACKS = [
     # the neighbouring 0.5mm-pitch pads; see the power-track-width-fanout DRU
     # rule), widening to 0.5 once clear, then B.Cu to R17's via-in-pad — the
     # anchor the autorouted EPD_VCC tree grows from.
+    # It ducks under the digital fan-out rather than crossing it on F.Cu: pins
+    # 9..14 escape west at 0.5mm pitch, where the only legal track centre is a
+    # 0.05mm-wide slot, and they cannot spread to via pitch before x44.
     ("EPD_VCC", "F.Cu", 0.3, ["J4.16", (45.7, 18.45), (45.7, 18.1), "J4.15"]),
-    ("EPD_VCC", "F.Cu", 0.3, [(45.7, 18.1), (45.25, 18.1), (40.0, 12.85),
-                              (40.0, 12.4)]),
-    ("EPD_VCC", "F.Cu", 0.5, [(40.0, 12.4), (40.0, 8.3)]),
+    ("EPD_VCC", "F.Cu", 0.3, [(45.7, 18.3), (44.85, 18.3)]),
+    ("EPD_VCC", "B.Cu", 0.4, [(44.85, 18.3), (41.0, 14.45), (41.0, 14.2)]),
+    ("EPD_VCC", "F.Cu", 0.5, [(41.0, 14.2), (40.0, 13.2), (40.0, 8.3)]),
     ("EPD_VCC", "B.Cu", 0.5, [(40.0, 8.3), (37.35, 8.3), (34.2, 5.15)]),
     ("EPD_VCC", "F.Cu", 0.5, ["R17.1", (34.2, 5.15)]),
 ]
 
 VIAS = [
+    # via-in-pad on U1's north row (0.4mm-wide pads; the 0.6mm via overhangs
+    # 0.1mm each side and still clears the 0.8mm-pitch neighbours by 0.3mm)
+    ("EPD_CS", 15.0, 8.05),
+    ("EPD_DC", 14.2, 8.05),
+    ("EPD_BUSY", 12.6, 8.05),
     ("VBAT", 42.25, 2.15),  # via-in-pad Q1.3
     ("VBAT", 36.1, 4.75),
     ("VBAT", 29.2, 26.2),
@@ -356,7 +376,9 @@ VIAS = [
     # ~SW_10U B-hop under ~SW_47U
     ("~SW_10U", 25.4, 17.0),
     ("~SW_10U", 29.5, 21.66),
-    # EPD_VCC J4 feed: F->B mid-run, then via-in-pad on R17.1
+    # EPD_VCC J4 feed: under the digital fan-out, F->B mid-run, via-in-pad R17.1
+    ("EPD_VCC", 44.85, 18.3),
+    ("EPD_VCC", 41.0, 14.2),
     ("EPD_VCC", 40.0, 8.3),
     ("EPD_VCC", 34.2, 5.15),
     # +3V3 trunk hops; (9.45,19.55) is a via-in-pad on U1.3, (28.4,18.93) on C28.1
