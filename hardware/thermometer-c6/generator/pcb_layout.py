@@ -76,8 +76,11 @@ PLACE = {
     "SW1": (3.9, 2.9, 0),
     "SW2": (11.6, 2.9, 0),
     "R7": (19.0, 23.4, 90),
-    "D3": (18.67, 13.12, 90),
-    "R8": (18.41, 10.38, 90),
+    # status LED at the south edge: U1's east flank (x17.9..19.4, y9.4..14.6)
+    # is the only F.Cu window for the east column's escapes, and it is the only
+    # pocket between U1's and J3's courtyards, so nothing may sit there
+    "D3": (14.65, 32.75, 180),
+    "R8": (11.85, 32.75, 0),
     "Y1": (19.09, 16.84, 90),
     "C10": (18.85, 20.7, 0),
     "C11": (18.85, 19.5, 0),
@@ -91,8 +94,11 @@ PLACE = {
     "C26": (5.41, 26.05, 90),
     "C27": (6.61, 26.45, 90),
     "Q2": (27.25, 15.27, 90),
-    "R12": (26.02, 18.47, 90),
-    "R24": (27.21, 18.47, 90),
+    # gate row: R24 flipped so all three gate pads share the north row (a bus
+    # straight up to Q2.1), leaving EPD_PWR_EN and the two +3V3 pads on the
+    # south row with the +3V3 pair adjacent. Nothing has to thread a pad gap.
+    "R24": (26.02, 18.47, 270),
+    "R12": (27.21, 18.47, 90),
     "C28": (28.4, 18.45, 90),
     "C14": (23.0, 24.0, 0),
     "C15": (21.5, 12.75, 0),
