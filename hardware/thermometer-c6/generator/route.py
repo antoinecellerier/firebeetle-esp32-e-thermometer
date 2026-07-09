@@ -1,0 +1,579 @@
+#!/usr/bin/env python3
+"""Grid A* autorouter for the remaining nets -> generator/pcb_routes.py.
+
+Routes every listed net on a 0.05mm grid (F.Cu/B.Cu, 45-degree moves, via
+hops) against the real clearance rules: 0.2mm netclass, 0.3mm around HV
+nets outside the fpc-fanout marker area, 0.18mm inside it, board-edge 0.2,
+keepout rule areas. Authored copper in pcb_layout.py is obstacle/seed; the
+result is written as plain TRACKS/VIAS data to pcb_routes.py (checked in,
+hand-tweakable) which pcb_layout.py appends. Re-run only via `make route`;
+`make pcb` just consumes the checked-in file, so builds stay deterministic.
+
+Run inside kicad's python (needs pcbnew for pad geometry):
+    python3 generator/route.py
+"""
+import heapq
+import math
+import os
+import sys
+
+import pcbnew
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PROJECT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+
+os.environ["PCB_NO_ROUTES"] = "1"  # route against authored copper only
+import circuit  # noqa: E402
+import pcb_layout as pl  # noqa: E402
+
+GRID = 0.05
+W = int(round(pl.BOARD["size"][0] / GRID))  # 960
+H = int(round(pl.BOARD["size"][1] / GRID))  # 700
+OX, OY = pl.BOARD["origin"]
+
+VIA_R = pl.DEFAULT_VIA["diameter"] / 2
+VIA_COST = 1.5          # mm-equivalent per via
+BEND_COST = 0.02        # keep runs straight
+EDGE_CLR = 0.2
+BASE_CLR = 0.2
+HV_CLR = 0.3
+HV_CLR_RELAXED = 0.18
+MARKER = (39.5, 8.0, 48.0, 25.5)   # fpc-fanout rule area
+
+HV_NETS = {"EPD_PREVGH", "EPD_PREVGL", "~EPD_VGH", "~EPD_VGL",
+           "~EPD_VSH", "~EPD_VSL", "~EPD_VCOM", "~EPD_VPP"}
+
+# (net, width, terminals-or-None) routed in this order; None = all pins from
+# circuit.py not already on the authored tree. GND is left to the M6 pour.
+ROUTE_PLAN = [
+    # J4 fan-out first: the 0.5mm-pitch escape corridor is the scarcest
+    ("~EPD_VGL", 0.25, None),
+    ("~EPD_VGH", 0.25, None),
+    ("EPD_GDR", 0.25, None),
+    ("EPD_RESE", 0.25, [("J4", "3"), ("TP9", "1")]),   # sense leg + bench TP
+    ("EPD_PREVGH", 0.25, [("J4", "21"), ("TP6", "1")]),
+    ("EPD_PREVGL", 0.25, [("J4", "23"), ("TP7", "1")]),
+    ("~EPD_VDD", 0.25, None),
+    ("~EPD_VPP", 0.25, None),
+    ("~EPD_VSH", 0.25, None),
+    ("~EPD_VSL", 0.25, None),
+    ("~EPD_VCOM", 0.25, None),
+    ("EPD_VCC", 0.5, [("L1", "1"), ("L2", "1"), ("C14", "1"), ("C15", "1"),
+                      ("R17", "1"), ("TP5", "1")]),
+    ("EPD_VCC", 0.3, [("J4", "15"), ("J4", "16")]),   # thin fanout stubs
+    # USB data pair early so it gets the direct corridor
+    ("~USB_DM_CONN", 0.25, None),
+    ("~USB_DP_CONN", 0.25, None),
+    ("USB_D-", 0.25, None),
+    ("USB_D+", 0.25, None),
+    ("~USB_CC1", 0.25, None),
+    ("~USB_CC2", 0.25, None),
+    # crystal
+    ("XTAL_32K_P", 0.25, None),
+    ("XTAL_32K_N", 0.25, None),
+    # EPD control
+    ("EPD_BUSY", 0.25, None),
+    ("EPD_RST", 0.25, None),
+    ("EPD_DC", 0.25, None),
+    ("EPD_CS", 0.25, None),
+    ("EPD_SCK", 0.25, None),
+    ("EPD_MOSI", 0.25, None),
+    ("EPD_PWR_EN", 0.25, None),
+    ("~EPD_GATE", 0.25, None),
+    # sensors / divider / straps / LED / buttons / charger / debug
+    ("SDA", 0.25, None),
+    ("SCL", 0.25, None),
+    ("VBAT_ADC", 0.25, None),
+    ("VDIV_EN", 0.25, None),
+    ("~VDIV_TOP", 0.25, None),
+    ("~VDIV_PGATE", 0.25, None),
+    ("VBUS_SENSE", 0.25, None),
+    ("CHG_STAT", 0.25, None),
+    ("~CHG_LED_A", 0.25, None),
+    ("~CHG_PROG", 0.25, None),
+    ("BOOT", 0.25, None),
+    ("EN", 0.25, None),
+    ("LED_STATUS", 0.25, None),
+    ("DBG_TX", 0.25, None),
+    ("DBG_RX", 0.25, None),
+    ("DBG_IO5", 0.25, None),
+    ("DBG_IO8", 0.25, None),
+    ("VBUS", 0.4, None),
+    ("+3V3", 0.5, None),
+    ("VBAT", 0.5, None),
+    ("VSYS", 0.5, None),
+]
+
+OUT = os.path.join(HERE, "pcb_routes.py")
+
+
+# --- geometry helpers -------------------------------------------------------
+def cell(x, y):
+    return int(round(x / GRID)), int(round(y / GRID))
+
+
+def mm(ix, iy):
+    return round(ix * GRID, 3), round(iy * GRID, 3)
+
+
+def is_hv(net):
+    return net in HV_NETS
+
+
+def inside_marker(x, y):
+    return MARKER[0] <= x <= MARKER[2] and MARKER[1] <= y <= MARKER[3]
+
+
+class Bitmap:
+    """One bit per grid cell, rect/disc stamping with mm coords."""
+
+    def __init__(self):
+        self.b = bytearray(W * H)
+
+    def stamp_rect(self, x1, y1, x2, y2):
+        # centre-sampling: a cell is blocked iff its centre point violates.
+        # Optimistic by at most half a cell; the real DRC arbitrates.
+        ix1 = max(0, int(math.ceil(x1 / GRID)))
+        iy1 = max(0, int(math.ceil(y1 / GRID)))
+        ix2 = min(W - 1, int(math.floor(x2 / GRID)))
+        iy2 = min(H - 1, int(math.floor(y2 / GRID)))
+        if ix2 < ix1 or iy2 < iy1:
+            return
+        row = b"\x01" * (ix2 - ix1 + 1)
+        for iy in range(iy1, iy2 + 1):
+            base = iy * W
+            self.b[base + ix1:base + ix2 + 1] = row
+
+    def stamp_seg(self, x1, y1, x2, y2, infl):
+        """Inflated capsule, conservatively as stamped squares."""
+        dx, dy = x2 - x1, y2 - y1
+        length = math.hypot(dx, dy)
+        if length < 1e-9 or dx == 0 or dy == 0:
+            self.stamp_rect(min(x1, x2) - infl, min(y1, y2) - infl,
+                            max(x1, x2) + infl, max(y1, y2) + infl)
+            return
+        steps = max(1, int(length / (GRID * 2)))
+        for i in range(steps + 1):
+            t = i / steps
+            px, py = x1 + dx * t, y1 + dy * t
+            self.stamp_rect(px - infl, py - infl, px + infl, py + infl)
+
+    def get(self, ix, iy):
+        return self.b[iy * W + ix]
+
+
+# --- collect obstacles from the generated board + authored layout -----------
+def load_pads():
+    board = pcbnew.LoadBoard(os.path.join(PROJECT, "thermometer-c6.kicad_pcb"))
+    pads = []
+    for fp in board.GetFootprints():
+        ref = fp.GetReference()
+        for pad in fp.Pads():
+            bb = pad.GetBoundingBox()
+            layers = pad.GetLayerSet().Seq()
+            pads.append(dict(
+                ref=ref, num=str(pad.GetNumber()), net=pad.GetNetname(),
+                cx=pad.GetPosition().x / 1e6 - OX,
+                cy=pad.GetPosition().y / 1e6 - OY,
+                x1=bb.GetLeft() / 1e6 - OX, y1=bb.GetTop() / 1e6 - OY,
+                x2=bb.GetRight() / 1e6 - OX, y2=bb.GetBottom() / 1e6 - OY,
+                F=pcbnew.F_Cu in layers, B=pcbnew.B_Cu in layers))
+    return pads
+
+
+def expand_dogleg(a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    if abs(dx) < 1e-9 or abs(dy) < 1e-9 or abs(abs(dx) - abs(dy)) < 1e-9:
+        return [a, b]
+    d = min(abs(dx), abs(dy))
+    mid = (a[0] + (d if dx > 0 else -d), a[1] + (d if dy > 0 else -d))
+    return [a, mid, b]
+
+
+def authored_copper(pads):
+    """[(net, layer, halfw, x1,y1,x2,y2)] segments + [(net,x,y)] vias from
+    pcb_layout plus pcb_routes accumulated so far (via pl reload semantics:
+    we only read pl.TRACKS/pl.VIAS, the caller appends routed results)."""
+    pad_by_key = {(p["ref"], p["num"]): (p["cx"], p["cy"]) for p in pads}
+    # exported-name mapping not needed here: circuit names are consistent
+    # within pcb_layout, and obstacles only need net identity
+    segs = []
+    for net, layer, width, nodes in pl.TRACKS:
+        pts = []
+        for n in nodes:
+            if isinstance(n, str):
+                ref, _, num = n.partition(".")
+                pts.append(pad_by_key[(ref, num)])
+            else:
+                pts.append(n)
+        path = []
+        for i in range(len(pts) - 1):
+            ext = expand_dogleg(pts[i], pts[i + 1])
+            path.extend(ext if not path else ext[1:])
+        for i in range(len(path) - 1):
+            segs.append((net, layer, width / 2,
+                         path[i][0], path[i][1], path[i + 1][0], path[i + 1][1]))
+    vias = [(net, x, y) for net, x, y in pl.VIAS]
+    return segs, vias
+
+
+# circuit-name <-> exported-name: pads carry exported names; anonymous "~"
+# circuit nets need resolution by pin membership.
+def net_alias(pads):
+    by_pin = {(p["ref"], p["num"]): p["net"] for p in pads}
+    alias = {}
+    for cname, pins in circuit.NETS.items():
+        exp = by_pin.get((pins[0][0], str(pins[0][1])))
+        alias[cname] = exp if exp else cname
+    return alias
+
+
+def build_bitmaps(pads, segs, vias, net_exp, width, alias):
+    """Track bitmaps (strict + relaxed HV variants) and via bitmaps."""
+    hw = width / 2
+    routed_hv = net_exp in {alias[n] for n in HV_NETS}
+
+    def infl_for(onet, base_extra):
+        if onet == net_exp:
+            return None
+        c = BASE_CLR
+        onet_hv = onet in {alias[n] for n in HV_NETS}
+        if routed_hv or onet_hv:
+            c = HV_CLR
+        return c + base_extra
+
+    def relaxed_for(onet, base_extra):
+        if onet == net_exp:
+            return None
+        c = BASE_CLR
+        onet_hv = onet in {alias[n] for n in HV_NETS}
+        if routed_hv or onet_hv:
+            c = HV_CLR_RELAXED
+        return c + base_extra
+
+    maps = {}
+    for kind, extra in (("trk", hw), ("via", VIA_R)):
+        for variant, get_clr in (("strict", infl_for), ("relax", relaxed_for)):
+            for layer in ("F.Cu", "B.Cu"):
+                maps[(kind, variant, layer)] = Bitmap()
+
+    def stamp(layer_flags, onet, x1, y1, x2, y2, seg=False, shw=0.0):
+        for kind, extra in (("trk", hw), ("via", VIA_R)):
+            for variant, get_clr in (("strict", infl_for),
+                                     ("relax", relaxed_for)):
+                clr = get_clr(onet, extra)
+                if clr is None:
+                    continue
+                i = clr + shw
+                for layer in layer_flags:
+                    bm = maps[(kind, variant, layer)]
+                    if seg:
+                        bm.stamp_seg(x1, y1, x2, y2, i)
+                    else:
+                        bm.stamp_rect(x1 - i, y1 - i, x2 + i, y2 + i)
+
+    for p in pads:
+        # HV relaxation keys off the HV item's position: an HV *obstacle*
+        # outside the marker forces 0.3 regardless of where we route, so
+        # only relax when the obstacle itself sits inside the marker
+        onet_hv = p["net"] in {alias[n] for n in HV_NETS}
+        obstacle_in = inside_marker(p["cx"], p["cy"])
+        layers = [l for l, f in (("F.Cu", p["F"]), ("B.Cu", p["B"])) if f]
+        if not layers:  # NPTH: block both
+            layers = ["F.Cu", "B.Cu"]
+        if onet_hv and not obstacle_in and not routed_hv:
+            # relaxation would be wrong here: stamp strict into both variants
+            for kind, extra in (("trk", hw), ("via", VIA_R)):
+                for variant in ("strict", "relax"):
+                    i = HV_CLR + extra
+                    for layer in layers:
+                        maps[(kind, variant, layer)].stamp_rect(
+                            p["x1"] - i, p["y1"] - i, p["x2"] + i, p["y2"] + i)
+            continue
+        stamp(layers, p["net"], p["x1"], p["y1"], p["x2"], p["y2"])
+
+    for net, layer, shw, x1, y1, x2, y2 in segs:
+        stamp([layer], alias.get(net, net), x1, y1, x2, y2, seg=True, shw=shw)
+    for net, x, y in vias:
+        stamp(["F.Cu", "B.Cu"], alias.get(net, net),
+              x - VIA_R, y - VIA_R, x + VIA_R, y + VIA_R)
+
+    # keepouts + board edge
+    for k in pl.KEEPOUTS:
+        x1, y1, x2, y2 = k["rect"]
+        kinds = []
+        if k.get("tracks", True):
+            kinds.append("trk")
+        if k.get("vias", True):
+            kinds.append("via")
+        for kind in kinds:
+            extra = hw if kind == "trk" else VIA_R
+            for variant in ("strict", "relax"):
+                for layer in k["layers"]:
+                    maps[(kind, variant, layer)].stamp_rect(
+                        x1 - extra, y1 - extra, x2 + extra, y2 + extra)
+    bw, bh = pl.BOARD["size"]
+    for kind, extra in (("trk", hw), ("via", VIA_R)):
+        m = EDGE_CLR + extra
+        for variant in ("strict", "relax"):
+            for layer in ("F.Cu", "B.Cu"):
+                bm = maps[(kind, variant, layer)]
+                bm.stamp_rect(-1, -1, bw + 1, m)
+                bm.stamp_rect(-1, bh - m, bw + 1, bh + 1)
+                bm.stamp_rect(-1, -1, m, bh + 1)
+                bm.stamp_rect(bw - m, -1, bw + 1, bh + 1)
+    return maps
+
+
+DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+LAYER_IDX = {"F.Cu": 0, "B.Cu": 1}
+
+
+MARKER_CELLS = (int(MARKER[0] / GRID), int(MARKER[1] / GRID),
+                int(MARKER[2] / GRID), int(MARKER[3] / GRID))
+
+
+def blocked(maps, kind, layer, ix, iy):
+    mx1, my1, mx2, my2 = MARKER_CELLS
+    variant = "relax" if (mx1 <= ix <= mx2 and my1 <= iy <= my2) else "strict"
+    return maps[(kind, variant, layer)].b[iy * W + ix]
+
+
+def astar(maps, starts, goals, max_pop=1_500_000):
+    """starts: [(layer, ix, iy)]; goals: set of (layer, ix, iy)."""
+    if not goals:
+        return None
+    gx1 = min(g[1] for g in goals)
+    gx2 = max(g[1] for g in goals)
+    gy1 = min(g[2] for g in goals)
+    gy2 = max(g[2] for g in goals)
+    glayers = {g[0] for g in goals}
+
+    def h(l, ix, iy):
+        # octile distance to the goal bounding box: O(1) and admissible
+        dx = max(gx1 - ix, 0, ix - gx2)
+        dy = max(gy1 - iy, 0, iy - gy2)
+        d = (max(dx, dy) + 0.4142 * min(dx, dy)) * GRID
+        if l not in glayers:
+            d += VIA_COST
+        return d
+
+    # clamp the search to the terminals' neighbourhood first; retry
+    # unbounded only if that fails
+    margin = int(8.0 / GRID)
+    sx = [s[1] for s in starts]
+    sy = [s[2] for s in starts]
+    bx1 = max(0, min(gx1, min(sx)) - margin)
+    bx2 = min(W - 1, max(gx2, max(sx)) + margin)
+    by1 = max(0, min(gy1, min(sy)) - margin)
+    by2 = min(H - 1, max(gy2, max(sy)) + margin)
+
+    open_q = []
+    best_g = {}
+    push_n = 0
+    for (l, ix, iy) in starts:
+        st = (l, ix, iy)
+        best_g[st] = 0.0
+        heapq.heappush(open_q, (h(l, ix, iy), push_n, 0.0, st, None, 8))
+        push_n += 1
+    came = {}
+    pops = 0
+    while open_q:
+        f, _, g, st, parent, d = heapq.heappop(open_q)
+        if st in came:
+            continue
+        came[st] = parent
+        pops += 1
+        if pops > max_pop:
+            return None
+        l, ix, iy = st
+        if st in goals:
+            path = []
+            cur = st
+            while cur is not None:
+                path.append(cur)
+                cur = came[cur]
+            path.reverse()
+            return path
+        lname = "F.Cu" if l == 0 else "B.Cu"
+        for di, (dx, dy) in enumerate(DIRS):
+            nx, ny = ix + dx, iy + dy
+            if not (bx1 <= nx <= bx2 and by1 <= ny <= by2):
+                continue
+            if blocked(maps, "trk", lname, nx, ny):
+                continue
+            if dx and dy:  # no corner cutting
+                if (blocked(maps, "trk", lname, ix + dx, iy)
+                        or blocked(maps, "trk", lname, ix, iy + dy)):
+                    continue
+            step = GRID * (1.4142 if dx and dy else 1.0)
+            ng = g + step + (BEND_COST if d != 8 and d != di else 0.0)
+            nst = (l, nx, ny)
+            if ng < best_g.get(nst, 1e18):
+                best_g[nst] = ng
+                push_n += 1
+                heapq.heappush(open_q,
+                               (ng + h(l, nx, ny), push_n, ng, nst, st, di))
+        # via hop
+        ol = 1 - l
+        olname = "F.Cu" if ol == 0 else "B.Cu"
+        if (not blocked(maps, "via", "F.Cu", ix, iy)
+                and not blocked(maps, "via", "B.Cu", ix, iy)
+                and not blocked(maps, "trk", olname, ix, iy)):
+            ng = g + VIA_COST
+            nst = (ol, ix, iy)
+            if ng < best_g.get(nst, 1e18):
+                best_g[nst] = ng
+                push_n += 1
+                heapq.heappush(open_q,
+                               (ng + h(ol, ix, iy), push_n, ng, nst, st, 8))
+    return None
+
+
+def path_to_tracks(path, net, width):
+    """Collapse grid path into segments + vias (board-relative mm)."""
+    tracks, vias = [], []
+    run = [path[0]]
+    for st in path[1:]:
+        if st[0] != run[-1][0]:  # layer change = via
+            pt = mm(run[-1][1], run[-1][2])
+            vias.append((net, pt[0], pt[1]))
+            tracks.append((net, run))
+            run = [st]
+        else:
+            run.append(st)
+    tracks.append((net, run))
+    out = []
+    for net_, run_ in tracks:
+        if len(run_) < 2:
+            continue
+        layer = "F.Cu" if run_[0][0] == 0 else "B.Cu"
+        pts = [mm(run_[0][1], run_[0][2])]
+        for i in range(1, len(run_) - 1):
+            d0 = (run_[i][1] - run_[i - 1][1], run_[i][2] - run_[i - 1][2])
+            d1 = (run_[i + 1][1] - run_[i][1], run_[i + 1][2] - run_[i][2])
+            if d0 != d1:
+                pts.append(mm(run_[i][1], run_[i][2]))
+        pts.append(mm(run_[-1][1], run_[-1][2]))
+        out.append((net_, layer, width, pts))
+    return out, vias
+
+
+def main():
+    pads = load_pads()
+    alias = net_alias(pads)
+    pad_by_key = {(p["ref"], p["num"]): p for p in pads}
+    segs, vias = authored_copper(pads)
+
+    new_tracks, new_vias, failed = [], [], []
+
+    for entry in ROUTE_PLAN:
+        cname, width, terminals = entry
+        exp = alias.get(cname, cname)
+        pins = circuit.NETS.get(cname)
+        if pins is None:
+            failed.append((cname, "unknown net"))
+            continue
+        if terminals is None:
+            terminals = [(r, str(n)) for r, n in pins]
+        # tree = same-net copper cells (segments sampled + pad centers of
+        # already-connected pads); simple heuristic: pads touched by any
+        # authored/routed segment endpoint or listed in a track node
+        tree = set()
+        for net_, layer, shw, x1, y1, x2, y2 in segs:
+            if alias.get(net_, net_) != exp:
+                continue
+            li = LAYER_IDX[layer]
+            steps = max(1, int(math.hypot(x2 - x1, y2 - y1) / GRID))
+            for i in range(steps + 1):
+                t = i / steps
+                tree.add((li, *cell(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t)))
+        for net_, x, y in vias:
+            if alias.get(net_, net_) == exp:
+                tree.add((0, *cell(x, y)))
+                tree.add((1, *cell(x, y)))
+
+        # terminals not already on the tree
+        todo = []
+        for (ref, num) in terminals:
+            p = pad_by_key.get((ref, num))
+            if p is None:
+                failed.append((cname, f"missing pad {ref}.{num}"))
+                continue
+            layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
+            c = cell(p["cx"], p["cy"])
+            near = any((li, ix, iy) in tree for li in layers
+                       for ix in range(c[0] - 2, c[0] + 3)
+                       for iy in range(c[1] - 2, c[1] + 3))
+            if not near:
+                todo.append(p)
+        if not todo:
+            continue
+        maps = build_bitmaps(pads, segs, vias, exp, width, alias)
+
+        def pad_cells(p, free_only=True):
+            """Grid cells safely on the pad's copper (inset past rounded
+            corners) for A* starts / tree seeds."""
+            layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
+            ins = 0.2 * min(p["x2"] - p["x1"], p["y2"] - p["y1"])
+            ix1, iy1 = cell(p["x1"] + ins, p["y1"] + ins)
+            ix2, iy2 = cell(p["x2"] - ins, p["y2"] - ins)
+            cx, cy = cell(p["cx"], p["cy"])
+            out = []
+            for li in layers:
+                lname = "F.Cu" if li == 0 else "B.Cu"
+                got = False
+                for ix in range(max(0, ix1), min(W - 1, ix2) + 1):
+                    for iy in range(max(0, iy1), min(H - 1, iy2) + 1):
+                        if not free_only or not blocked(maps, "trk", lname,
+                                                        ix, iy):
+                            out.append((li, ix, iy))
+                            got = True
+                if not got:  # fully blocked by neighbours: allow centre
+                    out.append((li, cx, cy))
+            return out
+
+        if not tree:
+            p = todo.pop(0)
+            tree.update(pad_cells(p, free_only=False))
+        for p in todo:
+            path = astar(maps, pad_cells(p), tree)
+            if path is None:
+                failed.append((cname, f"no path to {p['ref']}.{p['num']}"))
+                continue
+            tr, vi = path_to_tracks(path, cname, width)
+            for t in tr:
+                new_tracks.append(t)
+                for i in range(len(t[3]) - 1):
+                    (x1, y1), (x2, y2) = t[3][i], t[3][i + 1]
+                    segs.append((cname, t[1], width / 2, x1, y1, x2, y2))
+            for v in vi:
+                new_vias.append(v)
+                vias.append(v)
+            for st in path:
+                tree.add((st[0], st[1], st[2]))
+            print(f"routed {cname} -> {p['ref']}.{p['num']} "
+                  f"({len(tr)} runs, {len(vi)} vias)", flush=True)
+
+    with open(OUT, "w") as f:
+        f.write('"""Autorouted tracks (generator/route.py) - regenerate with'
+                ' `make route`.\nHand-tweaks allowed: this is plain'
+                ' TRACKS/VIAS data appended by pcb_layout.py."""\n\n')
+        f.write("TRACKS = [\n")
+        for net, layer, width, pts in new_tracks:
+            f.write(f"    ({net!r}, {layer!r}, {width}, {pts!r}),\n")
+        f.write("]\n\nVIAS = [\n")
+        for net, x, y in new_vias:
+            f.write(f"    ({net!r}, {x}, {y}),\n")
+        f.write("]\n")
+    print(f"\n{len(new_tracks)} track runs, {len(new_vias)} vias -> {OUT}")
+    if failed:
+        print("FAILED:")
+        for net, why in failed:
+            print(f"  {net}: {why}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

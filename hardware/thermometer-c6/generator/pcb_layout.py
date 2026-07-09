@@ -306,3 +306,14 @@ KEEPOUTS = [
 ]
 
 SILK = []
+
+# Autorouted tracks (generator/route.py -> pcb_routes.py, checked in).
+# `make route` regenerates; hand-tweaks there are fine (same data format).
+import os as _os
+if not _os.environ.get("PCB_NO_ROUTES"):
+    try:
+        import pcb_routes as _routes
+        TRACKS = TRACKS + _routes.TRACKS
+        VIAS = VIAS + _routes.VIAS
+    except ImportError:
+        pass

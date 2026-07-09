@@ -301,6 +301,12 @@ def write_dru(alias):
         f.write("(rule power-track-width\n"
                 f"  (condition \"{cond(POWER_NETS)}\")\n"
                 "  (constraint track_width (min 0.5mm)))\n")
+        # J4's EPD_VCC pins sit on the 0.5mm-pitch row: a 0.5mm stub cannot
+        # clear the neighbouring pads, so allow thin stubs inside the fanout
+        f.write("(rule power-track-width-fanout\n"
+                f"  (condition \"A.NetName == '{alias['EPD_VCC']}' && "
+                "A.insideArea('fpc-fanout')\")\n"
+                "  (constraint track_width (min 0.25mm)))\n")
 
 
 # pcbnew saves same-type items sorted by their (random) UUIDs, so both the

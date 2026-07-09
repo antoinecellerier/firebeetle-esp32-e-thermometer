@@ -2,7 +2,7 @@ SCH  := thermometer-c6.kicad_sch
 PCB  := thermometer-c6.kicad_pcb
 OUT  := out
 
-.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb drc pcb-img
+.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb route drc pcb-img
 
 all: check pdf
 
@@ -29,6 +29,12 @@ check: erc netlist invariants
 	@echo "ALL CHECKS PASSED"
 
 pcb: netlist
+	python3 generator/pcb.py
+
+# regenerate generator/pcb_routes.py with the A* autorouter (checked in;
+# slow, run explicitly), then re-render the board with the new routes
+route: pcb
+	python3 generator/route.py
 	python3 generator/pcb.py
 
 drc: pcb | $(OUT)
