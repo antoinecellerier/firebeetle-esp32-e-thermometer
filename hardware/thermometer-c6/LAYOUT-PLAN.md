@@ -23,6 +23,15 @@ zero violations at all severities, exported netlist exactly matches
 invariants, footprints resolve, zero label-over-wire/body overlaps
 (build-fatal), zero wire crossings, zone frames auto-fit.
 
+**PCB phase (the milestones at the bottom of this file): M1–M4 done, M5
+signal routing in progress.** The board is 48×35mm, 2-layer, DRC copper-clean.
+Placement and hand-authored copper live in `generator/pcb_layout.py`; the rest
+is autorouted into `generator/pcb_routes.py`. `make route` prints the current
+unrouted terminals — that list is the M5 to-do, so read it rather than trust
+any list written down here. The routing rules the router and DRC actually
+enforce, the geometry traps, and the review tools are all in `CLAUDE.md`; read
+that before touching copper.
+
 How this project works (do not break it):
 - The `.kicad_sch` is GENERATED. Single source of truth =
   `generator/circuit.py` (components/nets/NC/LCSC) + `generator/layout.py`
@@ -93,6 +102,11 @@ Deliverables this phase: `thermometer-c6.kicad_pcb`, JLCPCB fab zip
 
 ## 3. Routing rules
 
+Intent, not mechanism. The clearances DRC enforces (0.2mm netclass, not the
+0.15 board minimum), the min-width DRU rules, the geometry traps and the
+router's ordering semantics are in `CLAUDE.md` — that is the operative
+reference, and it is loaded automatically.
+
 - 2 layers: top = components + signal, bottom = as-unbroken-as-possible GND
   pour stitched with vias; pour top where free.
 - Power widths: VBAT/VSYS/3V3/EPD_VCC ≥ 0.5mm (465mA bursts); booster
@@ -100,6 +114,8 @@ Deliverables this phase: `thermometer-c6.kicad_pcb`, JLCPCB fab zip
 - EPD SPI: plain 0.25mm, keep away from the booster loop and antenna.
 - LP I2C (GPIO6/7): short, away from switching nodes.
 - USB D±: short pair, no stubs, reference plane under.
+- VBAT_ADC is a 50k Thevenin node: short, and away from the EPD HV nets and
+  the switch node.
 - No traces under the MINI-1 antenna region, either layer.
 
 ## 4. Silkscreen (required text)
