@@ -10,7 +10,8 @@ guarantee regardless of how pcb.py generated it:
  3. The sensor rule areas exist and no track/via/fill crosses them.
  4. Every assembled (non-DNP, LCSC-carrying) footprint is on the top side
     (JLCPCB economy assembly is single-sided).
- 5. Tracks on the battery-current nets are >= 0.5mm wide.
+ 5. Tracks on the battery-current nets are >= 0.5mm wide, and the +3V3 trunk
+    (LDO -> module -> panel load switch) is joined by 0.5mm copper alone.
  6. The board outline is closed and matches pcb_layout.BOARD.
  7. Both M2 mounting holes exist with 2.2mm drills.
  8. Required silkscreen strings exist (only once SILK is authored).
@@ -36,14 +37,59 @@ from check_netlist import load_netlist  # noqa: E402
 BOARD_PATH = os.path.join(PROJECT, "thermometer-c6.kicad_pcb")
 NETLIST = os.path.join(PROJECT, "out", "netlist.net")
 
-POWER_NETS = {"VBAT", "VSYS", "+3V3", "EPD_VCC"}
+POWER_NETS = {"VBAT", "VSYS", "EPD_VCC"}
+# +3V3 only carries the 465mA refresh burst between the LDO, the module and
+# the panel load switch; the rest of the net is pull-ups and sensor stubs.
+TRUNK_3V3 = [("U2", "5"), ("U1", "3"), ("Q2", "2")]
 REQUIRED_SILK = ["CHARGE INDOORS", "bridge ONE", "PPK2", "fit ONE", "rev "]
+
+ORIGIN = tuple(pl.BOARD["origin"])
 
 failures = []
 
 
 def fail(msg):
     failures.append(msg)
+
+
+def rel(pos):
+    """Absolute VECTOR2I -> board-relative mm."""
+    return (pos.x / 1e6 - ORIGIN[0], pos.y / 1e6 - ORIGIN[1])
+
+
+def pt_in_rect(p, rect, grow=0.0):
+    return (rect[0] - grow <= p[0] <= rect[2] + grow
+            and rect[1] - grow <= p[1] <= rect[3] + grow)
+
+
+def rects_overlap(a, rect):
+    return not (a[2] < rect[0] or a[0] > rect[2]
+                or a[3] < rect[1] or a[1] > rect[3])
+
+
+def seg_hits_rect(a, b, rect, grow=0.0):
+    """Liang-Barsky: does segment a->b touch `rect` grown by `grow`?
+    Square corners make this conservative, which is the safe direction."""
+    x1, y1, x2, y2 = (rect[0] - grow, rect[1] - grow,
+                      rect[2] + grow, rect[3] + grow)
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, a[0] - x1), (dx, x2 - a[0]),
+                 (-dy, a[1] - y1), (dy, y2 - a[1])):
+        if p == 0:
+            if q < 0:
+                return False
+        else:
+            r = q / p
+            if p < 0:
+                if r > t1:
+                    return False
+                t0 = max(t0, r)
+            else:
+                if r < t0:
+                    return False
+                t1 = min(t1, r)
+    return True
 
 
 def build_alias():
@@ -61,6 +107,56 @@ def build_alias():
                 alias[cname] = hits[0]
                 unmatched.pop(hits[0])
     return exported, alias
+
+
+def trunk_connected(board, netname, pad_keys, min_width):
+    """True if pad_keys are one component of `netname` copper built only from
+    tracks at least min_width wide (plus vias, which carry any width)."""
+    items = [t for t in board.GetTracks() if t.GetNetname() == netname
+             and (t.GetClass() == "PCB_VIA"
+                  or t.GetWidth() >= min_width)]  # vias carry any width
+    parent = {}
+
+    def find(a):
+        parent.setdefault(a, a)
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    # A track endpoint joins whatever same-net copper it lands on: another
+    # track's body (HitTest covers the width), a via, or a pad.
+    ends = []
+    for i, t in enumerate(items):
+        find(("i", i))
+        if t.GetClass() == "PCB_VIA":
+            ends.append((("i", i), t.GetPosition(), None))
+        else:
+            for p in (t.GetStart(), t.GetEnd()):
+                ends.append((("i", i), p, t.GetLayer()))
+    for node, pos, layer in ends:
+        for j, t in enumerate(items):
+            if t.GetClass() != "PCB_VIA" and layer is not None \
+                    and t.GetLayer() != layer:
+                continue
+            if t.HitTest(pos, 0):
+                union(node, ("i", j))
+    for fp in board.Footprints():
+        for pad in fp.Pads():
+            key = (fp.GetReference(), str(pad.GetNumber()))
+            if key not in pad_keys:
+                continue
+            for node, pos, _ in ends:
+                if pad.HitTest(pos, 0):
+                    union(node, ("p", key))
+    roots = {find(("p", k)) for k in pad_keys if ("p", k) in parent}
+    return len(roots) == 1 and len(pad_keys) == len(
+        [k for k in pad_keys if ("p", k) in parent])
 
 
 def main():
@@ -93,24 +189,30 @@ def main():
     for needed in ("antenna", "U5-sensor", "U6-sensor"):
         if needed not in areas:
             fail(f"rule area '{needed}' missing")
+    rects = {k["name"]: k["rect"] for k in pl.KEEPOUTS}
     sensor_pads_ok = {"U5", "U6", "H2"}  # sensor's own pads sit inside by design
     for name in ("antenna", "U5-sensor", "U6-sensor"):
-        z = areas.get(name)
-        if z is None:
+        if name not in areas or name not in rects:
             continue
-        bb = z.GetBoundingBox()
+        z, rect = areas[name], rects[name]
         for t in board.GetTracks():
-            if not bb.Intersects(t.GetBoundingBox()):
-                continue
             if t.GetClass() == "PCB_VIA":
-                fail(f"via on net {t.GetNetname()} intersects rule area {name}")
+                r = pl.DEFAULT_VIA["diameter"] / 2
+                if pt_in_rect(rel(t.GetPosition()), rect, r):
+                    fail(f"via on net {t.GetNetname()} intersects rule area {name}")
             elif name == "antenna":
-                fail(f"track on net {t.GetNetname()} intersects the antenna keep-out")
+                hw = t.GetWidth() / 2e6
+                if seg_hits_rect(rel(t.GetStart()), rel(t.GetEnd()), rect, hw):
+                    fail(f"track on net {t.GetNetname()} intersects the "
+                         f"antenna keep-out")
         for fp in board.Footprints():
             for pad in fp.Pads():
                 if fp.GetReference() in sensor_pads_ok:
                     continue
-                if pad.GetBoundingBox().Intersects(bb) and pad.IsOnCopperLayer():
+                bb = pad.GetBoundingBox()
+                pr = (bb.GetLeft(), bb.GetTop(), bb.GetRight(), bb.GetBottom())
+                if pad.IsOnCopperLayer() and rects_overlap(
+                        [c / 1e6 - o for c, o in zip(pr, ORIGIN * 2)], rect):
                     fail(f"pad {fp.GetReference()}.{pad.GetNumber()} intersects rule area {name}")
         for zz in board.Zones():
             if zz.GetIsRuleArea() or not zz.IsFilled():
@@ -132,12 +234,20 @@ def main():
         if fp.GetReference() not in dnp and fp.GetLayer() != pcbnew.F_Cu:
             fail(f"{fp.GetReference()} is assembled but not on the top side")
 
-    # 5. power-net track widths
+    # 5a. power-net track widths, except the J4 fan-out stubs where the 0.5mm
+    #     pad pitch forbids 0.5mm (same exception as the .kicad_dru rules)
     wide = {alias.get(n, n) for n in POWER_NETS}
+    fanouts = [areas[n].GetBoundingBox() for n in ("fpc-fanout",) if n in areas]
     for t in board.GetTracks():
         if t.GetClass() == "PCB_TRACK" and t.GetNetname() in wide:
+            if any(bb.Contains(t.GetBoundingBox()) for bb in fanouts):
+                continue
             if t.GetWidth() < pcbnew.FromMM(0.499):
                 fail(f"track on {t.GetNetname()} is {t.GetWidth()/1e6:.2f}mm wide (<0.5)")
+
+    # 5b. the +3V3 trunk pads must be joined by >=0.5mm copper alone
+    if not trunk_connected(board, "+3V3", TRUNK_3V3, pcbnew.FromMM(0.499)):
+        fail("+3V3 trunk (U2.5 - U1.3 - Q2.2) is not connected by 0.5mm copper")
 
     # 6. closed outline, expected size
     outlines = pcbnew.SHAPE_POLY_SET()

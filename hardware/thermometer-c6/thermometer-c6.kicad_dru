@@ -10,7 +10,7 @@
   (condition "A.memberOfFootprint('J4') && B.memberOfFootprint('J4')")
   (constraint clearance (min 0.18mm)))
 (rule power-track-width
-  (condition "A.NetName == 'VBAT' || A.NetName == 'VSYS' || A.NetName == '+3V3' || A.NetName == 'EPD_VCC' || A.NetName == 'Net-(J2-Pin_1)' || A.NetName == 'Net-(J1-Pin_1)'")
+  (condition "A.NetName == 'VBAT' || A.NetName == 'VSYS' || A.NetName == 'EPD_VCC' || A.NetName == 'Net-(J2-Pin_1)' || A.NetName == 'Net-(J1-Pin_1)'")
   (constraint track_width (min 0.5mm)))
 (rule power-track-width-fanout
   (condition "A.NetName == 'EPD_VCC' && A.insideArea('fpc-fanout')")

@@ -53,8 +53,12 @@ LAYER = {"F.Cu": pcbnew.F_Cu, "B.Cu": pcbnew.B_Cu}
 # Nets that see the EPD booster's +/-20V-class rails -> 0.3mm clearance rule
 HV_NETS = ["EPD_PREVGH", "EPD_PREVGL", "~EPD_VGH", "~EPD_VGL",
            "~EPD_VSH", "~EPD_VSL", "~EPD_VCOM", "~EPD_VPP"]
-# Full-current paths (465mA EPD refresh bursts) -> 0.5mm min track width rule
-POWER_NETS = ["VBAT", "VSYS", "+3V3", "EPD_VCC", "~VBAT_RAW", "~BAT_IN"]
+# Full-current paths (465mA EPD refresh bursts) -> 0.5mm min track width rule.
+# +3V3 is deliberately absent: only its LDO->U1->Q2 trunk carries that current,
+# while the pull-ups, probes and the sensors' 0.5mm-pitch LGA pads take
+# microamps and cannot physically accept a 0.5mm stub. check_pcb.py asserts
+# the trunk instead, which is what the rule was really trying to say.
+POWER_NETS = ["VBAT", "VSYS", "EPD_VCC", "~VBAT_RAW", "~BAT_IN"]
 
 
 def bmm(x, y):
@@ -175,12 +179,44 @@ def expand_dogleg(a, b):
     return [a, mid, b]
 
 
+def on_segment(p, a, b):
+    """True if p lies strictly between the collinear-ish endpoints a and b."""
+    if p == a or p == b:
+        return False
+    dx, dy = b.x - a.x, b.y - a.y
+    px, py = p.x - a.x, p.y - a.y
+    if dx * py - dy * px != 0:      # not exactly collinear
+        return False
+    dot = px * dx + py * dy
+    return 0 < dot < dx * dx + dy * dy
+
+
+def split_tees(paths):
+    """A track ending on another same-net track's mid-span is electrically
+    connected but has no shared anchor, so KiCad's connectivity flags it as a
+    dangling end. Give the crossed track a vertex there."""
+    for i, (net, layer, _w, path) in enumerate(paths):
+        ends = []
+        for j, (net2, layer2, _w2, path2) in enumerate(paths):
+            if i == j or net2 != net or layer2 != layer:
+                continue
+            ends.extend((path2[0], path2[-1]))
+        k = 0
+        while k < len(path) - 1:
+            hits = [p for p in ends if on_segment(p, path[k], path[k + 1])]
+            if hits:
+                hits.sort(key=lambda p: (p.x - path[k].x) ** 2
+                          + (p.y - path[k].y) ** 2)
+                path[k + 1:k + 1] = hits
+            k += 1 + len(hits)
+
+
 def add_tracks(board, netinfo, alias, pads):
+    paths = []
     for net, layer, width, nodes in pl.TRACKS:
         exp = alias.get(net)
         if exp is None:
             raise SystemExit(f"pcb: TRACKS references unknown net {net}")
-        ni = netinfo[exp]
         pts = []
         for node in nodes:
             pos, pad = node_pos(node, pads)
@@ -192,6 +228,12 @@ def add_tracks(board, netinfo, alias, pads):
         for i in range(len(pts) - 1):
             seg = expand_dogleg(pts[i], pts[i + 1])
             path.extend(seg if not path else seg[1:])
+        paths.append((exp, layer, width, path))
+
+    split_tees(paths)
+
+    for exp, layer, width, path in paths:
+        ni = netinfo[exp]
         for i in range(len(path) - 1):
             if path[i] == path[i + 1]:
                 continue

@@ -69,7 +69,9 @@ PLACE = {
     "U1": (11.8, 13.95, 90),
     "C7": (9.57, 22.52, 90),
     "C8": (8.11, 21.95, 90),
-    "R6": (15.4, 6.3, 0),
+    # R6 (EN pull-up) belongs beside C9 at U1's south row, not in the 2.5mm
+    # channel north of U1 where all six EPD signals and both UART lines cross
+    "R6": (16.6, 21.5, 0),
     "C9": (14.75, 21.5, 0),
     "SW1": (3.9, 2.9, 0),
     "SW2": (11.6, 2.9, 0),
@@ -193,10 +195,13 @@ TRACKS = [
     ("VSYS", "F.Cu", 0.5, ["C2.1", (8.19, 32.2), "C1.1"]),
 
     # ---- VBUS (USB current path; not in the 0.5 min-width class) ----
-    # main escape threads A9 between the CC2 pad corner and the J3 NPTH
-    # hole-clearance zone, all on F.Cu
-    ("VBUS", "F.Cu", 0.4, ["J3.A9", (25.88, 1.7), (25.45, 2.1), (25.0, 2.55),
-                           (25.0, 3.6), (26.8, 5.1), (26.8, 6.9)]),
+    # A9 escapes through a via in its own 0.6mm pad and runs B.Cu west of the
+    # mounting hole: the 0.9mm window between the A8 pad and that hole cannot
+    # carry both VBUS and CC2 on F.Cu, and CC2 has no pad wide enough for a
+    # via (see the USB-C fan-out below).
+    ("VBUS", "B.Cu", 0.4, [(25.85, 1.2), (25.4, 1.65), (25.4, 2.85),
+                           (25.85, 3.3)]),
+    ("VBUS", "F.Cu", 0.4, [(25.85, 3.3), (26.8, 4.25), (26.8, 6.9)]),
     # U3.6/C5.2 leave only a 0.7mm gap -> 0.3mm neck up to U3.5
     ("VBUS", "F.Cu", 0.3, [(26.8, 6.9), (26.97, 7.07), (26.97, 10.9),
                            (26.58, 11.34), "U3.5"]),
@@ -220,6 +225,37 @@ TRACKS = [
     ("VBUS", "B.Cu", 0.4, [(20.95, 1.2), (21.6, 2.5), (21.6, 3.4),
                            (16.4, 3.4), (15.5, 2.2)]),
     ("VBUS", "F.Cu", 0.4, [(15.5, 2.2), (16.1, 1.75), "R4.1"]),
+
+    # ---- USB-C signal fan-out (J3's 0.5mm pitch defeats the autorouter) ----
+    # CC2 owns the A8/mounting-hole window now that VBUS is on B.Cu there,
+    # then crosses the D pair on B.Cu, passing north of TP5's back-side pad
+    ("~USB_CC2", "F.Cu", 0.25, ["J3.B5", (25.2, 1.6), (25.2, 8.5)]),
+    ("~USB_CC2", "B.Cu", 0.25, [(25.2, 8.5), (22.4, 8.5), (22.4, 10.69),
+                                "R2.1"]),
+    # CC1 dives south-west past the mounting hole and runs west of R1: the
+    # R1/R2 gap is only 0.55mm, too narrow for a 0.25mm lane
+    ("~USB_CC1", "F.Cu", 0.25, ["J3.A5", (22.15, 1.85), (20.15, 3.85),
+                                (20.15, 10.6), "R1.1"]),
+    # B7/A6/A7/B6 alternate D-/D+/D-/D+, so exactly one pair must cross the
+    # other. The lanes first spread from 0.5mm pitch to via pitch; D+ then
+    # crosses on B.Cu at y5.5, clear of the VSYS lane at y4.15; D- merges on
+    # F.Cu below the via row, where D+ has vacated its lane.
+    ("~USB_DM_CONN", "F.Cu", 0.25, ["J3.B7", (22.65, 2.4), (22.0, 3.05),
+                                    (22.0, 6.6), (23.65, 6.6)]),
+    ("~USB_DM_CONN", "F.Cu", 0.25, ["J3.A7", (23.65, 10.39), "U3.1"]),
+    ("~USB_DP_CONN", "F.Cu", 0.25, ["J3.A6", (23.15, 3.2), (22.7, 3.65),
+                                    (22.7, 5.5)]),
+    ("~USB_DP_CONN", "B.Cu", 0.25, [(22.7, 5.5), (24.5, 5.5)]),
+    # B6 continues south through the channel between U3's pad columns
+    ("~USB_DP_CONN", "F.Cu", 0.25, ["J3.B6", (24.15, 2.4), (24.5, 2.75),
+                                    (24.5, 9.0), (24.79, 9.29),
+                                    (24.79, 12.29), "U3.3"]),
+
+    # ---- VBUS_SENSE divider mid-node ----
+    # R22.2 -> R23.1 crosses the ladder diagonally; the 0.74mm channel between
+    # R22.1 and R23.2 only clears a 0.2mm track, and only off-centre
+    ("VBUS_SENSE", "F.Cu", 0.2, ["R22.2", (29.46, 7.25), (30.6, 8.39),
+                                 "R23.1"]),
 
     # ---- EPD booster switch core ----
     # RESE sense/current path: Q3 source -> R14 (default 0.47R leg) through
@@ -255,6 +291,18 @@ TRACKS = [
     # rectified rails to their reservoir caps (J4 feeds come with the fan-out)
     ("EPD_PREVGH", "F.Cu", 0.3, ["D4.1", (38.05, 21.55), "C17.1"]),
     ("EPD_PREVGL", "F.Cu", 0.3, ["D6.2", (35.22, 25.55), "C18.1"]),
+
+    # ---- EPD_VCC panel feed to J4.15/16 ----
+    # 0.3mm stubs while inside the fpc-fanout area (a 0.5mm stub cannot clear
+    # the neighbouring 0.5mm-pitch pads; see the power-track-width-fanout DRU
+    # rule), widening to 0.5 once clear, then B.Cu to R17's via-in-pad — the
+    # anchor the autorouted EPD_VCC tree grows from.
+    ("EPD_VCC", "F.Cu", 0.3, ["J4.16", (45.7, 18.45), (45.7, 18.1), "J4.15"]),
+    ("EPD_VCC", "F.Cu", 0.3, [(45.7, 18.1), (45.25, 18.1), (40.0, 12.85),
+                              (40.0, 12.4)]),
+    ("EPD_VCC", "F.Cu", 0.5, [(40.0, 12.4), (40.0, 8.3)]),
+    ("EPD_VCC", "B.Cu", 0.5, [(40.0, 8.3), (37.35, 8.3), (34.2, 5.15)]),
+    ("EPD_VCC", "F.Cu", 0.5, ["R17.1", (34.2, 5.15)]),
 ]
 
 VIAS = [
@@ -269,6 +317,12 @@ VIAS = [
     ("VSYS", 8.36, 29.75),
     ("VBUS", 20.95, 1.2),
     ("VBUS", 15.5, 2.2),
+    ("VBUS", 25.85, 1.2),  # via-in-pad J3.A9
+    ("VBUS", 25.85, 3.3),
+    ("~USB_DP_CONN", 22.7, 5.5),   # D+ crosses the D- pair on B.Cu
+    ("~USB_DP_CONN", 24.5, 5.5),
+    ("~USB_CC2", 25.2, 8.5),       # CC2 crosses both pairs on B.Cu
+    ("~USB_CC2", 22.01, 11.08),    # via-in-pad R2.1
     # RESE alternates B column: via-in-pad on all three resistor sense legs
     ("EPD_RESE", 35.45, 17.01),
     ("EPD_RESE", 35.45, 13.41),
@@ -276,6 +330,9 @@ VIAS = [
     # ~SW_10U B-hop under ~SW_47U
     ("~SW_10U", 25.4, 17.0),
     ("~SW_10U", 29.5, 21.66),
+    # EPD_VCC J4 feed: F->B mid-run, then via-in-pad on R17.1
+    ("EPD_VCC", 40.0, 8.3),
+    ("EPD_VCC", 34.2, 5.15),
 ]
 
 STITCH = []

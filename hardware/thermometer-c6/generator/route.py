@@ -44,43 +44,62 @@ MARKER = (39.5, 8.0, 48.0, 25.5)   # fpc-fanout rule area
 HV_NETS = {"EPD_PREVGH", "EPD_PREVGL", "~EPD_VGH", "~EPD_VGL",
            "~EPD_VSH", "~EPD_VSL", "~EPD_VCOM", "~EPD_VPP"}
 
-# (net, width, terminals-or-None) routed in this order; None = all pins from
-# circuit.py not already on the authored tree. GND is left to the M6 pour.
+# (net, width, terminals-or-None[, box]) routed in this order; None = all pins
+# from circuit.py not already on the authored tree. Terminal order is routing
+# order: the first one seeds the tree when no authored copper exists, so a
+# scarce escape (J4's 0.5mm pitch) is claimed before the far end pulls the
+# tree away. `box` clamps the A* search to a rectangle. GND -> the M6 pour.
+#
+# Ordering rationale: hardest first. J4's fan-out corridor, then the wide
+# power nets, then long cross-board runs, then everything local. Nets routed
+# late get whatever copper is left, so anything that fails moves up.
 ROUTE_PLAN = [
-    # J4 fan-out first: the 0.5mm-pitch escape corridor is the scarcest
-    ("~EPD_VGL", 0.25, None),
-    ("~EPD_VGH", 0.25, None),
-    ("EPD_GDR", 0.25, None),
+    # --- J4 fan-out. 0.3mm HV clearance in a 0.5mm-pitch escape is the
+    # scarcest resource: each entry names its J4 pin first so the escape is
+    # claimed before the far terminal drags the tree away. Within each group
+    # the pins go free-edge inwards (north group N->S, south group S->N), so
+    # an early escape never fences a later one against the connector body.
+    ("EPD_GDR", 0.25, [("J4", "2"), ("Q3", "1"), ("R13", "1"), ("TP8", "1")]),
     ("EPD_RESE", 0.25, [("J4", "3"), ("TP9", "1")]),   # sense leg + bench TP
-    ("EPD_PREVGH", 0.25, [("J4", "21"), ("TP6", "1")]),
+    ("~EPD_VGL", 0.25, [("J4", "4"), ("C19", "1")]),
+    ("~EPD_VGH", 0.25, [("J4", "5"), ("C20", "1")]),
+    ("~EPD_VCOM", 0.25, [("J4", "24"), ("C25", "1"), ("TP10", "1")]),
     ("EPD_PREVGL", 0.25, [("J4", "23"), ("TP7", "1")]),
-    ("~EPD_VDD", 0.25, None),
-    ("~EPD_VPP", 0.25, None),
-    ("~EPD_VSH", 0.25, None),
-    ("~EPD_VSL", 0.25, None),
-    ("~EPD_VCOM", 0.25, None),
-    ("EPD_VCC", 0.5, [("L1", "1"), ("L2", "1"), ("C14", "1"), ("C15", "1"),
-                      ("R17", "1"), ("TP5", "1")]),
-    ("EPD_VCC", 0.3, [("J4", "15"), ("J4", "16")]),   # thin fanout stubs
-    # USB data pair early so it gets the direct corridor
-    ("~USB_DM_CONN", 0.25, None),
-    ("~USB_DP_CONN", 0.25, None),
+    ("~EPD_VSL", 0.25, [("J4", "22"), ("C24", "1")]),
+    ("EPD_PREVGH", 0.25, [("J4", "21"), ("TP6", "1")]),
+    ("~EPD_VSH", 0.25, [("J4", "20"), ("C23", "1")]),
+    ("~EPD_VPP", 0.25, [("J4", "19"), ("C22", "1")]),
+    ("~EPD_VDD", 0.25, [("J4", "18"), ("C21", "1")]),
+    # --- J4 digital pins. Descending: the bundle lands on U1's NE corner
+    # (pin 24 MOSI, pin 25 SCK), so the nearest U1 pin is served first and
+    # the later ones fan west along the north row behind it. Each run dives
+    # under the authored EPD_VCC diagonal on its way across.
+    ("EPD_MOSI", 0.25, [("J4", "14"), ("U1", "24")]),
+    ("EPD_SCK", 0.25, [("J4", "13"), ("U1", "25")]),
+    ("EPD_CS", 0.25, [("J4", "12"), ("U1", "26")]),
+    ("EPD_DC", 0.25, [("J4", "11"), ("U1", "27")]),
+    ("EPD_RST", 0.25, [("J4", "10"), ("R17", "2"), ("U1", "28")]),
+    ("EPD_BUSY", 0.25, [("J4", "9"), ("U1", "29")]),
+    # --- 0.5mm power through the booster neck, before the signals fill it.
+    # Q2's pads are adjacent, so its drain (EPD_VCC) claims copper first, then
+    # the gate network (0.55mm pad gaps, no room for a 0.5mm neighbour).
+    ("EPD_VCC", 0.5, [("Q2", "3"), ("C15", "1"), ("L1", "1"), ("TP5", "1"),
+                      ("C14", "1"), ("L2", "1")]),
+    ("~EPD_GATE", 0.25, None),
+    ("EPD_PWR_EN", 0.25, None),
+    # +3V3 trunk: LDO -> U1 -> the panel load switch, the only stretch that
+    # carries the 465mA refresh burst (verify/check_pcb.py asserts its width)
+    ("+3V3", 0.5, [("Q2", "2"), ("U1", "3"), ("C7", "1"), ("C8", "1"),
+                   ("U2", "5"), ("C3", "1"), ("C4", "1")]),
+    # +3V3 branches: gate network, pull-ups, probe pads, debug header and the
+    # sensor block. Microamps, and 0.5mm cannot escape U5's LGA pitch anyway.
+    ("+3V3", 0.25, None),
+    # --- USB (the connector fan-out itself is authored in pcb_layout)
     ("USB_D-", 0.25, None),
     ("USB_D+", 0.25, None),
-    ("~USB_CC1", 0.25, None),
-    ("~USB_CC2", 0.25, None),
     # crystal
     ("XTAL_32K_P", 0.25, None),
     ("XTAL_32K_N", 0.25, None),
-    # EPD control
-    ("EPD_BUSY", 0.25, None),
-    ("EPD_RST", 0.25, None),
-    ("EPD_DC", 0.25, None),
-    ("EPD_CS", 0.25, None),
-    ("EPD_SCK", 0.25, None),
-    ("EPD_MOSI", 0.25, None),
-    ("EPD_PWR_EN", 0.25, None),
-    ("~EPD_GATE", 0.25, None),
     # sensors / divider / straps / LED / buttons / charger / debug
     ("SDA", 0.25, None),
     ("SCL", 0.25, None),
@@ -88,22 +107,26 @@ ROUTE_PLAN = [
     ("VDIV_EN", 0.25, None),
     ("~VDIV_TOP", 0.25, None),
     ("~VDIV_PGATE", 0.25, None),
-    ("VBUS_SENSE", 0.25, None),
+    ("VBUS_SENSE", 0.25, [("R22", "2"), ("R23", "1"), ("U1", "9"), ("J5", "6")]),
     ("CHG_STAT", 0.25, None),
     ("~CHG_LED_A", 0.25, None),
     ("~CHG_PROG", 0.25, None),
-    ("BOOT", 0.25, None),
-    ("EN", 0.25, None),
+    ("BOOT", 0.25, [("U1", "23"), ("R7", "2"), ("SW2", "1")]),
+    ("EN", 0.25, [("U1", "8"), ("C9", "1"), ("R6", "2"), ("SW1", "1"),
+                  ("J5", "3")]),
     ("LED_STATUS", 0.25, None),
+    ("~LED_A", 0.25, None),
     ("DBG_TX", 0.25, None),
     ("DBG_RX", 0.25, None),
     ("DBG_IO5", 0.25, None),
     ("DBG_IO8", 0.25, None),
     ("VBUS", 0.4, None),
-    ("+3V3", 0.5, None),
     ("VBAT", 0.5, None),
     ("VSYS", 0.5, None),
 ]
+
+# Nets deliberately absent from ROUTE_PLAN: GND (M6 pour) and the booster-core
+# nets hand-authored in pcb_layout.TRACKS. check_plan_covers_nets() enforces it.
 
 OUT = os.path.join(HERE, "pcb_routes.py")
 
@@ -340,8 +363,12 @@ def blocked(maps, kind, layer, ix, iy):
     return maps[(kind, variant, layer)].b[iy * W + ix]
 
 
-def astar(maps, starts, goals, max_pop=1_500_000):
-    """starts: [(layer, ix, iy)]; goals: set of (layer, ix, iy)."""
+def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None):
+    """starts: [(layer, ix, iy)]; goals: set of (layer, ix, iy).
+
+    The search is clamped to the terminals' bounding box grown by margin_mm,
+    or to `box` (board mm) when given — a hard fence, not a hint.
+    """
     if not goals:
         return None
     gx1 = min(g[1] for g in goals)
@@ -359,15 +386,17 @@ def astar(maps, starts, goals, max_pop=1_500_000):
             d += VIA_COST
         return d
 
-    # clamp the search to the terminals' neighbourhood first; retry
-    # unbounded only if that fails
-    margin = int(8.0 / GRID)
-    sx = [s[1] for s in starts]
-    sy = [s[2] for s in starts]
-    bx1 = max(0, min(gx1, min(sx)) - margin)
-    bx2 = min(W - 1, max(gx2, max(sx)) + margin)
-    by1 = max(0, min(gy1, min(sy)) - margin)
-    by2 = min(H - 1, max(gy2, max(sy)) + margin)
+    if box is not None:
+        bx1, by1 = max(0, cell(box[0], 0)[0]), max(0, cell(0, box[1])[1])
+        bx2, by2 = min(W - 1, cell(box[2], 0)[0]), min(H - 1, cell(0, box[3])[1])
+    else:
+        margin = int(margin_mm / GRID)
+        sx = [s[1] for s in starts]
+        sy = [s[2] for s in starts]
+        bx1 = max(0, min(gx1, min(sx)) - margin)
+        bx2 = min(W - 1, max(gx2, max(sx)) + margin)
+        by1 = max(0, min(gy1, min(sy)) - margin)
+        by2 = min(H - 1, max(gy2, max(sy)) + margin)
 
     open_q = []
     best_g = {}
@@ -460,16 +489,27 @@ def path_to_tracks(path, net, width):
     return out, vias
 
 
-def main():
-    pads = load_pads()
-    alias = net_alias(pads)
-    pad_by_key = {(p["ref"], p["num"]): p for p in pads}
+def check_plan_covers_nets():
+    """Every net must be routed, authored, or explicitly exempt — a net that
+    is in neither ROUTE_PLAN nor pcb_layout.TRACKS is silently never routed."""
+    planned = {e[0] for e in ROUTE_PLAN}
+    authored = {t[0] for t in pl.TRACKS}
+    missing = sorted(set(circuit.NETS) - planned - authored - {"GND"})
+    if missing:
+        raise SystemExit("route: nets in neither ROUTE_PLAN nor pcb_layout."
+                         "TRACKS: " + ", ".join(missing))
+
+
+def route_all(entries, pads, alias, pads_by_key, verbose):
+    """Route `entries` in order against the authored copper. Returns
+    (tracks, vias, failed); `failed` is [(circuit_net, reason)]."""
     segs, vias = authored_copper(pads)
 
     new_tracks, new_vias, failed = [], [], []
 
-    for entry in ROUTE_PLAN:
-        cname, width, terminals = entry
+    for entry in entries:
+        cname, width, terminals = entry[:3]
+        box = entry[3] if len(entry) > 3 else None
         exp = alias.get(cname, cname)
         pins = circuit.NETS.get(cname)
         if pins is None:
@@ -494,20 +534,23 @@ def main():
                 tree.add((0, *cell(x, y)))
                 tree.add((1, *cell(x, y)))
 
-        # terminals not already on the tree
+        # terminals not already on the tree: same-net copper anywhere on the
+        # pad connects it, so test the whole pad rather than its centre cell
+        def on_tree(p):
+            ix1, iy1 = cell(p["x1"], p["y1"])
+            ix2, iy2 = cell(p["x2"], p["y2"])
+            layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
+            return any((li, ix, iy) in tree for li in layers
+                       for ix in range(ix1, ix2 + 1)
+                       for iy in range(iy1, iy2 + 1))
+
         todo = []
         for (ref, num) in terminals:
-            p = pad_by_key.get((ref, num))
-            if p is None:
+            group = pads_by_key.get((ref, num))
+            if not group:
                 failed.append((cname, f"missing pad {ref}.{num}"))
                 continue
-            layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
-            c = cell(p["cx"], p["cy"])
-            near = any((li, ix, iy) in tree for li in layers
-                       for ix in range(c[0] - 2, c[0] + 3)
-                       for iy in range(c[1] - 2, c[1] + 3))
-            if not near:
-                todo.append(p)
+            todo.extend(p for p in group if not on_tree(p))
         if not todo:
             continue
         maps = build_bitmaps(pads, segs, vias, exp, width, alias)
@@ -537,25 +580,60 @@ def main():
         if not tree:
             p = todo.pop(0)
             tree.update(pad_cells(p, free_only=False))
-        for p in todo:
-            path = astar(maps, pad_cells(p), tree)
-            if path is None:
-                failed.append((cname, f"no path to {p['ref']}.{p['num']}"))
-                continue
-            tr, vi = path_to_tracks(path, cname, width)
-            for t in tr:
-                new_tracks.append(t)
-                for i in range(len(t[3]) - 1):
-                    (x1, y1), (x2, y2) = t[3][i], t[3][i + 1]
-                    segs.append((cname, t[1], width / 2, x1, y1, x2, y2))
-            for v in vi:
-                new_vias.append(v)
-                vias.append(v)
-            for st in path:
-                tree.add((st[0], st[1], st[2]))
-            print(f"routed {cname} -> {p['ref']}.{p['num']} "
-                  f"({len(tr)} runs, {len(vi)} vias)", flush=True)
 
+        # Retry the stragglers while any terminal still makes progress: a
+        # later terminal's copper often opens a route the tree lacked before.
+        pending = todo
+        while pending:
+            stuck, progress = [], False
+            for p in pending:
+                goals = tree
+                if box is not None:
+                    goals = {g for g in tree
+                             if box[0] <= g[1] * GRID <= box[2]
+                             and box[1] <= g[2] * GRID <= box[3]}
+                path = astar(maps, pad_cells(p), goals, box=box)
+                if path is None and box is None:
+                    # the 8mm terminal-bbox clamp forbids long detours
+                    path = astar(maps, pad_cells(p), goals, margin_mm=1e4)
+                if path is None:
+                    stuck.append(p)
+                    continue
+                progress = True
+                tr, vi = path_to_tracks(path, cname, width)
+                for t in tr:
+                    new_tracks.append(t)
+                    for i in range(len(t[3]) - 1):
+                        (x1, y1), (x2, y2) = t[3][i], t[3][i + 1]
+                        segs.append((cname, t[1], width / 2, x1, y1, x2, y2))
+                for v in vi:
+                    new_vias.append(v)
+                    vias.append(v)
+                for st in path:
+                    tree.add((st[0], st[1], st[2]))
+                if verbose:
+                    print(f"routed {cname} -> {p['ref']}.{p['num']} "
+                          f"({len(tr)} runs, {len(vi)} vias)", flush=True)
+            if not progress:
+                for p in stuck:
+                    failed.append((cname, f"no path to {p['ref']}.{p['num']}"))
+                break
+            pending = stuck
+    return new_tracks, new_vias, failed
+
+
+def main():
+    check_plan_covers_nets()
+    pads = load_pads()
+    alias = net_alias(pads)
+    # J3/J4/SW1/SW2 repeat pad numbers (USB-C dual row, switch legs, FPC
+    # mounting pads): one number can mean several pads, all needing copper.
+    pads_by_key = {}
+    for p in pads:
+        pads_by_key.setdefault((p["ref"], p["num"]), []).append(p)
+
+    new_tracks, new_vias, failed = route_all(ROUTE_PLAN, pads, alias,
+                                             pads_by_key, verbose=True)
     with open(OUT, "w") as f:
         f.write('"""Autorouted tracks (generator/route.py) - regenerate with'
                 ' `make route`.\nHand-tweaks allowed: this is plain'
