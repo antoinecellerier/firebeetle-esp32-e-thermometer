@@ -32,10 +32,11 @@ pcb: netlist
 	python3 generator/pcb.py
 
 # regenerate generator/pcb_routes.py with the A* autorouter (checked in;
-# slow, run explicitly), then re-render the board with the new routes
+# slow, run explicitly), then re-render the board with the new routes.
+# The re-render must happen even when the router leaves terminals unrouted,
+# else the board keeps the previous pass's copper over the new placement.
 route: pcb
-	python3 generator/route.py
-	python3 generator/pcb.py
+	python3 generator/route.py; rc=$$?; python3 generator/pcb.py; exit $$rc
 
 drc: pcb | $(OUT)
 	kicad-cli pcb drc --severity-all --exit-code-violations --schematic-parity --refill-zones \
