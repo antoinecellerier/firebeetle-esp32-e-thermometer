@@ -298,6 +298,26 @@ TRACKS = [
     ("EPD_PREVGH", "F.Cu", 0.3, ["D4.1", (38.05, 21.55), "C17.1"]),
     ("EPD_PREVGL", "F.Cu", 0.3, ["D6.2", (35.22, 25.55), "C18.1"]),
 
+    # ---- +3V3 trunk: LDO/U1 -> Q2 source (the only 465mA stretch) ----
+    # Pinned, not autorouted: left to itself the router reaches Q2.2 from the
+    # south-east and lays a 0.5mm B.Cu diagonal across the whole south of the
+    # board, walling off every J5-bound signal. The trunk belongs under L1.
+    ("+3V3", "B.Cu", 0.5, [(9.45, 19.55), (19.0, 19.55), (20.5, 18.05)]),
+    ("+3V3", "F.Cu", 0.5, [(20.5, 18.05), (22.3, 18.05), (23.25, 17.1),
+                           (23.25, 14.45)]),
+    ("+3V3", "B.Cu", 0.5, [(23.25, 14.45), (24.5, 15.7), (27.1, 15.7)]),
+    ("+3V3", "F.Cu", 0.5, [(27.1, 15.7), "Q2.2"]),
+    # gate-row south pads: the +3V3 pair links along the row and drops to the
+    # trunk through a via in C28.1 (the row's only escape -- ~SW_47U owns the
+    # F.Cu corridor at y20.49 and the L2 pad walls the west)
+    ("+3V3", "F.Cu", 0.25, ["R12.1", (27.36, 18.93), "C28.1"]),
+    ("+3V3", "B.Cu", 0.25, [(28.4, 18.93), (27.1, 17.63), (27.1, 15.7)]),
+
+    # ---- Q2 gate network: bus along the north row, stub up to Q2.1 ----
+    ("~EPD_GATE", "F.Cu", 0.25, ["R24.1", "R12.2"]),
+    ("~EPD_GATE", "F.Cu", 0.25, ["R12.2", "C28.2"]),
+    ("~EPD_GATE", "F.Cu", 0.25, [(26.3, 17.96), (26.3, 16.6), "Q2.1"]),
+
     # ---- EPD_VCC panel feed to J4.15/16 ----
     # 0.3mm stubs while inside the fpc-fanout area (a 0.5mm stub cannot clear
     # the neighbouring 0.5mm-pitch pads; see the power-track-width-fanout DRU
@@ -339,6 +359,12 @@ VIAS = [
     # EPD_VCC J4 feed: F->B mid-run, then via-in-pad on R17.1
     ("EPD_VCC", 40.0, 8.3),
     ("EPD_VCC", 34.2, 5.15),
+    # +3V3 trunk hops; (9.45,19.55) is a via-in-pad on U1.3, (28.4,18.93) on C28.1
+    ("+3V3", 9.45, 19.55),
+    ("+3V3", 20.5, 18.05),
+    ("+3V3", 23.25, 14.45),
+    ("+3V3", 27.1, 15.7),
+    ("+3V3", 28.4, 18.93),
 ]
 
 STITCH = []
