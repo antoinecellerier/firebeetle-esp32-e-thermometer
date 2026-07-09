@@ -33,6 +33,8 @@ H = int(round(pl.BOARD["size"][1] / GRID))  # 700
 OX, OY = pl.BOARD["origin"]
 
 VIA_R = pl.DEFAULT_VIA["diameter"] / 2
+VIA_DRILL_R = pl.DEFAULT_VIA["drill"] / 2
+HOLE_CLR = 0.25         # board min hole-to-hole (0.2495), rounded up
 VIA_COST = 1.5          # mm-equivalent per via
 BEND_COST = 0.02        # keep runs straight
 EDGE_CLR = 0.2
@@ -206,12 +208,14 @@ def load_pads():
         for pad in fp.Pads():
             bb = pad.GetBoundingBox()
             layers = pad.GetLayerSet().Seq()
+            d = pad.GetDrillSize()
             pads.append(dict(
                 ref=ref, num=str(pad.GetNumber()), net=pad.GetNetname(),
                 cx=pad.GetPosition().x / 1e6 - OX,
                 cy=pad.GetPosition().y / 1e6 - OY,
                 x1=bb.GetLeft() / 1e6 - OX, y1=bb.GetTop() / 1e6 - OY,
                 x2=bb.GetRight() / 1e6 - OX, y2=bb.GetBottom() / 1e6 - OY,
+                drill=max(d.x, d.y) / 1e6,
                 F=pcbnew.F_Cu in layers, B=pcbnew.B_Cu in layers))
     return pads
 
@@ -307,7 +311,19 @@ def build_bitmaps(pads, segs, vias, net_exp, width, alias):
                     else:
                         bm.stamp_rect(x1 - i, y1 - i, x2 + i, y2 + i)
 
+    def stamp_hole(cx, cy, drill):
+        """Drill-to-drill spacing ignores nets. Copper clearance does not, so a
+        via looks free to land inside a same-net PTH pad -- and does, producing
+        a coincident hole. Keep every hole out of every other hole."""
+        r = drill / 2 + HOLE_CLR + VIA_DRILL_R
+        for variant in ("strict", "relax"):
+            for layer in ("F.Cu", "B.Cu"):
+                maps[("via", variant, layer)].stamp_rect(cx - r, cy - r,
+                                                         cx + r, cy + r)
+
     for p in pads:
+        if p["drill"] > 0:
+            stamp_hole(p["cx"], p["cy"], p["drill"])
         # HV relaxation keys off the HV item's position: an HV *obstacle*
         # outside the marker forces 0.3 regardless of where we route, so
         # only relax when the obstacle itself sits inside the marker
@@ -332,6 +348,7 @@ def build_bitmaps(pads, segs, vias, net_exp, width, alias):
     for net, x, y in vias:
         stamp(["F.Cu", "B.Cu"], alias.get(net, net),
               x - VIA_R, y - VIA_R, x + VIA_R, y + VIA_R)
+        stamp_hole(x, y, pl.DEFAULT_VIA["drill"])
 
     # keepouts + board edge
     for k in pl.KEEPOUTS:

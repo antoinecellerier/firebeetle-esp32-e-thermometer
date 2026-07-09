@@ -356,6 +356,19 @@ TRACKS = [
     ("~VDIV_PGATE", "F.Cu", 0.25, ["Q4.1", (13.6, 26.2), (14.25, 26.2),
                                    "Q5.3"]),
 
+    # ---- J5 debug-header fan-in ----
+    # VBAT's 0.5mm B.Cu lane at y29.75 walls J5's whole north approach, and
+    # only 0.21mm of it clears the pin rows. J5 is through-hole, though, so
+    # each lane surfaces on a via just north of the lane and drops onto the
+    # pads on F.Cu, straight over the top of it. The two outer-row pins are
+    # reached down the 0.84mm channels between the inner pads (0.295mm to each
+    # pad at 0.25mm width). The five vias sit on one row, 1.27mm apart.
+    ("DBG_TX", "F.Cu", 0.25, [(36.44, 28.75), "J5.4"]),
+    ("VBUS_SENSE", "F.Cu", 0.25, [(38.98, 28.75), "J5.6"]),
+    ("DBG_RX", "F.Cu", 0.25, [(40.25, 28.75), (40.25, 33.6), "J5.5"]),
+    ("DBG_IO8", "F.Cu", 0.25, [(41.52, 28.75), "J5.8"]),
+    ("DBG_IO5", "F.Cu", 0.25, [(42.79, 28.75), (42.79, 33.6), "J5.7"]),
+
     # ---- J4 digital fan-out (pins 9..14) ----
     # The six lanes leave their pads at the connector's 0.5mm pitch and spread
     # to 0.7mm, which is what a 0.6mm via needs beside a neighbouring lane
@@ -396,6 +409,12 @@ VIAS = [
     ("EPD_CS", 15.0, 8.05),
     ("EPD_DC", 14.2, 8.05),
     ("EPD_BUSY", 12.6, 8.05),
+    # J5 fan-in: one via row north of the VBAT B.Cu lane, 1.27mm pitch
+    ("DBG_TX", 36.44, 28.75),
+    ("VBUS_SENSE", 38.98, 28.75),
+    ("DBG_RX", 40.25, 28.75),
+    ("DBG_IO8", 41.52, 28.75),
+    ("DBG_IO5", 42.79, 28.75),
     # J4 digital fan-out staircase, 0.7mm apart along the EPD_VCC B.Cu diagonal
     ("EPD_BUSY", 40.0, 15.05),
     ("EPD_RST", 40.5, 15.75),
