@@ -70,6 +70,15 @@ ROUTE_PLAN = [
     ("~EPD_VSH", 0.25, [("J4", "20"), ("C23", "1")]),
     ("~EPD_VPP", 0.25, [("J4", "19"), ("C22", "1")]),
     ("~EPD_VDD", 0.25, [("J4", "18"), ("C21", "1")]),
+    # --- 0.5mm power through the booster neck, before the signals fill it.
+    # Q2's pads are adjacent, so its drain (EPD_VCC) claims copper first, then
+    # the gate network (0.55mm pad gaps, no room for a 0.5mm neighbour).
+    # This must precede the J4 digital pins, not follow them: Q2.3's only
+    # escape is north (its own gate/source pads wall the south) into the same
+    # B.Cu channel over TP8 that the six digital lanes cross the booster on.
+    # Routed after them, EPD_VCC loses Q2.3 and TP5.1 outright.
+    ("EPD_VCC", 0.5, [("Q2", "3"), ("C15", "1"), ("L1", "1"), ("TP5", "1"),
+                      ("C14", "1"), ("L2", "1")]),
     # --- J4 digital pins. Descending: the bundle lands on U1's NE corner
     # (pin 24 MOSI, pin 25 SCK), so the nearest U1 pin is served first and
     # the later ones fan west along the north row behind it. Each run dives
@@ -80,11 +89,6 @@ ROUTE_PLAN = [
     ("EPD_DC", 0.25, [("J4", "11"), ("U1", "27")]),
     ("EPD_RST", 0.25, [("J4", "10"), ("R17", "2"), ("U1", "28")]),
     ("EPD_BUSY", 0.25, [("J4", "9"), ("U1", "29")]),
-    # --- 0.5mm power through the booster neck, before the signals fill it.
-    # Q2's pads are adjacent, so its drain (EPD_VCC) claims copper first, then
-    # the gate network (0.55mm pad gaps, no room for a 0.5mm neighbour).
-    ("EPD_VCC", 0.5, [("Q2", "3"), ("C15", "1"), ("L1", "1"), ("TP5", "1"),
-                      ("C14", "1"), ("L2", "1")]),
     ("~EPD_GATE", 0.25, None),
     ("EPD_PWR_EN", 0.25, None),
     # +3V3 trunk: LDO -> U1 -> the panel load switch, the only stretch that

@@ -314,8 +314,6 @@ TRACKS = [
     # The lanes fan out east at 0.6mm pitch and surface in the flank.
     # (each lane drops clear of its neighbour's via before turning east:
     # a 45-degree exit straight off the pad grazes it by 0.06mm)
-    ("EPD_CS", "B.Cu", 0.25, ["U1.26", (15.0, 8.45), (17.55, 8.8)]),
-    ("EPD_DC", "B.Cu", 0.25, ["U1.27", (14.2, 9.05), (17.55, 9.4)]),
     ("EPD_BUSY", "B.Cu", 0.25, ["U1.29", (12.6, 9.65), (17.55, 10.0)]),
 
     # ---- +3V3 trunk: LDO/U1 -> Q2 source (the only 465mA stretch) ----
@@ -358,6 +356,24 @@ TRACKS = [
     ("~VDIV_PGATE", "F.Cu", 0.25, ["Q4.1", (13.6, 26.2), (14.25, 26.2),
                                    "Q5.3"]),
 
+    # ---- J4 digital fan-out (pins 9..14) ----
+    # The six lanes leave their pads at the connector's 0.5mm pitch and spread
+    # to 0.7mm, which is what a 0.6mm via needs beside a neighbouring lane
+    # (0.3 + 0.2 + 0.125). They cannot all turn at once: two parallel 45-degree
+    # legs 0.5mm apart are only 0.354mm apart perpendicular. So the drops
+    # cascade from the south, each in its own x-window, and a lane is never
+    # diagonal beside a diagonal.
+    #
+    # The vias then form a staircase rather than the usual two columns: they
+    # must sit south-west of EPD_VCC's 45-degree B.Cu feed (x-y = 26.55), and
+    # nothing here runs parallel to that line. Each lane dives the moment it
+    # clears the diagonal, 0.7mm south-west of the lane before it.
+    ("EPD_BUSY", "F.Cu", 0.25, ["J4.9", (40.0, 15.05)]),
+    ("EPD_RST", "F.Cu", 0.25, ["J4.10", (40.7, 15.55), (40.5, 15.75)]),
+    ("EPD_CS", "F.Cu", 0.25, ["J4.12", (42.2, 16.55), (41.6, 17.15)]),
+    ("EPD_SCK", "F.Cu", 0.25, ["J4.13", (43.2, 17.05), (42.4, 17.85)]),
+    ("EPD_MOSI", "F.Cu", 0.25, ["J4.14", (44.4, 17.55), (43.4, 18.55)]),
+
     # ---- EPD_VCC panel feed to J4.15/16 ----
     # 0.3mm stubs while inside the fpc-fanout area (a 0.5mm stub cannot clear
     # the neighbouring 0.5mm-pitch pads; see the power-track-width-fanout DRU
@@ -380,6 +396,11 @@ VIAS = [
     ("EPD_CS", 15.0, 8.05),
     ("EPD_DC", 14.2, 8.05),
     ("EPD_BUSY", 12.6, 8.05),
+    # J4 digital fan-out staircase, 0.7mm apart along the EPD_VCC B.Cu diagonal
+    ("EPD_BUSY", 40.0, 15.05),
+    ("EPD_RST", 40.5, 15.75),
+    ("EPD_CS", 41.6, 17.15),
+    ("EPD_MOSI", 43.4, 18.55),
     ("VBAT", 42.25, 2.15),  # via-in-pad Q1.3
     ("VBAT", 36.1, 4.75),
     ("VBAT", 29.2, 26.2),
