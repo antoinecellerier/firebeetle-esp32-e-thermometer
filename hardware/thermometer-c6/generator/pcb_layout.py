@@ -137,10 +137,16 @@ PLACE = {
     "TP10": (44.4, 25.9, 0, "B"),
     "Q4": (14.25, 25.17, 90),
     "Q5": (14.25, 29.37, 90),
-    "R18": (9.31, 25.17, 90),
+    # divider ladder: R20/R21 stacked horizontally so the VBAT_ADC tap is a
+    # 0.71mm vertical link between adjacent pads, R20's ~VDIV_TOP pad faces
+    # Q4.3 across a clear 1.77mm, and R18 (rot 270) drops ~VDIV_PGATE onto the
+    # south lane that runs under the ladder to Q4's gate. The old single row at
+    # y25.17 put every shared node diagonally across itself and jammed against
+    # C3/C7's pads (0.645mm, and a 0.25 lane needs 0.65).
+    "R18": (9.31, 25.5, 270),
     "R19": (13.02, 21.98, 90),
-    "R20": (10.51, 25.17, 90),
-    "R21": (11.71, 25.17, 90),
+    "R20": (11.4, 24.65, 180),
+    "R21": (11.4, 26.0, 0),
     "C29": (14.2, 26.0, 0, "B"),
     "TP11": (13.0, 23.4, 0, "B"),
     "J5": (33.9, 33.6, 90),
@@ -177,9 +183,11 @@ TRACKS = [
                            (16.45, 24.9)]),
     ("VBAT", "F.Cu", 0.5, [(16.45, 24.9), (16.45, 25.56), (15.94, 26.11),
                            "Q4.2"]),
-    ("VBAT", "B.Cu", 0.5, [(16.9, 25.15), (9.75, 25.15), (9.31, 25.59),
-                           (9.31, 26.3)]),
-    ("VBAT", "F.Cu", 0.5, [(9.31, 26.3), "R18.1"]),
+    # ... and on to R18's gate pull-up, ending in a via-in-pad. The lane is a
+    # B.Cu wall from x9.31 to x29 at y24.70..25.60 (0.5mm minimum width on
+    # VBAT): nothing else crosses it, so the divider's own nets stay on F.Cu
+    # and VBAT_ADC's two B.Cu spurs stay on their own sides of it.
+    ("VBAT", "B.Cu", 0.5, [(16.9, 25.15), (9.75, 25.15), "R18.1"]),
 
     # ---- VSYS: charger/load-share NE to LDO SW via west-edge B.Cu ----
     # (the y4.15 lane ducks south of the J3 shield-leg back-side pads)
@@ -330,6 +338,26 @@ TRACKS = [
     ("~EPD_GATE", "F.Cu", 0.25, ["R12.2", "C28.2"]),
     ("~EPD_GATE", "F.Cu", 0.25, [(26.3, 17.96), (26.3, 16.6), "Q2.1"]),
 
+    # ---- battery divider block ----
+    # VBAT_ADC is a 50k Thevenin node: kept on F.Cu between the two ladder
+    # pads and up U1's ADC pin through the 0.85mm C7/C3 pad channel (the only
+    # F.Cu gap; no via fits in it). The bench pad and the filter cap hang off
+    # short B.Cu spurs, one either side of the VBAT lane.
+    ("VBAT_ADC", "F.Cu", 0.25, ["R20.2", "R21.1"]),
+    ("VBAT_ADC", "F.Cu", 0.25, ["R20.2", (10.47, 24.23), (10.47, 21.0),
+                                (11.0, 20.47), "U1.5"]),
+    ("VBAT_ADC", "B.Cu", 0.25, [(10.87, 20.6), "TP11.1"]),
+    ("VBAT_ADC", "B.Cu", 0.25, [(10.89, 26.0), (10.89, 27.0), (12.6, 27.0),
+                                "C29.1"]),
+    # ladder top: R20's east pad straight into Q4's drain
+    ("~VDIV_TOP", "F.Cu", 0.25, ["R20.1", "Q4.3"]),
+    # gate node: south lane under the ladder (0.27mm to R21's pads, 0.25mm to
+    # U2's), then east under Q4's body to Q5's drain
+    ("~VDIV_PGATE", "F.Cu", 0.25, ["R18.2", (9.31, 26.72), (13.0, 26.72),
+                                   "Q4.1"]),
+    ("~VDIV_PGATE", "F.Cu", 0.25, ["Q4.1", (13.6, 26.2), (14.25, 26.2),
+                                   "Q5.3"]),
+
     # ---- EPD_VCC panel feed to J4.15/16 ----
     # 0.3mm stubs while inside the fpc-fanout area (a 0.5mm stub cannot clear
     # the neighbouring 0.5mm-pitch pads; see the power-track-width-fanout DRU
@@ -356,7 +384,7 @@ VIAS = [
     ("VBAT", 36.1, 4.75),
     ("VBAT", 29.2, 26.2),
     ("VBAT", 16.45, 24.9),
-    ("VBAT", 9.31, 26.3),
+    ("VBAT", 9.31, 24.99),  # via-in-pad R18.1
     ("VSYS", 30.0, 1.4),
     ("VSYS", 44.95, 2.65),
     ("VSYS", 7.55, 26.4),
@@ -381,6 +409,10 @@ VIAS = [
     ("EPD_VCC", 41.0, 14.2),
     ("EPD_VCC", 40.0, 8.3),
     ("EPD_VCC", 34.2, 5.15),
+    # divider: the north spur's via sits on the 45-degree leg into U1.5 (no via
+    # fits in the C7/C3 channel); the south one is a via-in-pad on R21.1
+    ("VBAT_ADC", 10.87, 20.6),
+    ("VBAT_ADC", 10.89, 26.0),
     # +3V3 trunk hops; (9.45,19.55) is a via-in-pad on U1.3, (28.4,18.93) on C28.1
     ("+3V3", 9.45, 19.55),
     ("+3V3", 20.5, 18.05),

@@ -111,7 +111,14 @@ ROUTE_PLAN = [
     ("CHG_STAT", 0.25, None),
     ("~CHG_LED_A", 0.25, None),
     ("~CHG_PROG", 0.25, None),
-    ("BOOT", 0.25, [("U1", "23"), ("R7", "2"), ("SW2", "1")]),
+    # BOOT is boxed to U1's north-east quadrant. R7 sits 13mm from U1.23 with
+    # the crystal block and the +3V3 B.Cu trunk between them, so unboxed A*
+    # reaches R7.2 the only way left: 60mm around the board's south edge and up
+    # the 0.3mm-wide B.Cu column between the antenna keep-out and the VSYS
+    # lane -- the single west corridor EN needs for SW1. R7.2 stays unrouted
+    # until R7 moves; a straggler here is cheaper than EN losing its only lane.
+    ("BOOT", 0.25, [("U1", "23"), ("R7", "2"), ("SW2", "1")],
+     (7.8, 0.0, 21.6, 24.5)),
     ("EN", 0.25, [("U1", "8"), ("C9", "1"), ("R6", "2"), ("SW1", "1"),
                   ("J5", "3")]),
     ("LED_STATUS", 0.25, None),
