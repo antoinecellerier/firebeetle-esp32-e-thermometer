@@ -220,6 +220,41 @@ TRACKS = [
     ("VBUS", "B.Cu", 0.4, [(20.95, 1.2), (21.6, 2.5), (21.6, 3.4),
                            (16.4, 3.4), (15.5, 2.2)]),
     ("VBUS", "F.Cu", 0.4, [(15.5, 2.2), (16.1, 1.75), "R4.1"]),
+
+    # ---- EPD booster switch core ----
+    # RESE sense/current path: Q3 source -> R14 (default 0.47R leg) through
+    # the Q3.1/Q3.3 pad gap with a jog north past R13.2; star point is the
+    # Q3.2 pad (J4.3 Kelvin sense taps there, routed with the J4 fan-out)
+    ("EPD_RESE", "F.Cu", 0.3, ["Q3.2", (29.99, 15.31), (31.9, 15.31),
+                               (32.1, 15.11), (34.3, 15.11), (34.3, 17.01),
+                               "R14.1"]),
+    # R15/R16 alternates hang off a B.Cu column via via-in-pad (an F column
+    # doesn't fit: C20.1's HV clearance vs the R-ladder leaves exactly 0mm)
+    ("EPD_RESE", "B.Cu", 0.3, ["R14.1", "R15.1", "R16.1"]),
+    # RESE legs to their solder jumpers: short and wide (joint mR vs 0.47R)
+    ("~RESE_A", "F.Cu", 0.5, ["R14.2", "JP2.1"]),
+    ("~RESE_B", "F.Cu", 0.5, ["R15.2", "JP3.1"]),
+    ("~RESE_C", "F.Cu", 0.5, ["R16.2", "JP4.1"]),
+    # SW node: Q3 drain exits east around R13, dives south through the
+    # JP-column/C22 window at x32.0, feeds both inductor jumpers + C16 + D4
+    ("EPD_SW", "F.Cu", 0.4, ["Q3.3", (31.7, 16.2), (31.9, 16.4),
+                             (31.9, 17.3), (32.0, 17.4), (32.0, 22.79),
+                             "C16.1"]),
+    ("EPD_SW", "F.Cu", 0.4, ["JP5.2", (32.0, 22.96)]),
+    ("EPD_SW", "F.Cu", 0.4, ["JP6.2", (32.0, 19.36)]),
+    ("EPD_SW", "F.Cu", 0.4, [(32.0, 18.1), (38.0, 18.1), "D4.2"]),
+    # inductor-to-jumper links; 10U crosses 47U so it ducks onto B.Cu
+    ("~SW_10U", "F.Cu", 0.4, ["L1.2", (24.34, 16.6), (25.4, 17.0)]),
+    ("~SW_10U", "B.Cu", 0.4, [(25.4, 17.0), (29.5, 21.66)]),
+    ("~SW_10U", "F.Cu", 0.4, [(29.5, 21.66), "JP5.1"]),
+    ("~SW_47U", "F.Cu", 0.4, ["L2.2", (28.95, 20.49), (29.4, 20.04),
+                              (29.4, 18.06), "JP6.1"]),
+    # charge pump: C16 low pad -> D6 -> D5
+    ("~EPD_PUMP", "F.Cu", 0.4, ["C16.2", (30.86, 27.10), "D6.1"]),
+    ("~EPD_PUMP", "F.Cu", 0.4, ["D6.1", (30.87, 27.6), "D5.2"]),
+    # rectified rails to their reservoir caps (J4 feeds come with the fan-out)
+    ("EPD_PREVGH", "F.Cu", 0.3, ["D4.1", (38.05, 21.55), "C17.1"]),
+    ("EPD_PREVGL", "F.Cu", 0.3, ["D6.2", (35.22, 25.55), "C18.1"]),
 ]
 
 VIAS = [
@@ -234,6 +269,13 @@ VIAS = [
     ("VSYS", 8.36, 29.75),
     ("VBUS", 20.95, 1.2),
     ("VBUS", 15.5, 2.2),
+    # RESE alternates B column: via-in-pad on all three resistor sense legs
+    ("EPD_RESE", 35.45, 17.01),
+    ("EPD_RESE", 35.45, 13.41),
+    ("EPD_RESE", 35.45, 9.81),
+    # ~SW_10U B-hop under ~SW_47U
+    ("~SW_10U", 25.4, 17.0),
+    ("~SW_10U", 29.5, 21.66),
 ]
 
 STITCH = []
