@@ -91,13 +91,18 @@ PLACE = {
     "C10": (18.85, 20.7, 0),
     "C11": (18.85, 19.5, 0),
     "R9": (18.5, 20.5, 0, "B"),
-    "U5": (2.6, 22.4, 0),
+    # Sensor corner, redesigned as a unit: both sensors rot 90 put SCL/SDA on
+    # the south/east faces, C12/C13/C26 leave the x5.41 picket strip (C12
+    # east of U5 below the antenna keep-out, C13 to the SW corner, C26 south
+    # of C27), and the I2C bus enters from the west F.Cu column and the south
+    # band instead of threading the old double fence.
+    "U5": (2.6, 22.4, 90),
     "R10": (6.62, 22.07, 90),
     "R11": (6.62, 24.27, 90),
-    "C12": (5.41, 22.05, 90),
-    "C13": (5.41, 24.05, 90),
-    "U6": (2.7, 26.6, 0),
-    "C26": (5.41, 26.05, 90),
+    "C12": (4.75, 21.45, 0),
+    "C13": (1.3, 29.9, 0),
+    "U6": (2.7, 26.6, 90),
+    "C26": (6.1, 28.5, 90),
     "C27": (6.61, 26.45, 90),
     "Q2": (27.25, 15.27, 90),
     # gate row: R24 flipped so all three gate pads share the north row (a bus
@@ -460,6 +465,20 @@ TRACKS = [
                                (25.55, 12.75), (26.9, 14.1), (31.75, 14.1),
                                (31.75, 26.15), (39.35, 26.15), (41.52, 28.32),
                                (41.52, 28.75)]),
+    # BOOT's crossing, authored: F.Cu west along y9.85 (north of the paddle),
+    # via at x10.9 -- west of TX's via-in-pad and clear of EPD_RST's future
+    # via at (13.4, 8.05), which the baseline x13.55 hop would collide with --
+    # then B.Cu down onto R7.2's pad. SW2.1 hangs off this tree via A*.
+    # Left unauthored, every west-side reshuffle (SDA/SCL, +3V3) starves it.
+    ("BOOT", "F.Cu", 0.25, ["U1.23", (16.55, 9.85), (10.75, 9.85),
+                            (10.3, 9.4)]),
+    ("BOOT", "B.Cu", 0.25, [(10.3, 9.4), (9.85, 8.95), (9.85, 6.1)]),
+    ("BOOT", "F.Cu", 0.25, [(9.85, 6.1), "R7.2"]),
+
+    # SCL's U5.2 leg: the sensor keep-out forbids vias under U5, so the pad is
+    # F.Cu-only, and +3V3 otherwise claims the lone F approach for U5.1 first.
+    ("SCL", "F.Cu", 0.25, ["U5.2", (2.85, 23.6), (4.5, 23.6)]),
+
     # XTAL_32K_N's only escape from U1.13 to the crystal block: via beside the
     # pad, B.Cu hop east under the crystal, via back up into the C11 pad gap.
     # Authored because USB_D+ (routed earlier) otherwise claims the y17.9..18.1
@@ -496,6 +515,9 @@ VIAS = [
     # XTAL_32K_N hop: via-in-pad U1.13, via in the C11 pad gap
     ("XTAL_32K_N", 16.8, 17.85),
     ("XTAL_32K_N", 18.4, 17.95),
+    # BOOT crossing: west of TX's via-in-pad; the second lands on R7.2's pad
+    ("BOOT", 10.3, 9.4),
+    ("BOOT", 9.85, 6.1),
     # J5 fan-in: one via row north of the VBAT B.Cu lane, 1.27mm pitch
     ("DBG_TX", 36.44, 28.75),
     ("VBUS_SENSE", 38.98, 28.75),
