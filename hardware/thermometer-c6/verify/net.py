@@ -18,8 +18,6 @@ import os
 import re
 import sys
 
-import pcbnew
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT = os.path.dirname(HERE)
 GEN = os.path.join(PROJECT, "generator")
@@ -100,18 +98,17 @@ def routed(net):
 
 
 def pads_of(net):
-    board = pcbnew.LoadBoard(os.path.join(PROJECT, "thermometer-c6.kicad_pcb"))
+    # circuit names vs exported names: anonymous "~" nets carry KiCad
+    # auto-names on the pads; route.py's alias resolves them by pin set
+    import route as rt
+    pads = rt.load_pads()
+    exp = rt.net_alias(pads).get(net, net)
     rows = []
-    for fp in board.GetFootprints():
-        for pad in fp.Pads():
-            if pad.GetNetname() != net:
-                continue
-            layers = pad.GetLayerSet().Seq()
-            lyr = ("F" if pcbnew.F_Cu in layers else "") + \
-                  ("B" if pcbnew.B_Cu in layers else "")
-            rows.append((f"{fp.GetReference()}.{pad.GetNumber()}",
-                         pad.GetPosition().x / 1e6 - OX,
-                         pad.GetPosition().y / 1e6 - OY, lyr or "-"))
+    for p in pads:
+        if p["net"] != exp:
+            continue
+        lyr = ("F" if p["F"] else "") + ("B" if p["B"] else "")
+        rows.append((f'{p["ref"]}.{p["num"]}', p["cx"], p["cy"], lyr or "-"))
     return sorted(rows)
 
 
