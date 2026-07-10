@@ -739,6 +739,60 @@ def route_all(entries, pads, alias, pads_by_key, verbose):
     return new_tracks, new_vias, failed
 
 
+STRAGGLERS = os.path.join(PROJECT, "out", "stragglers.txt")
+
+
+def _copper_by_net(tracks, vias):
+    """Per-net set of copper elements, for pass-to-pass comparison."""
+    nets = {}
+    for net, layer, width, pts in tracks:
+        nets.setdefault(net, set()).add(
+            ("t", layer, width, tuple(tuple(p) for p in pts)))
+    for net, x, y in vias:
+        nets.setdefault(net, set()).add(("v", x, y))
+    return nets
+
+
+def _load_prev_routes():
+    """Previous pass's pcb_routes.py as a per-net copper map, or None."""
+    try:
+        with open(OUT) as f:
+            ns = {}
+            exec(compile(f.read(), OUT, "exec"), ns)
+        return _copper_by_net(ns.get("TRACKS", []), ns.get("VIAS", []))
+    except (OSError, SyntaxError):
+        return None
+
+
+def report_delta(prev, new_tracks, new_vias, failed):
+    """Print only what changed vs the previous pass: straggler diff plus
+    which routed nets re-placed (the failure list names victims; the
+    re-placed list names candidate villains)."""
+    if prev is not None:
+        cur = _copper_by_net(new_tracks, new_vias)
+        changed = sorted(n for n in set(prev) | set(cur)
+                         if prev.get(n) != cur.get(n))
+        print(f"re-placed vs previous pass ({len(changed)}):"
+              f" {', '.join(changed) if changed else '(none)'}")
+    old = None
+    try:
+        with open(STRAGGLERS) as f:
+            old = f.read().splitlines()
+    except OSError:
+        pass
+    new = [f"{net}: {why}" for net, why in failed]
+    os.makedirs(os.path.dirname(STRAGGLERS), exist_ok=True)
+    with open(STRAGGLERS, "w") as f:
+        f.write("".join(line + "\n" for line in new))
+    if old is not None:
+        for line in old:
+            if line not in new:
+                print(f"straggler fixed:  {line}")
+        for line in new:
+            if line not in old:
+                print(f"straggler NEW:    {line}")
+
+
 def main():
     check_plan_covers_nets()
     pads = load_pads()
@@ -749,6 +803,7 @@ def main():
     for p in pads:
         pads_by_key.setdefault((p["ref"], p["num"]), []).append(p)
 
+    prev = _load_prev_routes()
     new_tracks, new_vias, failed = route_all(ROUTE_PLAN, pads, alias,
                                              pads_by_key, verbose=True)
     with open(OUT, "w") as f:
@@ -763,8 +818,9 @@ def main():
             f.write(f"    ({net!r}, {x}, {y}),\n")
         f.write("]\n")
     print(f"\n{len(new_tracks)} track runs, {len(new_vias)} vias -> {OUT}")
+    report_delta(prev, new_tracks, new_vias, failed)
     if failed:
-        print("FAILED:")
+        print(f"FAILED ({len(failed)}):")
         for net, why in failed:
             print(f"  {net}: {why}")
         sys.exit(1)

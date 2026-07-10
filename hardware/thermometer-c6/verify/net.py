@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""One net at a glance: authored copper (pcb_layout.py, with line numbers),
+autorouted copper (pcb_routes.py -- regenerated wholesale by `make route`,
+coordinates ephemeral, never document them), terminal pads, and the
+authored-island order (islands[0] seeds the router's tree; island order is
+pcb_layout.TRACKS order -- authoring an earlier same-net block MOVES the
+seed).
+
+Islands here are joined on exact shared coordinates / pad refs, which is how
+authored copper chains in practice; route.py's real merge is grid-based, so
+copper that merely touches without sharing an endpoint may show as separate
+islands here yet merge there.
+
+Usage: python3 verify/net.py NET [NET ...]      e.g. net.py EPD_SCK USB_D-
+"""
+
+import os
+import re
+import sys
+
+import pcbnew
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PROJECT = os.path.dirname(HERE)
+GEN = os.path.join(PROJECT, "generator")
+sys.path.insert(0, GEN)
+
+os.environ["PCB_NO_ROUTES"] = "1"  # authored copper only
+import pcb_layout as pl  # noqa: E402
+
+OX, OY = pl.BOARD["origin"]
+LAYOUT_SRC = os.path.join(GEN, "pcb_layout.py")
+ROUTES_SRC = os.path.join(GEN, "pcb_routes.py")
+STRAGGLERS = os.path.join(PROJECT, "out", "stragglers.txt")
+
+
+def source_lines_of(net):
+    """Line numbers of TRACKS/VIAS entries opening with this net, in file
+    order, keyed separately per list."""
+    out = {"TRACKS": [], "VIAS": []}
+    section = None
+    pat = re.compile(r'^\s*\(["\']' + re.escape(net) + r'["\'],')
+    with open(LAYOUT_SRC) as f:
+        for n, line in enumerate(f, 1):
+            m = re.match(r"^(TRACKS|VIAS)\s*=", line)
+            if m:
+                section = m.group(1)
+            elif re.match(r"^\S", line):
+                section = None
+            if section and pat.match(line):
+                out[section].append(n)
+    return out
+
+
+def entry_keys(entry, kind):
+    """Connectivity keys of one authored entry: exact points + pad refs."""
+    if kind == "via":
+        _, x, y = entry
+        return {(round(x, 3), round(y, 3))}
+    keys = set()
+    for p in entry[3]:
+        keys.add(p if isinstance(p, str) else (round(p[0], 3), round(p[1], 3)))
+    return keys
+
+
+def islands(net):
+    """Authored entries grouped into islands, in TRACKS/VIAS order. Each
+    member carries its pcb_layout.py line number."""
+    lines = source_lines_of(net)
+
+    def annotate(pool, kind, key):
+        mine = [e for e in pool if e[0] == net]
+        src = lines[key] + ["?"] * (len(mine) - len(lines[key]))
+        return [(e, kind, src[i]) for i, e in enumerate(mine)]
+
+    entries = annotate(pl.TRACKS, "track", "TRACKS") + \
+        annotate(pl.VIAS, "via", "VIAS")
+    groups = []  # [keys, members]
+    for e, kind, src in entries:
+        keys = entry_keys(e, kind)
+        hit = [g for g in groups if g[0] & keys]
+        for g in hit[1:]:
+            hit[0][0].update(g[0])
+            hit[0][1].extend(g[1])
+            groups.remove(g)
+        if hit:
+            hit[0][0].update(keys)
+            hit[0][1].append((e, kind, src))
+        else:
+            groups.append([keys, [(e, kind, src)]])
+    return groups
+
+
+def routed(net):
+    ns = {}
+    with open(ROUTES_SRC) as f:
+        exec(compile(f.read(), ROUTES_SRC, "exec"), ns)
+    return ([t for t in ns.get("TRACKS", []) if t[0] == net],
+            [v for v in ns.get("VIAS", []) if v[0] == net])
+
+
+def pads_of(net):
+    board = pcbnew.LoadBoard(os.path.join(PROJECT, "thermometer-c6.kicad_pcb"))
+    rows = []
+    for fp in board.GetFootprints():
+        for pad in fp.Pads():
+            if pad.GetNetname() != net:
+                continue
+            layers = pad.GetLayerSet().Seq()
+            lyr = ("F" if pcbnew.F_Cu in layers else "") + \
+                  ("B" if pcbnew.B_Cu in layers else "")
+            rows.append((f"{fp.GetReference()}.{pad.GetNumber()}",
+                         pad.GetPosition().x / 1e6 - OX,
+                         pad.GetPosition().y / 1e6 - OY, lyr or "-"))
+    return sorted(rows)
+
+
+def fmt_pts(pts):
+    return " ".join(p if isinstance(p, str) else f"({p[0]:g},{p[1]:g})"
+                    for p in pts)
+
+
+def show(net):
+    print(f"=== {net} ===")
+
+    pads = pads_of(net)
+    print(f"pads ({len(pads)}): " +
+          "  ".join(f"{r}({x:.2f},{y:.2f}){l}" for r, x, y, l in pads))
+
+    isls = islands(net)
+    print(f"authored islands ({len(isls)}, order = seeding order):")
+    for i, (_, members) in enumerate(isls):
+        print(f"  islands[{i}]")
+        for e, kind, src in members:
+            if kind == "track":
+                print(f"    L{src!s:<4} {e[1]} {e[2]}  {fmt_pts(e[3])}")
+            else:
+                print(f"    L{src!s:<4} via    ({e[1]:g},{e[2]:g})")
+    if not isls:
+        print("  (none)")
+
+    rt, rv = routed(net)
+    print(f"routed copper ({len(rt)} runs, {len(rv)} vias) -- ephemeral,"
+          " regenerated by `make route`:")
+    for _, layer, width, pts in rt:
+        print(f"    {layer} {width}  {fmt_pts(pts)}")
+    for _, x, y in rv:
+        print(f"    via    ({x:g},{y:g})")
+
+    try:
+        with open(STRAGGLERS) as f:
+            bad = [l for l in f.read().splitlines()
+                   if l.startswith(net + ":")]
+        if bad:
+            print("stragglers (last `make route`):")
+            for line in bad:
+                print(f"    {line}")
+    except OSError:
+        pass
+    print()
+
+
+def main():
+    if len(sys.argv) < 2:
+        raise SystemExit(__doc__.strip())
+    known = {e[0] for e in pl.TRACKS} | {e[0] for e in pl.VIAS}
+    for net in sys.argv[1:]:
+        show(net)
+        if net not in known:
+            print(f"(note: {net} has no authored copper)")
+
+
+if __name__ == "__main__":
+    main()
