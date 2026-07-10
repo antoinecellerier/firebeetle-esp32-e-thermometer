@@ -2,7 +2,7 @@ SCH  := thermometer-c6.kicad_sch
 PCB  := thermometer-c6.kicad_pcb
 OUT  := out
 
-.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb route drc pcb-img
+.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb route route-pf drc pcb-img
 
 all: check pdf
 
@@ -37,6 +37,13 @@ pcb: netlist
 # else the board keeps the previous pass's copper over the new placement.
 route: pcb
 	python3 generator/route.py; rc=$$?; python3 generator/pcb.py; exit $$rc
+
+# PathFinder (negotiated-congestion) experiment router. Same output contract as
+# `route`: regenerate generator/pcb_routes.py, then re-render the board. Stage 1
+# keeps all authored copper immovable, so the render is pl.TRACKS + pcb_routes
+# exactly like `route` -- no separate render path needed.
+route-pf: pcb
+	python3 generator/pathfind.py; rc=$$?; python3 generator/pcb.py; exit $$rc
 
 drc: pcb | $(OUT)
 	kicad-cli pcb drc --severity-all --exit-code-violations --schematic-parity --refill-zones \
