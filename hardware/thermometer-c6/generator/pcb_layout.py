@@ -128,7 +128,11 @@ PLACE = {
     # it senses (D6.2/C18.1), leaving B.Cu descent slots either side.
     "TP7": (33.4, 24.7, 0, "B"),
     "TP8": (29.0, 12.6, 0, "B"),
-    "TP9": (32.3, 13.5, 0, "B"),
+    # TP9 (EPD_RESE bench pad) kisses its own net's B.Cu sense column at
+    # x35.45 (same net, zero-length hookup): at its old (32.3, 13.5) spot it
+    # walled the only free north-south B.Cu seam east of the booster, which
+    # DBG_IO8's descent and ~EPD_VGH's C20-to-J4.5 hook both need.
+    "TP9": (36.35, 10.5, 0, "B"),
     "J4": (44.6, 16.8, 270),
     "C19": (30.8, 11.3, 90),
     "C20": (33.27, 12.0, 90),
@@ -405,6 +409,69 @@ TRACKS = [
     ("EPD_VCC", "F.Cu", 0.5, [(41.0, 14.2), (40.0, 13.2), (40.0, 8.3)]),
     ("EPD_VCC", "B.Cu", 0.5, [(40.0, 8.3), (37.35, 8.3), (34.2, 5.15)]),
     ("EPD_VCC", "F.Cu", 0.5, ["R17.1", (34.2, 5.15)]),
+
+    # ---- U1 debug escapes (kept AFTER the J5 fan-in: islands[0] seeds the
+    # tree, and these stubs must grow onto the J5 drops, not replace them) ----
+    # UART/IO8 take via-in-pads like the EPD signals; the stubs drop south of
+    # the pad row so the lanes run UNDER the module on B.Cu (the F.Cu band
+    # north of the row belongs to BOOT -> SW2). U1.9/U1.10 cannot drop through
+    # their pads -- the +3V3 B.Cu trunk runs under U1's south row -- so their
+    # vias sit 0.55mm south, which clears the trunk.
+    # The three lanes run pad-to-via-row, authored end to end. They cross the
+    # module's east half in the y12.75..13.65 band: north of EPD_VCC's field
+    # spine (B.Cu x21.95, top via copper reaches y14.45 -- crossing its
+    # longitude any lower evicts the spine into the pocket as a 0.5mm wall),
+    # south of the U1.20/U1.22 via latitudes, west of EPD_VCC's Q2.3 drain
+    # column (B.Cu x27.45..27.95, down to y13.7). A dive cascade (one
+    # x-window per lane) drops them to y14.2..15.1 south of the drain's foot
+    # and of the +3V3 elbow via (23.25,14.45), they descend the JP5/C19
+    # column at x30.2/30.65/31.1 -- east of VBAT's divider wall, west of
+    # TP7/TP9 -- and cross the pocket floor at y26.65..27.55 (south of TP7's
+    # HV wall and the EPD_PREVGL via) to their J5 fan-in vias.
+    # The x16.7 column and y12.5..17.5 latitudes at x15.4..17.4 stay free:
+    # they are the east pad row's via strip (LED/D+/D-/SDA/SCL escapes).
+    # (east runs at y14.1..15.0: the +3V3 elbow via (27.1,15.7) needs 0.625
+    # from the y15.0 lane. The tails stop at x<34: the pocket floor east of
+    # C21's longitude is the panel-cap service area -- authored copper there
+    # starves the J4 fan-out group -- so A* threads the last few mm to the
+    # RX/IO8 vias itself, as it already does for the C21..C24 feeds.)
+    ("DBG_TX", "B.Cu", 0.25, [(11.0, 8.05), (11.0, 13.65), (24.55, 13.65),
+                              (25.9, 15.0), (30.2, 15.0), (30.2, 27.55),
+                              (33.9, 27.55), (35.1, 28.75), (36.44, 28.75)]),
+    # RX descends at x30.65 (0.45 from TX; ~EPD_VGH's x31.05 weave leg
+    # re-places one grid step east, still west of TP9). IO8 ends at its band:
+    # only two descent columns exist between the ~SW_10U via halo and TP9,
+    # so A* finishes IO8 -- it has twice found the F-hop into the y28.1 seam.
+    # Pocket floor slots run at 0.45 pitch between EPD_PREVGL's HV diagonal
+    # (y25.55) and the via row: IO8 26.15, 26.6 left free for ~EPD_VPP's
+    # C22-to-J4.19 run, RX 27.05, TX 27.55, and the y28.1 seam for A*.
+    # IO8's descent sits at x31.75 so EPD_SCK keeps its corridor exit at
+    # x30.9..31.2 between RX's descent and IO8's.
+    ("DBG_RX", "B.Cu", 0.25, [(11.8, 8.05), (11.8, 13.2), (25.25, 13.2),
+                              (26.6, 14.55), (30.65, 14.55), (30.65, 27.05),
+                              (33.5, 27.05)]),
+    ("DBG_IO8", "B.Cu", 0.25, [(16.7, 10.75), (17.45, 10.75), (17.45, 12.75),
+                               (25.55, 12.75), (26.9, 14.1), (31.75, 14.1),
+                               (31.75, 26.15), (39.35, 26.15), (41.52, 28.32),
+                               (41.52, 28.75)]),
+    # XTAL_32K_N's only escape from U1.13 to the crystal block: via beside the
+    # pad, B.Cu hop east under the crystal, via back up into the C11 pad gap.
+    # Authored because USB_D+ (routed earlier) otherwise claims the y17.9..18.1
+    # seam the moment it becomes routable, and the crystal has no second exit.
+    ("XTAL_32K_N", "B.Cu", 0.25, [(16.8, 17.85), (16.9, 17.95), (18.4, 17.95)]),
+
+    # J5.2's +3V3 feed: B.Cu along the south edge from TP4 (same net), south
+    # of the corridor band at y28.5..31.0. Left to itself the router feeds
+    # J5.2 through the pocket floor -- a wall at y28.95 plus a diagonal through
+    # the x28.5 neck -- and every J5-bound debug lane then loops the board
+    # edge instead of descending to the via row.
+    # (y33.4 clears J2.2's through-hole pad; the J5 hook threads the 0.84mm
+    # channel between the J5.1 and J5.2 pads)
+    ("+3V3", "B.Cu", 0.25, ["TP4.1", (13.45, 33.4), (31.9, 33.4),
+                            (31.9, 32.3), (33.42, 32.3), (33.9, 31.82),
+                            "J5.2"]),
+    ("VBUS_SENSE", "F.Cu", 0.25, ["U1.9", (14.2, 20.4)]),
+    ("DBG_IO5", "F.Cu", 0.25, ["U1.10", (15.0, 20.4)]),
 ]
 
 VIAS = [
@@ -413,6 +480,16 @@ VIAS = [
     ("EPD_CS", 15.0, 8.05),
     ("EPD_DC", 14.2, 8.05),
     ("EPD_BUSY", 12.6, 8.05),
+    # U1 debug escapes: via-in-pad on the north row / east column, offset
+    # vias south of the +3V3 trunk for the south-row pins
+    ("DBG_TX", 11.0, 8.05),
+    ("DBG_RX", 11.8, 8.05),
+    ("DBG_IO8", 16.7, 10.75),
+    ("VBUS_SENSE", 14.2, 20.4),
+    ("DBG_IO5", 15.0, 20.4),
+    # XTAL_32K_N hop: via-in-pad U1.13, via in the C11 pad gap
+    ("XTAL_32K_N", 16.8, 17.85),
+    ("XTAL_32K_N", 18.4, 17.95),
     # J5 fan-in: one via row north of the VBAT B.Cu lane, 1.27mm pitch
     ("DBG_TX", 36.44, 28.75),
     ("VBUS_SENSE", 38.98, 28.75),
