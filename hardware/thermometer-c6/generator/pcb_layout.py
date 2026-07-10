@@ -478,6 +478,9 @@ TRACKS = [
     # SCL's U5.2 leg: the sensor keep-out forbids vias under U5, so the pad is
     # F.Cu-only, and +3V3 otherwise claims the lone F approach for U5.1 first.
     ("SCL", "F.Cu", 0.25, ["U5.2", (2.85, 23.6), (4.5, 23.6)]),
+    # ... and its U1.16 escape: stub west to a via beside the pad (the east
+    # pad row's via strip), from which the west-column path continues on B.Cu
+    ("SCL", "F.Cu", 0.25, ["U1.16", (16.25, 15.55), (15.9, 15.55)]),
 
     # XTAL_32K_N's only escape from U1.13 to the crystal block: via beside the
     # pad, B.Cu hop east under the crystal, via back up into the C11 pad gap.
@@ -517,6 +520,7 @@ VIAS = [
     ("XTAL_32K_N", 18.4, 17.95),
     # BOOT crossing: west of TX's via-in-pad; the second lands on R7.2's pad
     ("BOOT", 10.3, 9.4),
+    ("SCL", 15.9, 15.55),
     ("BOOT", 9.85, 6.1),
     # J5 fan-in: one via row north of the VBAT B.Cu lane, 1.27mm pitch
     ("DBG_TX", 36.44, 28.75),
