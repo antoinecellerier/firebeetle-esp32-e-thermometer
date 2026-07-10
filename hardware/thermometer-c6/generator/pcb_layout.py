@@ -389,9 +389,20 @@ TRACKS = [
     # each lane surfaces on a via just north of the lane and drops onto the
     # pads on F.Cu, straight over the top of it. The two outer-row pins are
     # reached down the 0.84mm channels between the inner pads (0.295mm to each
-    # pad at 0.25mm width). The five vias sit on one row, 1.27mm apart.
+    # pad at 0.25mm width). The four vias sit on one row at 1.27mm pitch.
+    # VBUS_SENSE has no fan-in via: its west leg arrives on F over the south
+    # corridor, onto this run between the pin rows (y32.33, 0.295mm to both
+    # rows) that enters J5.6 from below -- which keeps the old (38.98,28.75)
+    # slot and the row east of TX's via free for A*.
     ("DBG_TX", "F.Cu", 0.25, [(36.44, 28.75), "J5.4"]),
-    ("VBUS_SENSE", "F.Cu", 0.25, [(38.98, 28.75), "J5.6"]),
+    ("VBUS_SENSE", "F.Cu", 0.25, [(35.17, 32.33), (38.98, 32.33), "J5.6"]),
+    # ~EPD_VDD's C21.1 drop, authored: between D6.2's HV wall and TX's climb
+    # the pad's SW pocket is a fraction of a grid step from closing, and
+    # every re-placement wave that touches the fan-in flips it. West over
+    # D6.2's tail, south, 45 degrees onto a via on the fan-in row. A*
+    # carries on west along y28.75 on B.Cu.
+    ("~EPD_VDD", "F.Cu", 0.25, ["C21.1", (34.75, 27.42), (34.75, 28.15),
+                                (34.35, 28.55), (34.35, 28.75)]),
     ("DBG_RX", "F.Cu", 0.25, [(40.25, 28.75), (40.25, 33.6), "J5.5"]),
     ("DBG_IO8", "F.Cu", 0.25, [(41.52, 28.75), "J5.8"]),
     ("DBG_IO5", "F.Cu", 0.25, [(42.79, 28.75), (42.79, 33.6), "J5.7"]),
@@ -411,8 +422,23 @@ TRACKS = [
     ("EPD_BUSY", "F.Cu", 0.25, ["J4.9", (40.0, 15.05)]),
     ("EPD_RST", "F.Cu", 0.25, ["J4.10", (40.7, 15.55), (40.5, 15.75)]),
     ("EPD_CS", "F.Cu", 0.25, ["J4.12", (42.2, 16.55), (41.6, 17.15)]),
-    ("EPD_SCK", "F.Cu", 0.25, ["J4.13", (43.2, 17.05), (42.4, 17.85)]),
     ("EPD_MOSI", "F.Cu", 0.25, ["J4.14", (44.4, 17.55), (43.4, 18.55)]),
+    # SCK enters J4.13 from the east-edge column instead of the staircase:
+    # the U1 NE gate cannot carry MOSI+SCK+CS+DC at once, so SCK leaves U1
+    # north over the whole board. Via-in-pad on U1.25 (NE-offset: 0.9 from
+    # CS's via), B.Cu east on y7.75, 45-degree staircase up to y4.75 east of
+    # ~USB_DP_CONN's (24.5,5.5) via, drop to y4.1 before VBAT's (36.1,4.75)
+    # via (0.65 -- the exact via-annulus-to-track minimum), then up to F.Cu
+    # at (44.3,4.5), in the notch between Q1's VSYS yard and VBAT's B.Cu NE
+    # hook (the x45.75 column + its Q1.3 diagonal): the hook and H1's pad
+    # leave no B corridor to the corner (0.81mm, a lane needs 0.90), so F
+    # crosses over it and drops down x47.6, 0.65 east of the J4 pad row,
+    # into the pad.
+    ("EPD_SCK", "B.Cu", 0.25, [(15.9, 7.75), (24.0, 7.75), (27.0, 4.75),
+                               (33.0, 4.75), (33.65, 4.1), (43.9, 4.1),
+                               (44.3, 4.5)]),
+    ("EPD_SCK", "F.Cu", 0.25, [(44.3, 4.5), (47.2, 4.5), (47.6, 4.9),
+                               (47.6, 17.05), "J4.13"]),
 
     # ---- EPD_VCC panel feed to J4.15/16 ----
     # 0.3mm stubs while inside the fpc-fanout area (a 0.5mm stub cannot clear
@@ -454,23 +480,23 @@ TRACKS = [
     # C21's longitude is the panel-cap service area -- authored copper there
     # starves the J4 fan-out group -- so A* threads the last few mm to the
     # RX/IO8 vias itself, as it already does for the C21..C24 feeds.)
-    # TX runs the y28.1 seam itself and climbs at the east end. (A 45-degree
-    # climb straight into the via from a y27.55 lane -- no row segment --
-    # keeps the y28.5..29.35 under-band open as a second west-to-east through
-    # lane and unlocks the whole NE gate cluster, but the re-placement wave
-    # it triggers currently costs more nets than it frees on the west side;
-    # see the M5 notes before reviving it.)
+    # TX takes the y27.55 slot and climbs 45 degrees straight into its via --
+    # no row segment -- so the y28.1 slot and the y28.5..29.35 under-band
+    # stay open from the x28.5 neck as west-to-east through lanes. That
+    # second through lane is what lets A* carry the NE gate cluster
+    # (SCK/CS/DC/RST/~EPD_VPP/USB_D+) across the pocket.
     ("DBG_TX", "B.Cu", 0.25, [(11.0, 8.05), (11.0, 13.65), (24.55, 13.65),
-                              (25.9, 15.0), (30.2, 15.0), (30.2, 28.1),
-                              (35.89, 28.1), (36.44, 28.65), (36.44, 28.75)]),
+                              (25.9, 15.0), (30.2, 15.0), (30.2, 27.55),
+                              (35.24, 27.55), (36.44, 28.75)]),
     # RX descends at x30.65 (0.45 from TX; ~EPD_VGH's x31.05 weave leg
     # re-places one grid step east, still west of TP9). IO8 ends at its band:
     # only two descent columns exist between the ~SW_10U via halo and TP9,
     # so A* finishes IO8 -- it has twice found the F-hop into the y28.1 seam.
     # Pocket floor slots run at 0.45 pitch between EPD_PREVGL's HV diagonal
     # (y25.55) and the via row: IO8 26.15, 26.6 left free for ~EPD_VPP's
-    # C22-to-J4.19 run, RX 27.05, y27.55 left free for A* (the west-to-east
-    # through lane -- the neck at x28.5 feeds it), TX 28.1.
+    # C22-to-J4.19 run, RX 27.05, TX 27.55; y28.1 and the y28.5..29.35
+    # under-band are left free for A* (west-to-east through lanes -- the
+    # neck at x28.5 feeds them).
     # IO8's descent sits at x31.75 so EPD_SCK keeps its corridor exit at
     # x30.9..31.2 between RX's descent and IO8's.
     ("DBG_RX", "B.Cu", 0.25, [(11.8, 8.05), (11.8, 13.2), (25.25, 13.2),
@@ -548,6 +574,10 @@ VIAS = [
     ("EPD_CS", 15.0, 8.05),
     ("EPD_DC", 14.2, 8.05),
     ("EPD_BUSY", 12.6, 8.05),
+    # SCK's via-in-pad sits NE in U1.25 (0.9 Chebyshev from CS's via); the
+    # east one hops to F.Cu west of VBAT's NE hook for the corner crossing
+    ("EPD_SCK", 15.9, 7.75),
+    ("EPD_SCK", 44.3, 4.5),
     # U1 debug escapes: via-in-pad on the north row / east column, offset
     # vias south of the +3V3 trunk for the south-row pins
     ("DBG_TX", 11.0, 8.05),
@@ -566,8 +596,10 @@ VIAS = [
     ("SCL", 15.9, 15.55),
     ("BOOT", 9.85, 6.1),
     # J5 fan-in: one via row north of the VBAT B.Cu lane, 1.27mm pitch
+    # (VBUS_SENSE has no via -- its J5.6 drop is fed on F from the south
+    # corridor). ~EPD_VDD's C21 drop sits two row-slots west of TX.
     ("DBG_TX", 36.44, 28.75),
-    ("VBUS_SENSE", 38.98, 28.75),
+    ("~EPD_VDD", 34.35, 28.75),
     ("DBG_RX", 40.25, 28.75),
     ("DBG_IO8", 41.52, 28.75),
     ("DBG_IO5", 42.79, 28.75),
