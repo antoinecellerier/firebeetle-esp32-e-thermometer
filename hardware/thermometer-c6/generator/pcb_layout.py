@@ -63,8 +63,13 @@ PLACE = {
     "D2": (32.45, 2.29, 0),
     "Q1": (42.25, 2.48, 90),
     "R5": (30.61, 5.28, 90),
-    "R22": (29.46, 7.88, 90),
-    "R23": (30.66, 7.88, 90),
+    # VBUS_SENSE divider east of Q1, on the load-share VBUS lane: at its old
+    # (29.46/30.66, 7.88) spot the mid-node was walled in on every side (VBUS
+    # fanout on F; D7 + EPD_VCC's rigid Q2.3 channel on B) and unroutable.
+    # Here the node exits east on F straight into the east-edge margin.
+    # R22 rot 270 puts its VBUS pad north, beside the Q1.1 feed lane.
+    "R22": (42.3, 6.3, 270),
+    "R23": (43.5, 6.3, 90),
     "D7": (30.5, 8.2, 0, "B"),
     "U1": (11.8, 13.95, 90),
     "C7": (9.57, 22.52, 90),
@@ -239,10 +244,11 @@ TRACKS = [
     ("VBUS", "F.Cu", 0.3, [(26.8, 6.9), (26.97, 7.07), (26.97, 10.9),
                            (26.58, 11.34), "U3.5"]),
     ("VBUS", "F.Cu", 0.3, [(26.97, 11.2), (27.6, 11.8), "C5.1"]),
-    ("VBUS", "F.Cu", 0.4, [(26.97, 7.9), (28.6, 8.39), "R22.1"]),
-    # VBUS_SENSE divider feed loops around R23 (R22.2 sits in the direct path)
-    ("VBUS", "F.Cu", 0.4, ["R22.1", (29.9, 9.1), (31.3, 9.1), (31.7, 8.6),
-                           (31.7, 6.4), (31.1, 5.79), "R5.1"]),
+    # R5.1 hangs off the y6.6 lane (its old feed came from the divider wrap,
+    # which moved east with R22/R23)
+    ("VBUS", "F.Cu", 0.4, [(30.61, 6.6), "R5.1"]),
+    # divider feed east from the Q1.1 lane's bend
+    ("VBUS", "F.Cu", 0.4, [(40.5, 5.75), "R22.1"]),
     # D2 feed hooks around the J3 shield leg's F pad
     ("VBUS", "F.Cu", 0.4, [(26.97, 7.35), (28.5, 7.35), (28.75, 7.1),
                            (28.75, 6.6), (31.5, 6.6), (33.4, 5.7),
@@ -285,10 +291,12 @@ TRACKS = [
                                     (24.79, 12.29), "U3.3"]),
 
     # ---- VBUS_SENSE divider mid-node ----
-    # R22.2 -> R23.1 crosses the ladder diagonally; the 0.74mm channel between
-    # R22.1 and R23.2 only clears a 0.2mm track, and only off-centre
-    ("VBUS_SENSE", "F.Cu", 0.2, ["R22.2", (29.46, 7.25), (30.6, 8.39),
-                                 "R23.1"]),
+    # straight link along the south pads, then east past J4.1's latitude into
+    # the east-edge margin, where A* picks it up (F and B are both open there)
+    ("VBUS_SENSE", "F.Cu", 0.25, ["R22.2", "R23.1"]),
+    # escape endpoint on the 0.05 grid so A*'s continuation lands exactly on
+    # the lane end instead of leaving a 10um dangling tail
+    ("VBUS_SENSE", "F.Cu", 0.25, ["R23.1", (43.5, 6.8), (45.5, 6.8)]),
 
     # ---- EPD booster switch core ----
     # RESE sense/current path: Q3 source -> R14 (default 0.47R leg) through
@@ -446,16 +454,23 @@ TRACKS = [
     # C21's longitude is the panel-cap service area -- authored copper there
     # starves the J4 fan-out group -- so A* threads the last few mm to the
     # RX/IO8 vias itself, as it already does for the C21..C24 feeds.)
+    # TX runs the y28.1 seam itself and climbs at the east end. (A 45-degree
+    # climb straight into the via from a y27.55 lane -- no row segment --
+    # keeps the y28.5..29.35 under-band open as a second west-to-east through
+    # lane and unlocks the whole NE gate cluster, but the re-placement wave
+    # it triggers currently costs more nets than it frees on the west side;
+    # see the M5 notes before reviving it.)
     ("DBG_TX", "B.Cu", 0.25, [(11.0, 8.05), (11.0, 13.65), (24.55, 13.65),
-                              (25.9, 15.0), (30.2, 15.0), (30.2, 27.55),
-                              (33.9, 27.55), (35.1, 28.75), (36.44, 28.75)]),
+                              (25.9, 15.0), (30.2, 15.0), (30.2, 28.1),
+                              (35.89, 28.1), (36.44, 28.65), (36.44, 28.75)]),
     # RX descends at x30.65 (0.45 from TX; ~EPD_VGH's x31.05 weave leg
     # re-places one grid step east, still west of TP9). IO8 ends at its band:
     # only two descent columns exist between the ~SW_10U via halo and TP9,
     # so A* finishes IO8 -- it has twice found the F-hop into the y28.1 seam.
     # Pocket floor slots run at 0.45 pitch between EPD_PREVGL's HV diagonal
     # (y25.55) and the via row: IO8 26.15, 26.6 left free for ~EPD_VPP's
-    # C22-to-J4.19 run, RX 27.05, TX 27.55, and the y28.1 seam for A*.
+    # C22-to-J4.19 run, RX 27.05, y27.55 left free for A* (the west-to-east
+    # through lane -- the neck at x28.5 feeds it), TX 28.1.
     # IO8's descent sits at x31.75 so EPD_SCK keeps its corridor exit at
     # x30.9..31.2 between RX's descent and IO8's.
     ("DBG_RX", "B.Cu", 0.25, [(11.8, 8.05), (11.8, 13.2), (25.25, 13.2),
@@ -500,6 +515,31 @@ TRACKS = [
                             "J5.2"]),
     ("VBUS_SENSE", "F.Cu", 0.25, ["U1.9", (14.2, 20.4)]),
     ("DBG_IO5", "F.Cu", 0.25, ["U1.10", (15.0, 20.4)]),
+    # The C9/R6 yard passes exactly two nets besides EN, and only with every
+    # lane authored: EN owns the U1.8 drop and the C9.1 via zone west of
+    # x14.1; VBUS_SENSE dips to y21.05 (south of IO5's via, north of EN's
+    # C9.1 via window) and descends x14.9 through the C9.1/C9.2 pad gap
+    # (B.Cu -- the C9/R6 pads are F-only); IO5 descends x15.5, west of
+    # R6.1's longitude. The IO5 stub must stop at x15.5: one grid step more
+    # and +3V3 loses the (16.1,20.8) via window that drops R6.1 to the
+    # trunk, re-routes through the crystal's F.Cu hook zone, and XTAL_32K_P
+    # then loops the west and south board edges to enter R9.1 from below,
+    # taking SDA's column and EN's SW1 lane with it. A* finishes both
+    # descents from y22.3+ over the corridor's x18..19.15 F columns.
+    ("VBUS_SENSE", "B.Cu", 0.25, [(14.2, 20.4), (14.2, 21.05), (14.9, 21.05),
+                                  (14.9, 22.3)]),
+    ("DBG_IO5", "B.Cu", 0.25, [(15.0, 20.4), (15.5, 20.4), (15.5, 22.6)]),
+    # EN's yard set, authored end to end: greedily-routed neighbours squeeze
+    # U1.8's drop out of existence from either side of the ROUTE_PLAN (routed
+    # late, VDIV_EN's Q5.1 diagonal square-shadows the drop's only via pocket;
+    # routed early, EN's far legs starve SDA and VDIV_EN instead). The
+    # C9.1->R6.2 link runs on F.Cu at y22.3, under C9.2/R6.1 and over the
+    # B.Cu descents above, so the yard's only layer crossings are EN's own.
+    ("EN", "F.Cu", 0.25, ["U1.8", (13.4, 20.4)]),
+    ("EN", "B.Cu", 0.25, [(13.4, 20.4), (13.4, 21.45), (14.1, 22.15)]),
+    ("EN", "F.Cu", 0.25, [(14.1, 22.15), (14.25, 22.3), (17.11, 22.3),
+                          "R6.2"]),
+    ("EN", "F.Cu", 0.25, ["C9.1", (14.27, 22.3)]),
 ]
 
 VIAS = [
@@ -515,6 +555,9 @@ VIAS = [
     ("DBG_IO8", 16.7, 10.75),
     ("VBUS_SENSE", 14.2, 20.4),
     ("DBG_IO5", 15.0, 20.4),
+    # EN's U1.8 drop and its return into the F.Cu C9.1->R6.2 link
+    ("EN", 13.4, 20.4),
+    ("EN", 14.1, 22.15),
     # XTAL_32K_N hop: via-in-pad U1.13, via in the C11 pad gap
     ("XTAL_32K_N", 16.8, 17.85),
     ("XTAL_32K_N", 18.4, 17.95),

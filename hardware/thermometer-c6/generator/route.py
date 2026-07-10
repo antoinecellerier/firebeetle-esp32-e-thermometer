@@ -113,7 +113,6 @@ ROUTE_PLAN = [
     ("VDIV_EN", 0.25, None),
     ("~VDIV_TOP", 0.25, None),
     ("~VDIV_PGATE", 0.25, None),
-    ("VBUS_SENSE", 0.25, [("R22", "2"), ("R23", "1"), ("U1", "9"), ("J5", "6")]),
     ("CHG_STAT", 0.25, None),
     ("~CHG_LED_A", 0.25, None),
     ("~CHG_PROG", 0.25, None),
@@ -133,6 +132,11 @@ ROUTE_PLAN = [
     ("DBG_RX", 0.25, None),
     ("DBG_IO5", 0.25, None),
     ("DBG_IO8", 0.25, None),
+    # VBUS_SENSE last of the signals: three anchored islands (divider node,
+    # J5.6 drop, U1.9 tail) make it the most adaptable J5-bound net -- it has
+    # routed its west leg three different ways -- while EN's J5.3 and IO5's
+    # continuation die if its sweep claims the south-edge lanes first.
+    ("VBUS_SENSE", 0.25, [("R22", "2"), ("R23", "1"), ("U1", "9"), ("J5", "6")]),
     ("VBUS", 0.4, None),
     ("VBAT", 0.5, None),
     ("VSYS", 0.5, None),

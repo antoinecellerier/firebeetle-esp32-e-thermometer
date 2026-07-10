@@ -64,6 +64,15 @@ escapes.
   must clear F.Cu copper crossing that pad's face, not just B.Cu. This is what
   fixes `C14.1`'s via at y23.65: `~BAT_IN` runs F.Cu at y22.9, so the annulus
   cannot sit north of 23.15 + 0.2 + 0.3.
+- **route.py's `stamp_seg` rasterizes diagonals as squares**: a 45° lane's
+  clearance shadow is √2× its inflation — ~0.64mm per side against a 0.25mm
+  track centre, ~0.88mm against a via centre. H/V segments stamp exact rects.
+  Euclidean hand-checks pass where the bitmap blocks; use `verify/who.py`
+  (Chebyshev-correct) and prefer H/V authored copper beside via windows.
+- **A*'s via placement is stricter than DRC**: no new via lands within
+  Chebyshev 0.8mm of an existing via centre or 0.55mm of any hole. Authored
+  vias bypass route.py and answer only to DRC (0.8mm pairs are fine), but
+  they pin A* out of the neighbourhood — count that cost before authoring.
 
 ### The router (`generator/route.py`)
 
@@ -125,6 +134,18 @@ route` → diff the failure list.
   never from intuition or from the board renders.
 - `freespot.py W H [--ignore=REF,..] [--near=x,y]` — courtyard-aware free
   rectangles, for deciding whether a starved part has anywhere else to go.
+- `reach.py NET W OUT.png [x1 y1 x2 y2] [--seed=N] [--upto=NET]` — flood
+  fill with A*'s exact move rules from island N; says which islands are
+  reachable and where the flood's closest approach to each stranded one is.
+  **Debug every straggler with this first.** `--upto=NET` (needs
+  `PCB_NO_ROUTES=1`) reconstructs the net's true mid-pass obstacle set:
+  authored copper + only the nets earlier in ROUTE_PLAN.
+- `probe.py NET W [--upto=NET] SEED x,y ...` — per-cell trk/via blockage and
+  flood membership (SEED = island index or `x,y,F`).
+- `who.py NET W [--upto=NET] x,y [radius]` — nearby copper elements with
+  distances and trk/via margins; names the culprit a bitmap can't.
+- `gap.py NET W [--upto=NET] seedA seedB` — narrowest gap between two
+  islands' flood regions, i.e. where one authored bridge would join them.
 
 ## Conventions & traps
 

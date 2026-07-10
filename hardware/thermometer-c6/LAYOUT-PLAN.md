@@ -118,7 +118,82 @@ reference, and it is loaded automatically.
   the switch node.
 - No traces under the MINI-1 antenna region, either layer.
 
-### M5 state at b5dfecf: 13 stragglers
+### M5 state: 12 stragglers (VBUS_SENSE's J5.6 leg routed)
+
+Since b5dfecf (all committed): the VBUS_SENSE divider moved beside Q1
+(R22/R23 at 42.3/43.5, 6.3 -- at the old spot the mid-node was walled on
+every side: VBUS fanout on F, D7 + EPD_VCC's rigid Q2.3 channel on B; the
+node now exits east on F into the east-edge margin, and the J5.6 leg
+routes down the x46.55 B column east of VBAT's leg). The C9/R6 yard is
+fully authored -- EN's U1.8 drop + all-F C9.1->R6.2 link at y22.3,
+VBUS_SENSE's x14.9 and IO5's x15.5 B descents crossing under it -- because
+greedy neighbours (VDIV_EN's Q5.1 diagonal, EN's own sweep, +3V3's R6.1
+feed) otherwise squeeze one another out in whichever order they run; see
+the yard comment block in pcb_layout.py. VBUS_SENSE routes LAST of the
+signals (most-adaptable net; routed earlier its west leg sweeps the
+south-edge lanes EN's J5.3 and IO5 need). DBG_TX now runs the y28.1 seam.
+
+New review tooling (verify/, all support the mid-pass obstacle state via
+`PCB_NO_ROUTES=1 ... --upto=NET`, which is THE way to debug a straggler:
+a net's true obstacle set is authored copper + nets EARLIER in ROUTE_PLAN):
+- `reach.py NET W OUT.png [crop] [--seed=N] [--upto=NET]` -- flood-fill
+  with A*'s exact move rules from island N; prints REACHED/UNREACHED per
+  island and the closest-approach chokepoint. The single most useful tool.
+- `probe.py NET W --upto=NET SEED x,y ...` -- per-cell trk/via blockage +
+  flood membership (SEED = island index or "x,y,F|B").
+- `who.py NET W --upto=NET x,y [radius]` -- every copper element near a
+  point with distances and trk/via margins (Chebyshev-correct for
+  diagonals).
+- `gap.py NET W --upto=NET seedA seedB` -- narrowest gap between two
+  islands' flood regions: where one authored bridge would connect them.
+
+Router semantics found this phase (also see CLAUDE.md traps):
+- stamp_seg rasterizes DIAGONAL segments as squares: a 45-degree lane
+  shadows sqrt(2)x its inflation -- ~0.64mm per side against a 0.25 track,
+  ~0.88mm against a via centre. H/V segments stamp exact. Prefer H/V
+  authored copper beside via windows.
+- A* cannot place a via within Chebyshev 0.8mm of an existing via centre
+  or 0.55mm of any hole (stamp_hole). Authored vias bypass route.py and
+  answer only to DRC, so an authored 0.8mm pair is fine -- but it pins A*
+  out of the whole neighbourhood.
+- Re-placement dominos: 0.025mm at one via window can reroute a net into
+  a 60mm loop three nets later (+3V3's R6.1 window at (16.1,20.8) -> XTAL
+  around the west+south edges -> SDA/EN dead). Diff the villain nets'
+  routes between passes; the failure list names victims, not culprits.
+
+**NE-gate discovery (not committed -- next chunk's starting point).** With
+(a) DBG_TX climbing 45 degrees straight into its via, no y28.75 row
+segment (keeps the y28.5..29.35 under-band open from the neck), and
+(b) VBUS_SENSE's fan-in via at (35.17,28.75) + an L-drop entering J5.6
+from below (south through the J5.2/J5.4 channel, east between the pin
+rows), the router SOLVED six of the hard NE nets in one pass:
+- EPD_SCK: via-in-pad (15.9,7.75), B y7.75 east to x24, dodges NORTH of
+  the Q2.3 channel via y4.75, joins the y4.1 north-edge lane, F down the
+  x47.6 east-edge column into J4.13. (The negative-table y7.75 attempt
+  failed because it was AUTHORED straight through the channel longitudes;
+  routed, it ducks to y4.75 first.)
+- EPD_MOSI: south crossing -- via (20.1,14.55), B x21.3 descent BESIDE the
+  C14 spine (0.65 west), east y24.3 between C14 and the VBAT wall, F over
+  the pocket, B diagonal to its staircase via (43.4,18.55).
+- USB_D+: the east-pad-row strip as designed (vias 15.75/18.4/18.9, B
+  y14.3 and y12.1 bands to U3).
+- EPD_CS, EPD_DC, ~EPD_VPP, EPD_RST->R17.2 also routed.
+Cost in that pass: USB_D- (MOSI's x20.1 F vertical takes its x20.35
+column), SDA x3, VDIV_EN->Q5.1, EN x3 -- net 14. The harvest plan is to
+author those discovered paths one cluster at a time (SCK first, shifted
+so D-'s column survives), re-running the west-side fixes that already
+worked once per re-placement wave.
+
+Remaining 12: the six NE-gate terminals (SCK->U1.25, CS->island@15.0,8.1,
+DC->J4.11, RST->R17.2 + U1.28, BUSY->island@40.0,15.1), USB_D+->U1.18,
+~EPD_VPP->C22.1, SCL->island@15.9,15.6, LED_STATUS->R8.1,
+DBG_IO5->island@15.0,19.9, VBUS_SENSE->island@14.2,19.9 (U1.9 leg only).
+IO5's and VBUS_SENSE's remaining legs are the same structural problem:
+three west-to-pocket crossers (EN's J5.3 sweep is the third) into two
+south-edge funnel lanes; the seam/under-band rework above is the intended
+third lane.
+
+### M5 state at b5dfecf: 13 stragglers (historical)
 
 The corridor survey below is superseded where noted; the two-corridor
 geometry itself still holds. Authored since (all committed): TP7 (33.4,24.7),
