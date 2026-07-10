@@ -399,11 +399,16 @@ def blocked(maps, kind, layer, ix, iy):
     return maps[(kind, variant, layer)].b[iy * W + ix]
 
 
-def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None):
+def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None,
+          cell_cost=None):
     """starts: [(layer, ix, iy)]; goals: set of (layer, ix, iy).
 
     The search is clamped to the terminals' bounding box grown by margin_mm,
     or to `box` (board mm) when given — a hard fence, not a hint.
+
+    cell_cost(kind, layer, ix, iy) -> non-negative extra cost added when
+    entering a cell (None = greedy; leaves the octile heuristic admissible
+    since it only raises real costs). PathFinder passes a congestion price.
     """
     if not goals:
         return None
@@ -474,6 +479,8 @@ def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None):
                     continue
             step = GRID * (1.4142 if dx and dy else 1.0)
             ng = g + step + (BEND_COST if d != 8 and d != di else 0.0)
+            if cell_cost is not None:
+                ng += cell_cost("trk", lname, nx, ny)
             nst = (l, nx, ny)
             if ng < best_g.get(nst, 1e18):
                 best_g[nst] = ng
@@ -487,6 +494,8 @@ def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None):
                 and not blocked(maps, "via", "B.Cu", ix, iy)
                 and not blocked(maps, "trk", olname, ix, iy)):
             ng = g + VIA_COST
+            if cell_cost is not None:
+                ng += cell_cost("via", olname, ix, iy)
             nst = (ol, ix, iy)
             if ng < best_g.get(nst, 1e18):
                 best_g[nst] = ng
@@ -600,146 +609,164 @@ def _copper_islands(segs, vias, pads, exp, alias):
     return list(out.values())
 
 
+def route_one(entry, pads, alias, pads_by_key, segs, vias,
+              maps_for=None, cell_cost=None, verbose=False):
+    """Route one net's tree against `segs`/`vias` (authored + already-routed
+    obstacle copper), appending its new copper to them in place. Returns
+    (net_tracks, net_vias, net_failed).
+
+    maps_for(exp, width) -> bitmaps overrides build_bitmaps (PathFinder passes
+    hard-only maps built from immovable copper); cell_cost(exp) ->
+    astar cell_cost callback for this net (None = greedy)."""
+    net_tracks, net_vias, net_failed = [], [], []
+    cname, width, terminals = entry[:3]
+    box = entry[3] if len(entry) > 3 else None
+    exp = alias.get(cname, cname)
+    pins = circuit.NETS.get(cname)
+    if pins is None:
+        net_failed.append((cname, "unknown net"))
+        return net_tracks, net_vias, net_failed
+    if terminals is None:
+        terminals = [(r, str(n)) for r, n in pins]
+    # Same-net copper, grouped into ISLANDS. Touching same-net copper does
+    # not mean connected: two authored stubs on one net (a J4 escape and a
+    # U1 escape, say) are two islands, and treating either as "the tree"
+    # silently leaves the net open. Union-find the copper; then every
+    # island, plus every terminal pad that no island touches, is a node
+    # that must be merged into one tree.
+    islands = _copper_islands(segs, vias, pads, exp, alias)
+
+    def island_of(p):
+        ix1, iy1 = cell(p["x1"], p["y1"])
+        ix2, iy2 = cell(p["x2"], p["y2"])
+        layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
+        for i, isl in enumerate(islands):
+            if any((li, ix, iy) in isl for li in layers
+                   for ix in range(ix1, ix2 + 1)
+                   for iy in range(iy1, iy2 + 1)):
+                return i
+        return None
+
+    term_pads = []
+    for (ref, num) in terminals:
+        group = pads_by_key.get((ref, num))
+        if not group:
+            net_failed.append((cname, f"missing pad {ref}.{num}"))
+            continue
+        term_pads.extend(group)
+    if not term_pads and not islands:
+        return net_tracks, net_vias, net_failed
+    maps = (maps_for(exp, width) if maps_for is not None
+            else build_bitmaps(pads, segs, vias, exp, width, alias))
+    cc = cell_cost(exp) if cell_cost is not None else None
+
+    def pad_cells(p, free_only=True):
+        """Grid cells safely on the pad's copper (inset past rounded
+        corners) for A* starts / tree seeds."""
+        layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
+        ins = 0.2 * min(p["x2"] - p["x1"], p["y2"] - p["y1"])
+        ix1, iy1 = cell(p["x1"] + ins, p["y1"] + ins)
+        ix2, iy2 = cell(p["x2"] - ins, p["y2"] - ins)
+        cx, cy = cell(p["cx"], p["cy"])
+        out = []
+        for li in layers:
+            lname = "F.Cu" if li == 0 else "B.Cu"
+            got = False
+            for ix in range(max(0, ix1), min(W - 1, ix2) + 1):
+                for iy in range(max(0, iy1), min(H - 1, iy2) + 1):
+                    if not free_only or not blocked(maps, "trk", lname,
+                                                    ix, iy):
+                        out.append((li, ix, iy))
+                        got = True
+            if not got:  # fully blocked by neighbours: allow centre
+                out.append((li, cx, cy))
+        return out
+
+    # nodes to merge: (label, pad_or_None, island_index_or_None). An island
+    # starts A* from all of its copper, so a path leaves from its cheapest
+    # cell -- typically an authored stub's far tip, leaving nothing dangling.
+    pad_isl = {id(p): island_of(p) for p in term_pads}
+    nodes = []
+    for i, isl in enumerate(islands):
+        first = sorted(isl)[0]
+        nodes.append((f"island@{first[1] * GRID:.1f},{first[2] * GRID:.1f}",
+                      None, i))
+    nodes += [(f"{p['ref']}.{p['num']}", p, None)
+              for p in term_pads if pad_isl[id(p)] is None]
+    if not nodes:
+        return net_tracks, net_vias, net_failed
+
+    def starts_of(pad, idx):
+        return sorted(islands[idx]) if idx is not None else pad_cells(pad)
+
+    tree = set()
+    merged = set()
+
+    def absorb(idx, cells):
+        if idx is not None:
+            merged.add(idx)
+            tree.update(islands[idx])
+        tree.update(cells)
+
+    _, pad0, idx0 = nodes.pop(0)
+    absorb(idx0, [] if idx0 is not None
+           else pad_cells(pad0, free_only=False))
+
+    # Retry the stragglers while any node still makes progress: a later
+    # node's copper often opens a route the tree lacked before.
+    pending = nodes
+    while pending:
+        stuck, progress = [], False
+        for node in pending:
+            label, pad, idx = node
+            if idx in merged:
+                continue  # an earlier path already pulled this island in
+            starts = starts_of(pad, idx)
+            goals = tree
+            if box is not None:
+                goals = {g for g in tree
+                         if box[0] <= g[1] * GRID <= box[2]
+                         and box[1] <= g[2] * GRID <= box[3]}
+            path = astar(maps, starts, goals, box=box, cell_cost=cc)
+            if path is None and box is None:
+                # the 8mm terminal-bbox clamp forbids long detours
+                path = astar(maps, starts, goals, margin_mm=1e4, cell_cost=cc)
+            if path is None:
+                stuck.append(node)
+                continue
+            progress = True
+            tr, vi = path_to_tracks(path, cname, width)
+            for t in tr:
+                net_tracks.append(t)
+                for i in range(len(t[3]) - 1):
+                    (x1, y1), (x2, y2) = t[3][i], t[3][i + 1]
+                    segs.append((cname, t[1], width / 2, x1, y1, x2, y2))
+            for v in vi:
+                net_vias.append(v)
+                vias.append(v)
+            absorb(idx, [(st[0], st[1], st[2]) for st in path])
+            if verbose:
+                print(f"routed {cname} -> {label} "
+                      f"({len(tr)} runs, {len(vi)} vias)", flush=True)
+        if not progress:
+            for label, _, _ in stuck:
+                net_failed.append((cname, f"no path to {label}"))
+            break
+        pending = stuck
+    return net_tracks, net_vias, net_failed
+
+
 def route_all(entries, pads, alias, pads_by_key, verbose):
     """Route `entries` in order against the authored copper. Returns
     (tracks, vias, failed); `failed` is [(circuit_net, reason)]."""
     segs, vias = authored_copper(pads)
-
     new_tracks, new_vias, failed = [], [], []
-
     for entry in entries:
-        cname, width, terminals = entry[:3]
-        box = entry[3] if len(entry) > 3 else None
-        exp = alias.get(cname, cname)
-        pins = circuit.NETS.get(cname)
-        if pins is None:
-            failed.append((cname, "unknown net"))
-            continue
-        if terminals is None:
-            terminals = [(r, str(n)) for r, n in pins]
-        # Same-net copper, grouped into ISLANDS. Touching same-net copper does
-        # not mean connected: two authored stubs on one net (a J4 escape and a
-        # U1 escape, say) are two islands, and treating either as "the tree"
-        # silently leaves the net open. Union-find the copper; then every
-        # island, plus every terminal pad that no island touches, is a node
-        # that must be merged into one tree.
-        islands = _copper_islands(segs, vias, pads, exp, alias)
-
-        def island_of(p):
-            ix1, iy1 = cell(p["x1"], p["y1"])
-            ix2, iy2 = cell(p["x2"], p["y2"])
-            layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
-            for i, isl in enumerate(islands):
-                if any((li, ix, iy) in isl for li in layers
-                       for ix in range(ix1, ix2 + 1)
-                       for iy in range(iy1, iy2 + 1)):
-                    return i
-            return None
-
-        term_pads = []
-        for (ref, num) in terminals:
-            group = pads_by_key.get((ref, num))
-            if not group:
-                failed.append((cname, f"missing pad {ref}.{num}"))
-                continue
-            term_pads.extend(group)
-        if not term_pads and not islands:
-            continue
-        maps = build_bitmaps(pads, segs, vias, exp, width, alias)
-
-        def pad_cells(p, free_only=True):
-            """Grid cells safely on the pad's copper (inset past rounded
-            corners) for A* starts / tree seeds."""
-            layers = ([0] if p["F"] else []) + ([1] if p["B"] else [])
-            ins = 0.2 * min(p["x2"] - p["x1"], p["y2"] - p["y1"])
-            ix1, iy1 = cell(p["x1"] + ins, p["y1"] + ins)
-            ix2, iy2 = cell(p["x2"] - ins, p["y2"] - ins)
-            cx, cy = cell(p["cx"], p["cy"])
-            out = []
-            for li in layers:
-                lname = "F.Cu" if li == 0 else "B.Cu"
-                got = False
-                for ix in range(max(0, ix1), min(W - 1, ix2) + 1):
-                    for iy in range(max(0, iy1), min(H - 1, iy2) + 1):
-                        if not free_only or not blocked(maps, "trk", lname,
-                                                        ix, iy):
-                            out.append((li, ix, iy))
-                            got = True
-                if not got:  # fully blocked by neighbours: allow centre
-                    out.append((li, cx, cy))
-            return out
-
-        # nodes to merge: (label, pad_or_None, island_index_or_None). An island
-        # starts A* from all of its copper, so a path leaves from its cheapest
-        # cell -- typically an authored stub's far tip, leaving nothing dangling.
-        pad_isl = {id(p): island_of(p) for p in term_pads}
-        nodes = []
-        for i, isl in enumerate(islands):
-            first = sorted(isl)[0]
-            nodes.append((f"island@{first[1] * GRID:.1f},{first[2] * GRID:.1f}",
-                          None, i))
-        nodes += [(f"{p['ref']}.{p['num']}", p, None)
-                  for p in term_pads if pad_isl[id(p)] is None]
-        if not nodes:
-            continue
-
-        def starts_of(pad, idx):
-            return sorted(islands[idx]) if idx is not None else pad_cells(pad)
-
-        tree = set()
-        merged = set()
-
-        def absorb(idx, cells):
-            if idx is not None:
-                merged.add(idx)
-                tree.update(islands[idx])
-            tree.update(cells)
-
-        _, pad0, idx0 = nodes.pop(0)
-        absorb(idx0, [] if idx0 is not None
-               else pad_cells(pad0, free_only=False))
-
-        # Retry the stragglers while any node still makes progress: a later
-        # node's copper often opens a route the tree lacked before.
-        pending = nodes
-        while pending:
-            stuck, progress = [], False
-            for node in pending:
-                label, pad, idx = node
-                if idx in merged:
-                    continue  # an earlier path already pulled this island in
-                starts = starts_of(pad, idx)
-                goals = tree
-                if box is not None:
-                    goals = {g for g in tree
-                             if box[0] <= g[1] * GRID <= box[2]
-                             and box[1] <= g[2] * GRID <= box[3]}
-                path = astar(maps, starts, goals, box=box)
-                if path is None and box is None:
-                    # the 8mm terminal-bbox clamp forbids long detours
-                    path = astar(maps, starts, goals, margin_mm=1e4)
-                if path is None:
-                    stuck.append(node)
-                    continue
-                progress = True
-                tr, vi = path_to_tracks(path, cname, width)
-                for t in tr:
-                    new_tracks.append(t)
-                    for i in range(len(t[3]) - 1):
-                        (x1, y1), (x2, y2) = t[3][i], t[3][i + 1]
-                        segs.append((cname, t[1], width / 2, x1, y1, x2, y2))
-                for v in vi:
-                    new_vias.append(v)
-                    vias.append(v)
-                absorb(idx, [(st[0], st[1], st[2]) for st in path])
-                if verbose:
-                    print(f"routed {cname} -> {label} "
-                          f"({len(tr)} runs, {len(vi)} vias)", flush=True)
-            if not progress:
-                for label, _, _ in stuck:
-                    failed.append((cname, f"no path to {label}"))
-                break
-            pending = stuck
+        tr, vi, fl = route_one(entry, pads, alias, pads_by_key, segs, vias,
+                               verbose=verbose)
+        new_tracks.extend(tr)
+        new_vias.extend(vi)
+        failed.extend(fl)
     return new_tracks, new_vias, failed
 
 
