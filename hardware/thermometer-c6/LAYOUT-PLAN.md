@@ -118,7 +118,76 @@ reference, and it is loaded automatically.
   the switch node.
 - No traces under the MINI-1 antenna region, either layer.
 
-### M5: how U1 reaches J5 (measured against authored copper only)
+### M5 state at b5dfecf: 13 stragglers
+
+The corridor survey below is superseded where noted; the two-corridor
+geometry itself still holds. Authored since (all committed): TP7 (33.4,24.7),
+TP9 (36.35,10.5) kissing the RESE column, R7 (9.0,6.4), the sensor corner
+rot-90 rebuild with C12/C13/C26 out of the picket strip; end-to-end B.Cu
+lanes for DBG_TX/RX/IO8 (y12.75..13.65 band under the module, dive cascade
+past the +3V3 elbow, descents x30.2/30.65/31.75, pocket floor to the J5
+fan-in vias); BOOT's crossing (via x10.3, B.Cu leg onto R7.2); XTAL_32K_N's
+U1.13 hop; +3V3's J5.2 feed along the south edge; SCL anchors at U5.2 and
+U1.16. `make route` prints the live list; trust it, not this paragraph.
+
+**The rule that fell out of this phase:** an authored lane needs clearance
+only against other *authored* copper — routed nets re-place every pass. The
+exceptions are routed structures with a single legal window, which are
+de-facto rigid: EPD_VCC's Q2.3 escape (the B.Cu channel over TP8 at
+~x29.9..30.15 y7.9..9.2 plus its diagonal to R17 — the ROUTE_PLAN comment's
+"only escape is north"), EPD_VCC's C14 spine (the x~21.95 B.Cu vertical the
+C14 window forces, top via copper down to y14.45 — crossing its longitude
+below that evicts EPD_VCC into the pocket as a 0.5mm wall), and EPD_VCC's
+authored staircase diagonal (x−y=26.55), which seals J4.12/13/14's stubs
+from the NE: approach them only from the SW.
+
+**Pocket floor slots** (0.45 pitch between EPD_PREVGL's HV diagonal and the
+via row): 26.15 IO8 / 26.6 kept free for ~EPD_VPP / 27.05 RX / 27.55 TX /
+28.1 seam. The five J5 fan-in vias all sit at y28.75, which leaves no
+through-lane between the row and VBAT's y29.75 lane (0.45mm gap, a lane
+needs 0.65) — this is what still blocks VBUS_SENSE and DBG_IO5.
+
+Remaining 13, with fix directions:
+
+- **VBUS_SENSE ×2, DBG_IO5** — re-stagger the authored J5 fan-in via row:
+  the vias are authored geometry; give the VBUS/IO5 vias their own y (longer
+  F.Cu drops) so each has a private approach instead of fighting the
+  y28.75 line and the TX/IO8 tails.
+- **NE gate cluster** (EPD_SCK→U1.25, EPD_CS→island@15.0,8.1, EPD_DC→J4.11,
+  EPD_RST→R17.2/U1.28, EPD_BUSY→island@40,15.1, USB_D+→U1.18) — the U1 NE
+  gate (x15.3..18, y7.5..10.4) cannot carry MOSI+SCK+CS+DC at once. Needs a
+  coherent authored escape set (via-in-pads exist for CS/DC/BUSY; add RST at
+  (13.4,8.05) — BOOT's authored crossing already keeps clear of it — and one
+  for SCK) plus east lanes that respect the rigid EPD_VCC structures. MOSI
+  currently loops the NE successfully; its authored staircase via
+  (43.4,18.55) dangles until this is reworked.
+- **SCL→island@15.9,15.6** — the west path to the authored U1.16 anchor.
+  SDA crosses the module on the F.Cu paddle seam at x14.85; SCL needs a
+  parallel seam (paddle pad grid spans x9.1..14.5, y11.25..16.65 in a 3×3;
+  the inter-pad F.Cu seams are the candidates, minus TX/RX's B verticals at
+  x11.0/11.8 which don't block F).
+- **~EPD_VPP→C22.1** — slot 26.6 is reserved but unused; the block is at its
+  C22 exit or the J4.19 end. Re-derive with occupancy against the routed
+  board.
+- **LED_STATUS→R8.1** — the west B.Cu descent died with the debug verticals.
+  Candidates: F flank east then around, or move D3/R8 (the step-4
+  investigation of what D3's placement costs was never done).
+
+Negative results (each one `make route`; do not repeat):
+
+| change | stragglers | what it broke |
+|---|---|---|
+| debug nets early in `ROUTE_PLAN` | 20 | `DBG_IO8` takes U1's east flank → `USB_D±`, `XTAL_32K_P`; `EN`→J5.3, `+3V3`→J5.2 |
+| authored `L2.1`↔`C14.1` link | 17 | re-seeds `EPD_VCC` → `EPD_CS`, `EPD_DC`, `EN` |
+| `EPD_VCC` terminals, L2 before C14 | ≥21 | `DBG_TX`, `EN`×2, `XTAL_32K_P` |
+| authored U1 escapes, UART north of the row | 18 | `BOOT`→`SW2` (SW2 sits directly north) |
+| debug bands at y16.45..17.35 | 21 | crystal cell (XTAL via halos at y17.55) + SDA/SCL diagonals + CS/DC via displacement |
+| debug bands crossing x21.95 below y14.45 | 25 | evicts EPD_VCC's C14 spine → 0.5mm pocket wall → J4 five + TX/RX loop the board edge |
+| debug band/descent ending x30.7..31.4 | +5 | evicts ~EPD_VGH's x31.05 weave → F.Cu SE sweep → `VCOM`×2, `VSL`, `VDD`, `PREVGH` |
+| authored pocket tails east of x34 | 25 | panel-cap service area starved (`VDD`'s C21 via zone, `VCOM`→C25/TP10) |
+| SCK authored: y7.75 band + x32.3 column | 26 | crossed EPD_VCC's Q2.3 channel → `EPD_VCC`×6, `MOSI`, `USB_D-`, `EN`×2, `VBUS` (reverted) |
+
+### M5 corridor survey (historical; U1 escapes and TP7 now done)
 
 Every debug signal (`DBG_TX/RX/IO5/IO8`, `VBUS_SENSE`) has to cross the board
 from U1 to J5's authored via row, and only two B.Cu corridors can carry a
@@ -129,7 +198,9 @@ bundle. Widths below are free *centres* for a 0.25mm lane, from
 diagonal and south by `VBAT`'s B.Cu lane at y25.15. It tapers west-to-east as
 it follows the diagonal: 8.25mm at x24.5, 3.90mm at x28.0, **2.55mm at its
 x29.0 neck** (y22.30..24.85), then the pocket at x31+ opens to 14mm. Enter it
-from the north around x22.5..24.75, never from the field.
+from the north around x22.5..24.75, never from the field. (In practice the
+committed debug lanes bypass it via the x30.2..31.75 descents; the corridor
+band remains available.)
 
 **The field west of x22.6 is one lane, structurally.** `C14.1` can only be
 entered by a via — `~BAT_IN`'s 0.5mm F.Cu lane runs along C14's north edge,
@@ -140,35 +211,12 @@ and VBAT's lane starts at 24.575. **0.30mm.** `EPD_VCC`'s spine to `L2.1` and
 `C14.1` is load-bearing and lives there; do not try to shorten it (see the
 island-seeding rule in `CLAUDE.md`).
 
-**South corridor — 4 lanes, but only once `TP7` moves.** Today `TP7`'s HV pad
-pinches x28.7..31.1 to a 0.30mm slot at y≈27.0. Move it anywhere clear of that
-band (legal 1.5×1.5 B.Cu centres run x ≥ 30.75 across most of y20..28) and the
-path becomes: F.Cu down the **x17.10..19.15** column (2.05mm — the only place
-a bundle crosses VBAT's B.Cu wall), vias to B.Cu at y ≥ 28.65 (clear of TP1's
-pad), east at y28.50..31.00 under the test-point row, climb at x25..26.5, then
-the new neck at **x28.5 (1.75mm, y26.65..28.40)** between `J2.1`'s through-hole
-and VBAT's diagonal, and out into the pocket.
-
-**U1's own escapes.**  The `+3V3` B.Cu trunk lies directly under U1's south
-row, so `U1.9`/`U1.10` cannot drop through their pads; they need vias ~0.55mm
-south of the pads (y ≈ 20.4), which clears the trunk. `U1.22`/`U1.30`/`U1.31`
-take via-in-pads like the EPD signals already do. The east flank
-(x17.9..19.4) is owed to USB and the crystal — no debug lane may use it.
-
-Negative results, so they are not repeated (each is one `make route`; baseline
-is 15 stragglers):
-
-| change | stragglers | what it broke |
-|---|---|---|
-| debug nets early in `ROUTE_PLAN` | 20 | `DBG_IO8` takes U1's east flank → `USB_D±`, `XTAL_32K_P`; `EN`→J5.3, `+3V3`→J5.2 |
-| authored `L2.1`↔`C14.1` link | 17 | re-seeds `EPD_VCC` → `EPD_CS`, `EPD_DC`, `EN` |
-| `EPD_VCC` terminals, L2 before C14 | ≥21 | `DBG_TX`, `EN`×2, `XTAL_32K_P` |
-| authored U1 escapes, UART north of the row | 18 | `BOOT`→`SW2` (SW2 sits directly north of those lanes) |
-
-The last one is the near miss: `DBG_RX` and `DBG_IO8` stopped failing at U1 and
-started failing at the J5 island, which is the correct next failure. Run the
-UART lanes *under* the module instead — authored copper is claimed before the
-EPD escapes route, so they will move — and leave BOOT its crossing to SW2.
+**South corridor — 4 lanes (TP7 moved).** F.Cu down the **x17.10..19.15**
+column (4 lanes now that R7 is gone — the only place a bundle crosses VBAT's
+B.Cu wall), vias to B.Cu at y ≥ 28.65 (clear of TP1's pad), east at
+y28.50..31.00 under the test-point row, climb at x25..26.5, the neck at
+**x28.5 (1.75mm, y26.65..28.40)** between `J2.1`'s through-hole and VBAT's
+diagonal, and out into the pocket. EN's J5.3 leg uses it today.
 
 ## 4. Silkscreen (required text)
 

@@ -95,6 +95,15 @@ One greedy A* pass per net in `ROUTE_PLAN` order, no rip-up. Consequences:
 
 ### IMPORTANT: authored copper is never a local edit
 
+- An authored lane needs clearance only against other **authored** copper —
+  every routed net re-places on the next pass. The exceptions are routed
+  structures with a single legal window, which are de-facto rigid: EPD_VCC's
+  Q2.3 escape channel (over TP8, ~x29.9..30.15 y7.9..9.2 + its diagonal to
+  R17), EPD_VCC's C14 spine (the x~21.95 B.Cu vertical the C14 window
+  forces), and the authored EPD_VCC staircase diagonal (x−y=26.55) that
+  seals J4.12/13/14's stubs from the NE. Blocking any of these fails 5-6
+  nets 15mm away (see the M5 negative-results table in LAYOUT-PLAN.md).
+
 With no rip-up, any block you author reshuffles unrelated nets across the whole
 board (one `EPD_VCC` spine broke `+3V3` and both crystal terminals 20mm away).
 Change **one** thing per `make route` and read the failure **diff**, not the
