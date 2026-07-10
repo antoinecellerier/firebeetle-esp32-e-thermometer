@@ -396,13 +396,13 @@ TRACKS = [
     # slot and the row east of TX's via free for A*.
     ("DBG_TX", "F.Cu", 0.25, [(36.44, 28.75), "J5.4"]),
     ("VBUS_SENSE", "F.Cu", 0.25, [(35.17, 32.33), (38.98, 32.33), "J5.6"]),
-    # ~EPD_VDD's C21.1 drop, authored: between D6.2's HV wall and TX's climb
-    # the pad's SW pocket is a fraction of a grid step from closing, and
-    # every re-placement wave that touches the fan-in flips it. West over
-    # D6.2's tail, south, 45 degrees onto a via on the fan-in row. A*
-    # carries on west along y28.75 on B.Cu.
-    ("~EPD_VDD", "F.Cu", 0.25, ["C21.1", (34.75, 27.42), (34.75, 28.15),
-                                (34.35, 28.55), (34.35, 28.75)]),
+    # ~EPD_VDD's C21.1 feed, all-F down x36.65: between C18/C21.2 (0.3+
+    # both sides) and 0.9 east of EPD_PREVGL's D6.2<->C18.2 courses. This
+    # keeps ~EPD_VDD out of the pocket floor altogether -- unanchored, its
+    # J4.18 leg detours 20mm through the y23.85/y24.35 thread that MOSI's
+    # crossing needs, and one of the two always dies. A* joins J4.18 to the
+    # stub top over the y19.55 lane.
+    ("~EPD_VDD", "F.Cu", 0.25, [(36.65, 22.65), (36.65, 27.42), "C21.1"]),
     ("DBG_RX", "F.Cu", 0.25, [(40.25, 28.75), (40.25, 33.6), "J5.5"]),
     ("DBG_IO8", "F.Cu", 0.25, [(41.52, 28.75), "J5.8"]),
     ("DBG_IO5", "F.Cu", 0.25, [(42.79, 28.75), (42.79, 33.6), "J5.7"]),
@@ -439,6 +439,44 @@ TRACKS = [
                                (44.3, 4.5)]),
     ("EPD_SCK", "F.Cu", 0.25, [(44.3, 4.5), (47.2, 4.5), (47.6, 4.9),
                                (47.6, 17.05), "J4.13"]),
+    # MOSI crosses the board SOUTH of the module: SCK's y7.75 band owns
+    # U1.24's old north-corridor escape, and the east edge carries exactly
+    # one net (VBAT's B.Cu column walls B from y4.6 to y28.9; the pad row
+    # plus the one descent seal F). F.Cu drop at x20.1 -- 1.2 from
+    # USB_D+'s strip-via spots, which A*'s 0.8mm via exclusion needs --
+    # B.Cu descent at x21.3 (0.65 west of EPD_VCC's C14 spine), east at
+    # y24.35 through the slot between C14's via halo and the VBAT wall
+    # (EPD_VCC's C14.1 via keeps its y23.65..23.70 cells), ending west of
+    # ~EPD_VDD's old weave. A* carries MOSI over the pocket to the
+    # (43.4,18.55) staircase via (authored copper east of x34 would starve
+    # the panel-cap service area).
+    ("EPD_MOSI", "F.Cu", 0.25, ["U1.24", (17.7, 9.15), (20.1, 11.55),
+                                (20.1, 14.55)]),
+    ("EPD_MOSI", "B.Cu", 0.25, [(20.1, 14.55), (21.3, 15.75), (21.3, 24.35),
+                                (24.75, 24.35)]),
+    # (no via at the lane's east end: A* continues east on B through the
+    # corridor floor and hops layers in the neck on its own)
+    # EPD_PWR_EN, authored end to end because MOSI's crossing owns both of
+    # its routed courses (the x21.3 descent and the y24.3 slot) and every
+    # displacement re-routes it through the west bundle's corridor lanes.
+    # This is its route-10 course made deliberate: F.Cu column at x17.75 --
+    # west of the crystal cell's pads (0.315/0.215), east of EN's authored
+    # yard, leaving +3V3's (16.1,20.8) R6.1 window 1.65 clear -- over the
+    # VBAT wall on F, B.Cu east at y26.1 between the wall and the TP row
+    # (0.425), F bridge back over the wall beside JP1, B.Cu climb at x25.6
+    # (south of ~SW_10U's via and diagonal), entering R24.2 from the south.
+    # EN's SW1 column re-places west of x17.75; USB_D+'s (18.4,14.3) strip
+    # via shifts east a step.
+    ("EPD_PWR_EN", "F.Cu", 0.25, ["U1.19", (17.3, 13.15), (17.75, 13.6),
+                                  (17.75, 24.9), (17.15, 25.5),
+                                  (17.15, 26.1)]),
+    ("EPD_PWR_EN", "B.Cu", 0.25, [(17.15, 26.1), (25.15, 26.1)]),
+    ("EPD_PWR_EN", "F.Cu", 0.25, [(25.15, 26.1), (25.6, 25.65),
+                                  (25.6, 23.65)]),
+    ("EPD_PWR_EN", "B.Cu", 0.25, [(25.6, 23.65), (25.6, 19.8),
+                                  (25.55, 19.75)]),
+    ("EPD_PWR_EN", "F.Cu", 0.25, [(25.55, 19.75), (25.95, 19.35),
+                                  (25.95, 19.25), "R24.2"]),
 
     # ---- EPD_VCC panel feed to J4.15/16 ----
     # 0.3mm stubs while inside the fpc-fanout area (a 0.5mm stub cannot clear
@@ -516,6 +554,26 @@ TRACKS = [
     ("BOOT", "B.Cu", 0.25, [(10.3, 9.4), (9.85, 8.95), (9.85, 6.1)]),
     ("BOOT", "F.Cu", 0.25, [(9.85, 6.1), "R7.2"]),
 
+    # XTAL_32K_P, mostly authored (see also its ROUTE_PLAN box): displaced
+    # by any authored-copper wave it loops the west and south board edges,
+    # taking SDA's column and EN's SW1 lane with it. The Y1.1<->U1.12 leg
+    # is the router's own proven shape, pinned: via-in-pad on Y1.1, B.Cu
+    # around the crystal's west (0.72 from XTAL_N's U1.13 via at the
+    # closest corner), via onto U1.12.
+    ("XTAL_32K_P", "F.Cu", 0.25, ["Y1.1", (18.4, 15.9)]),
+    ("XTAL_32K_P", "B.Cu", 0.25, [(18.4, 15.9), (17.1, 17.2), (16.15, 17.2),
+                                  (16.15, 18.5), (16.35, 18.7)]),
+    ("XTAL_32K_P", "F.Cu", 0.25, [(16.35, 18.7), "U1.12"]),
+    # The C10.1/R9.1 pair: R9.1 (B) and C10.1 (F) sit on top of each other
+    # but R9.2's XTAL_N pad and PWR_EN's x17.75 column squeeze out every
+    # single-via join. The hook goes south around R9: F out of C10.1, via
+    # east of the pair, B back west into R9.1 from below -- PWR_EN's
+    # column is F-only there. A* bridges this island to the Y1 tree.
+    ("XTAL_32K_P", "F.Cu", 0.25, ["C10.1", (18.37, 21.35), (18.52, 21.5),
+                                  (18.85, 21.5)]),
+    ("XTAL_32K_P", "B.Cu", 0.25, [(18.85, 21.5), (18.3, 21.5), (18.0, 21.2),
+                                  (18.0, 20.7), "R9.1"]),
+
     # SCL's U5.2 leg: the sensor keep-out forbids vias under U5, so the pad is
     # F.Cu-only, and +3V3 otherwise claims the lone F approach for U5.1 first.
     ("SCL", "F.Cu", 0.25, ["U5.2", (2.85, 23.6), (4.5, 23.6)]),
@@ -578,6 +636,18 @@ VIAS = [
     # east one hops to F.Cu west of VBAT's NE hook for the corner crossing
     ("EPD_SCK", 15.9, 7.75),
     ("EPD_SCK", 44.3, 4.5),
+    # MOSI's drop east of the pad column; PWR_EN's four hops (wall
+    # over-and-back, climb)
+    ("EPD_MOSI", 20.1, 14.55),
+    ("EPD_PWR_EN", 17.15, 26.1),
+    ("EPD_PWR_EN", 25.15, 26.1),
+    ("EPD_PWR_EN", 25.6, 23.65),
+    ("EPD_PWR_EN", 25.55, 19.75),
+    # XTAL_32K_P: Y1.1 via-in-pad + U1.12 via (the pinned router shape),
+    # and the C10.1-to-R9.1 hook around the R9 pair
+    ("XTAL_32K_P", 18.4, 15.9),
+    ("XTAL_32K_P", 16.35, 18.7),
+    ("XTAL_32K_P", 18.85, 21.5),
     # U1 debug escapes: via-in-pad on the north row / east column, offset
     # vias south of the +3V3 trunk for the south-row pins
     ("DBG_TX", 11.0, 8.05),
@@ -597,9 +667,8 @@ VIAS = [
     ("BOOT", 9.85, 6.1),
     # J5 fan-in: one via row north of the VBAT B.Cu lane, 1.27mm pitch
     # (VBUS_SENSE has no via -- its J5.6 drop is fed on F from the south
-    # corridor). ~EPD_VDD's C21 drop sits two row-slots west of TX.
+    # corridor)
     ("DBG_TX", 36.44, 28.75),
-    ("~EPD_VDD", 34.35, 28.75),
     ("DBG_RX", 40.25, 28.75),
     ("DBG_IO8", 41.52, 28.75),
     ("DBG_IO5", 42.79, 28.75),

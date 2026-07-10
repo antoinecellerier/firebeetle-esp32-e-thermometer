@@ -118,7 +118,48 @@ reference, and it is loaded automatically.
   the switch node.
 - No traces under the MINI-1 antenna region, either layer.
 
-### M5 state: 12 stragglers (VBUS_SENSE's J5.6 leg routed)
+### M5 state: 12 stragglers after the NE-gate harvest (2026-07-10)
+
+The NE-gate discovery below is HARVESTED (committed): DBG_TX climbs 45
+degrees into its via from the y27.55 slot; VBUS_SENSE lost its fan-in via
+entirely (J5.6 is entered from below off a between-the-rows F run its west
+leg reaches over the south corridor); SCK, MOSI, EPD_PWR_EN, ~EPD_VDD and
+most of XTAL_32K_P are now authored end to end (see the comment blocks in
+pcb_layout.py); XTAL_32K_P is boxed in ROUTE_PLAN like BOOT. `make route`
+now writes out/stragglers.txt and prints only the delta (fixed/new/re-placed
+nets); `verify/net.py NET` dumps one net's authored+routed state.
+
+Structural facts that fell out of the harvest (do not re-derive):
+- West-to-east crossings for late signals: the EPD_VCC spine (x21.95,
+  y14.45..23.65 + its top via ~y14.15) has exactly two doors -- the
+  y12.75..13.65 debug-band latitude (full: TX/RX/IO8 at 0.45 pitch) and the
+  y24.3 slot + its single x21.15..21.3 descent lane (MOSI's, authored).
+  EPD_PWR_EN therefore crosses UNDER the VBAT wall at y26.1 on B and
+  bridges back over it on F, twice (its authored course).
+- The east edge carries exactly ONE net (SCK): VBAT's x45.75 B column
+  walls B from y4.6 to 28.9, and the J4 pad row + one descent seal F.
+  MOSI's J4.14 leg goes through the pocket to the staircase via instead.
+- The NE corner notch (between Q1's VSYS yard, VBAT's hook and H1) fits
+  one F crossing + one via: SCK's (44.3,4.5).
+- ~EPD_VDD never enters the pocket: its C21.1 feed is an all-F authored
+  link down x36.65 (between C18 and C21.2), and J4.18 joins over y19.55.
+- XTAL_32K_P's C10.1/R9.1 island remains THE straggler of this cluster:
+  PWR_EN's forced x17.75 column + the +3V3 elbow (via (20.5,18.05) + diag)
+  + the C10/C11 cap column seal every bridge to the Y1 tree that A* or
+  authored copper could take (all candidate slots enumerated and dead by
+  0.01..0.15mm). Candidates if it must die: move C10+R9 (cascades into
+  XTAL_32K_N's authored cell), or PathFinder-class rip-up routing.
+
+Remaining 12: ~EPD_VPP->C22.1, EPD_CS->island@15.0,8.1, EPD_DC->J4.11,
+EPD_RST->R17.2 + U1.28, EPD_BUSY->island@40,15.1, USB_D-->U1.17 (its old
+x20.35/y8.4 crossing died with SCK's y7.75 band -- needs a fresh course to
+U3.6), XTAL_32K_P->island@18.4,20.7 (above), SCL->island@15.9,15.6,
+EN->J5.3, DBG_IO5->island@15.0,19.9, VBUS_SENSE->island@14.2,19.9.
+The NE gate cluster (CS/DC/RST/BUSY/VPP) is unchanged from before the
+harvest; the west-funnel trio (EN.J5.3/IO5/VBUS_SENSE-west) still waits on
+the third south-funnel lane. `make route` prints the live list; trust it.
+
+### M5 state: 12 stragglers (historical; superseded by the harvest above)
 
 Since b5dfecf (all committed): the VBUS_SENSE divider moved beside Q1
 (R22/R23 at 42.3/43.5, 6.3 -- at the old spot the mid-node was walled on

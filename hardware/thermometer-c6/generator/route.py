@@ -103,8 +103,12 @@ ROUTE_PLAN = [
     # --- USB (the connector fan-out itself is authored in pcb_layout)
     ("USB_D-", 0.25, None),
     ("USB_D+", 0.25, None),
-    # crystal
-    ("XTAL_32K_P", 0.25, None),
+    # crystal. XTAL_32K_P is boxed to the crystal cell: all four of its
+    # pads (Y1.1, C10.1, R9.1, U1.12) sit within 3mm of each other, but
+    # displaced by any authored-copper wave it happily loops the west and
+    # south board edges instead -- taking SDA's column and EN's SW1 lane
+    # with it. Boxed, it either solves locally or fails locally.
+    ("XTAL_32K_P", 0.25, None, (15.0, 14.0, 21.0, 22.5)),
     ("XTAL_32K_N", 0.25, None),
     # sensors / divider / straps / LED / buttons / charger / debug
     ("SDA", 0.25, None),
