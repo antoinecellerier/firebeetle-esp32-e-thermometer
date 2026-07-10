@@ -206,6 +206,27 @@ def cover_of(tracks, vias, is_hv):
             {l: c for l, c in over.items() if c})
 
 
+# --- authored copper as per-net polylines (for Stage-2 warm seeding) ---------
+def authored_by_net(pads):
+    """{net: [(net,layer,width,pts)]}, {net: [(net,x,y)]} -- pl.TRACKS/VIAS with
+    'REF.PAD' nodes resolved to coords. Used to warm-seed anchored (movable)
+    authored copper as negotiable free copper instead of a fixed hard seed."""
+    pad_by_key = {(p["ref"], p["num"]): (p["cx"], p["cy"]) for p in pads}
+    tracks, vias = {}, {}
+    for net, layer, width, nodes in rt.pl.TRACKS:
+        pts = []
+        for n in nodes:
+            if isinstance(n, str):
+                ref, _, num = n.partition(".")
+                pts.append(pad_by_key[(ref, num)])
+            else:
+                pts.append(n)
+        tracks.setdefault(net, []).append((net, layer, width, pts))
+    for net, x, y in rt.pl.VIAS:
+        vias.setdefault(net, []).append((net, x, y))
+    return tracks, vias
+
+
 # --- warm start -------------------------------------------------------------
 def load_warm_start():
     """Committed pcb_routes.py -> {net: (tracks, vias)} of free copper."""
@@ -234,8 +255,19 @@ def parse_straggler_hint():
         return None
 
 
-def negotiate(pads, alias, pads_by_key, params, quiet=False):
-    segs0, vias0 = rt.authored_copper(pads)   # immovable authored copper
+def negotiate(pads, alias, pads_by_key, params, quiet=False, pinned_nets=None):
+    segs_all, vias_all = rt.authored_copper(pads)
+    all_authored = {s[0] for s in segs_all} | {v[0] for v in vias_all}
+    if pinned_nets is None:
+        pinned_nets = all_authored            # Stage 1: all authored immovable
+    anchored_nets = all_authored - pinned_nets
+    # hard obstacle/seed copper = authored copper of PINNED nets only. Anchored
+    # authored copper is demoted to negotiable free copper (warm-started at its
+    # authored position, movable) -- this is the Stage-2 lever that relieves the
+    # corridor saturation Stage 1 hits with all authored copper frozen.
+    segs0 = [s for s in segs_all if s[0] in pinned_nets]
+    vias0 = [v for v in vias_all if v[0] in pinned_nets]
+    atracks, avias = authored_by_net(pads)
     hv_by_exp = {alias[n] for n in rt.HV_NETS}
 
     def is_hv(cname):
@@ -265,11 +297,34 @@ def negotiate(pads, alias, pads_by_key, params, quiet=False):
     free = {}          # net -> (tracks, vias)
     failed = {}        # net -> [reasons]
 
+    # anchored nets' "home" = the territory of their authored copper. Routing an
+    # anchored net off-home costs `anchor` per cell, so it hugs its authored
+    # geometry and only deviates where a straggler needs the space -- preserving
+    # hand-won intent AND damping the thrash of fully-free authored copper.
+    anchor = params.get("anchor", 0.0)
+    home = {}
+    if anchor > 0:
+        for net in anchored_nets:
+            tr, vi = atracks.get(net, []), avias.get(net, [])
+            if tr or vi:
+                home[net] = cover_of(tr, vi, is_hv(net))[1]  # over_cover
+
     def route_net(cname, pres):
         """Rip up cname, reroute all its entries against current congestion."""
         field.remove(cname)
         exp = alias.get(cname, cname)
         cc = field.cell_cost(pres)
+        h = home.get(cname)
+        if h is not None:
+            base_cc = cc
+            hF, hB = h.get("F.Cu", set()), h.get("B.Cu", set())
+
+            def cc(kind, layer, ix, iy):
+                c = base_cc(kind, layer, ix, iy)
+                if kind == "trk" and (iy * W + ix) not in (
+                        hF if layer == "F.Cu" else hB):
+                    c += anchor
+                return c
         loc_segs, loc_vias = list(segs0), list(vias0)
         net_tr, net_vi, reasons = [], [], []
         for entry in entries_by_net[cname]:
@@ -277,7 +332,7 @@ def negotiate(pads, alias, pads_by_key, params, quiet=False):
             tr, vi, fl = rt.route_one(entry, pads, alias, pads_by_key,
                                       loc_segs, loc_vias,
                                       maps_for=lambda e, w, m=maps: m,
-                                      cell_cost=lambda e: cc)
+                                      cell_cost=lambda e, _cc=cc: _cc)
             net_tr.extend(tr)
             net_vi.extend(vi)
             reasons.extend(why for _, why in fl)
@@ -295,8 +350,12 @@ def negotiate(pads, alias, pads_by_key, params, quiet=False):
     hint = parse_straggler_hint()
     for net, (tr, vi) in warm.items():
         if net in entries_by_net:
-            free[net] = (tr, vi)
-            field.add(net, cover_of(tr, vi, is_hv(net)))
+            free[net] = (list(tr), list(vi))
+    for net in anchored_nets:                 # movable authored copper: warm it
+        tr, vi = free.get(net, ([], []))
+        free[net] = (tr + atracks.get(net, []), vi + avias.get(net, []))
+    for net, (tr, vi) in free.items():
+        field.add(net, cover_of(tr, vi, is_hv(net)))
     if hint is None:
         initial = list(net_order)
     else:
@@ -312,8 +371,11 @@ def negotiate(pads, alias, pads_by_key, params, quiet=False):
     # by routing them LAST into a full board; here they claim their scarce
     # corridors first and the flexible free nets negotiate AROUND them. A frozen
     # net is never rerouted and is ripped only as a last resort.
-    frozen = {n for n in (hint or ()) if n not in failed and n in free
-              and free[n][0]}
+    # Stage 1 freezes placed stragglers (priority inversion). Stage 2 does not:
+    # movable authored copper already provides the room, and freezing would lock
+    # in the mutual straggler overlaps from the iteration-0 soft placement.
+    frozen = set() if anchored_nets else {
+        n for n in (hint or ()) if n not in failed and n in free and free[n][0]}
     if not quiet:
         print(f"froze {len(frozen)} placed stragglers: "
               f"{sorted(frozen)}", flush=True)
@@ -412,6 +474,7 @@ def main():
         pres0=opt("--pres0", PRES0),
         presmul=opt("--presmul", PRES_MUL),
         histinc=opt("--histinc", HIST_INC),
+        anchor=opt("--anchor", 0.0),
     )
     quiet = "--quiet" in argv
 
@@ -422,8 +485,21 @@ def main():
     for p in pads:
         pads_by_key.setdefault((p["ref"], p["num"]), []).append(p)
 
+    pinned = None
+    if "--stage2" in argv:
+        # pin the rigid EPD_VCC structures + every pure-authored net (nothing
+        # re-routes those); demote all other authored copper to movable.
+        all_authored = {t[0] for t in rt.pl.TRACKS}
+        plan_nets = {e[0] for e in rt.ROUTE_PLAN}
+        pinned = {"EPD_VCC"} | (all_authored - plan_nets)
+        if not quiet:
+            print(f"STAGE 2: pinned {len(pinned)} nets, "
+                  f"{len(all_authored & plan_nets) - 1} anchored (movable)",
+                  flush=True)
+
     prev = rt._load_prev_routes()
-    free, failed, field = negotiate(pads, alias, pads_by_key, params, quiet)
+    free, failed, field = negotiate(pads, alias, pads_by_key, params, quiet,
+                                    pinned_nets=pinned)
 
     # flatten to route.py's output format, in ROUTE_PLAN order for stable diffs
     order = {e[0]: i for i, e in enumerate(rt.ROUTE_PLAN)}

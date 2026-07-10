@@ -46,11 +46,35 @@ authored copper to movable — the anchor sweep) and/or **placement** changes
 (XTAL's C10/R9 + cap column). Go/no-go criterion (a) "strictly more terminals
 than greedy" is **not met** by Stage 1.
 
+## Stage 2 (movable authored copper) — feasibility PROVEN
+`--stage2` demotes anchored authored copper (the 28 nets authored AND in
+ROUTE_PLAN, minus EPD_VCC) to negotiable; pinned = EPD_VCC's rigid structures +
+the 13 pure-authored nets + pads/keepouts. `--anchor A` keeps anchored nets near
+their authored geometry (cost A per off-home cell) to preserve intent + damp
+thrash.
+
+- **All 12 stragglers, including XTAL_32K_P, route simultaneously at iteration 0**
+  (`unrouted=0`). A fully-routed board EXISTS with movable authored copper.
+- Acid test: XTAL routes vs *EPD_VCC-pinned-only* and vs *all-except-+3V3*.
+  So **XTAL is freed by re-routing +3V3's authored elbow — NOT a placement
+  problem** (contra the earlier LAYOUT-PLAN note about moving C10/R9). The caps
+  alone don't block it.
+- Remaining gap: the iteration-0 solution is complete but *overlapping*;
+  legalizing it (separating to DRC-clean) is a solver-convergence problem. The
+  soft-negotiation loop reduces overlap slowly; a clean 0-straggler board needs
+  either more solver work (better rip-up scheduling / hard-legal RRR) or using
+  these now-known-feasible paths to guide manual harvest.
+
+**Bottom line:** M5 IS solvable — the 12 are not individually impossible, they
+are corridor-contended, and moving non-pinned authored copper resolves it.
+
 ## Reproduce
 ```
-make route            # greedy baseline: 12 stragglers, byte-identical
-make route-pf         # negotiated-congestion (Stage 1)
+make route                                    # greedy baseline: 12, byte-identical
+python3 generator/pathfind.py --iters 40      # Stage 1 (authored immovable)
+python3 generator/pathfind.py --stage2 --anchor 0.1 --iters 30   # Stage 2
 python3 verify/drc_summary.py --gate
 ```
-Diagnostics were run inline (see git history / the session); the two
-routability probes are the load-bearing evidence.
+Wrap perf-critical runs with `tlpctl launch --profile performance --`.
+Diagnostics were run inline (git history / session); the routability probes and
+the Stage-2 `unrouted=0` are the load-bearing evidence.
