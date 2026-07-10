@@ -126,6 +126,13 @@ route` → diff the failure list.
 
 ### Review tools (`verify/`, all take `--help`-ish docstrings)
 
+- `make route` writes `out/stragglers.txt` and prints only the delta vs the
+  previous pass: fixed/new stragglers plus which routed nets re-placed
+  (the failure list names victims; the re-placed list names candidate
+  villains). Never pipe it through `tail` — the delta comes first.
+- `net.py NET [NET ...]` — one net at a glance: authored TRACKS/VIAS with
+  pcb_layout.py line numbers and island grouping (islands[0] = seed),
+  routed copper, pads, straggler lines.
 - `plot_pcb.py [--crop x1 y1 x2 y2]` — board map, courtyards, ratsnest.
 - `pads.py [REF | REF.PAD | net:N | box:x1,y1,x2,y2]` — pad/courtyard geometry.
 - `occupancy.py NET WIDTH OUT.png [x1 y1 x2 y2] [--via]` — what A* actually
