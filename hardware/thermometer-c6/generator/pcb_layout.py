@@ -122,7 +122,11 @@ PLACE = {
     "C17": (35.55, 20.6, 90),
     "C18": (35.45, 24.6, 90),
     "TP6": (38.4, 23.9, 0, "B"),
-    "TP7": (29.9, 28.35, 0, "B"),
+    # TP7 (EPD_PREVGL bench pad) lives between C16 and D6 on the bottom face:
+    # its 2.1mm HV B.Cu wall sits out of the south corridor's east-running band
+    # (y26.5..29.2) and out of the pinch band x28.7..31.1, next to the copper
+    # it senses (D6.2/C18.1), leaving B.Cu descent slots either side.
+    "TP7": (33.4, 24.7, 0, "B"),
     "TP8": (29.0, 12.6, 0, "B"),
     "TP9": (32.3, 13.5, 0, "B"),
     "J4": (44.6, 16.8, 270),
