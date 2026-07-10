@@ -75,7 +75,13 @@ PLACE = {
     "C9": (14.75, 21.5, 0),
     "SW1": (3.9, 2.9, 0),
     "SW2": (11.6, 2.9, 0),
-    "R7": (19.0, 23.4, 90),
+    # R7 (BOOT pull-up) lies in the pocket between SW2's and U1's courtyards:
+    # BOOT taps R7.2 right in its U1.23->SW2 crossing zone, and R7.1's +3V3
+    # branch reaches the trunk over the module paddle on F.Cu. At its old
+    # (19.0, 23.4) spot it halved the x17.1..19.15 F.Cu column -- the south
+    # corridor's only crossing of the VBAT wall -- and sat 13mm from U1.23
+    # with the crystal block and the +3V3 trunk in between.
+    "R7": (9.0, 6.4, 0),
     # status LED at the south edge: U1's east flank (x17.9..19.4, y9.4..14.6)
     # is the only F.Cu window for the east column's escapes, and it is the only
     # pocket between U1's and J3's courtyards, so nothing may sit there
