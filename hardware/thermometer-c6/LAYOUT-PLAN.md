@@ -118,6 +118,58 @@ reference, and it is loaded automatically.
   the switch node.
 - No traces under the MINI-1 antenna region, either layer.
 
+### M5: how U1 reaches J5 (measured against authored copper only)
+
+Every debug signal (`DBG_TX/RX/IO5/IO8`, `VBUS_SENSE`) has to cross the board
+from U1 to J5's authored via row, and only two B.Cu corridors can carry a
+bundle. Widths below are free *centres* for a 0.25mm lane, from
+`verify/occupancy.py`'s bitmaps; they move only when authored copper moves.
+
+**North corridor — open, 5 lanes.** Walled north by `~SW_10U`'s 45° B.Cu
+diagonal and south by `VBAT`'s B.Cu lane at y25.15. It tapers west-to-east as
+it follows the diagonal: 8.25mm at x24.5, 3.90mm at x28.0, **2.55mm at its
+x29.0 neck** (y22.30..24.85), then the pocket at x31+ opens to 14mm. Enter it
+from the north around x22.5..24.75, never from the field.
+
+**The field west of x22.6 is one lane, structurally.** `C14.1` can only be
+entered by a via — `~BAT_IN`'s 0.5mm F.Cu lane runs along C14's north edge,
+that lane's leg down its west, `C14.2` sits east — and `verify/freespot.py`
+says C14 has no other legal window. That via's F.Cu annulus must clear
+`~BAT_IN`, so its centre is at y ≥ 23.65; its B.Cu halo then ends at 24.275,
+and VBAT's lane starts at 24.575. **0.30mm.** `EPD_VCC`'s spine to `L2.1` and
+`C14.1` is load-bearing and lives there; do not try to shorten it (see the
+island-seeding rule in `CLAUDE.md`).
+
+**South corridor — 4 lanes, but only once `TP7` moves.** Today `TP7`'s HV pad
+pinches x28.7..31.1 to a 0.30mm slot at y≈27.0. Move it anywhere clear of that
+band (legal 1.5×1.5 B.Cu centres run x ≥ 30.75 across most of y20..28) and the
+path becomes: F.Cu down the **x17.10..19.15** column (2.05mm — the only place
+a bundle crosses VBAT's B.Cu wall), vias to B.Cu at y ≥ 28.65 (clear of TP1's
+pad), east at y28.50..31.00 under the test-point row, climb at x25..26.5, then
+the new neck at **x28.5 (1.75mm, y26.65..28.40)** between `J2.1`'s through-hole
+and VBAT's diagonal, and out into the pocket.
+
+**U1's own escapes.**  The `+3V3` B.Cu trunk lies directly under U1's south
+row, so `U1.9`/`U1.10` cannot drop through their pads; they need vias ~0.55mm
+south of the pads (y ≈ 20.4), which clears the trunk. `U1.22`/`U1.30`/`U1.31`
+take via-in-pads like the EPD signals already do. The east flank
+(x17.9..19.4) is owed to USB and the crystal — no debug lane may use it.
+
+Negative results, so they are not repeated (each is one `make route`; baseline
+is 15 stragglers):
+
+| change | stragglers | what it broke |
+|---|---|---|
+| debug nets early in `ROUTE_PLAN` | 20 | `DBG_IO8` takes U1's east flank → `USB_D±`, `XTAL_32K_P`; `EN`→J5.3, `+3V3`→J5.2 |
+| authored `L2.1`↔`C14.1` link | 17 | re-seeds `EPD_VCC` → `EPD_CS`, `EPD_DC`, `EN` |
+| `EPD_VCC` terminals, L2 before C14 | ≥21 | `DBG_TX`, `EN`×2, `XTAL_32K_P` |
+| authored U1 escapes, UART north of the row | 18 | `BOOT`→`SW2` (SW2 sits directly north of those lanes) |
+
+The last one is the near miss: `DBG_RX` and `DBG_IO8` stopped failing at U1 and
+started failing at the J5 island, which is the correct next failure. Run the
+UART lanes *under* the module instead — authored copper is claimed before the
+EPD escapes route, so they will move — and leave BOOT its crossing to SW2.
+
 ## 4. Silkscreen (required text)
 
 - "CHARGE INDOORS ONLY 0–45°C" near USB-C.

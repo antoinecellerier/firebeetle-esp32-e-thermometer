@@ -31,6 +31,9 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
 - Never document coordinates taken from `pcb_routes.py`. It is regenerated
   from scratch on every `make route`; those numbers are fiction as soon as
   anything moves. Authored geometry in `pcb_layout.py` is the durable kind.
+- pcbnew's zone fill is **not byte-stable**: back-to-back `pcb.py` runs can
+  leave `thermometer-c6.kicad_pcb` dirty with nothing but `(xy ...)` fill
+  coordinates changed. `git diff` it before believing you changed the board.
 
 ### What DRC actually enforces (not what `pcb.py` sets)
 
@@ -53,6 +56,14 @@ escapes.
 - Two parallel 45° lanes 0.5mm apart in y are only **0.354mm** apart
   perpendicular. A fan-out cannot turn all its lanes at once: cascade the
   drops, one x-window each, so no lane is ever diagonal beside a diagonal.
+- A bench pad on an HV net is a **2.1mm-square B.Cu wall**: 1.5mm of pad plus
+  the 0.3mm HV clearance on each side. `TP6`/`TP7`/`TP10` all sit outside the
+  `fpc-fanout` marker, so none of them gets the 0.18mm relaxation. `TP7` alone
+  pinches the B.Cu channel south of the booster to a 0.30mm slot.
+- A through-hole via inside an SMD pad still has an **F.Cu annulus**, so it
+  must clear F.Cu copper crossing that pad's face, not just B.Cu. This is what
+  fixes `C14.1`'s via at y23.65: `~BAT_IN` runs F.Cu at y22.9, so the annulus
+  cannot sit north of 23.15 + 0.2 + 0.3.
 
 ### The router (`generator/route.py`)
 
@@ -72,6 +83,15 @@ One greedy A* pass per net in `ROUTE_PLAN` order, no rip-up. Consequences:
   pads). Suspect the same exemption whenever the router does something illegal.
 - Authored copper is obstacle **and** seed — and a seed A* may ignore, leaving
   your stub dangling. Check after each pass and trim what went unused.
+- **The seed is `islands[0]`, and island order is `pcb_layout.TRACKS` order.**
+  `route_all` merges every same-net island plus every unattached terminal pad;
+  islands always come first, and the first one is the tree the rest grow onto.
+  So authoring a second block of copper on a net that already has an authored
+  block *moves the seed* if it lands earlier in `TRACKS`. Authoring an
+  `L2.1`↔`C14.1` link re-seeded `EPD_VCC` at C14, and A* then hauled a 0.5mm
+  B.Cu diagonal across the whole board to reach the J4 feed — `EPD_CS`,
+  `EPD_DC` and `EN` died 15mm away. Any authored `EPD_VCC` copper in the west
+  has to contain `Q2.3` as well, or not exist.
 
 ### IMPORTANT: authored copper is never a local edit
 
