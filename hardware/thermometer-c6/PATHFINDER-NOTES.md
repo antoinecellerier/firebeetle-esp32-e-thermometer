@@ -68,6 +68,29 @@ thrash.
 **Bottom line:** M5 IS solvable — the 12 are not individually impossible, they
 are corridor-contended, and moving non-pinned authored copper resolves it.
 
+## Legalization attempts — none cleanly converge on this saturated board
+The Stage-2 solution is complete but overlapping; three strategies to legalize
+it (separate to DRC-clean) all thrash:
+1. **Global soft negotiation** (Stage 1 & 2): over-use plateaus (~11-16k cells),
+   doesn't reach 0 within a practical iteration budget; ~1min/iter.
+2. **Hard-legal rip-up-reroute** (`--rrr`): keeps the committed set mutually
+   legal, routing one net at a time and ripping the committed nets it crosses.
+   **Diverges** — committed shrinks 35→17, queue grows 11→28, rips climb past
+   67. Root cause: a straggler crossing a densely-packed corridor overlaps
+   *many* parallel nets at once, so it rips a whole corridor's worth; each
+   ripped net, re-routed into the same saturation, rips more. History can't
+   outpace the cascade. Tightening the rip cost / cost-cover didn't change the
+   trajectory (the saturation, not the tuning, dominates).
+
+**What's missing:** clean auto-legalization of a board this dense needs a
+*coordinated multi-net shift* primitive (move a whole corridor's nets together
+by one lane), not one-net-at-a-time rip-up. That is a substantially larger
+router effort with uncertain payoff. The pragmatic path is **targeted manual
+harvest guided by the feasibility proof** (author the specific authored-copper
+moves the proof identifies — starting with re-routing +3V3's elbow to free
+XTAL, a high-confidence 12→11), using the existing one-cluster-per-`make route`
+workflow that the harvest was already using.
+
 ## Reproduce
 ```
 make route                                    # greedy baseline: 12, byte-identical

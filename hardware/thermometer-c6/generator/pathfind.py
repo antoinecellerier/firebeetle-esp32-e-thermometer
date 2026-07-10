@@ -30,6 +30,7 @@ writes out/stragglers.txt; `make route-pf` re-renders the board.
 import math
 import os
 import sys
+from collections import deque
 
 import route as rt
 from route import GRID, W, H, OX, OY, BASE_CLR, HV_CLR, VIA_R
@@ -44,6 +45,13 @@ PRES_CAP = 8.0       # ceiling: unbounded pres makes nets take board-long
 HIST_INC = 0.05      # history (mm) added to each over-used cell per round
 PROBE_HW = 0.125     # 0.25mm-probe half-width for the route-exact cost cover
 ANCHOR = math.inf    # Stage 1: authored copper immovable (fixed hard seeds)
+
+# --- hard-legal rip-up & reroute (RRR) parameters ---------------------------
+RIP_PRES = 6.0       # cost multiplier for crossing a committed net (prefer a
+                     # legal gap; rip only when the detour would be worse)
+RIP_BUDGET = 600     # total rip-ups before giving up (leaves stragglers)
+MAX_RIP = 14         # per-net rip cap: a net ripped this often becomes a
+                     # straggler (breaks pathological ping-pong)
 
 LAYERS = ("F.Cu", "B.Cu")
 
@@ -188,16 +196,21 @@ def cover_of(tracks, vias, is_hv):
       inside it would violate; at min spacing it sits on the boundary (cost 0),
       so nets pack to the legal limit without penalty. This is what A* prices."""
     clr = HV_CLR if is_hv else BASE_CLR
+    # shrink the cost cover ~1.5 cells so a *legal* min-spacing centerline sits
+    # just outside it (cost 0) -- otherwise the fat covers of two legal neighbours
+    # meet in the gap between them and mask it, forcing crossings/rips. Real
+    # overlaps are still caught by the tight territory (over) grid.
+    m = 1.5 * GRID
     cost = {l: set() for l in LAYERS}
     over = {l: set() for l in LAYERS}
     for net, layer, width, pts in tracks:
         hw = width / 2
-        ci, oi = PROBE_HW + clr + hw, hw + clr / 2
+        ci, oi = PROBE_HW + clr + hw - m, hw + clr / 2
         for i in range(len(pts) - 1):
             (x1, y1), (x2, y2) = pts[i], pts[i + 1]
             _seg_cells(x1, y1, x2, y2, ci, cost[layer])
             _seg_cells(x1, y1, x2, y2, oi, over[layer])
-    cvi, ovi = PROBE_HW + clr + VIA_R, VIA_R + clr / 2
+    cvi, ovi = PROBE_HW + clr + VIA_R - m, VIA_R + clr / 2
     for net, x, y in vias:
         for l in LAYERS:
             _rect_cells(x - cvi, y - cvi, x + cvi, y + cvi, cost[l])
@@ -433,6 +446,148 @@ def resolve_overuse(field, free, failed, frozen, quiet):
         print(f"cleanup: ripped {ripped} net(s) to clear residual over-use")
 
 
+def rrr(pads, alias, pads_by_key, params, quiet=False):
+    """Hard-legal rip-up & reroute. The committed set stays mutually DRC-legal
+    at ALL times by construction: each net soft-routes against pinned copper
+    (hard) plus committed copper (crossable at RIP cost + history); the specific
+    committed nets its territory overlaps are then ripped (re-queued), so the
+    new net commits legal against everything that remains. History bumped on
+    each conflict makes chronically-contended cells progressively expensive,
+    breaking rip cycles. Anchored authored copper is committed-and-rippable
+    (movable -- the Stage-2 lever); pinned authored (EPD_VCC rigid structures +
+    the pure-authored nets) never moves. Converges to a clean 0-straggler board
+    iff a legal assignment is reachable within the rip budget."""
+    segs_all, vias_all = rt.authored_copper(pads)
+    all_authored = {s[0] for s in segs_all} | {v[0] for v in vias_all}
+    plan_nets = {e[0] for e in rt.ROUTE_PLAN}
+    pinned_nets = {"EPD_VCC"} | (all_authored - plan_nets)
+    anchored = (all_authored & plan_nets) - {"EPD_VCC"}
+    pinned_segs = [s for s in segs_all if s[0] in pinned_nets]
+    pinned_vias = [v for v in vias_all if v[0] in pinned_nets]
+    atracks, avias = authored_by_net(pads)
+    hv_by_exp = {alias[n] for n in rt.HV_NETS}
+
+    def is_hv(c):
+        return alias.get(c, c) in hv_by_exp
+
+    entries_by_net = {}
+    for e in rt.ROUTE_PLAN:
+        entries_by_net.setdefault(e[0], []).append(e)
+
+    map_cache = {}
+
+    def pinned_maps(exp, width):
+        m = map_cache.get((exp, width))
+        if m is None:
+            m = rt.build_bitmaps(pads, pinned_segs, pinned_vias, exp, width,
+                                 alias)
+            map_cache[(exp, width)] = m
+        return m
+
+    field = Field()          # committed nets' cost/over covers + rip history
+    committed = {}           # net -> (tracks, vias), all mutually legal
+    failed = {}
+
+    def commit(net, tr, vi):
+        committed[net] = (tr, vi)
+        field.add(net, cover_of(tr, vi, is_hv(net)))
+        failed.pop(net, None)
+
+    def uncommit(net):
+        if net in committed:
+            field.remove(net)
+            del committed[net]
+
+    def route_soft(cname, rip_pres):
+        exp = alias.get(cname, cname)
+        cc = field.cell_cost(rip_pres)
+        loc_s, loc_v = list(pinned_segs), list(pinned_vias)
+        tr, vi, reasons = [], [], []
+        for entry in entries_by_net[cname]:
+            maps = pinned_maps(exp, entry[1])
+            t, v, fl = rt.route_one(entry, pads, alias, pads_by_key, loc_s,
+                                    loc_v, maps_for=lambda e, w, m=maps: m,
+                                    cell_cost=lambda e, _cc=cc: _cc)
+            tr += t
+            vi += v
+            reasons += [w for _, w in fl]
+        return tr, vi, reasons
+
+    # initial committed = greedy warm copper for the settled nets + the anchored
+    # authored copper (movable). Stragglers route fresh from the queue.
+    warm = load_warm_start()
+    hint = parse_straggler_hint() or set()
+    for net, (tr, vi) in warm.items():
+        if net in entries_by_net and net not in hint:
+            committed[net] = (list(tr), list(vi))
+    for net in anchored:
+        if net in hint:
+            continue
+        tr, vi = committed.get(net, ([], []))
+        committed[net] = (tr + atracks.get(net, []), vi + avias.get(net, []))
+    for net, (tr, vi) in committed.items():
+        field.add(net, cover_of(tr, vi, is_hv(net)))
+
+    queue = deque(n for n in entries_by_net if n in hint)
+    for n in entries_by_net:           # anything greedy never routed
+        if n not in committed and n not in queue:
+            queue.append(n)
+
+    rip_pres = params.get("rippres", RIP_PRES)
+    budget = params.get("ripbudget", RIP_BUDGET)
+    maxrip = params.get("maxrip", MAX_RIP)
+    histinc = params.get("histinc", HIST_INC)
+    rip_count = {}
+    total = steps = 0
+    if not quiet:
+        print(f"rrr: {len(committed)} committed, {len(queue)} queued; "
+              f"pinned={len(pinned_nets)} anchored={len(anchored)}", flush=True)
+
+    while queue and total < budget:
+        steps += 1
+        N = queue.popleft()
+        uncommit(N)
+        tr, vi, reasons = route_soft(N, rip_pres)
+        if reasons:                    # blocked by pinned copper alone
+            failed[N] = reasons
+            continue
+        _, n_over = cover_of(tr, vi, is_hv(N))
+        blockers = []
+        for B, (_, b_over) in field.cover.items():
+            hit = {l: n_over.get(l, EMPTY) & b_over.get(l, EMPTY)
+                   for l in LAYERS}
+            hit = {l: c for l, c in hit.items() if c}
+            if hit:
+                blockers.append((B, hit))
+        for B, hit in blockers:
+            uncommit(B)
+            field.bump_history(hit, histinc)
+            rip_count[B] = rip_count.get(B, 0) + 1
+            total += 1
+            if rip_count[B] <= maxrip:
+                queue.append(B)
+            else:
+                failed[B] = [f"ripped {rip_count[B]}x (gave up)"]
+        commit(N, tr, vi)
+        if not quiet and steps % 25 == 0:
+            print(f"  step {steps}: committed={len(committed)} "
+                  f"queue={len(queue)} rips={total} failed={len(failed)}",
+                  flush=True)
+
+    for N in queue:
+        failed.setdefault(N, ["rip budget exhausted"])
+    free = dict(committed)
+    for N in failed:
+        free.setdefault(N, ([], []))
+    if not quiet:
+        print(f"rrr done: committed={len(committed)} stragglers={len(failed)} "
+              f"rips={total} steps={steps}", flush=True)
+    return free, failed, field
+
+
+EMPTY = frozenset()
+
+
 def _top_history(field, n):
     items = []
     for l in LAYERS:
@@ -475,6 +630,9 @@ def main():
         presmul=opt("--presmul", PRES_MUL),
         histinc=opt("--histinc", HIST_INC),
         anchor=opt("--anchor", 0.0),
+        rippres=opt("--rippres", RIP_PRES),
+        ripbudget=int(opt("--ripbudget", RIP_BUDGET)),
+        maxrip=int(opt("--maxrip", MAX_RIP)),
     )
     quiet = "--quiet" in argv
 
@@ -498,8 +656,11 @@ def main():
                   flush=True)
 
     prev = rt._load_prev_routes()
-    free, failed, field = negotiate(pads, alias, pads_by_key, params, quiet,
-                                    pinned_nets=pinned)
+    if "--rrr" in argv:
+        free, failed, field = rrr(pads, alias, pads_by_key, params, quiet)
+    else:
+        free, failed, field = negotiate(pads, alias, pads_by_key, params, quiet,
+                                        pinned_nets=pinned)
 
     # flatten to route.py's output format, in ROUTE_PLAN order for stable diffs
     order = {e[0]: i for i, e in enumerate(rt.ROUTE_PLAN)}
