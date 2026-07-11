@@ -2,7 +2,7 @@ SCH  := thermometer-c6.kicad_sch
 PCB  := thermometer-c6.kicad_pcb
 OUT  := out
 
-.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb route route-pf drc pcb-img
+.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb route route-pf freeroute drc pcb-img
 
 all: check pdf
 
@@ -44,6 +44,17 @@ route: pcb
 # exactly like `route` -- no separate render path needed.
 route-pf: pcb
 	python3 generator/pathfind.py; rc=$$?; python3 generator/pcb.py; exit $$rc
+
+# Freerouting DSN round-trip experiment (opens the Freerouting GUI; needs
+# java + a display). Writes out/freerouting/routed-a.kicad_pcb for review --
+# nothing is harvested automatically. Findings: PATHFINDER-NOTES.md (negative:
+# same 12 stragglers as the greedy router; 2.2.4 crashes, use 1.9.0).
+FRJAR := $(OUT)/freerouting/freerouting-1.9.0.jar
+$(FRJAR):
+	mkdir -p $(OUT)/freerouting
+	curl -sL -o $@ https://github.com/freerouting/freerouting/releases/download/v1.9.0/freerouting-1.9.0.jar
+freeroute: pcb $(FRJAR)
+	python3 generator/freeroute.py --jar $(FRJAR)
 
 drc: pcb | $(OUT)
 	kicad-cli pcb drc --severity-all --exit-code-violations --schematic-parity --refill-zones \

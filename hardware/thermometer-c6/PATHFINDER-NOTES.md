@@ -116,3 +116,34 @@ python3 verify/drc_summary.py --gate
 Wrap perf-critical runs with `tlpctl launch --profile performance --`.
 Diagnostics were run inline (git history / session); the routability probes and
 the Stage-2 `unrouted=0` are the load-bearing evidence.
+
+## Freerouting round-trip (2026-07-11) — external router, same 12 stragglers
+
+`generator/freeroute.py` (`make freeroute`) exports a variant board to
+Specctra DSN, post-processes it (0.25mm default width; `power` class 0.5mm;
+`hv` class 0.3mm clearance; optional `(type fix)` on authored copper), runs
+the Freerouting jar batch-mode, imports the `.ses` and DRC-summarizes the
+result under the real `.kicad_dru`. KiCad's DSN export carries the antenna
+keepout, the sensor via-keepouts and the GND pour (as a plane), so the
+constraint fidelity is decent; only the fpc-fanout 0.18mm relaxation and the
+per-area width rules are inexpressible in DSN.
+
+Configurations tried (Freerouting 1.9.0, the version reputed to route better
+than the 2.x line):
+
+| config | result |
+|---|---|
+| A: full board, authored fixed | routes NOTHING new — 1.9 batch mode **skips any net containing a fixed wire** (verified: identical DSN ± fix marking flips exactly those nets), and broke EPD_VCC by ripping it |
+| B: authored-only board, authored fixed | 15min41s, 31 of ~47 free nets unrouted (fix-skip poisoned all authored-copper nets) |
+| A relaxed to 0.18mm clearance everywhere | no change — clearance was not the blocker |
+| A all-rippable (best config) | 11.76s, otherwise DRC-clean, but **the exact baseline 12 straggler terminals remain unconnected**; partial stubs/dangling vias left on the knot nets; USB_D− and ~EPD_VPP not attempted at all |
+| Freerouting 2.2.4 (any config) | `java.lang.StackOverflowError` even with `-Xss64m` — unbounded recursion on this input; unusable |
+
+**Assessment:** Freerouting's free-angle rip-up, even with authored copper
+rippable (Stage-2-level freedom), gives up on the corridor knot in seconds —
+its batch rip-up depth is far shallower than what the contention needs, and
+it found none of the coordinated moves the Stage-2 proof identifies (e.g. the
++3V3 elbow re-route). Third independent router to stall on the same 12
+terminals; nothing worth harvesting (its rework of the routed nets is
+free-angle churn with no straggler gain). Reinforces the **targeted manual
+harvest** as the pragmatic path.
