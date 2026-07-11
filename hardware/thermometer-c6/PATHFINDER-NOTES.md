@@ -81,15 +81,30 @@ it (separate to DRC-clean) all thrash:
    ripped net, re-routed into the same saturation, rips more. History can't
    outpace the cascade. Tightening the rip cost / cost-cover didn't change the
    trajectory (the saturation, not the tuning, dominates).
+3. **Canonical PathFinder** (`--allnets`): reroute EVERY net each iteration in
+   fixed order (the textbook convergent method; the hot-subset above is a speed
+   optimisation that can stall coordinated shifts). Blocked by **performance** —
+   a congestion-priced (soft) A* explores ~7× more nodes than a hard route
+   (0.8s vs 0.12s) and reroute-all is ~46 nets/iter, so an iteration is minutes
+   and convergence needs dozens. Speed levers added + measured, both greedy-safe
+   (defaults preserve byte-identical): `route_one(fallback_mm=)` bounds the
+   board-wide fallback search; `astar(hweight=)` weighted A* cuts nodes 3-5×
+   (hw 2.0 → soft route 0.15s ≈ hard). Even so, dense reroute-all stays
+   multi-minute/iter (many nets fall to the wide fallback once congestion prices
+   their old path out).
 
-**What's missing:** clean auto-legalization of a board this dense needs a
-*coordinated multi-net shift* primitive (move a whole corridor's nets together
-by one lane), not one-net-at-a-time rip-up. That is a substantially larger
-router effort with uncertain payoff. The pragmatic path is **targeted manual
-harvest guided by the feasibility proof** (author the specific authored-copper
-moves the proof identifies — starting with re-routing +3V3's elbow to free
-XTAL, a high-confidence 12→11), using the existing one-cluster-per-`make route`
-workflow that the harvest was already using.
+**Assessment:** the *algorithm* is validated (Stage 2 proves a legal solution
+exists; canonical negotiated-congestion is the right convergent method), but a
+**practical** auto-legalizer for a board this dense needs a compiled/vectorised
+router core (the pure-Python soft A* is the wall) and/or a coordinated multi-net
+shift primitive (move a corridor's nets together by a lane). That is a large,
+uncertain effort; the new `hweight` / `fallback_mm` knobs are reusable
+regardless.
+
+**Pragmatic path** (reliable, uses the proof): targeted manual harvest — author
+the specific authored-copper moves the feasibility proof identifies, starting
+with re-routing +3V3's elbow to free XTAL (high-confidence 12→11), one cluster
+per `make route`, the workflow the NE-gate harvest already used.
 
 ## Reproduce
 ```

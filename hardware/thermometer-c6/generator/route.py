@@ -400,7 +400,7 @@ def blocked(maps, kind, layer, ix, iy):
 
 
 def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None,
-          cell_cost=None):
+          cell_cost=None, hweight=1.0):
     """starts: [(layer, ix, iy)]; goals: set of (layer, ix, iy).
 
     The search is clamped to the terminals' bounding box grown by margin_mm,
@@ -409,6 +409,10 @@ def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None,
     cell_cost(kind, layer, ix, iy) -> non-negative extra cost added when
     entering a cell (None = greedy; leaves the octile heuristic admissible
     since it only raises real costs). PathFinder passes a congestion price.
+
+    hweight > 1 is weighted A*: f = g + hweight*h. Non-optimal (paths up to
+    hweight× longer) but explores far fewer nodes -- vital under a congestion
+    cost, where h=1 degenerates toward Dijkstra. Default 1.0 = exact/greedy.
     """
     if not goals:
         return None
@@ -445,7 +449,8 @@ def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None,
     for (l, ix, iy) in starts:
         st = (l, ix, iy)
         best_g[st] = 0.0
-        heapq.heappush(open_q, (h(l, ix, iy), push_n, 0.0, st, None, 8))
+        heapq.heappush(open_q, (hweight * h(l, ix, iy), push_n, 0.0, st, None,
+                                8))
         push_n += 1
     came = {}
     pops = 0
@@ -485,8 +490,8 @@ def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None,
             if ng < best_g.get(nst, 1e18):
                 best_g[nst] = ng
                 push_n += 1
-                heapq.heappush(open_q,
-                               (ng + h(l, nx, ny), push_n, ng, nst, st, di))
+                heapq.heappush(open_q, (ng + hweight * h(l, nx, ny), push_n,
+                                        ng, nst, st, di))
         # via hop
         ol = 1 - l
         olname = "F.Cu" if ol == 0 else "B.Cu"
@@ -500,8 +505,8 @@ def astar(maps, starts, goals, max_pop=1_500_000, margin_mm=8.0, box=None,
             if ng < best_g.get(nst, 1e18):
                 best_g[nst] = ng
                 push_n += 1
-                heapq.heappush(open_q,
-                               (ng + h(ol, ix, iy), push_n, ng, nst, st, 8))
+                heapq.heappush(open_q, (ng + hweight * h(ol, ix, iy), push_n,
+                                        ng, nst, st, 8))
     return None
 
 
@@ -610,7 +615,8 @@ def _copper_islands(segs, vias, pads, exp, alias):
 
 
 def route_one(entry, pads, alias, pads_by_key, segs, vias,
-              maps_for=None, cell_cost=None, verbose=False):
+              maps_for=None, cell_cost=None, verbose=False, fallback_mm=1e4,
+              hweight=1.0):
     """Route one net's tree against `segs`/`vias` (authored + already-routed
     obstacle copper), appending its new copper to them in place. Returns
     (net_tracks, net_vias, net_failed).
@@ -727,10 +733,14 @@ def route_one(entry, pads, alias, pads_by_key, segs, vias,
                 goals = {g for g in tree
                          if box[0] <= g[1] * GRID <= box[2]
                          and box[1] <= g[2] * GRID <= box[3]}
-            path = astar(maps, starts, goals, box=box, cell_cost=cc)
+            path = astar(maps, starts, goals, box=box, cell_cost=cc,
+                         hweight=hweight)
             if path is None and box is None:
-                # the 8mm terminal-bbox clamp forbids long detours
-                path = astar(maps, starts, goals, margin_mm=1e4, cell_cost=cc)
+                # the 8mm terminal-bbox clamp forbids long detours; the fallback
+                # widens it (board-wide for greedy; bounded for PathFinder, which
+                # reroutes every pass so a stuck net retries next iteration)
+                path = astar(maps, starts, goals, margin_mm=fallback_mm,
+                             cell_cost=cc, hweight=hweight)
             if path is None:
                 stuck.append(node)
                 continue

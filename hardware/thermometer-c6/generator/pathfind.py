@@ -340,12 +340,15 @@ def negotiate(pads, alias, pads_by_key, params, quiet=False, pinned_nets=None):
                 return c
         loc_segs, loc_vias = list(segs0), list(vias0)
         net_tr, net_vi, reasons = [], [], []
+        fb = params.get("fallback", 15.0)
+        hw = params.get("hweight", 1.5)
         for entry in entries_by_net[cname]:
             maps = hard_maps(exp, entry[1])
             tr, vi, fl = rt.route_one(entry, pads, alias, pads_by_key,
                                       loc_segs, loc_vias,
                                       maps_for=lambda e, w, m=maps: m,
-                                      cell_cost=lambda e, _cc=cc: _cc)
+                                      cell_cost=lambda e, _cc=cc: _cc,
+                                      fallback_mm=fb, hweight=hw)
             net_tr.extend(tr)
             net_vi.extend(vi)
             reasons.extend(why for _, why in fl)
@@ -397,7 +400,13 @@ def negotiate(pads, alias, pads_by_key, params, quiet=False, pinned_nets=None):
         ov = field.overused()
         n_over = sum(len(c) for c in ov.values())
         n_fail = len(failed)
-        hot = (field.nets_touching(ov) | set(failed)) - frozen
+        # canonical PathFinder reroutes EVERY net each iteration (global
+        # re-negotiation -- what the convergence proof relies on); the hot-subset
+        # is a speed optimisation that can stall coordinated shifts.
+        if params.get("allnets"):
+            hot = set(net_order) - frozen
+        else:
+            hot = (field.nets_touching(ov) | set(failed)) - frozen
         if not quiet:
             print(f"iter {it:2d}: unrouted={n_fail} overused={n_over} "
                   f"hot={len(hot)} top_hist={_top_history(field, 3)}",
@@ -507,7 +516,9 @@ def rrr(pads, alias, pads_by_key, params, quiet=False):
             maps = pinned_maps(exp, entry[1])
             t, v, fl = rt.route_one(entry, pads, alias, pads_by_key, loc_s,
                                     loc_v, maps_for=lambda e, w, m=maps: m,
-                                    cell_cost=lambda e, _cc=cc: _cc)
+                                    cell_cost=lambda e, _cc=cc: _cc,
+                                    fallback_mm=params.get("fallback", 15.0),
+                                    hweight=params.get("hweight", 1.5))
             tr += t
             vi += v
             reasons += [w for _, w in fl]
@@ -633,6 +644,9 @@ def main():
         rippres=opt("--rippres", RIP_PRES),
         ripbudget=int(opt("--ripbudget", RIP_BUDGET)),
         maxrip=int(opt("--maxrip", MAX_RIP)),
+        allnets=("--allnets" in argv),
+        fallback=opt("--fallback", 15.0),
+        hweight=opt("--hweight", 1.5),
     )
     quiet = "--quiet" in argv
 
