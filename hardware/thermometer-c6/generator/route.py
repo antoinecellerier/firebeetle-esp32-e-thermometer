@@ -129,7 +129,7 @@ ROUTE_PLAN = [
     ("BOOT", 0.25, [("U1", "23"), ("R7", "2"), ("SW2", "1")],
      (7.8, 0.0, 21.6, 24.5)),
     ("EN", 0.25, [("U1", "8"), ("C9", "1"), ("R6", "2"), ("SW1", "1"),
-                  ("J5", "3")]),
+                  ("J5", "3")], None, 1.5),
     ("LED_STATUS", 0.25, None),
     ("~LED_A", 0.25, None),
     ("DBG_TX", 0.25, None),
@@ -627,6 +627,12 @@ def route_one(entry, pads, alias, pads_by_key, segs, vias,
     net_tracks, net_vias, net_failed = [], [], []
     cname, width, terminals = entry[:3]
     box = entry[3] if len(entry) > 3 else None
+    # optional 5th element: per-net weighted-A* hweight override. Weighted A*
+    # (f = g + hw*h) explores far fewer nodes, which lets a long connection
+    # across a contended-but-open corridor complete inside max_pop where plain
+    # admissible A* (hw=1) exhausts the budget and reports "no path". Absent =>
+    # unchanged (byte-identical greedy).
+    hw = entry[4] if len(entry) > 4 else hweight
     exp = alias.get(cname, cname)
     pins = circuit.NETS.get(cname)
     if pins is None:
@@ -734,13 +740,13 @@ def route_one(entry, pads, alias, pads_by_key, segs, vias,
                          if box[0] <= g[1] * GRID <= box[2]
                          and box[1] <= g[2] * GRID <= box[3]}
             path = astar(maps, starts, goals, box=box, cell_cost=cc,
-                         hweight=hweight)
+                         hweight=hw)
             if path is None and box is None:
                 # the 8mm terminal-bbox clamp forbids long detours; the fallback
                 # widens it (board-wide for greedy; bounded for PathFinder, which
                 # reroutes every pass so a stuck net retries next iteration)
                 path = astar(maps, starts, goals, margin_mm=fallback_mm,
-                             cell_cost=cc, hweight=hweight)
+                             cell_cost=cc, hweight=hw)
             if path is None:
                 stuck.append(node)
                 continue

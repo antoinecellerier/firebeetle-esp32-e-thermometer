@@ -395,7 +395,7 @@ TRACKS = [
     # rows) that enters J5.6 from below -- which keeps the old (38.98,28.75)
     # slot and the row east of TX's via free for A*.
     ("DBG_TX", "F.Cu", 0.25, [(36.44, 28.75), "J5.4"]),
-    ("VBUS_SENSE", "F.Cu", 0.25, [(35.17, 32.33), (38.98, 32.33), "J5.6"]),
+    ("VBUS_SENSE", "F.Cu", 0.25, [(37.71, 32.33), (38.98, 32.33), "J5.6"]),
     # ~EPD_VDD's C21.1 feed, all-F down x36.65: between C18/C21.2 (0.3+
     # both sides) and 0.9 east of EPD_PREVGL's D6.2<->C18.2 courses. This
     # keeps ~EPD_VDD out of the pocket floor altogether -- unanchored, its
@@ -631,6 +631,24 @@ TRACKS = [
     ("EN", "F.Cu", 0.25, [(14.1, 22.15), (14.25, 22.3), (17.11, 22.3),
                           "R6.2"]),
     ("EN", "F.Cu", 0.25, ["C9.1", (14.27, 22.3)]),
+    # EN's SW1 tie authored to its (greedy-found) baseline course: down the west
+    # edge under U1 on B, across the SW south edge, up the x17.1..19.15 F crossing
+    # of the VBAT wall to the yard. Authored so the weighted-A* fan-in leg (below)
+    # cannot re-optimise it -- a 0.07mm shift of its x11.6 surface via evicts
+    # LED_STATUS->R8.1, which threads the same SW south edge.
+    ("EN", "F.Cu", 0.25, [(1.25, 1.25), (5.7, 5.7)]),
+    ("EN", "F.Cu", 0.25, [(6.55, 1.25), (3.9, 3.9)]),
+    ("EN", "B.Cu", 0.25, [(5.7, 5.7), (5.7, 29.45), (8.1, 31.85), (11.6, 31.85)]),
+    ("EN", "F.Cu", 0.25, [(11.6, 31.85), (16.35, 31.85), (16.35, 29.15),
+                          (19.05, 26.45), (19.05, 23.7), (18.4, 23.05)]),
+    # EN's J5.3 fan-in: the +3V3 south hook + J5.1 GND pad wall J5.3's surface
+    # approach from the west, so EN gets an F.Cu tail in the corridor (like the
+    # debug fan-ins, but stays on F -- it clears VBAT's y29.75 B lane on layer)
+    # dropping down the 0.84mm channel between J5.2/J5.4 (x35.17) to J5.3.
+    # VBUS_SENSE's between-rows run is trimmed off this longitude to clear it.
+    # EN's ROUTE_PLAN entry carries hweight so weighted A* can reach this tail
+    # across the ~19mm contended corridor inside max_pop.
+    ("EN", "F.Cu", 0.25, [(35.17, 28.75), (35.17, 33.6), "J5.3"]),
 ]
 
 VIAS = [
@@ -665,6 +683,9 @@ VIAS = [
     # EN's U1.8 drop and its return into the F.Cu C9.1->R6.2 link
     ("EN", 13.4, 20.4),
     ("EN", 14.1, 22.15),
+    ("EN", 5.7, 5.7),      # SW1 tie: F->B at the NW corner
+    ("EN", 11.6, 31.85),   # SW1 tie: B->F to run the SW south edge
+    ("EN", 18.4, 23.05),   # SW1 tie: crossing top -> yard hop
     # XTAL_32K_N hop: via-in-pad U1.13, via in the C11 pad gap
     ("XTAL_32K_N", 16.8, 17.85),
     ("XTAL_32K_N", 18.4, 17.95),
