@@ -147,3 +147,29 @@ it found none of the coordinated moves the Stage-2 proof identifies (e.g. the
 terminals; nothing worth harvesting (its rework of the routed nets is
 free-angle churn with no straggler gain). Reinforces the **targeted manual
 harvest** as the pragmatic path.
+
+## Simplification probes (2026-07-11 evening) — where the density actually binds
+
+Three DSN-space experiments quantify what makes the board hard (all Freerouting
+1.9, batch, `-mp 100`; DSNs derived from `a.dsn` by script):
+
+- **2.2.5-SNAPSHOT (2026-07-02 build)**: NPE in ShapeTree during fanout pass 3
+  (`Storable.compareTo … "this.object" is null`). With 2.2.4's StackOverflow,
+  the whole 2.x line is unusable on this input; 1.9 is the only viable jar.
+- **No debug header** (`a-noJ5.dsn`: J5 deleted from placement + pins, its
+  nets' wiring stripped so they re-route fresh): clears exactly J5's own three
+  straggler terminals (EN.J5.3, DBG_IO5, VBUS_SENSE west leg) plus most of the
+  west funnel — but the NE-gate cluster (CS/DC/RST/BUSY/VPP), XTAL_32K_P
+  (105 wires of thrash before giving up), SCL's last 0.23mm and USB_D− are
+  untouched. The header is real load but NOT the bottleneck.
+- **Bare board** (`a-bare.dsn`: ALL wiring stripped — placement only, the
+  "could FR have routed this board from scratch" test): 29m47s, ~24 signal
+  nets unconnected, dominated by the J4/FPC ecosystem (every EPD rail + SPI
+  line + the fanout-adjacent HV nets) plus power trunks. **The hand-authored
+  copper is load-bearing**: the 0.18mm fanout relaxation is inexpressible in
+  DSN, and FR cannot escape the 0.5mm-pitch connector under 0.2/0.3 rules.
+
+**Spacing verdict:** spreading components would not rescue automation — the
+two hard chokes are pitch-fixed (J4's 0.5mm FPC fanout; U1's NE castellated
+pin gate), not inter-cluster spacing. Density between clusters is what FR
+already handles (west funnel cleared once J5's load left).
