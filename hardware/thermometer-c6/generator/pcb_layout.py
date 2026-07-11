@@ -407,6 +407,13 @@ TRACKS = [
     ("DBG_IO8", "F.Cu", 0.25, [(41.52, 28.75), "J5.8"]),
     ("DBG_IO5", "F.Cu", 0.25, [(42.79, 28.75), (42.79, 33.6), "J5.7"]),
 
+    # ~EPD_VPP: J4.19 is boxed at the fanout (VBAT east wall + ~EPD_VSH's via);
+    # authored all-F from C22.1 along y20.6->y20.15 and over the VBAT B wall into
+    # the pad, which evicts VSH's via from (45.0,20.4). Stage-2 feasibility shape.
+    ("~EPD_VPP", "F.Cu", 0.25, ["C22.1", (34.0, 20.7), (39.0, 20.6),
+                                (39.5, 20.15), (44.5, 20.15), (45.6, 20.05),
+                                "J4.19"]),
+
     # ---- J4 digital fan-out (pins 9..14) ----
     # The six lanes leave their pads at the connector's 0.5mm pitch and spread
     # to 0.7mm, which is what a 0.6mm via needs beside a neighbouring lane
