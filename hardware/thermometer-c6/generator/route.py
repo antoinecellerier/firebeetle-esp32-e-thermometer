@@ -112,7 +112,12 @@ ROUTE_PLAN = [
     ("XTAL_32K_N", 0.25, None),
     # sensors / divider / straps / LED / buttons / charger / debug
     ("SDA", 0.25, None),
-    ("SCL", 0.25, None),
+    # SCL is boxed to the west field + module: its U1.16 island's real fix
+    # is a paddle-seam west path (see LAYOUT-PLAN). Unboxed, the +3V3
+    # detour's east lane lets it "solve" as a 60mm tour down x19.65 and
+    # back along the south edge, eating the y31 lanes and the x2.7 west
+    # column that EN's SW1 sweep and LED_STATUS's descent need.
+    ("SCL", 0.25, None, (0.5, 11.0, 17.6, 29.0)),
     ("VBAT_ADC", 0.25, None),
     ("VDIV_EN", 0.25, None),
     ("~VDIV_TOP", 0.25, None),

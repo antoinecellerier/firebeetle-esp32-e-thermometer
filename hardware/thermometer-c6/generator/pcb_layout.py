@@ -346,9 +346,27 @@ TRACKS = [
     # ---- +3V3 trunk: LDO/U1 -> Q2 source (the only 465mA stretch) ----
     # Pinned, not autorouted: left to itself the router reaches Q2.2 from the
     # south-east and lays a 0.5mm B.Cu diagonal across the whole south of the
-    # board, walling off every J5-bound signal. The trunk belongs under L1.
-    ("+3V3", "B.Cu", 0.5, [(9.45, 19.55), (19.0, 19.55), (20.5, 18.05)]),
-    ("+3V3", "F.Cu", 0.5, [(20.5, 18.05), (22.3, 18.05), (23.25, 17.1),
+    # board, walling off every J5-bound signal.
+    # The B.Cu course detours SOUTH around the crystal cell (down x16.1,
+    # east y23.9, up x20.6): the old x16.1..20.5 straight-through at y19.55
+    # plus its elbow diagonal walled BOTH of XTAL_32K_P's C10.1/R9.1 bridge
+    # corridors (west B lane x16.7..17.6, east B lane x19.6..20.0), the last
+    # unroutable terminal of the crystal cell. Margins the detour threads:
+    # x16.1 clears IO5's x15.5 B descent by 0.600 and XTAL's (16.35,18.7)
+    # via by 0.85; y23.9 clears EN's SE yard-entry hook (the B dive under
+    # PWR_EN's F column at via (18.4,23.05), which a y22.3 course kills ->
+    # EN loses SW1) by 0.85, MOSI's y24.35 run by corner-Chebyshev 0.70
+    # and VBAT's (16.45,24.9) via by 1.0; x20.6 clears MOSI's x21.3
+    # descent by 0.70 and leaves XTAL the x19.6..20.0 lane.
+    ("+3V3", "B.Cu", 0.5, [(9.45, 19.55), (16.1, 19.55), (16.1, 23.9),
+                           (20.6, 23.9), (20.6, 18.05)]),
+    # TP4 -> U1.3 west 0.5mm link (the baseline router's own shape, pinned):
+    # left to A*, the y23.9 crossing offers the TP4/J5.2 island a cheaper
+    # x19.0 attach and U2.5 then hangs off TP4.1 alone -- the LDO->module
+    # 465mA path detours through the 0.25 J5.2 feed (check_pcb trunk fail).
+    ("+3V3", "B.Cu", 0.5, ["TP4.1", (11.6, 28.9), (8.55, 25.85),
+                           (8.55, 20.45), (9.45, 19.55)]),
+    ("+3V3", "F.Cu", 0.5, [(20.6, 18.05), (22.3, 18.05), (23.25, 17.1),
                            (23.25, 14.45)]),
     ("+3V3", "B.Cu", 0.5, [(23.25, 14.45), (24.5, 15.7), (27.1, 15.7)]),
     ("+3V3", "F.Cu", 0.5, [(27.1, 15.7), "Q2.2"]),
@@ -474,10 +492,13 @@ TRACKS = [
     # (south of ~SW_10U's via and diagonal), entering R24.2 from the south.
     # EN's SW1 column re-places west of x17.75; USB_D+'s (18.4,14.3) strip
     # via shifts east a step.
+    # (the wall dive via sits at the column's own longitude (17.75,26.1),
+    # south of the VBAT wall and 0.55 north of TP1's B pad: a westward F
+    # tail to x17.15 would deny VDIV_EN the x17.1 F window -- the only F
+    # crossing of the VBAT-wall latitudes left of MOSI)
     ("EPD_PWR_EN", "F.Cu", 0.25, ["U1.19", (17.3, 13.15), (17.75, 13.6),
-                                  (17.75, 24.9), (17.15, 25.5),
-                                  (17.15, 26.1)]),
-    ("EPD_PWR_EN", "B.Cu", 0.25, [(17.15, 26.1), (25.15, 26.1)]),
+                                  (17.75, 26.1)]),
+    ("EPD_PWR_EN", "B.Cu", 0.25, [(17.75, 26.1), (25.15, 26.1)]),
     ("EPD_PWR_EN", "F.Cu", 0.25, [(25.15, 26.1), (25.6, 25.65),
                                   (25.6, 23.65)]),
     ("EPD_PWR_EN", "B.Cu", 0.25, [(25.6, 23.65), (25.6, 19.8),
@@ -604,21 +625,17 @@ TRACKS = [
     ("+3V3", "B.Cu", 0.25, ["TP4.1", (13.45, 33.4), (31.9, 33.4),
                             (31.9, 32.3), (33.42, 32.3), (33.9, 31.82),
                             "J5.2"]),
-    ("VBUS_SENSE", "F.Cu", 0.25, ["U1.9", (14.2, 20.4)]),
     ("DBG_IO5", "F.Cu", 0.25, ["U1.10", (15.0, 20.4)]),
-    # The C9/R6 yard passes exactly two nets besides EN, and only with every
-    # lane authored: EN owns the U1.8 drop and the C9.1 via zone west of
-    # x14.1; VBUS_SENSE dips to y21.05 (south of IO5's via, north of EN's
-    # C9.1 via window) and descends x14.9 through the C9.1/C9.2 pad gap
-    # (B.Cu -- the C9/R6 pads are F-only); IO5 descends x15.5, west of
-    # R6.1's longitude. The IO5 stub must stop at x15.5: one grid step more
-    # and +3V3 loses the (16.1,20.8) via window that drops R6.1 to the
-    # trunk, re-routes through the crystal's F.Cu hook zone, and XTAL_32K_P
-    # then loops the west and south board edges to enter R9.1 from below,
-    # taking SDA's column and EN's SW1 lane with it. A* finishes both
-    # descents from y22.3+ over the corridor's x18..19.15 F columns.
-    ("VBUS_SENSE", "B.Cu", 0.25, [(14.2, 20.4), (14.2, 21.05), (14.9, 21.05),
-                                  (14.9, 22.3)]),
+    # The C9/R6 yard: EN owns the U1.8 drop and the C9.1 via zone west of
+    # x14.1; IO5 descends x15.5, west of R6.1's longitude. (VBUS_SENSE's
+    # former x14.9 descent is gone: with the +3V3 detour it routes its
+    # U1.9 leg north over the module and down the freed x19.65 east lane.)
+    # The IO5 stub must stop at x15.5: one grid step more and +3V3 loses
+    # the R6.1 via window that drops it to the trunk, re-routes through
+    # the crystal's F.Cu hook zone, and XTAL_32K_P then loops the west and
+    # south board edges to enter R9.1 from below, taking SDA's column and
+    # EN's SW1 lane with it. A* finishes the descent from y22.6+ over the
+    # corridor's x18..19.15 F columns.
     ("DBG_IO5", "B.Cu", 0.25, [(15.0, 20.4), (15.5, 20.4), (15.5, 22.6)]),
     # EN's yard set, authored end to end: greedily-routed neighbours squeeze
     # U1.8's drop out of existence from either side of the ROUTE_PLAN (routed
@@ -649,6 +666,17 @@ TRACKS = [
     # EN's ROUTE_PLAN entry carries hweight so weighted A* can reach this tail
     # across the ~19mm contended corridor inside max_pop.
     ("EN", "F.Cu", 0.25, [(35.17, 28.75), (35.17, 33.6), "J5.3"]),
+
+    # VDIV_EN's yard entry, one F vertical: the +3V3 detour's y23.9 B
+    # crossing kills its old B hop (via 0.45 north of the trunk), and
+    # unauthored it re-routes 40mm around the west edge, taking EN's SW1
+    # column (x5.7) and LED_STATUS's descent with it. x17.1 is the only F
+    # window over the VBAT-wall latitudes west of MOSI: 0.65 from both
+    # VBAT's (16.45,24.9) via annulus and PWR_EN's (17.75,24.9) one, all
+    # three B crossings (trunk y23.9, VBAT wall, PWR_EN y26.1) underneath.
+    # A* joins Q5's gate territory at the south end and the old F lane
+    # west to R19.1/U1.6 at the north end.
+    ("VDIV_EN", "F.Cu", 0.25, [(17.1, 26.5), (17.1, 22.95)]),
 ]
 
 VIAS = [
@@ -664,7 +692,7 @@ VIAS = [
     # MOSI's drop east of the pad column; PWR_EN's four hops (wall
     # over-and-back, climb)
     ("EPD_MOSI", 20.1, 14.55),
-    ("EPD_PWR_EN", 17.15, 26.1),
+    ("EPD_PWR_EN", 17.75, 26.1),
     ("EPD_PWR_EN", 25.15, 26.1),
     ("EPD_PWR_EN", 25.6, 23.65),
     ("EPD_PWR_EN", 25.55, 19.75),
@@ -678,7 +706,6 @@ VIAS = [
     ("DBG_TX", 11.0, 8.05),
     ("DBG_RX", 11.8, 8.05),
     ("DBG_IO8", 16.7, 10.75),
-    ("VBUS_SENSE", 14.2, 20.4),
     ("DBG_IO5", 15.0, 20.4),
     # EN's U1.8 drop and its return into the F.Cu C9.1->R6.2 link
     ("EN", 13.4, 20.4),
@@ -740,7 +767,7 @@ VIAS = [
     ("VBAT_ADC", 10.89, 26.0),
     # +3V3 trunk hops; (9.45,19.55) is a via-in-pad on U1.3, (28.4,18.93) on C28.1
     ("+3V3", 9.45, 19.55),
-    ("+3V3", 20.5, 18.05),
+    ("+3V3", 20.6, 18.05),
     ("+3V3", 23.25, 14.45),
     ("+3V3", 27.1, 15.7),
     ("+3V3", 28.4, 18.93),
