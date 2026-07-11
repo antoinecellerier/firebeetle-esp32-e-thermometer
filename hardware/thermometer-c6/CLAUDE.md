@@ -24,6 +24,9 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
   the A* autorouter over whatever is left and **overwrites**
   `generator/pcb_routes.py` wholesale (~2.5min, deterministic, checked in) —
   so every hand-tweak belongs in `pcb_layout.py`, never in `pcb_routes.py`.
+- Hand-editing in the KiCad GUI (routing stragglers, placement tweaks)
+  follows `HAND-ROUTING.md` exactly: copy to `out/hand/`, route there,
+  harvest via `extract_tracks.py` into `pcb_layout.py`.
 - Gate: `make check` + `make drc` copper-clean + `python3 verify/check_pcb.py`.
   `starved_thermal` waits for M6's pours, `silk_*` for M7. Dangling copper on
   a still-unrouted net is expected and disappears when it routes; dangling
