@@ -224,10 +224,15 @@ def add_tracks(board, netinfo, alias, pads):
                 raise SystemExit(f"pcb: track node {node} is on net "
                                  f"'{pad.GetNetname()}', not '{net}' ({exp})")
             pts.append(pos)
-        path = []
-        for i in range(len(pts) - 1):
-            seg = expand_dogleg(pts[i], pts[i + 1])
-            path.extend(seg if not path else seg[1:])
+        if pl.HAND_ROUTED:
+            # harvested GUI copper is verbatim geometry -- a dogleg insert
+            # would corrupt any deliberate non-45-degree segment
+            path = pts
+        else:
+            path = []
+            for i in range(len(pts) - 1):
+                seg = expand_dogleg(pts[i], pts[i + 1])
+                path.extend(seg if not path else seg[1:])
         paths.append((exp, layer, width, path))
 
     split_tees(paths)

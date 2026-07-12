@@ -28,8 +28,8 @@ import circuit  # noqa: E402
 import pcb_layout as pl  # noqa: E402
 
 GRID = 0.05
-W = int(round(pl.BOARD["size"][0] / GRID))  # 960
-H = int(round(pl.BOARD["size"][1] / GRID))  # 700
+W = int(round(pl.BOARD["size"][0] / GRID))  # 980
+H = int(round(pl.BOARD["size"][1] / GRID))  # 720
 OX, OY = pl.BOARD["origin"]
 
 VIA_R = pl.DEFAULT_VIA["diameter"] / 2
@@ -41,7 +41,7 @@ EDGE_CLR = 0.2
 BASE_CLR = 0.2
 HV_CLR = 0.3
 HV_CLR_RELAXED = 0.18
-MARKER = (39.5, 8.0, 48.0, 25.5)   # fpc-fanout rule area
+MARKER = (39.5, 8.0, pl.BOARD["size"][0], 25.5)   # fpc-fanout rule area
 
 HV_NETS = {"EPD_PREVGH", "EPD_PREVGL", "~EPD_VGH", "~EPD_VGL",
            "~EPD_VSH", "~EPD_VSL", "~EPD_VCOM", "~EPD_VPP"}
@@ -846,6 +846,17 @@ def report_delta(prev, new_tracks, new_vias, failed):
 
 
 def main():
+    try:
+        import pcb_routes
+        if getattr(pcb_routes, "HAND_ROUTED", False) \
+                and not os.environ.get("FORCE_REROUTE"):
+            raise SystemExit(
+                "route: pcb_routes.py holds the harvested GUI hand-routing "
+                "(HAND_ROUTED sentinel) and this run would overwrite it.\n"
+                "Edit copper in the GUI + extract_tracks.py --all instead "
+                "(HAND-ROUTING.md), or set FORCE_REROUTE=1 to destroy it.")
+    except ImportError:
+        pass
     check_plan_covers_nets()
     pads = load_pads()
     alias = net_alias(pads)

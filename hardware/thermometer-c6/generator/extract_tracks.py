@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """Extract tracks/vias from a .kicad_pcb into pcb_layout TRACKS/VIAS lines.
 
-Escape hatch for manual routing: route a net interactively in KiCad, save a
-COPY of the board (never the generated one), then run
+Escape hatch for manual routing: route interactively in KiCad on a COPY of
+the board (never the generated one), then either
 
     python3 generator/extract_tracks.py /path/to/copy.kicad_pcb NET [NET...]
 
-and paste the printed entries into generator/pcb_routes.py (or pcb_layout.py
-for hand-authored copper). Coordinates come out board-relative, matching
-BOARD["origin"]. Net names are the exported KiCad names; anonymous nets can
-be given as the circuit.py "~" name via the pin-set mapping in pcb.py, so
-paste the name the board file uses and rename by hand if needed.
+and paste the printed entries into generator/pcb_layout.py, or harvest the
+whole board (every net with copper except GND) as a complete pcb_routes.py:
+
+    python3 generator/extract_tracks.py /path/to/copy.kicad_pcb --all \\
+        > generator/pcb_routes.py
+
+Coordinates come out board-relative, matching BOARD["origin"]. In per-net
+mode net names are the exported KiCad names (rename anonymous nets to their
+circuit.py "~" names by hand); --all renames them automatically via pcb.py's
+netlist alias map (needs out/netlist.net, i.e. run `make netlist` first).
 """
 import sys
 from collections import defaultdict
@@ -22,13 +27,38 @@ import pcb_layout as pl  # noqa: E402
 
 OX, OY = pl.BOARD["origin"]
 
+HAND_HEADER = '''\
+"""Hand-routed copper, harvested wholesale from the KiCad GUI working copy.
+Regenerate ONLY with `extract_tracks.py BOARD --all > pcb_routes.py` after a
+GUI editing pass (HAND-ROUTING.md). `make route` refuses to overwrite this
+file while HAND_ROUTED is set (FORCE_REROUTE=1 overrides and DESTROYS it)."""
+
+HAND_ROUTED = True
+'''
+
 
 def main():
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
     board = pcbnew.LoadBoard(sys.argv[1])
-    wanted = set(sys.argv[2:])
     layer_name = {pcbnew.F_Cu: "F.Cu", pcbnew.B_Cu: "B.Cu"}
+
+    # --all: every net with copper except GND (the M6 pour owns GND), printed
+    # as a complete pcb_routes.py module; anonymous nets are renamed from
+    # their exported KiCad names back to circuit.py's "~" names.
+    wholesale = sys.argv[2] == "--all"
+    if wholesale:
+        import pcb
+        rename = {exp: name for name, exp in pcb.build_net_maps()[2].items()}
+        wanted = {t.GetNetname() for t in board.GetTracks()} - {"GND", ""}
+        unknown = wanted - set(rename)
+        if unknown:
+            raise SystemExit(f"extract_tracks: nets not in the netlist "
+                             f"(stale board?): {sorted(unknown)}")
+        print(HAND_HEADER)
+    else:
+        wanted = set(sys.argv[2:])
+        rename = {}
 
     tracks = defaultdict(list)   # (net, layer, width) -> [segments]
     vias = []
@@ -36,6 +66,7 @@ def main():
         net = t.GetNetname()
         if net not in wanted:
             continue
+        net = rename.get(net, net)
         if t.GetClass() == "PCB_VIA":
             p = t.GetPosition()
             vias.append((net, round(p.x / 1e6 - OX, 3),
@@ -48,8 +79,11 @@ def main():
                 ((round(s.x / 1e6 - OX, 3), round(s.y / 1e6 - OY, 3)),
                  (round(e.x / 1e6 - OX, 3), round(e.y / 1e6 - OY, 3))))
 
+    if wholesale:
+        print("TRACKS = [")
     # chain segments into polylines where endpoints meet
-    for (net, layer, width), segs in tracks.items():
+    items = sorted(tracks.items()) if wholesale else list(tracks.items())
+    for (net, layer, width), segs in items:
         segs = segs[:]
         while segs:
             chain = list(segs.pop(0))
@@ -72,8 +106,14 @@ def main():
                     break
             pts = ", ".join(f"({x}, {y})" for x, y in chain)
             print(f"    ({net!r}, {layer!r}, {width}, [{pts}]),")
-    for net, x, y in vias:
-        print(f"    ({net!r}, {x}, {y}),  # via")
+    if wholesale:
+        print("]\n\nVIAS = [")
+        for net, x, y in sorted(vias):
+            print(f"    ({net!r}, {x}, {y}),")
+        print("]")
+    else:
+        for net, x, y in vias:
+            print(f"    ({net!r}, {x}, {y}),  # via")
 
 
 if __name__ == "__main__":
