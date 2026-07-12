@@ -38,6 +38,14 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
 - pcbnew's zone fill is **not byte-stable**: back-to-back `pcb.py` runs can
   leave `thermometer-c6.kicad_pcb` dirty with nothing but `(xy ...)` fill
   coordinates changed. `git diff` it before believing you changed the board.
+- **Stale `__pycache__` renders phantom copper**: rewriting `pcb_routes.py`
+  twice within the same second with the same file size makes the old
+  bytecode cache entry look valid, and the next `pcb.py` renders copper
+  that is not on disk (phantom DRC shorts, gate flapping). Any tool that
+  rewrites generator modules in a loop must run children with
+  `PYTHONDONTWRITEBYTECODE=1` (straighten.py does); when DRC results look
+  impossible, `rm -rf generator/__pycache__` and re-render before believing
+  them.
 
 ### What DRC actually enforces (not what `pcb.py` sets)
 
