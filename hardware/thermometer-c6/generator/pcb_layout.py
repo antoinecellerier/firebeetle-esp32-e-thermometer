@@ -242,6 +242,9 @@ TRACKS = [
     ("GND", "F.Cu", 0.15, [(34.825, 19.650), (33.725, 19.650)]),
     ("GND", "F.Cu", 0.15, [(14.600, 4.780), (14.580, 5.250)]),
     ("GND", "F.Cu", 0.15, [(1.840, 21.900), (1.840, 22.400)]),
+    # U5.8/9 escape: west across the clear F.Cu gap to a stitch via into the
+    # B.Cu west-edge plane (via at 0.70,21.90, below the antenna keep-out).
+    ("GND", "F.Cu", 0.15, [(1.840, 21.900), (0.700, 21.900)]),
 ]
 
 VIAS = []
@@ -251,6 +254,7 @@ VIAS = []
 # fill on both layers with >=0.28mm inward margin (auto-clears other-net copper
 # to spec) and >=0.55mm centre-to-centre from every other hole.
 STITCH = [
+    (0.700, 21.900),
     (26.650, 1.575),
     (7.290, 3.040),
     (16.050, 5.500),
