@@ -203,6 +203,13 @@ KEEPOUTS = [
     # edge, all copper kept out on both layers per Espressif HDG
     dict(name="antenna", layers=["F.Cu", "B.Cu"], rect=(0, 7.25, 5.3, 20.65),
          tracks=True, vias=True, fills=True, pads=False),
+    # extra RF margin east of the antenna keep-out (out/topo/REPORT.md
+    # audit): the hand-routing cleared this strip of tracks/vias -- lock
+    # that in so later passes can't regress it. GND pour stays allowed
+    # (adjacent ground is the antenna's counterpoise per the module HDG).
+    dict(name="antenna-margin", layers=["F.Cu", "B.Cu"],
+         rect=(5.3, 8.5, 7.0, 18.0),
+         tracks=True, vias=True, fills=False, pads=False),
     # no copper/vias/pour under either pressure sensor (Bosch handling +
     # thermal-fidelity guidance)
     # sensors: no vias/pour under the body; the LGA's own escape traces are

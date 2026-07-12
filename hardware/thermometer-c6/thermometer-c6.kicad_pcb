@@ -31875,6 +31875,37 @@
 	(zone
 		(layers "F.Cu" "B.Cu")
 		(uuid "09ef368e-b936-5ec4-8c59-ee182a8ba7c6")
+		(name "antenna-margin")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks not_allowed)
+			(vias not_allowed)
+			(pads allowed)
+			(copperpour allowed)
+			(footprints allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy 105.3 108.5) (xy 107 108.5) (xy 107 118) (xy 105.3 118)
+			)
+		)
+	)
+	(zone
+		(layers "F.Cu" "B.Cu")
+		(uuid "6254c435-bdfa-5945-96ee-5e8ba103b5f2")
 		(name "fpc-fanout")
 		(hatch edge 0.5)
 		(connect_pads
@@ -31906,7 +31937,7 @@
 	(zone
 		(net "GND")
 		(layer "B.Cu")
-		(uuid "6254c435-bdfa-5945-96ee-5e8ba103b5f2")
+		(uuid "07bacc2b-ad34-577c-a9f6-0e861f8874df")
 		(hatch edge 0.5)
 		(connect_pads
 			(clearance 0.5)

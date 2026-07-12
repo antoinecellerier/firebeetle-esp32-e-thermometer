@@ -23,14 +23,19 @@ zero violations at all severities, exported netlist exactly matches
 invariants, footprints resolve, zero label-over-wire/body overlaps
 (build-fatal), zero wire crossings, zone frames auto-fit.
 
-**PCB phase (the milestones at the bottom of this file): M1–M4 done, M5
-signal routing in progress.** The board is 48×35mm, 2-layer, DRC copper-clean.
-Placement and hand-authored copper live in `generator/pcb_layout.py`; the rest
-is autorouted into `generator/pcb_routes.py`. `make route` prints the current
-unrouted terminals — that list is the M5 to-do, so read it rather than trust
-any list written down here. The routing rules the router and DRC actually
-enforce, the geometry traps, and the review tools are all in `CLAUDE.md`; read
-that before touching copper.
+**PCB phase (the milestones at the bottom of this file): M1–M5 DONE, next
+M6 (GND pour + stitching).** The board is 49×36mm, 2-layer, DRC copper-clean,
+every non-GND net routed. M5 closed 2026-07-12 via **complete GUI
+hand-routing by the user** (after three autorouters — greedy A*, PathFinder
+negotiation, Freerouting — all stalled on the same 12-terminal knot; see
+PATHFINDER-NOTES.md). The copper now lives wholesale in
+`generator/pcb_routes.py` (HAND_ROUTED sentinel; `make route` refuses to
+touch it; as-routed snapshot in `archive/`). Copper edits go through the GUI
+round-trip in `HAND-ROUTING.md` or direct polyline edits in `pcb_routes.py`,
+gated by DRC (`verify/drc_summary.py --gate` + `verify/check_pcb.py`). The
+M5-state sections and corridor surveys below are HISTORICAL archaeology.
+Next: topology-driven simplification (report `out/topo/REPORT.md`, tool
+`verify/topo.py`), then M6.
 
 How this project works (do not break it):
 - The `.kicad_sch` is GENERATED. Single source of truth =

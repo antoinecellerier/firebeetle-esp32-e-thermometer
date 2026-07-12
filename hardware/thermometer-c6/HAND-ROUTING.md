@@ -41,14 +41,21 @@ the `fpc-fanout` area, 0.5mm power widths). `out/` is gitignored.
 
 ## 3. Harvest tracks/vias back into the generator
 
+Since M5 the whole board is hand-routed and `pcb_routes.py` is the copper
+source of truth — harvest wholesale:
+
 ```bash
-python3 generator/extract_tracks.py out/hand/thermometer-c6.kicad_pcb NET [NET ...]
+python3 generator/extract_tracks.py out/hand/thermometer-c6.kicad_pcb --all \
+    -o generator/pcb_routes.py
+python3 generator/pcb.py     # re-render, then gate (step 5)
 ```
 
-Paste the printed TRACKS/VIAS entries into `generator/pcb_layout.py` —
-**never into `pcb_routes.py`** (that file is overwritten wholesale by
-`make route`). Anonymous nets print under their exported KiCad names
-(`Net-(J1-Pin_1)` style); rename to the `~` names `pcb_layout.py` uses.
+Always use `-o` (atomic write) — **never a shell `>` redirect**, which
+truncates `pcb_routes.py` before the harvester's own imports run.
+Anonymous nets are renamed to their `~` names automatically (needs
+`out/netlist.net`; run `make netlist` once if missing). Per-net mode
+(`... NET [NET ...]`, prints entries for pasting) still exists for
+surgical work.
 
 ## 4. Placement tweaks (two traps)
 
@@ -68,13 +75,14 @@ Paste the printed TRACKS/VIAS entries into `generator/pcb_layout.py` —
 ## 5. Gate every iteration
 
 ```bash
-make route          # re-places all free nets around the new authored copper
-make drc            # real rules incl. fanout relaxation
+make check
+python3 verify/drc_summary.py --gate   # REAL=0 required
+python3 verify/check_pcb.py            # trunk width, keep-out intersects
 ```
 
-Read the straggler **delta** that `make route` prints (fixed/new + which
-nets re-placed) — one cluster per iteration, otherwise failures 15mm away
-are unattributable. `make check` before committing.
+Unconnected items must be GND-only (the M6 pour owns GND). Beware stale
+`out/drc.json` — regenerate before reading it. (`make route` is retired:
+it aborts on the HAND_ROUTED sentinel.)
 
 ## 6. Commit
 

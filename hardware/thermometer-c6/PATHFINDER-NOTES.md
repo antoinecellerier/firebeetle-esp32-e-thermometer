@@ -173,3 +173,22 @@ Three DSN-space experiments quantify what makes the board hard (all Freerouting
 two hard chokes are pitch-fixed (J4's 0.5mm FPC fanout; U1's NE castellated
 pin gate), not inter-cluster spacing. Density between clusters is what FR
 already handles (west funnel cleared once J5's load left).
+
+## Resolution (2026-07-12): M5 closed by complete GUI hand-routing
+
+The user hand-routed the ENTIRE board in the KiCad GUI (all non-GND nets,
+DRC-clean, board grown 48×35 → 49×36, ~36% of segments rerouted vs the
+autorouted baseline). Every knot the three routers stalled on fell to
+interactive rip-up with human judgment. The copper was harvested wholesale
+into `generator/pcb_routes.py` (HAND_ROUTED sentinel; `extract_tracks.py
+--all -o`); route.py/pathfind.py remain for archaeology and a hypothetical
+from-scratch re-route only. As-routed snapshot: `archive/`. Follow-on
+analysis: `verify/topo.py` + `out/topo/REPORT.md` (pour-damage ranking,
+antenna-strip audit, power-via audit).
+
+Also for the record: cluster-scoped Opus agents with the corridor facts DID
+make real progress where batch autorouters could not (~EPD_VPP, EN, XTAL —
+12→9 in one round, commits b51af3a/1db17ea/1773b61, all since superseded by
+the hand routing). The binding lesson stands: on a board this dense the
+productive split is human rip-up in the GUI + scripted harvest/gating, not
+better autorouting.
