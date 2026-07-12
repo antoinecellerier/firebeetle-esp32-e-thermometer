@@ -19,21 +19,22 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
 ## PCB workflow
 
 - **IMPORTANT: never hand-edit `thermometer-c6.kicad_pcb` — it is generated.**
-  Authored data lives in `generator/pcb_layout.py` (PLACE / TRACKS / VIAS /
-  KEEPOUTS / zones); `make pcb` renders the board from it. `make route` runs
-  the A* autorouter over whatever is left and **overwrites**
-  `generator/pcb_routes.py` wholesale (~2.5min, deterministic, checked in) —
-  so every hand-tweak belongs in `pcb_layout.py`, never in `pcb_routes.py`.
-- Hand-editing in the KiCad GUI (routing stragglers, placement tweaks)
-  follows `HAND-ROUTING.md` exactly: copy to `out/hand/`, route there,
-  harvest via `extract_tracks.py` into `pcb_layout.py`.
-- Gate: `make check` + `make drc` copper-clean + `python3 verify/check_pcb.py`.
-  `starved_thermal` waits for M6's pours, `silk_*` for M7. Dangling copper on
-  a still-unrouted net is expected and disappears when it routes; dangling
-  copper on a *routed* net is authored copper the router bypassed — delete it.
-- Never document coordinates taken from `pcb_routes.py`. It is regenerated
-  from scratch on every `make route`; those numbers are fiction as soon as
-  anything moves. Authored geometry in `pcb_layout.py` is the durable kind.
+  Authored data lives in `generator/pcb_layout.py` (PLACE / KEEPOUTS / zones;
+  TRACKS/VIAS are empty since M5); `make pcb` renders the board from it plus
+  `generator/pcb_routes.py`.
+- **Since M5, `pcb_routes.py` IS the board's copper**: the complete GUI
+  hand-routing, harvested verbatim (`HAND_ROUTED` sentinel — pcb.py renders
+  it without dogleg insertion, `make route` refuses to overwrite it without
+  `FORCE_REROUTE=1`; route.py/the A* survive only for archaeology and for
+  a hypothetical re-route from scratch). Copper edits happen in the KiCad
+  GUI per `HAND-ROUTING.md` (copy in `out/hand/`, edit, then
+  `extract_tracks.py COPY --all > generator/pcb_routes.py`), or by editing
+  the polyline data in `pcb_routes.py` directly for small mechanical tweaks
+  — both are legitimate; DRC is the gate either way.
+- Gate: `make check` + DRC copper-clean (`python3 verify/drc_summary.py
+  --gate`, REAL=0) + `python3 verify/check_pcb.py`. `starved_thermal` waits
+  for M6's pours, `silk_*` for M7; unconnected = GND-only until the pour.
+  Beware `out/drc.json` staleness — regenerate before reading it.
 - pcbnew's zone fill is **not byte-stable**: back-to-back `pcb.py` runs can
   leave `thermometer-c6.kicad_pcb` dirty with nothing but `(xy ...)` fill
   coordinates changed. `git diff` it before believing you changed the board.

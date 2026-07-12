@@ -10,19 +10,27 @@ and paste the printed entries into generator/pcb_layout.py, or harvest the
 whole board (every net with copper except GND) as a complete pcb_routes.py:
 
     python3 generator/extract_tracks.py /path/to/copy.kicad_pcb --all \\
-        > generator/pcb_routes.py
+        -o generator/pcb_routes.py
+
+(-o writes atomically; NEVER use a shell `>` redirect to pcb_routes.py --
+it truncates the file before python imports run.)
 
 Coordinates come out board-relative, matching BOARD["origin"]. In per-net
 mode net names are the exported KiCad names (rename anonymous nets to their
 circuit.py "~" names by hand); --all renames them automatically via pcb.py's
 netlist alias map (needs out/netlist.net, i.e. run `make netlist` first).
 """
+import os
 import sys
 from collections import defaultdict
 
 import pcbnew
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
+# the harvest reads copper from the LoadBoard'd file, never from the
+# checked-in routes -- and importing them would break when -o targets
+# pcb_routes.py itself (truncate-then-import)
+os.environ["PCB_NO_ROUTES"] = "1"
 import pcb_layout as pl  # noqa: E402
 
 OX, OY = pl.BOARD["origin"]
@@ -117,4 +125,23 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    argv = sys.argv[1:]
+    outpath = None
+    if "-o" in argv:
+        i = argv.index("-o")
+        outpath = argv[i + 1]
+        del argv[i:i + 2]
+        sys.argv = sys.argv[:1] + argv
+    if outpath:
+        # atomic write: never truncate the target (it may be the very
+        # pcb_routes.py a failed run would otherwise destroy)
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main()
+        tmp = outpath + ".tmp"
+        open(tmp, "w").write(buf.getvalue())
+        os.replace(tmp, outpath)
+    else:
+        main()
