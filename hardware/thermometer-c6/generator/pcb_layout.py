@@ -191,6 +191,12 @@ STITCH = []
 COPPER_ZONES = [
     ("GND", "B.Cu", [(0, 0), (BOARD["size"][0], 0),
                      BOARD["size"], (0, BOARD["size"][1])]),
+    # F.Cu GND pour (M6): picks up the 77 top-only GND pads (U1's ground
+    # array above all) and doubles as the antenna counterpoise in the
+    # antenna-margin area; excluded from the antenna + sensor keep-outs
+    # like the B pour. Priorities don't interact across layers.
+    ("GND", "F.Cu", [(0, 0), (BOARD["size"][0], 0),
+                     BOARD["size"], (0, BOARD["size"][1])]),
 ]
 
 KEEPOUTS = [
