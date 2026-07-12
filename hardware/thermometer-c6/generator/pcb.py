@@ -252,20 +252,24 @@ def add_tracks(board, netinfo, alias, pads):
 
 
 def add_vias(board, netinfo, alias):
-    def one(net, x, y):
+    def one(net, x, y, dia, drill):
         v = pcbnew.PCB_VIA(board)
         v.SetPosition(bmm(x, y))
-        v.SetDrill(FromMM(pl.DEFAULT_VIA["drill"]))
-        v.SetWidth(FromMM(pl.DEFAULT_VIA["diameter"]))
+        v.SetDrill(FromMM(drill))
+        v.SetWidth(FromMM(dia))
         v.SetViaType(pcbnew.VIATYPE_THROUGH)
         v.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
         v.SetNet(netinfo[alias[net]])
         board.Add(v)
 
     for net, x, y in pl.VIAS:
-        one(net, x, y)
+        one(net, x, y, pl.DEFAULT_VIA["diameter"], pl.DEFAULT_VIA["drill"])
+    # GND stitch vias: 0.5mm/0.3mm (board/JLC minimum) — the 0.6mm default
+    # cannot clear neighbouring copper in the dense pockets, leaving many GND
+    # groups unroutable; 0.5mm halves the required clearance shadow.
+    sv = getattr(pl, "STITCH_VIA", pl.DEFAULT_VIA)
     for x, y in pl.STITCH:
-        one("GND", x, y)
+        one("GND", x, y, sv["diameter"], sv["drill"])
 
 
 def add_zones(board, netinfo, alias):
@@ -325,6 +329,10 @@ def design_settings(board):
     ds.m_ViasMinSize = FromMM(0.5)
     ds.m_MinThroughDrill = FromMM(0.3)
     ds.m_CopperEdgeClearance = FromMM(0.2)  # JLC min; USB-C edge pads sit at 0.31
+    # Accept single-spoke thermal relief on GND pads (default 2). Many GND pads
+    # on tightly-packed 0402s can only take one spoke without moving parts; one
+    # spoke is a valid connection. Narrowest fix for starved_thermal.
+    ds.m_MinResolvedSpokes = 1
 
 
 def write_dru(alias):
