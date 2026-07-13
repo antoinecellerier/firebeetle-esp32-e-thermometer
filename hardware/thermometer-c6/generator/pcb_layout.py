@@ -326,14 +326,17 @@ KEEPOUTS = [
     dict(name="antenna-margin", layers=["F.Cu", "B.Cu"],
          rect=(5.3, 8.5, 7.0, 18.0),
          tracks=True, vias=True, fills=False, pads=False),
-    # no copper/vias/pour under either pressure sensor (Bosch handling +
-    # thermal-fidelity guidance)
-    # sensors: no vias/pour under the body; the LGA's own escape traces are
-    # unavoidable (Bosch reference layouts route them), so tracks stay legal
+    # No copper POUR under either pressure sensor (Bosch thermal-fidelity
+    # guidance -- a large-area pour would thermally couple the temp die to the
+    # board). Tracks AND vias stay legal: the LGA's escape traces are
+    # unavoidable, and a single GND via is a comparable thermal path while
+    # buying a low-inductance B-plane ground for the sensor's GND pad. Only
+    # `fills` (pour) is barred; keep the sensor GND vias off the die pad
+    # itself (via-in-pad wicks solder on an assembled LGA).
     dict(name="U5-sensor", layers=["F.Cu", "B.Cu"], rect=(1.3, 21.1, 3.9, 23.7),
-         tracks=False, vias=True, fills=True, pads=False),
+         tracks=False, vias=False, fills=True, pads=False),
     dict(name="U6-sensor", layers=["F.Cu", "B.Cu"], rect=(0.8, 24.7, 4.6, 28.5),
-         tracks=False, vias=True, fills=True, pads=False),
+         tracks=False, vias=False, fills=True, pads=False),
 ]
 
 SILK = []
