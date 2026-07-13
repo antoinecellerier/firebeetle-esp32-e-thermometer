@@ -190,6 +190,10 @@ def main():
         if needed not in areas:
             fail(f"rule area '{needed}' missing")
     rects = {k["name"]: k["rect"] for k in pl.KEEPOUTS}
+    # vias are only barred from rule areas whose keepout forbids them (antenna);
+    # the sensor keep-outs relax vias=False so a single GND stitch via can buy a
+    # low-inductance B-plane ground for the sensor's GND pad (pcb_layout.py).
+    via_forbidden = {k["name"]: k.get("vias", True) for k in pl.KEEPOUTS}
     sensor_pads_ok = {"U5", "U6", "H2"}  # sensor's own pads sit inside by design
     for name in ("antenna", "U5-sensor", "U6-sensor"):
         if name not in areas or name not in rects:
@@ -197,6 +201,8 @@ def main():
         z, rect = areas[name], rects[name]
         for t in board.GetTracks():
             if t.GetClass() == "PCB_VIA":
+                if not via_forbidden.get(name, True):
+                    continue
                 r = pl.DEFAULT_VIA["diameter"] / 2
                 if pt_in_rect(rel(t.GetPosition()), rect, r):
                     fail(f"via on net {t.GetNetname()} intersects rule area {name}")
