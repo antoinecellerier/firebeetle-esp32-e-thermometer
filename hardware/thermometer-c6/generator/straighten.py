@@ -8,7 +8,11 @@ connectivity survives. Endpoints never move (they anchor to pads/vias/other
 tracks); interior vertices that coincide with a same-net vertex or a via are
 load-bearing junctions and are left alone.
 
-    python3 generator/straighten.py [--dry-run] [--sep MM] [--min-save MM]
+    python3 generator/straighten.py [--layout] [--dry-run] [--sep MM] [--min-save MM]
+
+--layout straightens pcb_layout.py's GND TRACKS instead of pcb_routes.py's
+signal TRACKS (same gate; the GND lacing polylines take the identical
+interior-vertex-delete + collinear-merge treatment).
 
 --dry-run reports what the collinear pass and shortcut candidates would do
 without rendering or touching pcb_routes.py. A real run rewrites pcb_routes.py
@@ -42,8 +46,19 @@ PROJECT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 ROUTES = os.path.join(HERE, "pcb_routes.py")
+LAYOUT = os.path.join(HERE, "pcb_layout.py")
 BOARD = os.path.join(PROJECT, "thermometer-c6.kicad_pcb")
 DRC_JSON = os.path.join(PROJECT, "out", "drc.json")
+
+# Which polyline list to straighten: "routes" = pcb_routes.py TRACKS (signal
+# copper), "layout" = pcb_layout.py TRACKS (the GND lacing). The gate is
+# identical either way (pcb.py renders both files); only the load/write ends
+# differ. Set from --layout in main().
+TARGET = "routes"
+
+
+def target_file():
+    return LAYOUT if TARGET == "layout" else ROUTES
 
 # DRC violation types that never gate copper edits: M6 pours + M7 silk.
 WAIVED = {"starved_thermal", "silk_edge_clearance", "silk_overlap",
@@ -102,9 +117,29 @@ def seg_rect_dist(a, b, rect):
 # --- model I/O -------------------------------------------------------------
 
 def load():
-    """Fresh import of pcb_routes -> (tracks, vias). tracks are mutable:
-    [net, layer, width, [(x, y), ...]]."""
+    """Fresh import of the target module -> (tracks, vias). tracks are mutable:
+    [net, layer, width, [(x, y), ...]]. For the layout (GND) target the STITCH
+    vias stand in for `vias` so GND vertices sitting on a stitch via are treated
+    as load-bearing junctions."""
     import importlib
+    if TARGET == "layout":
+        # pcb_layout appends pcb_routes.TRACKS unless PCB_NO_ROUTES is set, so
+        # reload with it set to get the GND-only list, then restore the env so
+        # the subprocess renders (which own connectivity) still see full copper.
+        prev = os.environ.get("PCB_NO_ROUTES")
+        os.environ["PCB_NO_ROUTES"] = "1"
+        try:
+            import pcb_layout
+            importlib.reload(pcb_layout)
+            tracks = [[n, l, w, [tuple(p) for p in pts]]
+                      for n, l, w, pts in pcb_layout.TRACKS]
+            vias = [("GND", x, y) for (x, y) in pcb_layout.STITCH]
+        finally:
+            if prev is None:
+                del os.environ["PCB_NO_ROUTES"]
+            else:
+                os.environ["PCB_NO_ROUTES"] = prev
+        return tracks, vias
     import pcb_routes
     importlib.reload(pcb_routes)
     tracks = [[n, l, w, [tuple(p) for p in pts]]
@@ -113,8 +148,11 @@ def load():
 
 
 def write(tracks, vias):
-    """Rewrite pcb_routes.py, preserving the header and the extract_tracks.py
-    formatting so unchanged entries stay byte-identical."""
+    """Rewrite the target file's TRACKS, preserving everything else and the
+    extract_tracks.py formatting so unchanged entries stay byte-identical."""
+    if TARGET == "layout":
+        write_layout(tracks)
+        return
     orig = open(ROUTES).read()
     head = orig[:orig.index("\nTRACKS = [\n") + 1]
     lines = [head + "TRACKS = ["]
@@ -128,6 +166,25 @@ def write(tracks, vias):
     tmp = ROUTES + ".tmp"
     open(tmp, "w").write("\n".join(lines) + "\n")
     os.replace(tmp, ROUTES)
+
+
+def write_layout(tracks):
+    """Splice the GND TRACKS block back into pcb_layout.py in place, leaving
+    VIAS/STITCH/PLACE/zones untouched. Double-quoted strings match the checked-in
+    style so unchanged rows stay byte-identical."""
+    src = open(LAYOUT).read()
+    body = "\n".join(
+        '    ("{}", "{}", {}, [{}]),'.format(
+            net, layer, width,
+            ", ".join(f"({x}, {y})" for x, y in pts))
+        for net, layer, width, pts in tracks)
+    m = re.search(r"TRACKS = \[\n.*?\n\]\nVIAS = \[\]", src, re.DOTALL)
+    if not m:
+        raise SystemExit("straighten: pcb_layout TRACKS/VIAS block not found")
+    src = src[:m.start()] + "TRACKS = [\n" + body + "\n]\nVIAS = []" + src[m.end():]
+    tmp = LAYOUT + ".tmp"
+    open(tmp, "w").write(src)
+    os.replace(tmp, LAYOUT)
 
 
 def nverts(tracks):
@@ -168,17 +225,14 @@ def gate():
         for v in real:
             h[v["type"]] = h.get(v["type"], 0) + 1
         return False, "viol:" + ",".join(f"{k}x{n}" for k, n in h.items())
-    nong = 0
-    for v in dd.get("unconnected_items", []):
-        nets = set()
-        for it in v.get("items", []):
-            m = re.search(r"\[([^\]]+)\]", it.get("description", ""))
-            if m:
-                nets.add(m.group(1))
-        if nets - {"GND"}:
-            nong += 1
-    if nong:
-        return False, f"unconnected:{nong}"
+    # This tool straightens a FINISHED board (0 unconnected baseline), so any
+    # new unconnected is a regression -- including GND. Waiving GND here (a
+    # routing-era habit, where the pour reconnects it later) is unsafe: a GND
+    # pad under a fills=False sensor keep-out has no pour to fall back on, so a
+    # deleted vertex that was its only spur silently disconnects it.
+    nunc = len(dd.get("unconnected_items", []))
+    if nunc:
+        return False, f"unconnected:{nunc}"
     if dd.get("schematic_parity"):
         return False, f"parity:{len(dd['schematic_parity'])}"
     r = _run([sys.executable, os.path.join(PROJECT, "verify", "check_pcb.py")])
@@ -462,7 +516,9 @@ def build_batch(cands):
 def main():
     args = sys.argv[1:]
     dry = "--dry-run" in args
-    global SEP, MIN_SAVE
+    global SEP, MIN_SAVE, TARGET
+    if "--layout" in args:
+        TARGET = "layout"
     if "--sep" in args:
         SEP = float(args[args.index("--sep") + 1])
     if "--min-save" in args:
@@ -489,13 +545,13 @@ def main():
         return
 
     # collinear pass is free but still validated by the first gate.
-    baseline = open(ROUTES).read()
+    baseline = open(target_file()).read()
     write(tracks, vias)
     ok, reason = gate()
     if not ok:
         # restore the pre-run file and re-render -- never leave the tree
         # in a failed intermediate state
-        open(ROUTES, "w").write(baseline)
+        open(target_file(), "w").write(baseline)
         _run([sys.executable, os.path.join(HERE, "pcb.py")])
         print(f"straighten: collinear pass failed the gate ({reason}); "
               f"aborted and restored")
