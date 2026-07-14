@@ -299,6 +299,26 @@ STITCH = [
     (40.025, 14.525),
     (42.35, 14.525),
     (36.025, 24.125),
+    # Redundant GND stitches (gnd_islands.py audit): each doubles a via that was
+    # the SOLE F<->B tie for a pocketed region, giving it a second independent
+    # path to the main plane. Oracle-validated (region stays connected if the
+    # original via is removed) + DRC-clean (0.5 pad sits wholly on GND both
+    # layers, clear of holes/keep-outs).
+    (25.77, 28.94),   # doubles via@(25.51,28.13): C1/C2/C13/C26/C27 south field
+    (13.3, 5.43),     # doubles via@(14.10,5.72): C5/C6/C15-C25 storage caps
+    (18.36, 30.34),   # doubles via@(17.51,30.34): C1/C13/C26/C27/D3/Q5/U2
+    (0.85, 22.74),    # doubles via@(0.70,21.90): U5/U6 sensor GND + J5.1
+    (39.65, 5.13),    # doubles via@(38.80,5.13): C6/U4 booster GND
+    (12.08, 12.1),    # doubles via@(11.42,11.55): U1.49 GND
+    (17.06, 5.79),    # doubles via@(16.05,5.50): U1.51 GND
+    # Redundant stitches for the three LARGEST single-via SPOFs (each was the
+    # sole F<->B tie for a board-spanning sub-plane). No fully-pour-covered spot
+    # exists, so these land B-side on the main pour with the F annulus in bare
+    # substrate -- oracle-validated (region reconnects with the original via
+    # removed) and real-DRC-clean (REAL=0), which is the actual legality gate.
+    (26.0, 23.3),     # doubles via@(23.38,23.62): 46-pad south/central plane
+    (14.9, 18.5),     # doubles via@(15.58,17.88): 36-pad west storage-cap plane
+    (23.0, 6.5),      # doubles via@(22.42,6.88): 27-pad HV/booster east plane
 ]
 
 # B.Cu ground pour over the full board (the antenna keep-out excludes it
