@@ -87,6 +87,26 @@ relocated one 0.5/0.3 GND stitch. As-saved (before the scripted straighten +
   2nd-path needed); 15-pad east-cap via@(44.70,6.40) — a redundant 2nd stitch
   at (44.49,5.58) is added in the following commit.
 
+## hand-routed-2026-07-16-gnd-loop.kicad_pcb
+
+The GUI board (mtime 00:41) the user called done — added a full-board GND loop
+return path, improved GND connectivity, shortened traces, preserved the antenna
+counterpoise. Provenance:
+
+- Base: generated board at commit cc6d380.
+- The loop path RESOLVES the 27-pad B.Cu neck: `gnd_islands` narrow-neck SPOFs
+  11→0, the old 21–22-pad single-via SPOFs collapse to 1-pad stubs; GND = one
+  connected system. Antenna GND counterpoise intact (coverage slightly up: F
+  66/96, B 95/96 zones), keepout clean on both layers.
+- Harvested into `generator/pcb_routes.py` (signals) + `generator/pcb_layout.py`
+  STITCH (73 vias: 28×0.5/0.3, 45×0.6/0.3 grown preserved) + GND TRACKS (43).
+  out/hand == generated copper-identical (topo sim=1.00; only split_tees vertex
+  artifacts). DRC REAL=0, unconnected=0, starved=0; `make check` green; byte-stable.
+- Voltage rails verified: no series bottleneck (every trunk ≥ its needed min;
+  +3V3 burst path 0.5mm, VBUS charge path 0.4mm) — uniformizing is cosmetic only.
+- Remaining: 4 single-via 1-pad ties (U6.6/U5.3/R21.2/C6.2, keep-out, accepted);
+  3 dangling tails (+3V3/DBG_RX/EPD_SCK) trimmed in the following commit.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
