@@ -47,6 +47,27 @@ ties eliminated by hand. Provenance:
   in the sensor keep-out (1 pad each, no legal stitch spot); a 0.15mm B.Cu
   neck (22.42→27.63, ~y6) now sole tie for 27 pads.
 
+## hand-routed-2026-07-15-reroute-pass.kicad_pcb
+
+The GUI board (mtime 18:10) after a large hand simplification/reroute pass —
+~30 nets tidied (LED_STATUS −11, DBG_TX −10, VSYS −8, SDA −7, VBAT −7, SCL −5,
+USB_D+ −5, EPD_MOSI +4, …; ~56 fewer signal segments, vias unchanged at 191).
+As-saved, so it still contains one slip: the **DBG_TX gap was bridged with a
+copper graphic line** (`PCB_SHAPE` on B.Cu, ~(28.9,22.8)→(30.1,24.0)) instead
+of a track. `extract_tracks` reads only `GetTracks()`, so on harvest that
+bridge was reproduced as a proper netted DBG_TX track (connectivity restored,
+DRC-validated); a 0.099mm EPD_DC dangling stub was trimmed. Provenance:
+
+- Base: generated board at commit bf49e23 (straighten+widen simplification).
+- Harvested into `generator/pcb_routes.py` (signals) + `generator/pcb_layout.py`
+  STITCH (68 vias, grown 0.6/0.3 preserved) + GND TRACKS (47 polylines).
+- `out/hand` == generated is copper-identical (topo 59/59, only the trimmed
+  EPD_DC stub differs); DRC REAL=0, unconnected=0, starved_thermal=0;
+  `make check` green; byte-stable.
+- Known remaining SPOFs (unaddressed this pass): 0.15mm B.Cu neck
+  (22.42→27.63, ~y6) sole tie for 27 pads; U5.3/U6.6 single-via sensor-keepout
+  ties (1 pad each).
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
