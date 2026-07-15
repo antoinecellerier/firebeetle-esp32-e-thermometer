@@ -16,7 +16,9 @@ STITCH: [(x, y) | (x, y, dia, drill)]          GND stitching vias (STITCH_VIA
 COPPER_ZONES: [(net, layer, [(x, y) corners])] filled polygons, lowest priority
 KEEPOUTS: [dict(name=, layers=[...], rect=(x1, y1, x2, y2),
                 tracks=, vias=, fills=, pads=)] rule areas
-SILK:   [(text, x, y, size_mm, rot)]           F.SilkS text, thickness 0.15*size
+SILK:   [(text, x, y, size_mm, rot[, layer])]  silk text, thickness 0.15*size;
+        optional layer "F.SilkS" (default) or "B.SilkS" (mirrored so it reads
+        correctly through the board)
 
 Floorplan (48x35; pouch-adjacent target relaxed for the antenna keep-out,
 booster HV clearances and the routable-density limit):

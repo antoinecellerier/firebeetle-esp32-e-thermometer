@@ -118,6 +118,9 @@ def add_outline(board):
 
 
 def add_footprints(board, netinfo, pad_net):
+    # Connectors + sensors keep their reference on F.SilkS (assembly/orientation
+    # aids); every other refdes moves to F.Fab so the silk stays legible.
+    KEEP_SILK_REFS = {"J1", "J2", "J3", "J4", "J5", "U5", "U6"}
     pads_by_key = {}
     for c in circuit.COMPONENTS:
         ref = c["ref"]
@@ -126,6 +129,8 @@ def add_footprints(board, netinfo, pad_net):
         if fp is None:
             raise SystemExit(f"pcb: cannot load footprint {c['footprint']} for {ref}")
         fp.SetReference(ref)
+        if ref not in KEEP_SILK_REFS:
+            fp.Reference().SetLayer(pcbnew.F_Fab)
         fp.SetValue(c["value"])
         # FootprintLoad drops the library nickname; restore it or the
         # schematic-parity DRC flags every footprint as substituted.
@@ -316,11 +321,17 @@ def add_keepouts(board):
 
 
 def add_silk(board):
-    for text, x, y, size, rot in pl.SILK:
+    for entry in pl.SILK:
+        text, x, y, size, rot = entry[:5]
+        layer = entry[5] if len(entry) > 5 else "F.SilkS"
         t = pcbnew.PCB_TEXT(board)
         t.SetText(text)
         t.SetPosition(bmm(x, y))
-        t.SetLayer(pcbnew.F_SilkS)
+        if layer == "B.SilkS":
+            t.SetLayer(pcbnew.B_SilkS)
+            t.SetMirrored(True)  # bottom text reads correctly through the board
+        else:
+            t.SetLayer(pcbnew.F_SilkS)
         t.SetTextSize(pcbnew.VECTOR2I(FromMM(size), FromMM(size)))
         t.SetTextThickness(FromMM(round(size * 0.15, 2)))
         t.SetTextAngleDegrees(rot)

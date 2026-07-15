@@ -65,7 +65,7 @@ for k in ('violations','unconnected_items','schematic_parity') for v in d.get(k,
 	@echo "DRC: clean"
 
 pcb-img: pcb | $(OUT)
-	kicad-cli pcb export svg --mode-multi --layers F.Cu,B.Cu,Edge.Cuts,F.SilkS,F.Fab -o $(OUT)/pcb-svg $(PCB)
+	kicad-cli pcb export svg --mode-multi --layers F.Cu,B.Cu,Edge.Cuts,F.SilkS,B.SilkS,F.Fab -o $(OUT)/pcb-svg $(PCB)
 	kicad-cli pcb render --side top -o $(OUT)/pcb-top.png $(PCB)
 	kicad-cli pcb render --side bottom -o $(OUT)/pcb-bottom.png $(PCB)
 
