@@ -268,8 +268,13 @@ def add_vias(board, netinfo, alias):
     # cannot clear neighbouring copper in the dense pockets, leaving many GND
     # groups unroutable; 0.5mm halves the required clearance shadow.
     sv = getattr(pl, "STITCH_VIA", pl.DEFAULT_VIA)
-    for x, y in pl.STITCH:
-        one("GND", x, y, sv["diameter"], sv["drill"])
+    for entry in pl.STITCH:
+        # (x, y) renders at STITCH_VIA size; (x, y, dia, drill) is a per-via
+        # override (grown stitches -- 0.6/0.3 = 0.15mm annular ring vs 0.1mm).
+        x, y = entry[0], entry[1]
+        dia = entry[2] if len(entry) > 3 else sv["diameter"]
+        drill = entry[3] if len(entry) > 3 else sv["drill"]
+        one("GND", x, y, dia, drill)
 
 
 def add_zones(board, netinfo, alias):

@@ -133,7 +133,7 @@ def load():
             importlib.reload(pcb_layout)
             tracks = [[n, l, w, [tuple(p) for p in pts]]
                       for n, l, w, pts in pcb_layout.TRACKS]
-            vias = [("GND", x, y) for (x, y) in pcb_layout.STITCH]
+            vias = [("GND", e[0], e[1]) for e in pcb_layout.STITCH]
         finally:
             if prev is None:
                 del os.environ["PCB_NO_ROUTES"]
