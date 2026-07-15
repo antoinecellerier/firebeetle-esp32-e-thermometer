@@ -244,16 +244,26 @@ def gate():
 
 # --- passes ----------------------------------------------------------------
 
-def collinear_pass(tracks):
+def collinear_pass(tracks, vias):
     """Remove interior vertices that lie on the straight line between their
     neighbours (or duplicate a neighbour). Copper is unchanged to within
-    COLLINEAR_TOL, so this needs no per-step gate."""
+    COLLINEAR_TOL, so this needs no per-step gate. Vertices that coincide with a
+    via or a same-net junction (a tee/vertex shared by >=2 same-net vertices) are
+    load-bearing and left alone -- COLLINEAR_TOL slack can nudge a tee endpoint
+    off the merged chord and dangle it, so they are skipped exactly like the
+    shortcut pass does."""
+    per_net, vset = protected_coords(tracks, vias)
     removed = 0
     for t in tracks:
+        net = t[0]
         pts = t[3]
         i = 1
         while i < len(pts) - 1:
             a, c, b = pts[i - 1], pts[i], pts[i + 1]
+            cc = r3(c)
+            if per_net[net][cc] >= 2 or cc in vset:
+                i += 1
+                continue
             drop = False
             if a == c or c == b:
                 drop = True
@@ -527,7 +537,7 @@ def main():
     tracks, vias = load()
     v0, l0 = nverts(tracks), length(tracks)
 
-    coll = collinear_pass(tracks)
+    coll = collinear_pass(tracks, vias)
     obst = load_obstacles()
     screened = {}
     cands = candidates(tracks, vias, set(), MIN_SAVE, obst, screened)
