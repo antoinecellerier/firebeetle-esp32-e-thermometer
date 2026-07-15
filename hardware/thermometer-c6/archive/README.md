@@ -68,6 +68,25 @@ DRC-validated); a 0.099mm EPD_DC dangling stub was trimmed. Provenance:
   (22.42→27.63, ~y6) sole tie for 27 pads; U5.3/U6.6 single-via sensor-keepout
   ties (1 pad each).
 
+## hand-routed-2026-07-15-widen-antenna.kicad_pcb
+
+The GUI board (mtime 19:58) after the user widened every sub-0.25mm trace to
+≥0.25 (min width now exactly 0.25mm), cleaned up LED_STATUS/SDA/SCL routing near
+the antenna B side, widened+straightened the 27-pad B.Cu GND neck 0.15→0.25, and
+relocated one 0.5/0.3 GND stitch. As-saved (before the scripted straighten +
+3-stub trim applied on harvest). Provenance:
+
+- Base: generated board at commit c6bf143.
+- Harvested into `generator/pcb_routes.py` (signals, 34 nets) + `generator/pcb_layout.py`
+  STITCH (68 vias, 40 grown 0.6/0.3 preserved) + GND TRACKS (44 polylines).
+- On harvest: 3 dangling stubs (EN / VDIV_EN / LED_STATUS) trimmed; scripted
+  straighten to fixpoint (−50 verts / −7.54mm; no widen). Generated board gated:
+  DRC REAL=0, unconnected=0, starved=0; `make check` green; byte-stable;
+  out/hand-vs-generated differs only by the trim + straighten.
+- Remaining SPOFs: 27-pad B.Cu neck (now 0.25mm but still a single path — GUI
+  2nd-path needed); 15-pad east-cap via@(44.70,6.40) — a redundant 2nd stitch
+  at (44.49,5.58) is added in the following commit.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
