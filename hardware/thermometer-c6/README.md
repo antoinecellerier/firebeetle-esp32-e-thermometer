@@ -121,8 +121,9 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
 
 ## Bench procedures
 
-- **PPK2 ampere-meter (series) measurement**: wick JP1, insert PPK2 via J2
-  (2-pin header, DNP by default — solder one in). Battery in JST as usual.
+- **IBAT break — battery-current (series) measurement**: wick JP1 and insert a
+  PPK2 (or any ammeter) across J2 (the 2-pin header silk-labelled `IBAT`, DNP by
+  default — solder one in). Battery in JST as usual.
 - **PPK2 source-mode power**: feed J2 pin 2 (system side) + GND, JST empty,
   JP1 open. This powers the full deployment topology (LDO in circuit).
 - **Do NOT back-feed the 3V3 test pad**: RT9080 abs-max forbids VOUT > VIN

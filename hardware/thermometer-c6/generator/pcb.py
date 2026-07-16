@@ -365,6 +365,31 @@ def add_silk(board):
         board.Add(t)
 
 
+def add_silk_shapes(board):
+    """Silk GRAPHIC outlines from pl.SILK_SHAPES (see its docstring): a "rect"
+    entry renders as one unfilled SHAPE_T_RECT, a "line" entry as one
+    SHAPE_T_SEGMENT, on the given silk layer at the given line width."""
+    silk_layer = {"F.SilkS": pcbnew.F_SilkS, "B.SilkS": pcbnew.B_SilkS}
+    for entry in getattr(pl, "SILK_SHAPES", []):
+        kind, x1, y1, x2, y2 = entry[:5]
+        layer = entry[5] if len(entry) > 5 else "F.SilkS"
+        width = entry[6] if len(entry) > 6 else 0.15
+        s = pcbnew.PCB_SHAPE(board)
+        if kind == "rect":
+            s.SetShape(pcbnew.SHAPE_T_RECT)
+        elif kind == "line":
+            s.SetShape(pcbnew.SHAPE_T_SEGMENT)
+        else:
+            raise SystemExit(f"pcb: SILK_SHAPES unknown kind {kind!r}")
+        s.SetStart(bmm(x1, y1))
+        s.SetEnd(bmm(x2, y2))
+        s.SetLayer(silk_layer[layer])
+        s.SetWidth(FromMM(width))
+        if hasattr(s, "SetFilled"):
+            s.SetFilled(False)
+        board.Add(s)
+
+
 def design_settings(board):
     ds = board.GetDesignSettings()
     ds.m_MinClearance = FromMM(0.15)
@@ -535,6 +560,7 @@ def main():
     add_vias(board, netinfo, alias)
     add_zones(board, netinfo, alias)
     add_silk(board)
+    add_silk_shapes(board)
 
     write_dru(alias)
     pcbnew.SaveBoard(BOARD_PATH, board)

@@ -19,6 +19,10 @@ KEEPOUTS: [dict(name=, layers=[...], rect=(x1, y1, x2, y2),
 SILK:   [(text, x, y, size_mm, rot[, layer])]  silk text, thickness 0.15*size;
         optional layer "F.SilkS" (default) or "B.SilkS" (mirrored so it reads
         correctly through the board)
+SILK_SHAPES: [("rect"|"line", x1, y1, x2, y2[, layer[, width]])]  silk GRAPHIC
+        outlines rendered by pcb.py add_silk_shapes as pcbnew.PCB_SHAPE. "rect"
+        = one unfilled rectangle (opposite corners), "line" = one straight
+        segment; layer defaults "F.SilkS", width defaults 0.15mm
 
 Floorplan (48x35; pouch-adjacent target relaxed for the antenna keep-out,
 booster HV clearances and the routable-density limit):
@@ -372,7 +376,8 @@ KEEPOUTS = [
 # default: 1.0mm on the north USB-C overhang, already clear.)
 REF_POS = {
     "J1": (18.5, 22.7, 0.8, 0),     # north pocket, clear of J1 body / BAT+ / C14
-    "J5": (46.9, 32.6, 0.8, 0),     # SE corner, east of the pin-9/10 column
+    "J5": (35.15, 28.6, 0.8, 0),    # grouped immediately left of the DBG marker
+    #                                 (DBG nudged E to 37.5 to clear D6's silk)
     "U5": (4.20, 22.2, 0.8, 90),    # slot between U5 and C12
     # U6 refdes SOUTH of U6's body (clear of the sensor keep-out, y28.5): its
     # old spot between U5 and U6 could be misread as U5's. Now unambiguously U6.
@@ -403,12 +408,13 @@ SILK = [
     ("RST", 3.9, 6.5, 0.8, 0),          # S of SW1
     ("BOOT", 11.6, 6.5, 0.8, 0),        # S of SW2
     ("CHG", 16.5, 6.5, 0.8, 0),         # S of D1 (charge LED)
-    ("STAT", 14.65, 34.2, 0.8, 0),      # S of D3 (status LED)
+    ("STATUS", 14.5, 34.2, 0.8, 0),     # S of D3 (status LED), nudged W of J1.MP
     # battery connector J1: BAT + polarity in the clear pocket N of J1's body
     ("BAT", 18.0, 24.2, 0.8, 0),
     ("+", 20.0, 24.2, 0.9, 0),          # directly above J1.1 (the + pad, x=20)
-    # PPK2 series-measurement header J2 (in J2's south edge strip)
-    ("PPK2", 27.7, 34.48, 0.8, 0),
+    # battery-current series-measurement break at J2 (in J2's south edge strip);
+    # wick JP1 and insert an ammeter (e.g. PPK2) across J2. Label device-neutral.
+    ("IBAT", 27.7, 34.48, 0.8, 0),
     # RESE sense jumpers: value beside each JP, vertical in the JP<->J4 corridor
     ("3Ω", 39.8, 8.9, 0.8, 90),         # JP4
     ("2.2Ω", 39.8, 12.5, 0.8, 90),      # JP3
@@ -419,14 +425,16 @@ SILK = [
     ("10µH", 30.74, 24.9, 0.8, 0),
     ("47µH", 27.8, 20.0, 0.8, 0),
     # debug header J5: per-pin legend won't fit at >=0.8mm on the crowded top;
-    # DBG marker only here. The full 10-pin pinout is a B.SilkS legend on the
-    # BACK, north of the header (see the J5 back legend below) — the pins are
-    # through-hole and land on the back, so the mirrored legend aligns with them.
-    ("DBG", 36.5, 28.6, 0.8, 0),
-    # EPD FPC J4 (24-pin, cable exits east): pin-1 / pin-24 end markers for
-    # cable-orientation reference, just outside the end pads (N end / S end).
-    ("1", 46.9, 9.9, 0.8, 0),           # beside J4 pin 1  (north end)
-    ("24", 44.5, 22.2, 0.8, 0),         # beside J4 pin 24 (south end)
+    # DBG marker only here, with J5's kept refdes grouped immediately to its
+    # left (REF_POS["J5"]) so the pair reads as one label. The full 10-pin pinout
+    # is a B.SilkS legend on the BACK, north of the header (see the J5 back legend
+    # below) — the pins are through-hole and land on the back, so the mirrored
+    # legend aligns with them.
+    ("DBG", 37.5, 28.6, 0.8, 0),
+    # EPD FPC J4 (24-pin, cable exits east): pin-1 end marker for cable
+    # orientation, on exposed silk east of the connector body (body east x45.97).
+    # The pin-24 marker is dropped — it sat under J4's body (invisible assembled).
+    ("1", 46.9, 9.9, 0.8, 0),           # beside J4 pin 1 (north end)
 
     # === BACK (B.SilkS, mirrored) — bench test points, label beside each pad ===
     ("VBAT", 18.5, 25.7, 0.8, 0, "B.SilkS"),
@@ -458,11 +466,6 @@ SILK = [
     # spec goes on the BACK under J1's body — exposed there (J1 has no THT pads).
     ("3.7V LiPo", 20.8, 31.2, 0.8, 0, "B.SilkS"),
 
-    # populate-one sensors U5/U6 — the note goes on the back under the sensor
-    # projection (no >=0.8mm exposed-silk gap on top). "U5/U6 fit ONE" names the
-    # pair explicitly; centred as far west as the board edge allows.
-    ("U5/U6 fit ONE", 5.0, 24.3, 0.8, 0, "B.SilkS"),
-
     # === BACK (B.SilkS, mirrored) — general notes ===
     # NW-corner block, LEFT-ALIGNED at x1.0 (centres = 1.0 + width/2, widths at
     # 0.8mm), looser 1.4mm inter-line pitch. All lines stay WEST of J3 (x<18) so
@@ -470,19 +473,29 @@ SILK = [
     # full title is too wide for one line west of J3); "rev A" rides the second
     # line for the check_pcb-required "rev " token. CHARGE INDOORS reads as one
     # contiguous phrase with its 0-45°C charging range.
-    ("Low-Power E-Paper", 7.395, 1.30, 0.8, 0, "B.SilkS"),
+    ("Low Power ePaper", 6.69, 1.30, 0.8, 0, "B.SilkS"),
     ("Thermometer   rev A", 7.45, 2.70, 0.8, 0, "B.SilkS"),
     ("CHARGE INDOORS 0-45°C", 9.05, 4.10, 0.8, 0, "B.SilkS"),
 
-    # Jumper legend (bridge exactly one per group), relocated off the crowded NW
-    # corner into the clear central back band EAST of the antenna keep-out, where
-    # it spreads to three looser-spaced lines (1.4mm pitch, left-aligned at x7.5).
-    # Holds the check_pcb-required literal "bridge ONE". Values: RESE JP2/JP3/JP4
-    # = 0.47/2.2/3Ω, inductor JP5/JP6 = 10/47µH (both also labelled per-jumper on
-    # top). The wide RESE line stays north of R9/VBAT_ADC and west of GDR.
-    ("bridge ONE", 11.015, 15.6, 0.8, 0, "B.SilkS"),
-    ("RESE 0.47/2.2/3Ω = JP2/3/4", 17.205, 17.0, 0.8, 0, "B.SilkS"),
-    ("IND 10/47µH = JP5/6", 14.73, 18.4, 0.8, 0, "B.SilkS"),
+    # populate-ONE legend (bridge/fit exactly one per group), as ONE left-aligned
+    # block in the clean NE back corner (left edge x32.5, 1.4mm pitch), north of
+    # the charger and clear of both the WEST antenna keep-out and H1 (x>=45.5).
+    # Keyed off component VALUES — the JP refdes aren't printed on the board.
+    # Holds the check_pcb literals "bridge ONE" / "fit ONE". Centres = 32.5 +
+    # width/2 (widths at 0.8mm): 7.41/11.83/8.48/9.24mm.
+    ("bridge ONE:", 36.21, 2.0, 0.8, 0, "B.SilkS"),
+    ("RESE 0.47/2.2/3Ω", 38.42, 3.4, 0.8, 0, "B.SilkS"),
+    ("IND 10/47µH", 36.74, 4.8, 0.8, 0, "B.SilkS"),
+    ("U5/U6 fit ONE", 37.12, 6.2, 0.8, 0, "B.SilkS"),
+
+    # === BACK (B.SilkS) — antenna keep-out reminder ===
+    # Enclosure/mounting note (keep metal/ground/battery clear of the antenna
+    # region). On the BACK: the FRONT antenna area is entirely under the U1
+    # module (invisible once assembled), while the back over the keep-out is
+    # bare (pour excluded) and has no parts, so the note + SILK_SHAPES outline
+    # read here. Rotated 90 as two columns to fit the tall/narrow keep-out box.
+    ("ANTENNA", 2.0, 13.95, 0.8, 90, "B.SilkS"),
+    ("KEEP CLEAR", 3.6, 13.95, 0.8, 90, "B.SilkS"),
 
     # === BACK (B.SilkS, mirrored) — J5 debug-header pinout legend ===
     # J5 is a 2x5 through-hole header (pads land on the back), mounted on the
@@ -507,6 +520,19 @@ SILK = [
     ("IO5",  41.52, 29.4, 0.8, 0, "B.SilkS"),       # pin 7
     # pins 9 (S) & 10 (N): both GND -> single centred label for the column
     ("GND",  44.06, 28.775, 0.8, 0, "B.SilkS"),     # pins 9 & 10
+]
+
+# Silk GRAPHIC outlines (non-text), rendered by pcb.py add_silk_shapes. See the
+# module docstring for the entry format.
+SILK_SHAPES = [
+    # Antenna keep-out reminder outline on the BACK: trace the KEEPOUTS["antenna"]
+    # rect (0, 7.25, 5.3, 20.65) with the west edge inset to x0.5 for
+    # silk_edge_clearance; N/S/E follow the true keep-out. Back side because the
+    # FRONT keep-out is under the U1 module (invisible assembled) whereas the back
+    # over it is bare (pour excluded) — and B.SilkS carries no module outline to
+    # double. Silk is non-conductive -> RF-safe, and allowed in the copper-only
+    # keep-out. Pairs with the "ANTENNA"/"KEEP CLEAR" B.SilkS note inside it.
+    ("rect", 0.5, 7.25, 5.3, 20.65, "B.SilkS", 0.15),
 ]
 
 # Routed copper (generator/pcb_routes.py, checked in). Since the M5 GUI
