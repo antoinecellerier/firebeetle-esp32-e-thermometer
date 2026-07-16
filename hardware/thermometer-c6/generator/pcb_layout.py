@@ -413,8 +413,10 @@ SILK = [
     # C16 E bodies). JP6=47µH has no >=0.8mm exposed-silk neighbour (Q3/C22/C28
     # box it), so its value lives in the back "bridge ONE" legend; see report.
     ("10µH", 30.74, 24.9, 0.8, 0),
-    # debug header J5: per-pin legend won't fit at >=0.8mm; DBG marker only, the
-    # pinout lives in the README/assembly doc (see report).
+    # debug header J5: per-pin legend won't fit at >=0.8mm on the crowded top;
+    # DBG marker only here. The full 10-pin pinout is a B.SilkS legend on the
+    # BACK, north of the header (see the J5 back legend below) — the pins are
+    # through-hole and land on the back, so the mirrored legend aligns with them.
     ("DBG", 36.5, 28.6, 0.8, 0),
 
     # === BACK (B.SilkS, mirrored) — bench test points, label beside each pad ===
@@ -446,6 +448,33 @@ SILK = [
     # JP5/JP6 = 10/47µH.
     ("bridge ONE   RESE 0.47/2.2/3Ω=JP2/3/4   IND 10/47µH=JP5/6",
      22.0, 18.5, 0.8, 0, "B.SilkS"),
+
+    # === BACK (B.SilkS, mirrored) — J5 debug-header pinout legend ===
+    # J5 is a 2x5 through-hole header (pads land on the back), mounted on the
+    # TOP. The full 10-pin legend didn't fit at >=0.8mm on the crowded top, so
+    # it lives here on the back, north of the header, column-aligned over the
+    # through-hole pin pairs: each x-column is a pin pair, upper text row = the
+    # NORTH (even) pin, lower text row = the SOUTH (odd) pin. Co-located with the
+    # pins in board coords, so mirroring + the through-pins keep label<->pin
+    # aligned when viewed from the back. Pad columns x = 33.90/36.44/38.98/
+    # 41.52/44.06; north pads at y31.06 (tops y30.21) bound the lower row.
+    # Pins 9&10 are BOTH GND and VCOM's label sits directly above that east
+    # column, leaving no room for two >=0.8mm rows there -> one centred GND for
+    # the pair. MOUNT TOP warns the header solders to the TOP (not the back).
+    ("MOUNT TOP", 39.0, 27.35, 0.8, 0, "B.SilkS"),  # solder-side cue
+    ("J5", 31.2, 28.95, 0.8, 0, "B.SilkS"),         # legend tag, W of the rows
+    # even pins 2/4/6/8 (NORTH row) — upper text row
+    ("+3V3", 33.90, 28.45, 0.8, 0, "B.SilkS"),      # pin 2
+    ("TX",   36.44, 28.45, 0.8, 0, "B.SilkS"),      # pin 4
+    ("IO4",  38.98, 28.45, 0.8, 0, "B.SilkS"),      # pin 6
+    ("IO8",  41.52, 28.45, 0.8, 0, "B.SilkS"),      # pin 8
+    # odd pins 1/3/5/7 (SOUTH row) — lower text row
+    ("GND",  33.90, 29.55, 0.8, 0, "B.SilkS"),      # pin 1
+    ("EN",   36.44, 29.55, 0.8, 0, "B.SilkS"),      # pin 3
+    ("RX",   38.98, 29.55, 0.8, 0, "B.SilkS"),      # pin 5
+    ("IO5",  41.52, 29.55, 0.8, 0, "B.SilkS"),      # pin 7
+    # pins 9 (S) & 10 (N): both GND -> single centred label for the column
+    ("GND",  44.06, 29.05, 0.8, 0, "B.SilkS"),      # pins 9 & 10
 ]
 
 # Routed copper (generator/pcb_routes.py, checked in). Since the M5 GUI
