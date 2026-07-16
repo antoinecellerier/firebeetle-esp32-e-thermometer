@@ -119,6 +119,18 @@ redundant NE stitch vias (44.49,5.58 / 46.6,5.7) render one-sided in the
 generated zone-fill (`via_dangling`, benign — neither is the sole tie for any
 pad; GND still one connected system). `make check` green.
 
+## hand-routed-2026-07-17-mounthole-q1.kicad_pcb
+
+GUI board after the mounting-hole + NE-corner rework: (1) H1/H2 repositioned to
+(45.8,2.2)/(2.2,32.8) — symmetric (180° about board center), **≥1mm wall to every
+board edge** (was H1 0.30mm, a JLC hole-to-edge DFM fail); (2) user hand-moved
+**Q1→(41.6,5.04), R22→(41.2,7.6 rot0), R23→(44.0,7.11)** and rerouted VSYS/VBUS to
+clear the H1↔Q1 courtyard overlap the reposition surfaced. GND re-stitched (7 vias
+removed incl the 2 now-redundant ones the user deleted → **via_dangling 0**). Base:
+aa55505. Harvested: PLACE (H1/H2/Q1/R22/R23), pcb_routes.py, pcb_layout STITCH/TRACKS.
+Gate: 0 unconnected, 0 DRC, **courtyards_overlap=0**, make check green, byte-stable,
+out/hand == generated.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.

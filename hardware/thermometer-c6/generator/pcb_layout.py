@@ -75,15 +75,18 @@ PLACE = {
     "R4": (16.5, 1.1, 270),
     "D1": (16.5, 3.7, 90),
     "D2": (32.45, 2.29, 0),
-    "Q1": (42.25, 2.48, 90),
+    # Q1 sits SW of H1's mount (45.8, 2.2): pushed west+south so its SOT-23
+    # courtyard clears H1's keep-out, with its VSYS/VBUS load-share copper
+    # rerouted to follow (harvested from the GUI working copy).
+    "Q1": (41.6, 5.0375, 90),
     "R5": (30.61, 5.28, 90),
-    # VBUS_SENSE divider east of Q1, on the load-share VBUS lane: at its old
-    # (29.46/30.66, 7.88) spot the mid-node was walled in on every side (VBUS
-    # fanout on F; D7 + EPD_VCC's rigid Q2.3 channel on B) and unroutable.
-    # Here the node exits east on F straight into the east-edge margin.
-    # R22 rot 270 puts its VBUS pad north, beside the Q1.1 feed lane.
-    "R22": (42.3, 6.3, 270),
-    "R23": (43.5, 6.3, 90),
+    # VBUS_SENSE divider south of the moved Q1, on the load-share VBUS lane:
+    # the mid-node exits east on F into the east-edge margin (its old central
+    # spot walled it in on every side). R22 rot 0 lays VBUS (west) / VBUS_SENSE
+    # (east) along Q1's south feed; R23 rot 90 drops VBUS_SENSE onto GND, its
+    # ground pad landing on the (44.0, 6.6) stitch.
+    "R22": (41.2, 7.6, 0),
+    "R23": (44.0, 7.11, 90),
     "D7": (30.5, 8.2, 0, "B"),
     "U1": (11.8, 13.95, 90),
     "C7": (9.57, 22.52, 90),
@@ -188,8 +191,14 @@ PLACE = {
     "C29": (12.6, 27.7, 0),
     "TP11": (13.0, 23.4, 0, "B"),
     "J5": (33.9, 33.6, 90),
-    "H1": (46.6, 2.1, 0),
-    "H2": (2.4, 33.2, 0),
+    # Diagonal M2 mount points, placed for manufacturability: center >=2.1mm
+    # from every board edge (wall->edge >=1.0mm; the JLC hole-to-edge floor is
+    # ~0.5mm) and clear of non-pour copper. H1 is the squeeze (east edge + the
+    # VBAT/VSYS/EPD_SCK traces at x~43.2 to its west): at x45.8 the east wall
+    # and the copper clearance balance at ~1.1mm. H2 is H1's 180-degree mirror
+    # about the board center (24, 17.5) so the two mounts are symmetric.
+    "H1": (45.8, 2.2, 0),
+    "H2": (2.2, 32.8, 0),
 }
 
 # ---------------------------------------------------------------------------
@@ -246,6 +255,9 @@ TRACKS = [
     ("GND", 'F.Cu', 0.5, [(30.5, 33.4), (30.87, 32.4)]),
     ("GND", 'F.Cu', 0.5, [(35.0, 19.875), (33.955, 19.875), (33.27, 19.19)]),
     ("GND", 'F.Cu', 0.5, [(40.6, 28.25), (40.45, 28.25), (39.025, 26.825), (38.05, 26.825), (38.025, 26.85)]),
+    # GND jumper east of moved Q1: bridges the new (44.0, 6.6) stitch to the
+    # (46.5, 6.6) via, re-tying the pour split by Q1's relocation.
+    ("GND", 'F.Cu', 0.2, [(44.0, 6.6), (46.5, 6.6)]),
 ]
 VIAS = []
 
@@ -315,20 +327,14 @@ STITCH = [
     (38.05, 26.825, 0.6, 0.3),
     (38.7, 9.8, 0.6, 0.3),
     (38.8, 5.13, 0.6, 0.3),
-    (39.65, 5.13, 0.6, 0.3),
     (40.025, 14.525, 0.6, 0.3),
-    (40.635, 6.535),
     (40.9, 13.9, 0.6, 0.3),
-    (41.3, 6.5),
     (41.75, 22.0),
     (41.9, 15.0, 0.6, 0.3),
     (42.35, 14.525),
-    (43.5, 5.8),
-    (44.49, 5.58),
-    (44.7, 6.4, 0.6, 0.3),
+    (44.0, 6.6),
     (46.5, 6.6, 0.6, 0.3),
     (46.5, 7.6, 0.6, 0.3),
-    (46.6, 5.7, 0.6, 0.3),
 ]
 
 # B.Cu ground pour over the full board (the antenna keep-out excludes it
