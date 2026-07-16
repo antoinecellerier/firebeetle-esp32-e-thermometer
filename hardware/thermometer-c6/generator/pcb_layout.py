@@ -16,9 +16,12 @@ STITCH: [(x, y) | (x, y, dia, drill)]          GND stitching vias (STITCH_VIA
 COPPER_ZONES: [(net, layer, [(x, y) corners])] filled polygons, lowest priority
 KEEPOUTS: [dict(name=, layers=[...], rect=(x1, y1, x2, y2),
                 tracks=, vias=, fills=, pads=)] rule areas
-SILK:   [(text, x, y, size_mm, rot[, layer])]  silk text, thickness 0.15*size;
-        optional layer "F.SilkS" (default) or "B.SilkS" (mirrored so it reads
-        correctly through the board)
+SILK:   [(text, x, y, size_mm, rot[, layer[, hjust[, vjust]]])]  silk text,
+        thickness 0.15*size; optional layer "F.SilkS" (default) or "B.SilkS"
+        (mirrored so it reads correctly through the board). hjust in
+        {"L","C","R"} (default "C"), vjust in {"T","C","B"} (default "C"):
+        multi-line \\n blocks anchor at a corner (e.g. "R"/"T" = top-right) so
+        their lines align toward one board edge; single-line labels stay centred
 SILK_SHAPES: [("rect"|"line", x1, y1, x2, y2[, layer[, width]])]  silk GRAPHIC
         outlines rendered by pcb.py add_silk_shapes as pcbnew.PCB_SHAPE. "rect"
         = one unfilled rectangle (opposite corners), "line" = one straight
@@ -268,10 +271,10 @@ STITCH = [
     (11.8, 15.9, 0.6, 0.3),
     (12.299, 26.601),
     (13.3, 5.43, 0.6, 0.3),
-    (13.4, 2.5, 0.6, 0.3),
     (13.5, 9.7, 0.6, 0.3),
     (14.1, 5.725),
     (14.7, 7.0, 0.6, 0.3),
+    (14.9, 2.5, 0.6, 0.3),
     (14.9, 18.5, 0.6, 0.3),
     (14.95, 10.35),
     (15.025, 24.375),
@@ -369,16 +372,16 @@ KEEPOUTS = [
          tracks=False, vias=False, fills=True, pads=False),
 ]
 
-# Reference-designator overrides for the refs kept on F.SilkS (J1/J3/J5/U5/U6
+# Reference-designator overrides for the refs kept on F.SilkS (J1/J5/U5/U6
 # per add_footprints' KEEP_SILK_REFS). Every kept refdes must clear its part's
 # body and neighbours at the >=0.8mm/0.15mm legibility floor. Tuple is
-# (x, y, size_mm, angle_deg), board-relative like PLACE. (J3 keeps its footprint
-# default: 1.0mm on the north USB-C overhang, already clear.)
+# (x, y, size_mm, angle_deg), board-relative like PLACE. (J3's refdes is not
+# kept: its footprint default sits off the board outline, so it goes to F.Fab.)
 REF_POS = {
     "J1": (18.5, 22.7, 0.8, 0),     # north pocket, clear of J1 body / BAT+ / C14
     "J5": (35.15, 28.6, 0.8, 0),    # grouped immediately left of the DBG marker
     #                                 (DBG nudged E to 37.5 to clear D6's silk)
-    "U5": (4.20, 22.2, 0.8, 90),    # slot between U5 and C12
+    "U5": (4.7, 22.9, 0.8, 180),    # SE of U5's body, clear of C12/the keep-out
     # U6 refdes SOUTH of U6's body (clear of the sensor keep-out, y28.5): its
     # old spot between U5 and U6 could be misread as U5's. Now unambiguously U6.
     "U6": (2.7, 29.1, 0.8, 0),
@@ -431,14 +434,17 @@ SILK = [
     # below) — the pins are through-hole and land on the back, so the mirrored
     # legend aligns with them.
     ("DBG", 37.5, 28.6, 0.8, 0),
-    # EPD FPC J4 (24-pin, cable exits east): pin-1 end marker for cable
-    # orientation, on exposed silk east of the connector body (body east x45.97).
-    # The pin-24 marker is dropped — it sat under J4's body (invisible assembled).
+    # EPD FPC J4 (24-pin, cable exits east): end markers for cable orientation,
+    # on exposed silk east of the connector body (body east x45.97). "1" by the
+    # north end (pin 1); "2/4" stacked by the south end (pin 24).
     ("1", 46.9, 9.9, 0.8, 0),           # beside J4 pin 1 (north end)
+    ("2\n4", 47.0, 24.4, 0.8, 0),       # beside J4 pin 24 (south end)
 
     # === BACK (B.SilkS, mirrored) — bench test points, label beside each pad ===
+    # TP1 VBAT / TP3 GND north of their pads; TP2's GND sits SOUTH of its pad so
+    # the two GND labels don't read as one row.
     ("VBAT", 18.5, 25.7, 0.8, 0, "B.SilkS"),
-    ("GND", 21.2, 25.7, 0.8, 0, "B.SilkS"),
+    ("GND", 21.2, 29.3, 0.8, 0, "B.SilkS"),
     ("GND", 23.9, 25.7, 0.8, 0, "B.SilkS"),
     # TP4 is the 3V3 rail probe-ONLY pad (RT9080 forbids back-drive); the
     # "probe-only" warning rides on TP4's own label.
@@ -463,30 +469,30 @@ SILK = [
 
     # battery type by J1: J1 is a front SMD JST whose north pocket (BAT/+) has no
     # >=0.8mm exposed FRONT-silk gap (Q4 W, C14 E, caps N, J1 pads S), so the LiPo
-    # spec goes on the BACK under J1's body — exposed there (J1 has no THT pads).
-    ("3.7V LiPo", 20.8, 31.2, 0.8, 0, "B.SilkS"),
+    # spec goes on the BACK, south of J1's body — exposed there (J1 has no THT pads).
+    ("3.7V LiPo", 21.0, 33.9, 0.8, 0, "B.SilkS"),
 
-    # === BACK (B.SilkS, mirrored) — general notes ===
-    # NW-corner block, LEFT-ALIGNED at x1.0 (centres = 1.0 + width/2, widths at
-    # 0.8mm), looser 1.4mm inter-line pitch. All lines stay WEST of J3 (x<18) so
-    # they clear its USB-C shield tabs. The product name wraps to two lines (the
-    # full title is too wide for one line west of J3); "rev A" rides the second
-    # line for the check_pcb-required "rev " token. CHARGE INDOORS reads as one
-    # contiguous phrase with its 0-45°C charging range.
-    ("Low Power ePaper", 6.69, 1.30, 0.8, 0, "B.SilkS"),
-    ("Thermometer   rev A", 7.45, 2.70, 0.8, 0, "B.SilkS"),
-    ("CHARGE INDOORS 0-45°C", 9.05, 4.10, 0.8, 0, "B.SilkS"),
-
-    # populate-ONE legend (bridge/fit exactly one per group), as ONE left-aligned
-    # block in the clean NE back corner (left edge x32.5, 1.4mm pitch), north of
-    # the charger and clear of both the WEST antenna keep-out and H1 (x>=45.5).
-    # Keyed off component VALUES — the JP refdes aren't printed on the board.
-    # Holds the check_pcb literals "bridge ONE" / "fit ONE". Centres = 32.5 +
-    # width/2 (widths at 0.8mm): 7.41/11.83/8.48/9.24mm.
-    ("bridge ONE:", 36.21, 2.0, 0.8, 0, "B.SilkS"),
-    ("RESE 0.47/2.2/3Ω", 38.42, 3.4, 0.8, 0, "B.SilkS"),
-    ("IND 10/47µH", 36.74, 4.8, 0.8, 0, "B.SilkS"),
-    ("U5/U6 fit ONE", 37.12, 6.2, 0.8, 0, "B.SilkS"),
+    # === BACK (B.SilkS, mirrored) — general notes, two multi-line corner blocks.
+    # Each is ONE native \n text object anchored at a top corner and justified
+    # toward its own board edge, so KiCad aligns the lines automatically (stored
+    # justify is verbatim: SetMirrored does not flip it, so "R"/top reads
+    # left-aligned from the west edge on the back, "L"/top reads right-aligned to
+    # the east edge). ===
+    # NW-corner block, TOP-LEFT anchored at (1.0, 0.6): project URL, the full
+    # product name, "rev A" (holds the check_pcb "rev " token) and the indoor
+    # charge range as one contiguous phrase. A blank line separates the URL from
+    # the name. Sits in the bare NW back corner (pour-free, no back parts), north
+    # of J3's front footprint; DRC-clean silk clearance.
+    ("github.com/antoinecellerier\n\nLow Power ePaper Thermometer\nrev A\n"
+     "CHARGE INDOORS 0-45°C", 1.0, 0.6, 0.8, 0, "B.SilkS", "R", "T"),
+    # populate-ONE legend (bridge/fit exactly one per group), as ONE TOP-RIGHT
+    # anchored block in the clean NE back corner (right edge x44.0), north of the
+    # charger and clear of the WEST antenna keep-out and H1. Keyed off component
+    # VALUES — the JP refdes aren't printed on the board. Holds the check_pcb
+    # literals "bridge one" / "fit one"; the "EPD:"/"Sensor:" heads name each group.
+    ("EPD: bridge one only\nRESE 0.47/2.2/3Ω\nIND 10/47µH\n"
+     "Sensor: fit one only\nU5 BMP581/U6 BMP585", 44.0, 0.6, 0.8, 0,
+     "B.SilkS", "L", "T"),
 
     # === BACK (B.SilkS) — antenna keep-out reminder ===
     # Enclosure/mounting note (keep metal/ground/battery clear of the antenna
@@ -507,7 +513,7 @@ SILK = [
     # to open the rows. Pad columns x = 33.90/36.44/38.98/41.52/44.06. Pins 9&10
     # are BOTH GND -> one centred label. MOUNT TOP: header solders to the TOP.
     ("MOUNT TOP", 39.0, 26.9, 0.8, 0, "B.SilkS"),   # solder-side cue
-    ("J5", 31.2, 28.75, 0.8, 0, "B.SilkS"),         # legend tag, W of the rows
+    ("J5", 46.7, 32.1, 0.8, 0, "B.SilkS"),          # legend tag, SE corner
     # even pins 2/4/6/8 (NORTH row) — upper text row
     ("+3V3", 33.90, 28.15, 0.8, 0, "B.SilkS"),      # pin 2
     ("TX",   36.44, 28.15, 0.8, 0, "B.SilkS"),      # pin 4

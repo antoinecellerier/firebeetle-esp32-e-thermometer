@@ -41,7 +41,7 @@ POWER_NETS = {"VBAT", "VSYS", "EPD_VCC"}
 # +3V3 only carries the 465mA refresh burst between the LDO, the module and
 # the panel load switch; the rest of the net is pull-ups and sensor stubs.
 TRUNK_3V3 = [("U2", "5"), ("U1", "3"), ("Q2", "2")]
-REQUIRED_SILK = ["CHARGE INDOORS", "bridge ONE", "IBAT", "fit ONE", "rev "]
+REQUIRED_SILK = ["CHARGE INDOORS", "bridge one", "IBAT", "fit one", "rev "]
 
 ORIGIN = tuple(pl.BOARD["origin"])
 

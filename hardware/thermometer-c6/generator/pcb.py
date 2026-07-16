@@ -126,7 +126,9 @@ def add_footprints(board, netinfo, pad_net):
     # J4 (EPD FPC) is excluded too: its west courtyard edge is pinched to <0.7mm
     # by JP4/C6/D4 and its body/pads fill the east, so no >=0.8mm refdes fits on
     # exposed silk; the footprint's pin-1 silk mark stays for orientation.
-    KEEP_SILK_REFS = {"J1", "J3", "J5", "U5", "U6"}
+    # J3 (USB-C) is excluded: its footprint-default refdes sits on the north
+    # overhang OFF the board outline (y<0), so it moves to F.Fab (off silk).
+    KEEP_SILK_REFS = {"J1", "J5", "U5", "U6"}
     pads_by_key = {}
     for c in circuit.COMPONENTS:
         ref = c["ref"]
@@ -345,10 +347,26 @@ def add_keepouts(board):
         board.Add(z)
 
 
+SILK_HJUST = {"L": pcbnew.GR_TEXT_H_ALIGN_LEFT,
+              "C": pcbnew.GR_TEXT_H_ALIGN_CENTER,
+              "R": pcbnew.GR_TEXT_H_ALIGN_RIGHT}
+SILK_VJUST = {"T": pcbnew.GR_TEXT_V_ALIGN_TOP,
+              "C": pcbnew.GR_TEXT_V_ALIGN_CENTER,
+              "B": pcbnew.GR_TEXT_V_ALIGN_BOTTOM}
+
+
 def add_silk(board):
     for entry in pl.SILK:
         text, x, y, size, rot = entry[:5]
         layer = entry[5] if len(entry) > 5 else "F.SilkS"
+        # Optional horizontal/vertical justification (default centre/centre).
+        # Single-line labels stay centre-anchored; the two multi-line corner
+        # blocks anchor at a corner (top-left / top-right) so their lines align
+        # cleanly toward their own board edge and \n-wrapped text lands where
+        # authored in the GUI. Mirrored (B.SilkS) blocks store the justify
+        # verbatim -- SetMirrored does not flip it here.
+        hjust = entry[6] if len(entry) > 6 else "C"
+        vjust = entry[7] if len(entry) > 7 else "C"
         t = pcbnew.PCB_TEXT(board)
         t.SetText(text)
         t.SetPosition(bmm(x, y))
@@ -362,6 +380,11 @@ def add_silk(board):
         # minimum) or it prints thin/broken; enforce it regardless of size*0.15.
         t.SetTextThickness(FromMM(max(0.15, round(size * 0.15, 2))))
         t.SetTextAngleDegrees(rot)
+        # Set justify only when non-default so single-line silk stays byte-stable.
+        if hjust != "C":
+            t.SetHorizJustify(SILK_HJUST[hjust])
+        if vjust != "C":
+            t.SetVertJustify(SILK_VJUST[vjust])
         board.Add(t)
 
 
