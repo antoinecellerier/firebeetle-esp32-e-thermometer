@@ -79,6 +79,22 @@ Transcribed from `hardware/DESPI-C02_SCH V1.0.pdf` (visual + embedded netlist),
 | 22 | EPD RST | 10k pull-up to **EPD_VCC** (gated) |
 | 23 | EPD BUSY (input) | |
 
+## Debug header J5 (2×5, DNP — GND-first, no VBAT)
+
+The silk carries only a `DBG` marker (no room for a per-pin legend at ≥0.8mm),
+so the pinout lives here. Standard 2×5 numbering, pin 1 = the marked corner:
+
+| Pin | Signal | | Pin | Signal |
+|---|---|---|---|---|
+| 1 | GND | | 2 | +3V3 |
+| 3 | EN (reset) | | 4 | DBG_TX (UART0 TXD0, GPIO16) |
+| 5 | DBG_RX (UART0 RXD0, GPIO17) | | 6 | VBUS_SENSE (GPIO4) |
+| 7 | DBG_IO5 (spare GPIO5) | | 8 | DBG_IO8 (spare GPIO8, strap) |
+| 9 | GND | | 10 | GND |
+
+DNP by default — solder a header only if you need wired debug/UART. **BOOT is
+not on J5** (it's the SW2 button only); only EN is exposed here.
+
 ## Charging rule (product decision, 2026-07-07)
 
 **Charge indoors only (0–45°C).** The MCP73831 has no thermistor input;
