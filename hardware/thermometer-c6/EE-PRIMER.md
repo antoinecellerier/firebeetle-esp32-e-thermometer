@@ -22,8 +22,8 @@ keyed to actual reference designators so you can follow along in the PDF.
   via a connector; VSYS via a FET) would flag an error without it. Zero
   electrical meaning.
 - **X on a pin** (small blue cross): deliberate no-connect. **Big red X
-  over a part**: DNP — footprint on the board, part not fitted (U6, C29,
-  D7, R9, the headers).
+  over a part**: DNP — footprint on the board, part not fitted (U6, D7,
+  R9, the headers).
 - **Solder jumpers** (two pads with a dumbbell): bridged = filled link,
   open = gap. Config switches you operate with an iron; effectively 0Ω.
 - **Test point** (circle on a stub): a bare copper pad for a probe.

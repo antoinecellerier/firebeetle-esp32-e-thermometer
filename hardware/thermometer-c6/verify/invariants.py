@@ -122,7 +122,7 @@ def main():
     # --- battery sense (high-side switched) ------------------------------
     check("Divider is high-side switched: P-FET source on VBAT, drain feeds top 100k",
           N("Q4", 2) == N("U4", 3) and N("Q4", 3) == N("R20", 1))
-    check("Sense node: top 100k + bottom 100k + GPIO2 (pin 5) + TP + DNP "
+    check("Sense node: top 100k + bottom 100k + GPIO2 (pin 5) + TP + "
           "sampling cap, nothing else",
           nets.get(N("U1", 5), set()) ==
           {("U1", "5"), ("R20", "2"), ("R21", "1"), ("TP11", "1"), ("C29", "1")})

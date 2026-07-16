@@ -130,8 +130,8 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
   TP4 (3V3) is probe-only.
 - Charge current: R3 10k → 100mA (0.25C for a 400–500mAh pouch). 4.99k →
   200mA if a bigger pack is fitted.
-- If C29 (DNP sampling cap on VBAT_ADC) is fitted: enable the divider
-  ~5ms before reading (τ = 50k × 10n = 0.5ms).
+- C29 (10nF ADC reservoir on VBAT_ADC) is populated by default: enable the
+  divider ~5ms before reading (τ = 50k × 10n = 0.5ms).
 - BMP58x INT pins are unconnected: firmware must configure int_en=1,
   int_od=0, pad_int_drv=0 per the Bosch datasheets.
 - The 3700mV shutdown threshold inherited from the XIAO buck rig should be

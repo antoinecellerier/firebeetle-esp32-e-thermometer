@@ -27,7 +27,8 @@ booster HV clearances and the routable-density limit):
   east      J4 FPC (cable exits east), storage-cap columns + south row before it
   centre    channel col + crystal, L1/L2, gate, booster jumpers/RESE/pump
   south     sensors SW corner (keep-outs), LDO, divider, JST + Q6/JP1/J2, J5
-  bottom    bench test pads, DNP/hand-solder small parts (C9/C14/C15/C29/D7/R9)
+  bottom    bench test pads; back DNP/hand-solder parts D7/R9
+            (C9/C14/C15 populated; C29 now front/populated)
   MINI-1 rot 90 pad sides: EAST col s->n: 12 IO0, 13 IO1, 14 GND, 15 SDA,
   16 SCL, 17 D-, 18 D+, 19 GATE, 20 LED, 21 NC, 22 IO8, 23 BOOT, 24 MOSI;
   NORTH row w->e: 31 TXD0, 30 RXD0, 29 BUSY, 28 RST, 27 DC, 26 CS, 25 SCK;
@@ -177,7 +178,7 @@ PLACE = {
     "R19": (13.02, 21.98, 270),
     "R20": (11.4, 24.65, 180),
     "R21": (11.4, 26.0, 0),
-    "C29": (14.2, 26.0, 0, "B"),
+    "C29": (12.6, 27.7, 0),
     "TP11": (13.0, 23.4, 0, "B"),
     "J5": (33.9, 33.6, 90),
     "H1": (46.6, 2.1, 0),
@@ -194,49 +195,50 @@ PLACE = {
 # board DRC's copper-clean; regenerate both blocks by harvesting GND from the
 # hand board (extract_tracks.py GND) after a GUI GND editing pass.
 TRACKS = [
-    ("GND", 'B.Cu', 0.25, [(14.988, 24.412), (13.509, 24.412), (13.445, 24.475), (12.555, 24.475), (12.491, 24.412), (11.5, 24.412), (11.8, 22.7), (11.375, 22.275)]),
-    ("GND", 'B.Cu', 0.25, [(21.98, 12.75), (25.35, 12.75), (28.0, 15.4)]),
+    ("GND", 'B.Cu', 0.25, [(9.875, 24.25), (10.037, 24.412), (11.5, 24.412), (12.491, 24.412), (12.555, 24.475), (13.445, 24.475), (13.509, 24.412), (14.988, 24.412)]),
     ("GND", 'B.Cu', 0.25, [(10.125, 26.125), (10.9, 26.9), (11.8, 26.9)]),
-    ("GND", 'B.Cu', 0.25, [(9.875, 24.25), (10.037, 24.412), (11.5, 24.412)]),
+    ("GND", 'B.Cu', 0.25, [(11.5, 24.412), (11.8, 22.7), (11.375, 22.275)]),
+    ("GND", 'B.Cu', 0.25, [(21.98, 12.75), (25.35, 12.75), (28.0, 15.4)]),
     ("GND", 'B.Cu', 0.25, [(27.72, 6.05), (23.25, 6.05), (22.425, 6.875)]),
+    ("GND", 'B.Cu', 0.45, [(12.299, 26.601), (12.602, 26.905), (14.057, 26.905), (14.45, 26.512), (14.45, 26.4)]),
     ("GND", 'B.Cu', 0.45, [(19.08, 6.05), (21.5, 6.05), (21.55, 6.0)]),
-    ("GND", 'B.Cu', 0.45, [(12.495, 26.905), (14.057, 26.905), (14.45, 26.512), (14.45, 26.4)]),
-    ("GND", 'B.Cu', 0.5, [(26.9, 1.7), (26.6, 1.075), (26.65, 1.025), (27.495, 1.87)]),
     ("GND", 'B.Cu', 0.5, [(2.7, 25.375), (2.7, 24.6)]),
     ("GND", 'B.Cu', 0.5, [(11.375, 22.275), (11.37, 22.27)]),
     ("GND", 'B.Cu', 0.5, [(15.225, 21.55), (15.375, 21.7)]),
-    ("GND", 'F.Cu', 0.25, [(46.225, 14.55), (45.342, 14.55), (45.232, 14.5), (44.832, 14.1), (42.8, 14.1), (41.9, 15.0)]),
-    ("GND", 'F.Cu', 0.25, [(22.01, 10.06), (22.665, 10.715), (22.665, 10.741), (23.264, 11.34), (23.08, 11.34), (21.98, 12.75), (21.98, 12.739), (21.356, 12.115), (20.535, 12.115), (20.315, 12.335), (20.315, 16.415), (19.58, 17.15), (16.7, 17.15), (15.8, 17.6), (15.8, 19.85), (16.7, 19.85), (16.75, 19.9), (16.75, 20.15), (18.65, 22.05), (19.35, 22.05)]),
-    ("GND", 'F.Cu', 0.25, [(32.7, 16.81), (34.239, 17.765), (34.474, 18.0), (36.7, 18.0), (37.95, 16.75), (39.6, 18.4), (39.6, 19.042), (38.992, 19.65), (38.834, 19.65)]),
-    ("GND", 'F.Cu', 0.25, [(29.925, 28.45), (29.925, 31.455), (30.87, 32.4)]),
-    ("GND", 'F.Cu', 0.25, [(15.23, 21.5), (15.8, 20.5), (15.8, 19.85)]),
+    ("GND", 'B.Cu', 0.5, [(26.9, 1.7), (26.6, 1.075), (26.65, 1.025), (27.495, 1.87)]),
     ("GND", 'F.Cu', 0.25, [(1.838, 22.4), (1.1, 22.4), (0.8, 22.7)]),
-    ("GND", 'F.Cu', 0.25, [(8.362, 28.35), (9.5, 28.7), (9.5, 30.63), (10.09, 31.22)]),
-    ("GND", 'F.Cu', 0.25, [(27.72, 1.87), (28.435, 1.87), (28.435, 1.835), (29.205, 1.065), (35.74, 1.065), (36.075, 1.4), (36.075, 1.651), (36.674, 2.25), (37.062, 2.25)]),
-    ("GND", 'F.Cu', 0.25, [(10.125, 26.125), (9.955, 24.33), (9.875, 24.25), (9.25, 24.25), (8.11, 23.47)]),
-    ("GND", 'F.Cu', 0.25, [(27.72, 6.05), (29.59, 5.79), (30.61, 4.77)]),
     ("GND", 'F.Cu', 0.25, [(5.12, 21.5), (5.12, 21.38), (6.6, 19.9), (6.72, 19.9)]),
-    ("GND", 'F.Cu', 0.25, [(33.27, 11.05), (34.72, 12.5), (36.4, 12.5), (37.95, 13.15)]),
-    ("GND", 'F.Cu', 0.25, [(29.3, 24.8), (29.6, 24.5), (31.5, 24.5), (31.6, 24.4), (31.8, 24.4)]),
+    ("GND", 'F.Cu', 0.25, [(8.362, 28.35), (9.5, 28.7), (9.5, 30.63), (10.09, 31.22)]),
+    ("GND", 'F.Cu', 0.25, [(10.125, 26.125), (9.955, 24.33), (9.875, 24.25), (9.25, 24.25), (8.11, 23.47)]),
+    ("GND", 'F.Cu', 0.25, [(12.299, 26.601), (13.08, 27.383), (13.08, 27.7)]),
     ("GND", 'F.Cu', 0.25, [(15.025, 24.375), (15.025, 23.425), (14.65, 23.05), (14.214, 23.05), (13.02, 22.49)]),
-    ("GND", 'F.Cu', 0.3, [(47.6, 19.05), (44.55, 19.05), (44.5, 19.0), (41.2, 19.0)]),
-    ("GND", 'F.Cu', 0.3, [(14.7, 7.0), (16.3, 7.0), (16.75, 8.0)]),
+    ("GND", 'F.Cu', 0.25, [(15.23, 21.5), (15.8, 20.5), (15.8, 19.85)]),
+    ("GND", 'F.Cu', 0.25, [(22.01, 10.06), (22.665, 10.715), (22.665, 10.741), (23.264, 11.34), (23.08, 11.34), (21.98, 12.75), (21.98, 12.739), (21.356, 12.115), (20.535, 12.115), (20.315, 12.335), (20.315, 16.415), (19.58, 17.15), (16.7, 17.15), (15.8, 17.6), (15.8, 19.85), (16.7, 19.85), (16.75, 19.9), (16.75, 20.15), (18.65, 22.05), (19.35, 22.05)]),
+    ("GND", 'F.Cu', 0.25, [(27.72, 1.87), (28.435, 1.87), (28.435, 1.835), (29.205, 1.065), (35.74, 1.065), (36.075, 1.4), (36.075, 1.651), (36.674, 2.25), (37.062, 2.25)]),
+    ("GND", 'F.Cu', 0.25, [(27.72, 6.05), (29.59, 5.79), (30.61, 4.77)]),
+    ("GND", 'F.Cu', 0.25, [(29.3, 24.8), (29.6, 24.5), (31.5, 24.5), (31.6, 24.4), (31.8, 24.4)]),
+    ("GND", 'F.Cu', 0.25, [(29.925, 28.45), (29.925, 31.455), (30.87, 32.4)]),
+    ("GND", 'F.Cu', 0.25, [(32.7, 16.81), (34.239, 17.765), (34.474, 18.0), (36.7, 18.0), (37.95, 16.75), (39.6, 18.4), (39.6, 19.042), (38.992, 19.65), (38.834, 19.65)]),
+    ("GND", 'F.Cu', 0.25, [(33.27, 11.05), (34.72, 12.5), (36.4, 12.5), (37.95, 13.15)]),
+    ("GND", 'F.Cu', 0.25, [(46.225, 14.55), (45.342, 14.55), (45.232, 14.5), (44.832, 14.1), (42.8, 14.1), (41.9, 15.0)]),
     ("GND", 'F.Cu', 0.3, [(0.8, 21.9), (1.84, 21.9), (1.84, 22.4)]),
     ("GND", 'F.Cu', 0.3, [(4.35, 22.95), (3.412, 22.95), (3.362, 22.9)]),
+    ("GND", 'F.Cu', 0.3, [(14.7, 7.0), (16.3, 7.0), (16.75, 8.0)]),
+    ("GND", 'F.Cu', 0.3, [(47.6, 19.05), (44.55, 19.05), (44.5, 19.0), (41.2, 19.0)]),
     ("GND", 'F.Cu', 0.4, [(4.4, 22.9), (4.35, 22.95), (4.25, 22.85)]),
-    ("GND", 'F.Cu', 0.45, [(29.375, 13.775), (29.375, 11.25), (29.425, 11.2)]),
+    ("GND", 'F.Cu', 0.45, [(12.299, 26.601), (12.299, 26.389), (11.91, 26.0)]),
     ("GND", 'F.Cu', 0.45, [(17.06, 5.79), (14.165, 5.79), (14.1, 5.725), (14.075, 5.7), (13.7, 5.7), (13.43, 5.43), (13.3, 5.43)]),
-    ("GND", 'F.Cu', 0.45, [(12.495, 26.905), (11.91, 26.0)]),
-    ("GND", 'F.Cu', 0.5, [(14.6, 4.78), (14.58, 5.25), (14.575, 5.25), (14.1, 5.725), (14.158, 5.783)]),
-    ("GND", 'F.Cu', 0.5, [(17.06, 5.79), (18.2, 4.65), (18.2, 1.0), (18.7, 0.5), (19.695, 0.5), (20.15, 0.955), (19.235, 1.87), (19.08, 1.87)]),
+    ("GND", 'F.Cu', 0.45, [(29.375, 13.775), (29.375, 11.25), (29.425, 11.2)]),
     ("GND", 'F.Cu', 0.5, [(8.425, 21.625), (9.1, 21.925), (9.125, 21.95), (9.8, 22.125)]),
-    ("GND", 'F.Cu', 0.5, [(35.0, 19.875), (33.955, 19.875), (33.27, 19.19)]),
-    ("GND", 'F.Cu', 0.5, [(40.6, 28.25), (40.45, 28.25), (39.025, 26.825), (38.05, 26.825), (38.025, 26.85)]),
     ("GND", 'F.Cu', 0.5, [(11.375, 22.2), (11.375, 22.275)]),
-    ("GND", 'F.Cu', 0.5, [(14.6, 4.775), (15.361, 4.775), (16.3, 5.714), (16.3, 5.783), (16.283, 5.783), (16.3, 5.783), (16.242, 5.725)]),
-    ("GND", 'F.Cu', 0.5, [(30.5, 33.4), (30.87, 32.4)]),
     ("GND", 'F.Cu', 0.5, [(11.525, 10.35), (11.475, 10.3)]),
     ("GND", 'F.Cu', 0.5, [(13.02, 22.49), (11.37, 21.745)]),
+    ("GND", 'F.Cu', 0.5, [(14.6, 4.775), (15.361, 4.775), (16.3, 5.714), (16.3, 5.783), (16.283, 5.783), (16.3, 5.783), (16.242, 5.725)]),
+    ("GND", 'F.Cu', 0.5, [(14.6, 4.78), (14.58, 5.25), (14.575, 5.25), (14.1, 5.725), (14.158, 5.783)]),
+    ("GND", 'F.Cu', 0.5, [(17.06, 5.79), (18.2, 4.65), (18.2, 1.0), (18.7, 0.5), (19.695, 0.5), (20.15, 0.955), (19.235, 1.87), (19.08, 1.87)]),
+    ("GND", 'F.Cu', 0.5, [(30.5, 33.4), (30.87, 32.4)]),
+    ("GND", 'F.Cu', 0.5, [(35.0, 19.875), (33.955, 19.875), (33.27, 19.19)]),
+    ("GND", 'F.Cu', 0.5, [(40.6, 28.25), (40.45, 28.25), (39.025, 26.825), (38.05, 26.825), (38.025, 26.85)]),
 ]
 VIAS = []
 
@@ -260,7 +262,7 @@ STITCH = [
     (11.475, 10.3),
     (11.8, 12.0, 0.6, 0.3),
     (11.8, 15.9, 0.6, 0.3),
-    (12.495, 26.905),
+    (12.299, 26.601),
     (13.3, 5.43, 0.6, 0.3),
     (13.4, 2.5, 0.6, 0.3),
     (13.5, 9.7, 0.6, 0.3),
@@ -372,7 +374,9 @@ REF_POS = {
     "J1": (18.5, 22.7, 0.8, 0),     # north pocket, clear of J1 body / BAT+ / C14
     "J5": (46.9, 32.6, 0.8, 0),     # SE corner, east of the pin-9/10 column
     "U5": (4.20, 22.2, 0.8, 90),    # slot between U5 and C12
-    "U6": (2.6, 24.15, 0.8, 0),     # between the U5 and U6 courtyards
+    # U6 refdes SOUTH of U6's body (clear of the sensor keep-out, y28.5): its
+    # old spot between U5 and U6 could be misread as U5's. Now unambiguously U6.
+    "U6": (2.7, 29.1, 0.8, 0),
 }
 
 # Footprint F.SilkS graphic items relocated to F.Fab so authored labels can sit
@@ -409,72 +413,100 @@ SILK = [
     ("3Ω", 39.8, 8.9, 0.8, 90),         # JP4
     ("2.2Ω", 39.8, 12.5, 0.8, 90),      # JP3
     ("0.47Ω", 39.8, 16.1, 0.8, 90),     # JP2
-    # inductor jumper: 10µH beside JP5 (south pocket, centred to clear Q6 W /
-    # C16 E bodies). JP6=47µH has no >=0.8mm exposed-silk neighbour (Q3/C22/C28
-    # box it), so its value lives in the back "bridge ONE" legend; see report.
+    # inductor jumpers: value beside each JP. 10µH beside JP5 (south pocket,
+    # centred to clear Q6 W / C16 E bodies); 47µH in the pocket W of JP6 between
+    # C28 (W) and JP6 (E) — spot found in the GUI working copy and harvested.
     ("10µH", 30.74, 24.9, 0.8, 0),
+    ("47µH", 27.8, 20.0, 0.8, 0),
     # debug header J5: per-pin legend won't fit at >=0.8mm on the crowded top;
     # DBG marker only here. The full 10-pin pinout is a B.SilkS legend on the
     # BACK, north of the header (see the J5 back legend below) — the pins are
     # through-hole and land on the back, so the mirrored legend aligns with them.
     ("DBG", 36.5, 28.6, 0.8, 0),
+    # EPD FPC J4 (24-pin, cable exits east): pin-1 / pin-24 end markers for
+    # cable-orientation reference, just outside the end pads (N end / S end).
+    ("1", 46.9, 9.9, 0.8, 0),           # beside J4 pin 1  (north end)
+    ("24", 44.5, 22.2, 0.8, 0),         # beside J4 pin 24 (south end)
 
     # === BACK (B.SilkS, mirrored) — bench test points, label beside each pad ===
     ("VBAT", 18.5, 25.7, 0.8, 0, "B.SilkS"),
     ("GND", 21.2, 25.7, 0.8, 0, "B.SilkS"),
     ("GND", 23.9, 25.7, 0.8, 0, "B.SilkS"),
-    ("3V3", 11.6, 32.3, 0.8, 0, "B.SilkS"),
+    # TP4 is the 3V3 rail probe-ONLY pad (RT9080 forbids back-drive); the
+    # "probe-only" warning rides on TP4's own label.
+    ("3V3 probe-only", 11.6, 32.3, 0.8, 0, "B.SilkS"),
     ("EPD_VCC", 24.0, 11.9, 0.8, 0, "B.SilkS"),
-    ("PREVGH", 38.4, 25.7, 0.8, 0, "B.SilkS"),
-    ("PREVGL", 33.4, 26.5, 0.8, 0, "B.SilkS"),
+    # PREVGH/PREVGL/VCOM sit NORTH of their pads (smaller y) so they don't
+    # crowd the J5 pinout legend that occupies the strip to their south.
+    ("PREVGH", 38.4, 22.0, 0.8, 0, "B.SilkS"),
+    ("PREVGL", 33.4, 22.8, 0.8, 0, "B.SilkS"),
     ("GDR", 29.0, 14.4, 0.8, 0, "B.SilkS"),
     ("RESE", 36.35, 12.3, 0.8, 0, "B.SilkS"),
-    ("VCOM", 44.4, 27.7, 0.8, 0, "B.SilkS"),
+    ("VCOM", 44.4, 24.0, 0.8, 0, "B.SilkS"),
     ("VBAT_ADC", 13.0, 21.5, 0.8, 0, "B.SilkS"),
 
-    # populate-one sensors U5/U6 — the west cluster (U1 module N, cap column E,
-    # board edge W, U6 pin-1 dot) has no >=0.8mm exposed-silk gap on top, so the
-    # note goes on the back under the sensor projection.
-    ("fit ONE", 2.6, 24.3, 0.8, 0, "B.SilkS"),
+    # Optional DNP hand-solder BACK parts: refdes + value beside each pad so the
+    # assembler knows what fits there (both bottom-side, populated only if the
+    # respective ring/startup issue proves real).
+    ("D7 SMF5.0A", 30.5, 10.0, 0.8, 0, "B.SilkS"),  # VBUS surge clamp, S of D7
+    # R9 10M (crystal bias) moved E of R9, clear of the VBAT_ADC TP label to its
+    # west (VBAT_ADC right edge x15.98; this label left edge x19.55).
+    ("R9 10M", 22.0, 20.5, 0.8, 0, "B.SilkS"),
 
-    # === BACK (B.SilkS, mirrored) — general notes, sparse bottom mid-band ===
-    ("thermometer-c6 rev A", 20.0, 13.3, 0.8, 0, "B.SilkS"),
-    ("CHARGE INDOORS", 20.5, 15.0, 0.8, 0, "B.SilkS"),
-    ("0-45°C", 20.5, 16.5, 0.8, 0, "B.SilkS"),
-    # Complete jumper legend: bridge exactly one per group; both groups carry
-    # their values symmetrically (the per-jumper values on top are immediate
-    # labels, this is the consolidated reference and holds the check_pcb-required
-    # literal "bridge ONE"). Values: RESE JP2/JP3/JP4 = 0.47/2.2/3Ω, inductor
-    # JP5/JP6 = 10/47µH.
-    ("bridge ONE   RESE 0.47/2.2/3Ω=JP2/3/4   IND 10/47µH=JP5/6",
-     22.0, 18.5, 0.8, 0, "B.SilkS"),
+    # battery type by J1: J1 is a front SMD JST whose north pocket (BAT/+) has no
+    # >=0.8mm exposed FRONT-silk gap (Q4 W, C14 E, caps N, J1 pads S), so the LiPo
+    # spec goes on the BACK under J1's body — exposed there (J1 has no THT pads).
+    ("3.7V LiPo", 20.8, 31.2, 0.8, 0, "B.SilkS"),
+
+    # populate-one sensors U5/U6 — the note goes on the back under the sensor
+    # projection (no >=0.8mm exposed-silk gap on top). "U5/U6 fit ONE" names the
+    # pair explicitly; centred as far west as the board edge allows.
+    ("U5/U6 fit ONE", 5.0, 24.3, 0.8, 0, "B.SilkS"),
+
+    # === BACK (B.SilkS, mirrored) — general notes ===
+    # NW-corner block, LEFT-ALIGNED at x1.0 (centres = 1.0 + width/2, widths at
+    # 0.8mm), looser 1.4mm inter-line pitch. All lines stay WEST of J3 (x<18) so
+    # they clear its USB-C shield tabs. The product name wraps to two lines (the
+    # full title is too wide for one line west of J3); "rev A" rides the second
+    # line for the check_pcb-required "rev " token. CHARGE INDOORS reads as one
+    # contiguous phrase with its 0-45°C charging range.
+    ("Low-Power E-Paper", 7.395, 1.30, 0.8, 0, "B.SilkS"),
+    ("Thermometer   rev A", 7.45, 2.70, 0.8, 0, "B.SilkS"),
+    ("CHARGE INDOORS 0-45°C", 9.05, 4.10, 0.8, 0, "B.SilkS"),
+
+    # Jumper legend (bridge exactly one per group), relocated off the crowded NW
+    # corner into the clear central back band EAST of the antenna keep-out, where
+    # it spreads to three looser-spaced lines (1.4mm pitch, left-aligned at x7.5).
+    # Holds the check_pcb-required literal "bridge ONE". Values: RESE JP2/JP3/JP4
+    # = 0.47/2.2/3Ω, inductor JP5/JP6 = 10/47µH (both also labelled per-jumper on
+    # top). The wide RESE line stays north of R9/VBAT_ADC and west of GDR.
+    ("bridge ONE", 11.015, 15.6, 0.8, 0, "B.SilkS"),
+    ("RESE 0.47/2.2/3Ω = JP2/3/4", 17.205, 17.0, 0.8, 0, "B.SilkS"),
+    ("IND 10/47µH = JP5/6", 14.73, 18.4, 0.8, 0, "B.SilkS"),
 
     # === BACK (B.SilkS, mirrored) — J5 debug-header pinout legend ===
     # J5 is a 2x5 through-hole header (pads land on the back), mounted on the
-    # TOP. The full 10-pin legend didn't fit at >=0.8mm on the crowded top, so
-    # it lives here on the back, north of the header, column-aligned over the
+    # TOP. The full 10-pin legend didn't fit at >=0.8mm on the crowded top, so it
+    # lives here on the back, north of the header, column-aligned over the
     # through-hole pin pairs: each x-column is a pin pair, upper text row = the
-    # NORTH (even) pin, lower text row = the SOUTH (odd) pin. Co-located with the
-    # pins in board coords, so mirroring + the through-pins keep label<->pin
-    # aligned when viewed from the back. Pad columns x = 33.90/36.44/38.98/
-    # 41.52/44.06; north pads at y31.06 (tops y30.21) bound the lower row.
-    # Pins 9&10 are BOTH GND and VCOM's label sits directly above that east
-    # column, leaving no room for two >=0.8mm rows there -> one centred GND for
-    # the pair. MOUNT TOP warns the header solders to the TOP (not the back).
-    ("MOUNT TOP", 39.0, 27.35, 0.8, 0, "B.SilkS"),  # solder-side cue
-    ("J5", 31.2, 28.95, 0.8, 0, "B.SilkS"),         # legend tag, W of the rows
+    # NORTH (even) pin, lower text row = the SOUTH (odd) pin. Looser 1.25mm pitch,
+    # bounded south by the pad tops (y30.21) and north by TP6 — MOUNT TOP moves up
+    # to open the rows. Pad columns x = 33.90/36.44/38.98/41.52/44.06. Pins 9&10
+    # are BOTH GND -> one centred label. MOUNT TOP: header solders to the TOP.
+    ("MOUNT TOP", 39.0, 26.9, 0.8, 0, "B.SilkS"),   # solder-side cue
+    ("J5", 31.2, 28.75, 0.8, 0, "B.SilkS"),         # legend tag, W of the rows
     # even pins 2/4/6/8 (NORTH row) — upper text row
-    ("+3V3", 33.90, 28.45, 0.8, 0, "B.SilkS"),      # pin 2
-    ("TX",   36.44, 28.45, 0.8, 0, "B.SilkS"),      # pin 4
-    ("IO4",  38.98, 28.45, 0.8, 0, "B.SilkS"),      # pin 6
-    ("IO8",  41.52, 28.45, 0.8, 0, "B.SilkS"),      # pin 8
+    ("+3V3", 33.90, 28.15, 0.8, 0, "B.SilkS"),      # pin 2
+    ("TX",   36.44, 28.15, 0.8, 0, "B.SilkS"),      # pin 4
+    ("IO4",  38.98, 28.15, 0.8, 0, "B.SilkS"),      # pin 6
+    ("IO8",  41.52, 28.15, 0.8, 0, "B.SilkS"),      # pin 8
     # odd pins 1/3/5/7 (SOUTH row) — lower text row
-    ("GND",  33.90, 29.55, 0.8, 0, "B.SilkS"),      # pin 1
-    ("EN",   36.44, 29.55, 0.8, 0, "B.SilkS"),      # pin 3
-    ("RX",   38.98, 29.55, 0.8, 0, "B.SilkS"),      # pin 5
-    ("IO5",  41.52, 29.55, 0.8, 0, "B.SilkS"),      # pin 7
+    ("GND",  33.90, 29.4, 0.8, 0, "B.SilkS"),       # pin 1
+    ("EN",   36.44, 29.4, 0.8, 0, "B.SilkS"),       # pin 3
+    ("RX",   38.98, 29.4, 0.8, 0, "B.SilkS"),       # pin 5
+    ("IO5",  41.52, 29.4, 0.8, 0, "B.SilkS"),       # pin 7
     # pins 9 (S) & 10 (N): both GND -> single centred label for the column
-    ("GND",  44.06, 29.05, 0.8, 0, "B.SilkS"),      # pins 9 & 10
+    ("GND",  44.06, 28.775, 0.8, 0, "B.SilkS"),     # pins 9 & 10
 ]
 
 # Routed copper (generator/pcb_routes.py, checked in). Since the M5 GUI

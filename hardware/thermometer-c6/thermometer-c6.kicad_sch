@@ -23575,9 +23575,9 @@
     (at 396.24 185.42 0)
     (unit 1)
     (exclude_from_sim no)
-    (in_bom no)
+    (in_bom yes)
     (on_board yes)
-    (dnp yes)
+    (dnp no)
     (uuid "171311f7-5fe8-5144-a055-83a9aab97671")
     (property "Reference" "C29"
       (at 398.44 184.22 0)
@@ -23615,7 +23615,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" ""
+    (property "LCSC" "C15195"
       (at 396.24 185.42 0)
       (effects
         (font

@@ -262,7 +262,7 @@ COMPONENTS = [
     dict(ref="R21", lib_id="Device:R", value="100k 1%", footprint=R0402,
          lcsc="C25741", zone="I: Battery sense"),  # divider bottom
     dict(ref="C29", lib_id="Device:C", value="10nF", footprint=C0402,
-         lcsc="", dnp=True, zone="I: Battery sense"),  # ADC reservoir; enable divider ~5ms before reading if fitted
+         lcsc="C15195", dnp=False, zone="I: Battery sense"),  # ADC reservoir, populated; enable divider ~5ms before reading (10nF 0402 X7R, JLC Basic — re-verify stock at order)
     dict(ref="TP11", lib_id="Connector:TestPoint", value="VBAT_ADC", footprint=TP,
          lcsc="", zone="I: Battery sense"),
 
