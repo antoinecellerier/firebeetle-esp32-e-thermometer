@@ -119,8 +119,14 @@ def add_outline(board):
 
 def add_footprints(board, netinfo, pad_net):
     # Connectors + sensors keep their reference on F.SilkS (assembly/orientation
-    # aids); every other refdes moves to F.Fab so the silk stays legible.
-    KEEP_SILK_REFS = {"J1", "J2", "J3", "J4", "J5", "U5", "U6"}
+    # aids); every other refdes moves to F.Fab so the silk stays legible. J2 is
+    # excluded: its courtyard is boxed on all four sides (J1/JP1/D5/edge), leaving
+    # a ~1mm south strip that cannot hold both a >=0.8mm refdes and the required
+    # "PPK2" function label — the function label wins, the refdes lives on F.Fab.
+    # J4 (EPD FPC) is excluded too: its west courtyard edge is pinched to <0.7mm
+    # by JP4/C6/D4 and its body/pads fill the east, so no >=0.8mm refdes fits on
+    # exposed silk; the footprint's pin-1 silk mark stays for orientation.
+    KEEP_SILK_REFS = {"J1", "J3", "J5", "U5", "U6"}
     pads_by_key = {}
     for c in circuit.COMPONENTS:
         ref = c["ref"]
@@ -155,7 +161,7 @@ def add_footprints(board, netinfo, pad_net):
             r = fp.Reference()
             r.SetPosition(bmm(rx, ry))
             r.SetTextSize(pcbnew.VECTOR2I(FromMM(rsize), FromMM(rsize)))
-            r.SetTextThickness(FromMM(round(rsize * 0.15, 2)))
+            r.SetTextThickness(FromMM(max(0.15, round(rsize * 0.15, 2))))
             r.SetTextAngleDegrees(rang)
         # Relocate irreducible footprint silk graphics to F.Fab (see SILK_TO_FAB).
         mode = getattr(pl, "SILK_TO_FAB", {}).get(ref)
@@ -352,7 +358,9 @@ def add_silk(board):
         else:
             t.SetLayer(pcbnew.F_SilkS)
         t.SetTextSize(pcbnew.VECTOR2I(FromMM(size), FromMM(size)))
-        t.SetTextThickness(FromMM(round(size * 0.15, 2)))
+        # Legibility floor: >=0.8mm silk needs >=0.15mm strokes (JLCPCB reliable
+        # minimum) or it prints thin/broken; enforce it regardless of size*0.15.
+        t.SetTextThickness(FromMM(max(0.15, round(size * 0.15, 2))))
         t.SetTextAngleDegrees(rot)
         board.Add(t)
 
@@ -364,12 +372,12 @@ def design_settings(board):
     ds.m_ViasMinSize = FromMM(0.5)
     ds.m_MinThroughDrill = FromMM(0.3)
     ds.m_CopperEdgeClearance = FromMM(0.2)  # JLC min; USB-C edge pads sit at 0.31
-    # This board is at its routable-density limit; the functional silk (M7)
-    # needs sub-0.8mm text to sit clear of the packed pads. JLC prints down to
-    # ~0.4mm/0.06mm, so relax the DRC floor from KiCad's 0.8/0.08 default to
-    # match the intent (silk stays legible; most labels are 0.5-0.7mm).
-    ds.m_MinSilkTextHeight = FromMM(0.4)
-    ds.m_MinSilkTextThickness = FromMM(0.06)
+    # Legibility-first silk (M7c): every authored label is >=0.8mm/0.15mm (JLCPCB
+    # reliable-silk minimum), so DRC ENFORCES that floor rather than relaxing it.
+    # set_project_drc_severities() mirrors these into the .kicad_pro rules that
+    # kicad-cli actually reads.
+    ds.m_MinSilkTextHeight = FromMM(0.8)
+    ds.m_MinSilkTextThickness = FromMM(0.15)
     # Accept single-spoke thermal relief on GND pads (default 2). Many GND pads
     # on tightly-packed 0402s can only take one spoke without moving parts; one
     # spoke is a valid connection. Narrowest fix for starved_thermal.
@@ -480,16 +488,28 @@ PRO_PATH = os.path.join(PROJECT, "thermometer-c6.kicad_pro")
 
 
 def set_project_drc_severities():
-    """SILK_TO_FAB relocates a few footprints' silk graphics to F.Fab, which by
-    design makes them differ from their library copy. SaveBoard rewrites the
-    project severities from pcbnew defaults, so pin lib_footprint_mismatch back
-    to 'ignore' — this board intentionally edits those footprints, and the check
-    is otherwise unrelated to copper legality (drc_summary's REAL gate)."""
-    if not pl.SILK_TO_FAB or not os.path.exists(PRO_PATH):
+    """Fix up the .kicad_pro that SaveBoard rewrites from pcbnew defaults:
+
+    1. lib_footprint_mismatch -> 'ignore': SILK_TO_FAB relocates a few
+       footprints' silk graphics to F.Fab, which by design makes them differ
+       from their library copy; the check is unrelated to copper legality.
+    2. min_text_height=0.8mm / min_text_thickness=0.15mm: enforce the M7c
+       legibility floor in the rules kicad-cli actually reads (SaveBoard should
+       carry the design-setting values over, but pin them explicitly so the DRC
+       floor never silently regresses to a pcbnew default)."""
+    if not os.path.exists(PRO_PATH):
         return
     txt = open(PRO_PATH).read()
-    fixed = txt.replace('"lib_footprint_mismatch": "warning"',
-                        '"lib_footprint_mismatch": "ignore"')
+    # Targeted line edits only (preserve KiCad's exact JSON formatting so the
+    # committed diff stays minimal and regeneration is byte-stable).
+    subs = [
+        (r'("lib_footprint_mismatch":\s*)"warning"', r'\1"ignore"'),
+        (r'("min_text_height":\s*)[0-9.]+', r'\g<1>0.8'),
+        (r'("min_text_thickness":\s*)[0-9.]+', r'\g<1>0.15'),
+    ]
+    fixed = txt
+    for pat, rep in subs:
+        fixed = re.sub(pat, rep, fixed)
     if fixed != txt:
         open(PRO_PATH, "w").write(fixed)
 

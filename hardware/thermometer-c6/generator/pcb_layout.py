@@ -363,15 +363,16 @@ KEEPOUTS = [
          tracks=False, vias=False, fills=True, pads=False),
 ]
 
-# Reference-designator overrides for the refs kept on F.SilkS (J1-J5/U5/U6 per
-# add_footprints' KEEP_SILK_REFS). J2/J4/J5/U6's default positions collide with
-# neighbouring copper/silk; nudge + shrink + (re)angle to a clear spot. Tuple is
-# (x, y, size_mm, angle_deg), board-relative like PLACE.
+# Reference-designator overrides for the refs kept on F.SilkS (J1/J3/J5/U5/U6
+# per add_footprints' KEEP_SILK_REFS). Every kept refdes must clear its part's
+# body and neighbours at the >=0.8mm/0.15mm legibility floor. Tuple is
+# (x, y, size_mm, angle_deg), board-relative like PLACE. (J3 keeps its footprint
+# default: 1.0mm on the north USB-C overhang, already clear.)
 REF_POS = {
-    "J2": (25.9, 34.1, 0.55, 0),    # south of the header, beside PPK2
-    "J4": (40.2, 20.0, 0.6, 90),    # corridor between D4 and the J4 outline
-    "J5": (46.0, 32.6, 0.6, 0),     # SE corner, east of pin 9/10
-    "U6": (2.7, 24.15, 0.6, 0),     # between the U5 and U6 courtyards
+    "J1": (18.5, 22.7, 0.8, 0),     # north pocket, clear of J1 body / BAT+ / C14
+    "J5": (46.9, 32.6, 0.8, 0),     # SE corner, east of the pin-9/10 column
+    "U5": (4.20, 22.2, 0.8, 90),    # slot between U5 and C12
+    "U6": (2.6, 24.15, 0.8, 0),     # between the U5 and U6 courtyards
 }
 
 # Footprint F.SilkS graphic items relocated to F.Fab so authored labels can sit
@@ -382,52 +383,69 @@ REF_POS = {
 # the module outline rectangle stays on silk.
 SILK_TO_FAB = {"J5": "all", "JP5": "all", "JP6": "all", "U1": "poly"}
 
-# Functional silkscreen. Standard units; "*" marks the ships-bridged / default
-# jumper. Bottom-side (B.SilkS) text is auto-mirrored so it reads through the
-# board. Ω/µ/° render in KiCad's Newstroke stroke font.
+# Functional silkscreen (M7c, LEGIBILITY-FIRST). Every authored label is
+# >=0.8mm text / >=0.15mm stroke (JLCPCB reliable-silk minimum, DRC-enforced via
+# min_text_height/min_text_thickness) and sits on EXPOSED silk beside its part,
+# never under a chip/connector body (each label's bbox is courtyard-clear on its
+# own board side).
+# No "*" default markers — the ships-bridged/open state is obvious from the
+# jumper pads and a printed "*" would go stale if the selection changes.
+# POSITION-SPECIFIC labels stay beside their part on that part's side; general
+# position-independent notes go to B.SilkS (mirrored) to free top room.
+# Ω/µ/° render in KiCad's Newstroke stroke font.
 SILK = [
-    # --- B.SilkS bench test points (label beside each 1.5mm pad) ---
-    ("VBAT", 18.5, 25.7, 0.7, 0, "B.SilkS"),
-    ("GND", 21.2, 25.7, 0.7, 0, "B.SilkS"),
-    ("GND", 23.9, 25.7, 0.7, 0, "B.SilkS"),
-    ("3V3", 11.6, 32.3, 0.7, 0, "B.SilkS"),
-    ("EPD_VCC", 24.0, 11.8, 0.7, 0, "B.SilkS"),
-    ("PREVGH", 38.4, 25.7, 0.7, 0, "B.SilkS"),
-    ("PREVGL", 33.4, 26.5, 0.7, 0, "B.SilkS"),
-    ("GDR", 29.0, 14.4, 0.7, 0, "B.SilkS"),
-    ("RESE", 36.35, 12.3, 0.7, 0, "B.SilkS"),
-    ("VCOM", 44.4, 27.7, 0.7, 0, "B.SilkS"),
-    ("VBAT_ADC", 13.0, 21.5, 0.6, 0, "B.SilkS"),
-    # --- buttons / LEDs ---
-    ("RST", 3.9, 6.4, 0.6, 0),
-    ("BOOT", 11.6, 6.4, 0.6, 0),
-    ("CHG", 16.5, 6.3, 0.55, 0),
-    ("STAT", 14.65, 34.3, 0.5, 0),
-    # --- battery connector (BAT in J1's body, + at the positive pad) ---
-    ("BAT", 21.0, 32.6, 0.7, 0),
-    ("+", 20.0, 24.4, 0.9, 0),
-    ("PPK2", 28.1, 34.15, 0.55, 0),
-    # --- RESE sense jumpers (vertical, in the JP-stack / J4 corridor) ---
-    ("3Ω", 40.0, 8.9, 0.6, 90),
-    ("2.2Ω", 40.0, 12.5, 0.55, 90),
-    ("0.47Ω*", 40.0, 16.1, 0.5, 90),
-    ("RESE bridge ONE", 38.2, 6.7, 0.5, 0),
-    # --- inductor jumpers (values top, JP5/JP6 outlines moved to F.Fab) ---
-    ("47µH", 29.45, 18.4, 0.5, 90),
-    ("10µH*", 30.85, 20.55, 0.5, 0),
-    ("IND bridge ONE", 30.8, 20.5, 0.6, 0, "B.SilkS"),
-    # --- populate-one sensors ---
-    ("fit ONE", 2.6, 29.0, 0.6, 0),
-    # --- VBAT-measurement jumper (vertical, between J1 and JP1 outlines) ---
-    ("VBAT MEAS*", 25.55, 25.8, 0.5, 90),
-    # --- charging safety, at J3's south skirt ---
-    ("CHARGE INDOORS", 23.4, 7.4, 0.5, 0),
-    ("0-45°C", 23.4, 8.3, 0.5, 0),
-    # --- board id (B.SilkS, in the sparse bottom mid-band) ---
-    ("thermometer-c6 rev A", 20.0, 16.5, 0.7, 0, "B.SilkS"),
-    # --- J5 debug-header pinout legend (two rows, north of the header) ---
-    ("2 3V3 4 TX 6 IO4 8 IO8 10 GND\n1 GND 3 EN 5 RX 7 IO5 9 GND",
-     39.0, 29.475, 0.4, 0),
+    # === TOP (F.SilkS) — position-specific, beside the part it labels ===
+    # buttons / LEDs
+    ("RST", 3.9, 6.5, 0.8, 0),          # S of SW1
+    ("BOOT", 11.6, 6.5, 0.8, 0),        # S of SW2
+    ("CHG", 16.5, 6.5, 0.8, 0),         # S of D1 (charge LED)
+    ("STAT", 14.65, 34.2, 0.8, 0),      # S of D3 (status LED)
+    # battery connector J1: BAT + polarity in the clear pocket N of J1's body
+    ("BAT", 18.0, 24.2, 0.8, 0),
+    ("+", 20.0, 24.2, 0.9, 0),          # directly above J1.1 (the + pad, x=20)
+    # PPK2 series-measurement header J2 (in J2's south edge strip)
+    ("PPK2", 27.7, 34.48, 0.8, 0),
+    # RESE sense jumpers: value beside each JP, vertical in the JP<->J4 corridor
+    ("3Ω", 39.8, 8.9, 0.8, 90),         # JP4
+    ("2.2Ω", 39.8, 12.5, 0.8, 90),      # JP3
+    ("0.47Ω", 39.8, 16.1, 0.8, 90),     # JP2
+    # inductor jumper: 10µH beside JP5 (south pocket, centred to clear Q6 W /
+    # C16 E bodies). JP6=47µH has no >=0.8mm exposed-silk neighbour (Q3/C22/C28
+    # box it), so its value lives in the back "bridge ONE" legend; see report.
+    ("10µH", 30.74, 24.9, 0.8, 0),
+    # debug header J5: per-pin legend won't fit at >=0.8mm; DBG marker only, the
+    # pinout lives in the README/assembly doc (see report).
+    ("DBG", 36.5, 28.6, 0.8, 0),
+
+    # === BACK (B.SilkS, mirrored) — bench test points, label beside each pad ===
+    ("VBAT", 18.5, 25.7, 0.8, 0, "B.SilkS"),
+    ("GND", 21.2, 25.7, 0.8, 0, "B.SilkS"),
+    ("GND", 23.9, 25.7, 0.8, 0, "B.SilkS"),
+    ("3V3", 11.6, 32.3, 0.8, 0, "B.SilkS"),
+    ("EPD_VCC", 24.0, 11.9, 0.8, 0, "B.SilkS"),
+    ("PREVGH", 38.4, 25.7, 0.8, 0, "B.SilkS"),
+    ("PREVGL", 33.4, 26.5, 0.8, 0, "B.SilkS"),
+    ("GDR", 29.0, 14.4, 0.8, 0, "B.SilkS"),
+    ("RESE", 36.35, 12.3, 0.8, 0, "B.SilkS"),
+    ("VCOM", 44.4, 27.7, 0.8, 0, "B.SilkS"),
+    ("VBAT_ADC", 13.0, 21.5, 0.8, 0, "B.SilkS"),
+
+    # populate-one sensors U5/U6 — the west cluster (U1 module N, cap column E,
+    # board edge W, U6 pin-1 dot) has no >=0.8mm exposed-silk gap on top, so the
+    # note goes on the back under the sensor projection.
+    ("fit ONE", 2.6, 24.3, 0.8, 0, "B.SilkS"),
+
+    # === BACK (B.SilkS, mirrored) — general notes, sparse bottom mid-band ===
+    ("thermometer-c6 rev A", 20.0, 13.3, 0.8, 0, "B.SilkS"),
+    ("CHARGE INDOORS", 20.5, 15.0, 0.8, 0, "B.SilkS"),
+    ("0-45°C", 20.5, 16.5, 0.8, 0, "B.SilkS"),
+    # Complete jumper legend: bridge exactly one per group; both groups carry
+    # their values symmetrically (the per-jumper values on top are immediate
+    # labels, this is the consolidated reference and holds the check_pcb-required
+    # literal "bridge ONE"). Values: RESE JP2/JP3/JP4 = 0.47/2.2/3Ω, inductor
+    # JP5/JP6 = 10/47µH.
+    ("bridge ONE   RESE 0.47/2.2/3Ω=JP2/3/4   IND 10/47µH=JP5/6",
+     22.0, 18.5, 0.8, 0, "B.SilkS"),
 ]
 
 # Routed copper (generator/pcb_routes.py, checked in). Since the M5 GUI
