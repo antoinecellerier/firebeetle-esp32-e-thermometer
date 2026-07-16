@@ -107,6 +107,18 @@ counterpoise. Provenance:
 - Remaining: 4 single-via 1-pad ties (U6.6/U5.3/R21.2/C6.2, keep-out, accepted);
   3 dangling tails (+3V3/DBG_RX/EPD_SCK) trimmed in the following commit.
 
+## hand-routed-2026-07-16-h1-clearance.kicad_pcb
+
+GUI board after the user rerouted **VBAT + EPD_SCK away from mounting hole H1**
+to open its board-edge/copper clearance, and re-stitched the NE GND (added
+0.5/0.3 @ (43.5,5.8) and 0.6/0.3 @ (46.5,6.6)/(46.5,7.6); dropped (46.6,6.7)).
+Base: generated at cd3a9e4. H1 nearest non-pour copper **2.32mm → 3.05mm** (a
+full 5mm M2 flat washer now clears). Harvested: pcb_routes.py (VBAT/EPD_SCK
+signals) + pcb_layout.py STITCH. GND fully connected (0 unconnected). Note: 2
+redundant NE stitch vias (44.49,5.58 / 46.6,5.7) render one-sided in the
+generated zone-fill (`via_dangling`, benign — neither is the sole tie for any
+pad; GND still one connected system). `make check` green.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
