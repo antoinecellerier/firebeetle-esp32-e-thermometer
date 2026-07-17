@@ -31,6 +31,11 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
   `extract_tracks.py COPY --all > generator/pcb_routes.py`), or by editing
   the polyline data in `pcb_routes.py` directly for small mechanical tweaks
   — both are legitimate; DRC is the gate either way.
+  `extract_tracks.py` harvests only signal copper (GND excluded);
+  `verify/hand_diff.py COPY` audits every OTHER unharvested GUI edit
+  (placement / GND vias+tracks / silk / copper-graphics / outline /
+  signal-sync) and `--apply` mirrors placement + STITCH vias into
+  `pcb_layout.py`. Run it (exit 0) before the gate.
 - Gate: `make check` + DRC copper-clean (`python3 verify/drc_summary.py
   --gate`, REAL=0) + `python3 verify/check_pcb.py`. `starved_thermal` waits
   for M6's pours, `silk_*` for M7; unconnected = GND-only until the pour.

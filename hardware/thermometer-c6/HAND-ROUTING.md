@@ -57,17 +57,37 @@ Anonymous nets are renamed to their `~` names automatically (needs
 (`... NET [NET ...]`, prints entries for pasting) still exists for
 surgical work.
 
+## 3.5. Audit unharvested edits
+
+`extract_tracks.py` mirrors only signal copper (GND excluded). Everything
+else — placement, GND vias/tracks, silk, copper graphics, outline — is
+hand-mirrored and easy to forget. Audit the whole round-trip:
+
+```bash
+python3 verify/hand_diff.py            # must exit 0 before the gate
+python3 verify/hand_diff.py --apply    # mirror placement + STITCH vias
+```
+
+`--apply` writes the moved-footprint `PLACE` tuples and added/removed GND
+`STITCH` vias into `pcb_layout.py` (unique line match required, atomic
+write), then tells you to regenerate. GND tracks, silk, copper graphics and
+signal-copper sync are report-only — harvest them per the report's hints.
+hand_diff must exit 0 (fully mirrored) before step 5's gate.
+
 ## 4. Placement tweaks (two traps)
 
-- Nothing harvests placement. Mirror moved footprints into
-  `pcb_layout.PLACE` by hand: entries are `(x, y, rot[, "B"])` in
-  **board-relative mm, origin (100,100)** — subtract 100 from each
-  KiCad-shown absolute coordinate. Rotation is
+- Nothing harvests placement automatically. `hand_diff` catches this — its
+  A section reports every moved/rotated/flipped footprint and `--apply`
+  writes the `pcb_layout.PLACE` tuple for you. By hand the entries are
+  `(x, y, rot[, "B"])` in **board-relative mm, origin (100,100)** — subtract
+  100 from each KiCad-shown absolute coordinate; rotation is
   `SetOrientationDegrees` semantics (what the GUI shows).
 - Authored TRACKS/VIAS are absolute coordinates and do **not** follow a
-  moved component. Moving anything inside a hand-authored cluster (FPC
-  fanout, booster core, NE-gate copper, EPD_VCC spine) orphans that copper;
-  it must be re-authored. Cheapest tweaks are in the all-A* west/center
+  moved component. hand_diff catches this too: its A section WARNs when a
+  move orphans authored copper (a TRACKS vertex, VIA or STITCH via) inside
+  the old courtyard. Moving anything inside a hand-authored cluster (FPC
+  fanout, booster core, NE-gate copper, EPD_VCC spine) orphans that copper
+  and it must be re-authored. Cheapest tweaks are in the all-A* west/center
   signal field; the east side is expensive.
 - Known negative result: moving C10/R9 does NOT free `XTAL_32K_P` — its box
   is +3V3's authored elbow (PATHFINDER-NOTES Stage-2 acid test).
@@ -76,6 +96,7 @@ surgical work.
 
 ```bash
 make check
+python3 verify/hand_diff.py            # exit 0 = every GUI edit mirrored
 python3 verify/drc_summary.py --gate   # REAL=0 required
 python3 verify/check_pcb.py            # trunk width, keep-out intersects
 ```
