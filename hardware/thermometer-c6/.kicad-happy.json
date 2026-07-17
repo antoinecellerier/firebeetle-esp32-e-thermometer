@@ -1,0 +1,8 @@
+{
+  "analysis": {
+    "output_dir": "out/kicad-happy",
+    "retention": 5,
+    "auto_diff": true,
+    "track_in_git": false
+  }
+}

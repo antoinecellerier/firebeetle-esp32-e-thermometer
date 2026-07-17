@@ -1,4 +1,5 @@
 out/
+datasheets/
 fp-info-cache
 __pycache__/
 *-backups/
