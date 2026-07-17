@@ -39,8 +39,12 @@ from generate import NAMESPACE, ROOT_UUID, uid  # noqa: E402
 from check_netlist import load_netlist  # noqa: E402
 
 SYSTEM_FP = "/usr/share/kicad/footprints"
-BOARD_PATH = os.path.join(PROJECT, "thermometer-c6.kicad_pcb")
-DRU_PATH = os.path.join(PROJECT, "thermometer-c6.kicad_dru")
+# PCB_OUT_DIR renders a standalone mini-project (board + .kicad_dru + .kicad_pro)
+# into a separate directory for fab export; default writes the committed board.
+# The netlist input is always read from the project tree.
+OUT_DIR = os.environ.get("PCB_OUT_DIR", PROJECT)
+BOARD_PATH = os.path.join(OUT_DIR, "thermometer-c6.kicad_pcb")
+DRU_PATH = os.path.join(OUT_DIR, "thermometer-c6.kicad_dru")
 NETLIST = os.path.join(PROJECT, "out", "netlist.net")
 
 FromMM = pcbnew.FromMM
@@ -356,8 +360,17 @@ SILK_VJUST = {"T": pcbnew.GR_TEXT_V_ALIGN_TOP,
 
 
 def add_silk(board):
+    # FAB_STAMP appends a fab-export tag (git hash + date) to the "rev A" silk
+    # line; empty/unset leaves the committed silk untouched.
+    stamp = os.environ.get("FAB_STAMP", "").strip()
+    stamped = 0
     for entry in pl.SILK:
         text, x, y, size, rot = entry[:5]
+        if stamp:
+            n = text.count("\nrev A\n")
+            if n:
+                text = text.replace("\nrev A\n", f"\nrev A {stamp}\n")
+                stamped += n
         layer = entry[5] if len(entry) > 5 else "F.SilkS"
         # Optional horizontal/vertical justification (default centre/centre).
         # Single-line labels stay centre-anchored; the two multi-line corner
@@ -386,6 +399,8 @@ def add_silk(board):
         if vjust != "C":
             t.SetVertJustify(SILK_VJUST[vjust])
         board.Add(t)
+    if stamp and stamped != 1:
+        raise SystemExit("pcb: FAB_STAMP found no unique 'rev A' silk line")
 
 
 def add_silk_shapes(board):
@@ -486,6 +501,21 @@ def write_dru(alias):
                 "  (constraint track_width (min 0.25mm)))\n")
 
 
+def write_fp_lib_table():
+    """For a PCB_OUT_DIR export, emit an fp-lib-table so the standalone
+    mini-project resolves the project-local footprint library under DRC.
+    The source table's ${KIPRJMOD} is rewritten to the project's absolute
+    path — local.pretty stays in the source tree, not the export dir. The
+    committed project dir keeps its own tracked table untouched."""
+    if os.path.abspath(OUT_DIR) == os.path.abspath(PROJECT):
+        return
+    src = os.path.join(PROJECT, "fp-lib-table")
+    if not os.path.exists(src):
+        return
+    txt = open(src).read().replace("${KIPRJMOD}", PROJECT)
+    open(os.path.join(OUT_DIR, "fp-lib-table"), "w").write(txt)
+
+
 # pcbnew saves same-type items sorted by their (random) UUIDs, so both the
 # uuids AND the block order change every run. Normalize: sort same-type
 # top-level blocks by uuid-stripped content, then rewrite every uuid in file
@@ -557,7 +587,7 @@ def normalize_board_file(path):
     open(path, "w").write(text)
 
 
-PRO_PATH = os.path.join(PROJECT, "thermometer-c6.kicad_pro")
+PRO_PATH = os.path.join(OUT_DIR, "thermometer-c6.kicad_pro")
 
 
 def set_project_drc_severities():
@@ -590,6 +620,7 @@ def set_project_drc_severities():
 def main():
     if not os.path.exists(NETLIST):
         raise SystemExit("pcb: out/netlist.net missing - run `make netlist` first")
+    os.makedirs(OUT_DIR, exist_ok=True)
     exported, pad_net, alias = build_net_maps()
 
     board = pcbnew.CreateEmptyBoard()
@@ -611,6 +642,7 @@ def main():
     add_silk_shapes(board)
 
     write_dru(alias)
+    write_fp_lib_table()
     pcbnew.SaveBoard(BOARD_PATH, board)
 
     # Fill zones on a re-loaded board (see module docstring: ZONE_FILLER
@@ -624,8 +656,10 @@ def main():
     normalize_board_file(BOARD_PATH)
     set_project_drc_severities()
     n_tracks = len([t for t in board2.GetTracks()])
+    stamp = os.environ.get("FAB_STAMP", "").strip()
     print(f"pcb: {len(circuit.COMPONENTS)} footprints, {len(exported)} nets, "
-          f"{n_tracks} track segments/vias -> {os.path.basename(BOARD_PATH)}")
+          f"{n_tracks} track segments/vias -> {os.path.basename(BOARD_PATH)}"
+          + (f" [stamp: {stamp}]" if stamp else ""))
 
 
 if __name__ == "__main__":
