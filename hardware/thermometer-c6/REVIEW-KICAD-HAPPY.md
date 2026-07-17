@@ -15,20 +15,21 @@ This review is the last outside-opinion gate before ordering. It complements the
 
 No CRITICAL (board-killing) issues found. All pinouts, polarities, straps, and the power tree verify against manufacturer datasheets at both schematic and PCB pad level.
 
-Warnings (validate at first article; none blocks ordering):
+Warnings (none blocks ordering). **Status added post-review** — ✅ = fixed in-place or already covered, ○ = open first-article/bring-up item:
 
-| Severity | Issue | Section |
-|----------|-------|---------|
-| WARNING | Booster ships JP2+JP5 (0.47Ω/10µH) but SSD1677/GDEH0576T81 app circuit wants 2.2Ω/47µH (=JP3+JP6). Deliberate DESPI-proven universal config — verify VGH reaches spec at first article; JP3+JP6 is the on-board fallback | Deep Review |
-| WARNING | FPC pin-1 orientation verified only against SSD1677/DESPI-C02 transcription (Good Display gates the panel PDF). A mirrored cable puts −20V on logic pins — continuity-check pad1→panel pin1 before first power-up | Deep Review |
-| WARNING | RT9080 dropout margin is thin during the ~465mA EPD refresh peak if low-battery shutdown is ever lowered to 3.4–3.5V; keep ≥3.6V or measure refresh-peak VOUT | Deep Review |
-| WARNING | FC-135 ESR spec (70kΩ) sits exactly at Espressif's 32k max; near-zero cold-start margin on the C6's low-gm oscillator. Mitigations already designed in: R9 10MΩ DNP provision, planned cold-start test | Deep Review |
-| WARNING | D2 SS14 reverse leakage grows steeply with temperature and lands on the sleep floor via the 66k VBUS pulldowns — measure warm floor; PMEG6010-class swap is the fallback | Deep Review |
-| WARNING | U5/U6 populate-exactly-one: both parts answer at I²C 0x47, so double-stuffing silently corrupts reads. CORRECTED post-review: the guard already exists — B.SilkS info block reads "Sensor: fit one only / U5 BMP581/U6 BMP585" (pcb_layout.py:511); the reviewer missed it. BOM DNP + silk = covered | Deep Review |
-| WARNING | D7 TVS is a unidirectional SMF5.0A on a bidirectional `D_TVS` symbol; net orientation is correct (cathode→VBUS) but the part is hand-solder (DNP) — polarity mistake-prone at the bench | Deep Review |
-| WARNING | GND/SDA vias + a trace run under the U6 BMP585 land (violates Bosch "no vias under sensor") — harmless while U6 is DNP; fix before ever building the BMP585 variant | Deep Review |
+| Status | Issue | Section |
+|--------|-------|---------|
+| ✅ FIXED (e6828d8) | 4.7µF/25V on the ~22–24V VGH/PREVGH booster rails DC-bias-derates to ~1–2µF (C17/PREVGH tightest, ~88% of rating). All nine 4.7µF caps swapped to a 50V X5R part (Samsung CL21A475KBQNNNE, C98192) — same 0805 pads, one BOM line, real margin | PCB / Deep Review |
+| ✅ FIXED (e6828d8) | D7 (unidirectional SMF5.0A) sat on the bidirectional `D_TVS` symbol — polarity implicit for a hand-solder DNP part. Symbol changed to `Device:D_Zener`; schematic now shows cathode→VBUS explicitly, pin/net mapping unchanged | Deep Review |
+| ✅ COVERED | U5/U6 populate-exactly-one (both answer at I²C 0x47; double-stuffing corrupts reads). Guard already exists — B.SilkS info block reads "Sensor: fit one only / U5 BMP581/U6 BMP585" (pcb_layout.py:511) plus BOM DNP flags; the reviewer missed the silk | Deep Review |
+| ○ OPEN (first-article) | Booster ships JP2+JP5 (0.47Ω/10µH) but SSD1677/GDEH0576T81 app circuit wants 2.2Ω/47µH (=JP3+JP6). Deliberate DESPI-proven universal config — verify VGH reaches spec; JP3+JP6 is the on-board fallback | Deep Review |
+| ○ OPEN (first power-up) | FPC pin-1 orientation verified only against SSD1677/DESPI-C02 transcription (Good Display gates the panel PDF). A mirrored cable puts −20V on logic pins — continuity-check pad1→panel pin1 before first power-up | Deep Review |
+| ○ OPEN (bring-up) | RT9080 dropout margin is thin during the ~465mA EPD refresh peak if low-battery shutdown is ever lowered to 3.4–3.5V; keep ≥3.6V or measure refresh-peak VOUT | Deep Review |
+| ○ OPEN (first-article) | FC-135 ESR spec (70kΩ) sits exactly at Espressif's 32k max; near-zero cold-start margin on the C6's low-gm oscillator. Mitigations already designed in: R9 10MΩ DNP provision, planned cold-start test | Deep Review |
+| ○ OPEN (bring-up) | D2 SS14 reverse leakage grows steeply with temperature and lands on the sleep floor via the 66k VBUS pulldowns — measure warm floor; PMEG6010-class swap is the fallback (no SMA drop-in exists, so left in place) | Deep Review |
+| ○ DEFERRED (BMP585 variant) | GND/SDA vias + a trace run under the U6 BMP585 land (violates Bosch "no vias under sensor") — harmless while U6 is DNP; fix before ever building the BMP585 variant | Deep Review |
 
-Documentation staleness (no electrical impact): README "Open item #3" still says reverse protection omitted (Q6 is fitted); README sensor text still says "populate U6" while the fab BOM populates U5 BMP581 (restocked: 3,675 units at order time).
+Documentation staleness: ✅ FIXED (e6828d8) — README "Open item #3" now records Q6 reverse protection as fitted, and the sensor/BOM text reflects the restocked BMP581 (3,675 units) with U5 populated by default.
 
 ## Component Summary
 
@@ -77,7 +78,7 @@ All regulator/charger output voltages datasheet-verified (`vref_source` equivale
 - **Power/charging** (20): MCP73831 pinout/variant/PROG=100mA/caps verified; PU-001 on STAT is a false positive (D1+R4 LED is the datasheet STAT load, ~3mA ≪ 25mA sink). Q1/D2 load-sharing and Q6 reverse-protection topologies verified state-by-state (Vgs in-range both states; reversed cell contained at J1/Q6.3). RT9080 caps/EN/NC verified; TP4 probe-only rule confirmed from abs-max VOUT−VIN=+0.3V + 80Ω discharge. Charger sleep drain ≤2µA max (IDISCHARGE).
 - **MCU/clocking** (16): all 53 module pins match Espressif Table 3-1 (incl. IO0/IO1=32k crystal, IO12/13=USB D∓, IO6/7=LP-I2C, TXD0/RXD0→J5). EN RC (R6 10k + C9 1µF) is verbatim the datasheet recommendation; BOOT strap correct; other straps don't-care. 20pF load caps exact for FC-135 CL=12.5pF. J5 header GND-first, no VBAT, BOOT unexposed — settled-decision compliant. "U1 thermal vias 0/5" triaged: optional module EPAD, <100mW application.
 - **Sensors/I²C** (16): BMP581 (10-pin) and BMP585 (9-pin) pad maps each match their own datasheet; CSB/SDO straps → I²C addr 0x47 both (datasheet-quoted); 4.7k pull-ups → ~100ns rise on the 25–29mm 2-device bus; INT push-pull → PU-001 false positive; ports unobstructed; BMP585's optional 10Ω VDD resistor correctly omitted. C13 (U5's second 100nF) sits 7.9mm away near U6 — C12 at 1.8mm is the effective local cap; acceptable.
-- **EPD/boost** (20): all 24 J4 pins map to the SSD1677 function table; boost + inverting charge pump orientations verified from the netlist; Si1308EDL and MBR0530 at ~73–80% of Vds/Vrrm ratings (no diode sees the full 40V swing); EPD gating default-OFF through reset/boot (R12 pull-to-source) with R24/C28 soft-start (the SPICE "C29 decoupling warn" was a misclassified sampling cap; R24/C28 is this soft-start RC); 0.3mm HV clearance OK *coated* per IPC-2221B (soldermask is load-bearing — note for any future mask-less rework near J4); EPD_VCC 0.5mm width OK for 465mA; 4.7µF/25V on ~22–24V rails derates to ~1–2µF effective — matches the controller's app-circuit BOM, though C17 (PREVGH) is the tightest and a 50V part would add margin.
+- **EPD/boost** (20): all 24 J4 pins map to the SSD1677 function table; boost + inverting charge pump orientations verified from the netlist; Si1308EDL and MBR0530 at ~73–80% of Vds/Vrrm ratings (no diode sees the full 40V swing); EPD gating default-OFF through reset/boot (R12 pull-to-source) with R24/C28 soft-start (the SPICE "C29 decoupling warn" was a misclassified sampling cap; R24/C28 is this soft-start RC); 0.3mm HV clearance OK *coated* per IPC-2221B (soldermask is load-bearing — note for any future mask-less rework near J4); EPD_VCC 0.5mm width OK for 465mA; the 4.7µF/25V caps on the ~22–24V rails (C17/PREVGH tightest) were **upgraded to 50V (C98192) in e6828d8**, replacing the ~1–2µF-effective derated originals with real margin.
 
 ## Signal Analysis Review
 
@@ -108,7 +109,7 @@ Analyzer worst-case 3.26mA / "realistic" 2.49mA is a **false positive for batter
 SPICE-verified 0.136A estimated inrush into the 3V3 bank, settles at 3.3V (0.0% error); battery/JST source impedance limits hot-plug dI/dt; no IC supply-pin abs-max concerns at 101-component scale.
 
 ### Voltage Derating
-1µF/50V on HV pump nodes — ample; 4.7µF/25V at 22–24V on VGH/PREVGH heavily DC-bias-derated but per controller app circuit (C17 noted above); 25V parts elsewhere on ≤5V rails — ample.
+1µF/50V on HV pump nodes — ample; the 4.7µF caps on the 22–24V VGH/PREVGH rails were upgraded 25V→50V (C98192, e6828d8) — see PCB section; 25V parts elsewhere on ≤5V rails — ample.
 
 ## PCB Layout Analysis
 
@@ -196,4 +197,4 @@ LCSC-only audit gives no lifecycle status by construction (see Not Performed); t
 
 ## Final verdict / readiness
 
-**READY TO ORDER.** No critical findings; the fab package (gerbers/BOM/CPL at d609762) is internally consistent, datasheet-verified, and DRC/DFM-clean for the selected JLC options. Before/at first article, work the warning list: FPC pin-1 continuity check, VGH-reaches-spec with JP2+JP5 (fallback JP3+JP6), cold-start the 32k crystal (R9 provision if marginal), warm-floor measurement (D2 leakage), and keep low-battery shutdown ≥3.6V pending the refresh-peak measurement. Update the two stale README notes (Q6 fitted; U5 BMP581 populated) at leisure.
+**READY TO ORDER.** No critical findings; the fab package is internally consistent, datasheet-verified, and DRC/DFM-clean for the selected JLC options. Post-review the safe in-place fixes were applied and the package regenerated + re-gated (`make fab` at e6828d8, `check_fab` 55/55): 4.7µF caps upgraded to 50V, D7 symbol made unidirectional, README refreshed; the U5/U6 fit-one silk guard was confirmed already present. The remaining ○ items are all bring-up/first-article measurements, not board changes: FPC pin-1 continuity check, VGH-reaches-spec with JP2+JP5 (fallback JP3+JP6), cold-start the 32k crystal (R9 provision if marginal), warm-floor measurement (D2 leakage), and keep low-battery shutdown ≥3.6V pending the refresh-peak measurement. The only pre-order human step is the JLC upload-preview walk with `out/fab/rotation-checklist.md` against the e6828d8 zip.
