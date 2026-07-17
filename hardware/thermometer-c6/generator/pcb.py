@@ -419,7 +419,15 @@ def design_settings(board):
     ds.m_TrackMinWidth = FromMM(0.15)
     ds.m_ViasMinSize = FromMM(0.5)
     ds.m_MinThroughDrill = FromMM(0.3)
-    ds.m_CopperEdgeClearance = FromMM(0.2)  # JLC min; USB-C edge pads sit at 0.31
+    # JLCPCB 2-layer economy minimums (make DRC a real fab gate):
+    ds.m_CopperEdgeClearance = FromMM(0.3)  # JLC copper-to-edge floor
+    ds.m_HoleToHoleMin = FromMM(0.5)        # JLC hole-to-hole (edge-to-edge) floor
+    ds.m_SolderMaskMinWidth = FromMM(0.1)   # JLC mask sliver / web floor (was 0 = off)
+    # Via annular ring: keep JLC's 0.3/0.5 via preset floor (0.10mm ring). The
+    # dense GND-stitch pockets cannot all fit a 0.6mm pad, and JLC accepts the
+    # 0.3mm-drill/0.5mm-pad standard preset; grow_stitch.py fattens to 0.6/0.3
+    # (0.15mm ring) only where DRC still clears, leaving the boxed ones at 0.5.
+    ds.m_ViasMinAnnularWidth = FromMM(0.10)
     # Legibility-first silk (M7c): every authored label is >=0.8mm/0.15mm (JLCPCB
     # reliable-silk minimum), so DRC ENFORCES that floor rather than relaxing it.
     # set_project_drc_severities() mirrors these into the .kicad_pro rules that
@@ -450,6 +458,23 @@ def write_dru(alias):
         f.write("(rule hv-clearance-j4\n"
                 "  (condition \"A.memberOfFootprint('J4') && B.memberOfFootprint('J4')\")\n"
                 "  (constraint clearance (min 0.18mm)))\n")
+        # J3 (USB-C receptacle) overhangs the north board edge by design, so its
+        # contact-pad row inherently sits 0.23mm from the edge -- inside the
+        # 0.3mm global copper-to-edge floor. JLC builds edge-launch USB-C
+        # routinely; scope a 0.2mm edge floor to J3's own copper (the value the
+        # board used globally before this DFM pass) while every other net keeps
+        # the tightened 0.3mm. Matches the hv-clearance-j4 scoped-exception idiom.
+        f.write("(rule edge-clearance-usb-c\n"
+                "  (condition \"A.memberOfFootprint('J3')\")\n"
+                "  (constraint edge_clearance (min 0.2mm)))\n")
+        # Global hole-to-hole is 0.5mm (JLC). Relax it to 0.25mm between holes
+        # of the SAME net: a drill-breakout there can only merge already-common
+        # copper, so there is no short risk (JLC accepts same-net hole spacing
+        # below the diff-net floor). Dense GND-stitch/via-in-pad pockets rely on
+        # this; diff-net pairs still get the tightened 0.5mm.
+        f.write("(rule hole-to-hole-samenet\n"
+                "  (condition \"A.NetName == B.NetName\")\n"
+                "  (constraint hole_to_hole (min 0.25mm)))\n")
         f.write("(rule power-track-width\n"
                 f"  (condition \"{cond(POWER_NETS)}\")\n"
                 "  (constraint track_width (min 0.5mm)))\n")

@@ -9,6 +9,12 @@
 (rule hv-clearance-j4
   (condition "A.memberOfFootprint('J4') && B.memberOfFootprint('J4')")
   (constraint clearance (min 0.18mm)))
+(rule edge-clearance-usb-c
+  (condition "A.memberOfFootprint('J3')")
+  (constraint edge_clearance (min 0.2mm)))
+(rule hole-to-hole-samenet
+  (condition "A.NetName == B.NetName")
+  (constraint hole_to_hole (min 0.25mm)))
 (rule power-track-width
   (condition "A.NetName == 'VBAT' || A.NetName == 'VSYS' || A.NetName == 'EPD_VCC' || A.NetName == 'Net-(J2-Pin_1)' || A.NetName == 'Net-(J1-Pin_1)'")
   (constraint track_width (min 0.5mm)))
