@@ -23,9 +23,10 @@ zero violations at all severities, exported netlist exactly matches
 invariants, footprints resolve, zero label-over-wire/body overlaps
 (build-fatal), zero wire crossings, zone frames auto-fit.
 
-**PCB phase (the milestones at the bottom of this file): M1–M5 DONE, next
-M6 (GND pour + stitching).** The board is 49×36mm, 2-layer, DRC copper-clean,
-every non-GND net routed. M5 closed 2026-07-12 via **complete GUI
+**PCB phase is DONE**: layout, routing, GND pour + stitching, silkscreen and
+the `make fab` export are all complete (milestone history lives in the git
+log; ordering in `ORDERING.md`). The board is 48×35mm, 2-layer, DRC-clean at
+full severity, every net routed. M5 closed 2026-07-12 via **complete GUI
 hand-routing by the user** (after three autorouters — greedy A*, PathFinder
 negotiation, Freerouting — all stalled on the same 12-terminal knot; see
 PATHFINDER-NOTES.md). The copper now lives wholesale in
@@ -34,8 +35,8 @@ touch it; as-routed snapshot in `archive/`). Copper edits go through the GUI
 round-trip in `HAND-ROUTING.md` or direct polyline edits in `pcb_routes.py`,
 gated by DRC (`verify/drc_summary.py --gate` + `verify/check_pcb.py`). The
 M5-state sections and corridor surveys below are HISTORICAL archaeology.
-Next: topology-driven simplification (report `out/topo/REPORT.md`, tool
-`verify/topo.py`), then M6.
+The topology-driven simplification (report `out/topo/REPORT.md`, tool
+`verify/topo.py`), the GND pour and the fab export are all done.
 
 How this project works (do not break it):
 - The `.kicad_sch` is GENERATED. Single source of truth =
@@ -350,17 +351,12 @@ diagonal, and out into the pocket. EN's J5.3 leg uses it today.
 
 ## 5. Ordering (JLCPCB)
 
-- `kicad-cli pcb export gerbers` + `drill` → zip; `pos` → CPL (map KiCad
-  side/rotation quirks; JLCPCB rotation fixes usually needed for SOT-23-5,
-  USB-C, FPC — check their preview).
-- BOM: `bom/thermometer-c6-bom.csv` is assembly-ready (Comment, Designator,
-  Footprint, LCSC). DNP list stays off the BOM by construction. Re-verify
-  stock at order time: ESP32-C6-MINI-1-N4 (~1.7k), Si1308EDL (~1.4k, fall
-  back to Si1304BDL clone C7419947), 10k C25744 (was transiently 0 — alt
-  C60490), BMP581 C5362283 (out of stock → consign or populate U6 BMP585
-  C18184976 instead).
-- Economy PCBA is top-side only — placement must keep all assembled parts
-  on top (TPs/jumpers are copper-only, headers DNP, fine on either face).
+Fab export is `make fab`: it renders a git-hash+date-stamped standalone
+board, runs a full-severity DRC, exports JLCPCB gerbers + drill + CPL + BOM,
+zips them, and gates the whole bundle with `verify/check_fab.py`. The order
+checklist — board options, stock re-verification, the rotation/polarity
+preview walk, and archiving — lives in **`ORDERING.md`** (single home; don't
+duplicate the stock notes here).
 
 ## 6. First-article bench checklist (PPK2)
 

@@ -35,6 +35,13 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
   --gate`, REAL=0) + `python3 verify/check_pcb.py`. `starved_thermal` waits
   for M6's pours, `silk_*` for M7; unconnected = GND-only until the pour.
   Beware `out/drc.json` staleness — regenerate before reading it.
+- **Fab export: `make fab`** = stamped render (`FAB_STAMP` + `PCB_OUT_DIR`
+  into `out/fab/board/`, `rev A <hash> <date>` on silk) → **full-severity
+  DRC** (`kicad-cli ... --severity-all`, NOT the waiving `drc_summary --gate`)
+  → gerbers/drill + `fab_cpl.py` CPL/BOM/rotation-checklist → zip →
+  `verify/check_fab.py` (55 assertions). The committed board is **never**
+  stamped (the guard rejects a dirty tree so the stamp names the exact
+  commit); ordering steps are in `ORDERING.md`.
 - pcbnew's zone fill is **not byte-stable**: back-to-back `pcb.py` runs can
   leave `thermometer-c6.kicad_pcb` dirty with nothing but `(xy ...)` fill
   coordinates changed. `git diff` it before believing you changed the board.
@@ -185,4 +192,6 @@ route` → diff the failure list.
 ## Settled decisions — don't re-ask
 
 LDO not buck; indoor-only charging 0–45°C (silkscreen); 100mA charge;
-JLCPCB economy assembly; GND-first debug header without VBAT.
+JLCPCB economy assembly; GND-first debug header without VBAT; ENIG finish;
+POFV (epoxy filled & capped) via covering; JLC order number printed at the
+authored `JLCJLCJLCJLC` back-silk token.

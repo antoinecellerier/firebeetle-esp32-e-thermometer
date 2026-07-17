@@ -5,7 +5,10 @@ BMP581 + universal 24-pin EPD interface with on-board gated booster, USB-C
 charging, LDO power tree. Design driven by the PPK2 measurement campaign in
 `docs/notes.md` (repo root).
 
-**Status: schematic + BOM phase. No layout yet.**
+**Status: layout + routing complete** (48×35mm 2-layer, hand-routed,
+DRC-clean at full severity), silkscreen done. Fab export is `make fab`
+(gerbers/drill + CPL/BOM zip, git-hash+date stamped, gated by
+`verify/check_fab.py`); order per `ORDERING.md`.
 
 ## Why these choices (measurement rationale)
 
@@ -215,10 +218,11 @@ against circuit.py (anonymous `~` nets matched by pin set).
    DNP it if vetoed (firmware falls back to internal RC).
 8. Old `hardware/kicad/` Copilot draft: delete or archive — your call.
 
-## Follow-up phases (not in this deliverable)
+## Follow-up phases
 
-- PCB layout (2-layer): booster switch loop tight, RESE sense short,
-  no-copper zone under BMP581, antenna keep-out per Espressif HDG,
-  JLCPCB CPL/assembly files.
-- Firmware: new board define with this pin map (EPD on GPIO18–23,
-  gate GPIO14, LED GPIO15, divider GPIO2/3, 32k crystal sdkconfig).
+- PCB layout (2-layer) — **DONE**: booster switch loop tight, RESE sense
+  short, no-copper zone under BMP581, antenna keep-out per Espressif HDG,
+  JLCPCB gerbers/drill + CPL/BOM via `make fab` (order per `ORDERING.md`).
+- Firmware (not in this deliverable): new board define with this pin map
+  (EPD on GPIO18–23, gate GPIO14, LED GPIO15, divider GPIO2/3, 32k crystal
+  sdkconfig).
