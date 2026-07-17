@@ -24,7 +24,7 @@ Warnings (validate at first article; none blocks ordering):
 | WARNING | RT9080 dropout margin is thin during the ~465mA EPD refresh peak if low-battery shutdown is ever lowered to 3.4–3.5V; keep ≥3.6V or measure refresh-peak VOUT | Deep Review |
 | WARNING | FC-135 ESR spec (70kΩ) sits exactly at Espressif's 32k max; near-zero cold-start margin on the C6's low-gm oscillator. Mitigations already designed in: R9 10MΩ DNP provision, planned cold-start test | Deep Review |
 | WARNING | D2 SS14 reverse leakage grows steeply with temperature and lands on the sleep floor via the 66k VBUS pulldowns — measure warm floor; PMEG6010-class swap is the fallback | Deep Review |
-| WARNING | U5/U6 populate-exactly-one is enforced only by BOM DNP flags; both parts answer at I²C 0x47, so double-stuffing silently corrupts reads. Consider a silk note | Deep Review |
+| WARNING | U5/U6 populate-exactly-one: both parts answer at I²C 0x47, so double-stuffing silently corrupts reads. CORRECTED post-review: the guard already exists — B.SilkS info block reads "Sensor: fit one only / U5 BMP581/U6 BMP585" (pcb_layout.py:511); the reviewer missed it. BOM DNP + silk = covered | Deep Review |
 | WARNING | D7 TVS is a unidirectional SMF5.0A on a bidirectional `D_TVS` symbol; net orientation is correct (cathode→VBUS) but the part is hand-solder (DNP) — polarity mistake-prone at the bench | Deep Review |
 | WARNING | GND/SDA vias + a trace run under the U6 BMP585 land (violates Bosch "no vias under sensor") — harmless while U6 is DNP; fix before ever building the BMP585 variant | Deep Review |
 
