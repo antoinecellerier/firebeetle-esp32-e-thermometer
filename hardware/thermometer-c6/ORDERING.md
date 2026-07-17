@@ -25,8 +25,9 @@ this file is the human procedure around it. Settled fab decisions live in
       via-in-pad escapes depend on it; the 0.3mm via drills are within JLC's
       fill limit.
 - [ ] **Mark on PCB: "Order Number (Specify Position)".** The `JLCJLCJLCJLC`
-      token is authored on back silk at (17,17); JLC prints the order number
-      there instead of a random spot.
+      token is authored on back silk at (6.5, 13.95) rotated 90° — stood
+      vertically just east of the antenna keep-out outline; JLC prints the order
+      number there instead of a random spot.
 
 ## 3. Assembly options
 

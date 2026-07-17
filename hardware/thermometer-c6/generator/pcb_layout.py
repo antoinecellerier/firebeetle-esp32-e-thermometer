@@ -477,10 +477,12 @@ SILK = [
 
     # JLCPCB order-number placement token (JLC's "specify a location" option):
     # JLC swaps this 12-char string for the board's order number (~same 8.5mm
-    # footprint). Sits in the empty central back band — no back pads in
-    # y13.35..20.18 across the whole board — with ~7mm clear W to the antenna
-    # keep-out outline and E to the GDR label, ~2.6mm N to TP8 / S to R9.
-    ("JLCJLCJLCJLC", 17.0, 17.0, 0.8, 0, "B.SilkS"),
+    # footprint). Rotated 90 and stood vertically just E of the antenna keep-out
+    # outline (rect E edge x5.3), centered on the rect's y-center (13.95) so it
+    # runs parallel to the outline. ~0.7mm gap W to the rect, and it stays
+    # OUTSIDE the keep-clear zone; the tall clear back band E of the antenna has
+    # no back pads here, so it reads cleanly.
+    ("JLCJLCJLCJLC", 6.5, 13.95, 0.8, 90, "B.SilkS"),
 
     # battery type by J1: J1 is a front SMD JST whose north pocket (BAT/+) has no
     # >=0.8mm exposed FRONT-silk gap (Q4 W, C14 E, caps N, J1 pads S), so the LiPo
