@@ -161,7 +161,11 @@ def trunk_connected(board, netname, pad_keys, min_width):
 
 def main():
     report = "--report" in sys.argv
-    board = pcbnew.LoadBoard(BOARD_PATH)
+    # Optional positional: the board to check (default = committed board). The
+    # netlist / pcb_layout intent it is compared against is always the project's.
+    positional = [a for a in sys.argv[1:] if not a.startswith("-")]
+    board_path = positional[0] if positional else BOARD_PATH
+    board = pcbnew.LoadBoard(board_path)
     exported, alias = build_alias()
 
     # 1. pad nets == intent

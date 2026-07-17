@@ -2,7 +2,13 @@ SCH  := thermometer-c6.kicad_sch
 PCB  := thermometer-c6.kicad_pcb
 OUT  := out
 
-.PHONY: all gen erc netlist check invariants pdf svg bom clean pcb route route-pf freeroute drc pcb-img
+FAB      := $(OUT)/fab
+GITHASH   = $(shell git rev-parse --short HEAD)
+TODAY     = $(shell date +%Y-%m-%d)
+FAB_STAMP = $(GITHASH) $(TODAY)
+FABPCB   := $(FAB)/board/$(PCB)
+
+.PHONY: all gen erc netlist check invariants pdf svg fab clean pcb route route-pf freeroute drc pcb-img
 
 all: check pdf
 
@@ -63,6 +69,44 @@ drc: pcb | $(OUT)
 [print(v['severity'],v['type'],'-',v['description'],[i.get('description') for i in v.get('items',[])]) \
 for k in ('violations','unconnected_items','schematic_parity') for v in d.get(k,[])]" | head -80; exit 1)
 	@echo "DRC: clean"
+
+# Fab export (rev A): render a git-hash+date-stamped standalone board into
+# out/fab/, DRC-gate it, and emit JLCPCB gerbers + drill + placement. Refuses a
+# dirty tree so the "rev A <hash> <date>" silk stamp names the exact committed
+# source (FAB_FORCE=1 warns instead of failing). The `drc` prereq re-renders the
+# committed board and pcbnew's zone fill is not byte-stable, so it leaves the
+# (generated, never hand-edited) board dirty with pure (xy ...) fill noise --
+# discard that before the tree check so only real source changes trip the guard.
+fab: check drc
+	@git checkout -- $(PCB)
+	@git diff --quiet && git diff --cached --quiet || \
+	  { [ "$(FAB_FORCE)" = "1" ] && echo "fab: WARNING dirty tree, stamp $(GITHASH) is a lie" || \
+	    { echo "fab: dirty git tree -- commit first (FAB_FORCE=1 to override)"; exit 1; }; }
+	python3 verify/check_pcb.py
+	rm -rf $(FAB) generator/__pycache__
+	mkdir -p $(FAB)/board $(FAB)/gerbers
+	PYTHONDONTWRITEBYTECODE=1 FAB_STAMP="$(FAB_STAMP)" PCB_OUT_DIR=$(FAB)/board \
+	  python3 generator/pcb.py
+	cp $(SCH) $(FAB)/board/
+	kicad-cli pcb drc --severity-all --exit-code-violations --schematic-parity --refill-zones \
+	  --format json -o $(FAB)/drc.json $(FABPCB) \
+	  || { python3 verify/drc_summary.py $(FAB)/drc.json; exit 1; }
+	python3 verify/check_pcb.py $(FABPCB)
+	kicad-cli pcb export gerbers \
+	  --layers Edge.Cuts,F.Cu,B.Cu,F.Mask,B.Mask,F.SilkS,B.SilkS,F.Paste,B.Paste \
+	  --subtract-soldermask --check-zones -o $(FAB)/gerbers/ $(FABPCB)
+	kicad-cli pcb export drill --format excellon --excellon-units mm \
+	  --excellon-zeros-format decimal --excellon-oval-format alternate \
+	  --drill-origin absolute --generate-map --map-format gerberx2 \
+	  -o $(FAB)/gerbers/ $(FABPCB)
+	kicad-cli pcb export pos --format csv --units mm --side front \
+	  -o $(FAB)/pos-raw.csv $(FABPCB)
+	PYTHONDONTWRITEBYTECODE=1 python3 generator/fab_cpl.py $(FABPCB) \
+	  -o $(FAB)/thermometer-c6-cpl.csv --checklist $(FAB)/rotation-checklist.md
+	cp bom/thermometer-c6-bom.csv $(FAB)/
+	cd $(FAB)/gerbers && python3 -m zipfile -c ../thermometer-c6-gerbers-$(GITHASH)-$(TODAY).zip *
+	PYTHONDONTWRITEBYTECODE=1 python3 verify/check_fab.py $(FAB) --stamp "$(FAB_STAMP)"
+	@echo "FAB EXPORT OK: $(FAB) (stamp: rev A $(FAB_STAMP))"
 
 pcb-img: pcb | $(OUT)
 	kicad-cli pcb export svg --mode-multi --layers F.Cu,B.Cu,Edge.Cuts,F.SilkS,B.SilkS,F.Fab -o $(OUT)/pcb-svg $(PCB)
