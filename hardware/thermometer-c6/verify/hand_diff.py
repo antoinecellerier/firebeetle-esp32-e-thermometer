@@ -495,16 +495,30 @@ def apply_edits(rep):
     text = open(LAYOUT_PY).read()
     errors = []
 
+    # Constrain PLACE surgery to the PLACE block: REF_POS reuses the same
+    # "REF": (...) line shape for J1/J5/U5/U6, so a whole-file substitution
+    # would double-match those refs.
+    pm = re.search(r'^PLACE = \{', text, re.M)
+    pend = text.index("\n}", pm.end()) if pm else -1
+    if not pm:
+        errors.append("PLACE dict not found")
+
     for ref, nx, ny, nrot, nside in rep.place_edits:
+        if not pm:
+            break
         pat = re.compile(rf'^(\s*)"{re.escape(ref)}":\s*\([^)]*\)(,)(.*)$', re.M)
         tup = place_tuple_text(nx, ny, nrot, nside)
 
         def repl(m, _ref=ref, _tup=tup):
             return f'{m.group(1)}"{_ref}": {_tup}{m.group(2)}{m.group(3)}'
 
-        text, n = pat.subn(repl, text)
+        block, n = pat.subn(repl, text[pm.end():pend])
         if n != 1:
             errors.append(f'PLACE["{ref}"]: {n} matches (need exactly 1)')
+        else:
+            delta = len(block) - (pend - pm.end())
+            text = text[:pm.end()] + block + text[pend:]
+            pend += delta
 
     for entry in rep.stitch_del:
         tup = re.escape(tuple_str(entry))
