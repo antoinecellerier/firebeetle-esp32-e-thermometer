@@ -155,8 +155,8 @@ Notable parts: ESP32-C6-MINI-1-N4 (C5736265), RT9080-33GJ5 (C841192),
 MCP73831-2 (C424093), Si1308EDL (C469327, low stock — fallback Si1304BDL
 clone C7419947), MBR0530 TWGMC (C5204746), FPC-05FB-24PH20 dual-contact
 (C2856831), SWPA4030S100MT (C38117), FC-135 (C32346), BMP581 (C5362283 —
-**out of stock at LCSC/JLCPCB as of 2026-07-07**: consign from
-DigiKey/Mouser or hand-place from a Fermion breakout donor).
+**restocked at LCSC as of 2026-07-17** (3,675 pcs); the fab BOM populates
+U5 by default. Re-verify stock at order time like everything else).
 
 DESPI-C02 §4.5 requires an FPC socket with "contact at up side or both
 side" — hence the dual-contact FPC-05FB (the bottom-contact-only
@@ -181,7 +181,7 @@ unobstructed in the enclosure). Same LP I2C bus, same 0x47 strapping
 (CSB+SDO→VDDIO), same register map — the firmware BMP58x driver reads the
 chip-ID (0x50=581, 0x51=585) and works with either unchanged.
 **Populate exactly one**: both strap to address 0x47.
-BMP585 = LCSC C18184976 (in stock, unlike the BMP581). Its datasheet
+BMP585 = LCSC C18184976. Its datasheet
 requires a 10Ω supply series resistor only for supply ramps <10µs — not
 applicable here (always-on 3V3 rail, never GPIO-gated).
 
@@ -201,12 +201,16 @@ against circuit.py (anonymous `~` nets matched by pin set).
 
 ## Open items (user sign-off)
 
-1. **BMP581 sourcing** — out of stock at LCSC/JLCPCB (3 pcs). Mitigated:
-   the BMP585 (in stock, C18184976) has its own footprint on the board as
-   U6 — assemble with U6 populated and U5 empty if the 581 stays dry.
+1. **BMP581 sourcing** — RESOLVED 2026-07-17: restocked at LCSC (3,675
+   pcs); fab BOM populates U5 BMP581. The BMP585 (C18184976) remains the
+   U6 populate-one alternate (outdoor/media-resistant builds, or if the
+   581 dries up again).
 2. **Si1308EDL stock thin** (~1.4k) — order early; fallback Si1304BDL-clone
    C7419947 (Vgs(th) ≤1.2V, same SC-70, lower Id 0.9A — adequate).
-3. **Reverse-polarity protection omitted** (keyed JST + clear silk) — veto?
+3. **Reverse-polarity protection** — RESOLVED: Q6 AO3401A P-FET at the
+   JST is fitted (see "Why these choices"); a reversed cell is blocked,
+   MCP73831's −0.3V abs-max is respected. Keyed JST + silk remain the
+   first line of defense.
 4. **EPD SPI/control series resistors omitted** (DESPI omits them; firmware
    floats pins when the panel is gated off) — veto?
 5. **JST-PH polarity**: silk will mark +; verify against your pigtails

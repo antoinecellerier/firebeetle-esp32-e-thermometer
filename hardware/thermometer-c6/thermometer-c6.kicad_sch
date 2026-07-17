@@ -2743,7 +2743,7 @@
       )
       (embedded_fonts no)
     )
-    (symbol "Device:D_TVS"
+    (symbol "Device:D_Zener"
       (pin_numbers
         (hide yes)
       )
@@ -2766,7 +2766,7 @@
           )
         )
       )
-      (property "Value" "D_TVS"
+      (property "Value" "D_Zener"
         (at 0 -2.54 0)
         (show_name no)
         (do_not_autoplace no)
@@ -2798,7 +2798,7 @@
           )
         )
       )
-      (property "Description" "Bidirectional transient-voltage-suppression diode"
+      (property "Description" "Zener diode"
         (at 0 0 0)
         (show_name no)
         (do_not_autoplace no)
@@ -2809,7 +2809,7 @@
           )
         )
       )
-      (property "ki_keywords" "diode TVS thyrector"
+      (property "ki_keywords" "diode"
         (at 0 0 0)
         (show_name no)
         (do_not_autoplace no)
@@ -2831,29 +2831,12 @@
           )
         )
       )
-      (symbol "D_TVS_0_1"
+      (symbol "D_Zener_0_1"
         (polyline
           (pts
-            (xy -2.54 1.27)
-            (xy -2.54 -1.27)
-            (xy 2.54 1.27)
-            (xy 2.54 -1.27)
-            (xy -2.54 1.27)
-          )
-          (stroke
-            (width 0.254)
-            (type default)
-          )
-          (fill
-            (type none)
-          )
-        )
-        (polyline
-          (pts
-            (xy 0.508 1.27)
-            (xy 0 1.27)
-            (xy 0 -1.27)
-            (xy -0.508 -1.27)
+            (xy -1.27 -1.27)
+            (xy -1.27 1.27)
+            (xy -0.762 1.27)
           )
           (stroke
             (width 0.254)
@@ -2876,12 +2859,27 @@
             (type none)
           )
         )
+        (polyline
+          (pts
+            (xy 1.27 -1.27)
+            (xy 1.27 1.27)
+            (xy -1.27 0)
+            (xy 1.27 -1.27)
+          )
+          (stroke
+            (width 0.254)
+            (type default)
+          )
+          (fill
+            (type none)
+          )
+        )
       )
-      (symbol "D_TVS_1_1"
+      (symbol "D_Zener_1_1"
         (pin passive line
           (at -3.81 0 0)
           (length 2.54)
-          (name "A1"
+          (name "K"
             (effects
               (font
                 (size 1.27 1.27)
@@ -2899,7 +2897,7 @@
         (pin passive line
           (at 3.81 0 180)
           (length 2.54)
-          (name "A2"
+          (name "A"
             (effects
               (font
                 (size 1.27 1.27)
@@ -17909,7 +17907,7 @@
         (justify right)
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 287.36 41.476 0)
       (effects
         (font
@@ -17936,7 +17934,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 289.56 35.56 0)
       (effects
         (font
@@ -18125,7 +18123,7 @@
         (justify left)
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 265.09 82.48 0)
       (effects
         (font
@@ -18152,7 +18150,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 262.89 81.28 0)
       (effects
         (font
@@ -18659,7 +18657,7 @@
     )
   )
   (symbol
-    (lib_id "Device:D_TVS")
+    (lib_id "Device:D_Zener")
     (at 295.91 35.56 270)
     (unit 1)
     (exclude_from_sim no)
@@ -21957,7 +21955,7 @@
         (justify left)
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 70.78 170.11 0)
       (effects
         (font
@@ -21984,7 +21982,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 68.58 168.91 0)
       (effects
         (font
@@ -22025,7 +22023,7 @@
         )
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 86.36 164.626 0)
       (effects
         (font
@@ -22051,7 +22049,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 86.36 156.21 0)
       (effects
         (font
@@ -22093,7 +22091,7 @@
         (justify left)
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 97.45 177.73 0)
       (effects
         (font
@@ -22120,7 +22118,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 95.25 176.53 0)
       (effects
         (font
@@ -22560,7 +22558,7 @@
         )
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 201.93 172.5 90)
       (effects
         (font
@@ -22586,7 +22584,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 201.93 165.1 0)
       (effects
         (font
@@ -22627,7 +22625,7 @@
         )
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 189.23 172.54 90)
       (effects
         (font
@@ -22653,7 +22651,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 189.23 167.64 0)
       (effects
         (font
@@ -22829,7 +22827,7 @@
         (justify right)
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 186.014 210.64 90)
       (effects
         (font
@@ -22856,7 +22854,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 189.23 205.74 0)
       (effects
         (font
@@ -22897,7 +22895,7 @@
         )
       )
     )
-    (property "Value" "4.7uF/25V"
+    (property "Value" "4.7uF/50V"
       (at 190.5 229.396 0)
       (effects
         (font
@@ -22923,7 +22921,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C1779"
+    (property "LCSC" "C98192"
       (at 190.5 220.98 0)
       (effects
         (font

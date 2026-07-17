@@ -71,15 +71,15 @@ COMPONENTS = [
     dict(ref="U3", lib_id="Power_Protection:USBLC6-2SC6", value="USBLC6-2SC6",
          footprint="Package_TO_SOT_SMD:SOT-23-6", lcsc="C7519",
          zone="C: USB-C + charger"),
-    dict(ref="C5", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="C: USB-C + charger"),
+    dict(ref="C5", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="C: USB-C + charger"),
     dict(ref="U4", lib_id="Battery_Management:MCP73831-2-OT", value="MCP73831-2",
          footprint="Package_TO_SOT_SMD:SOT-23-5", lcsc="C424093",
          zone="C: USB-C + charger"),
     dict(ref="R3", lib_id="Device:R", value="10k", footprint=R0402,
          lcsc="C25744", zone="C: USB-C + charger"),  # PROG: 100mA
-    dict(ref="C6", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="C: USB-C + charger"),
+    dict(ref="C6", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="C: USB-C + charger"),
     dict(ref="R4", lib_id="Device:R", value="1k", footprint=R0402,
          lcsc="C11702", zone="C: USB-C + charger"),
     dict(ref="D1", lib_id="Device:LED", value="CHG red", footprint=LED0603,
@@ -94,9 +94,9 @@ COMPONENTS = [
          lcsc="C25741", zone="C: USB-C + charger"),  # VBUS sense top
     dict(ref="R23", lib_id="Device:R", value="100k", footprint=R0402,
          lcsc="C25741", zone="C: USB-C + charger"),  # VBUS sense bottom
-    dict(ref="D7", lib_id="Device:D_TVS", value="SMF5.0A",
+    dict(ref="D7", lib_id="Device:D_Zener", value="SMF5.0A",
          footprint="Diode_SMD:D_SOD-123F", lcsc="", dnp=True,
-         zone="C: USB-C + charger"),  # VBUS surge clamp, populate if hot-plug ring proves real
+         zone="C: USB-C + charger"),  # VBUS surge clamp, populate if hot-plug ring proves real; unidirectional TVS (zener symbol): K=pin1=VBUS, matches SOD-123F pad1=cathode band
 
     # ---- D: MCU ----
     dict(ref="U1", lib_id="RF_Module:ESP32-C6-MINI-1", value="ESP32-C6-MINI-1-N4",
@@ -210,12 +210,12 @@ COMPONENTS = [
          footprint="Diode_SMD:D_SOD-123", lcsc="C5204746", zone="G: EPD booster"),
     dict(ref="D6", lib_id="Diode:MBR0530", value="MBR0530",
          footprint="Diode_SMD:D_SOD-123", lcsc="C5204746", zone="G: EPD booster"),
-    dict(ref="C16", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="G: EPD booster"),  # pump cap (DESPI C3)
-    dict(ref="C17", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="G: EPD booster"),  # PREVGH
-    dict(ref="C18", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="G: EPD booster"),  # PREVGL
+    dict(ref="C16", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="G: EPD booster"),  # pump cap (DESPI C3)
+    dict(ref="C17", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="G: EPD booster"),  # PREVGH
+    dict(ref="C18", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="G: EPD booster"),  # PREVGL
     dict(ref="TP6", lib_id="Connector:TestPoint", value="PREVGH", footprint=TP,
          lcsc="", zone="G: EPD booster"),
     dict(ref="TP7", lib_id="Connector:TestPoint", value="PREVGL", footprint=TP,
@@ -229,18 +229,18 @@ COMPONENTS = [
     dict(ref="J4", lib_id="Connector_Generic:Conn_01x24", value="EPD FPC24 0.5mm",
          footprint="local:XUNPU_FPC-05FB-24PH20",
          lcsc="C2856831", zone="H: EPD FPC"),  # dual contact; land from XUNPU FPC-05FB-NPH20 drawing, cross-checked vs EasyEDA C2856831
-    dict(ref="C19", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="H: EPD FPC"),  # VGL
-    dict(ref="C20", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="H: EPD FPC"),  # VGH
+    dict(ref="C19", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="H: EPD FPC"),  # VGL
+    dict(ref="C20", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="H: EPD FPC"),  # VGH
     dict(ref="C21", lib_id="Device:C", value="1uF/50V", footprint=C0805,
          lcsc="C28323", zone="H: EPD FPC"),  # VDD
     dict(ref="C22", lib_id="Device:C", value="1uF/50V", footprint=C0805,
          lcsc="C28323", zone="H: EPD FPC"),  # VPP
-    dict(ref="C23", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="H: EPD FPC"),  # VSH
-    dict(ref="C24", lib_id="Device:C", value="4.7uF/25V", footprint=C0805,
-         lcsc="C1779", zone="H: EPD FPC"),  # VSL
+    dict(ref="C23", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="H: EPD FPC"),  # VSH
+    dict(ref="C24", lib_id="Device:C", value="4.7uF/50V", footprint=C0805,
+         lcsc="C98192", zone="H: EPD FPC"),  # VSL
     dict(ref="C25", lib_id="Device:C", value="1uF/50V", footprint=C0805,
          lcsc="C28323", zone="H: EPD FPC"),  # VCOM
     dict(ref="R17", lib_id="Device:R", value="10k", footprint=R0402,
