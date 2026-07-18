@@ -5755,9 +5755,9 @@
 			(uuid "85d9f303-76a6-5524-b161-34c93fb4b84d")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_JST.3dshapes/JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal.step"
+		(model "${KIPRJMOD}/local.3dmodels/JST_PH_S2B-PH-SM4-TB_Horizontal.step"
 			(offset
-				(xyz 0 0 0)
+				(xyz 0.98 -3.25 0)
 			)
 			(scale
 				(xyz 1 1 1)
@@ -6732,9 +6732,9 @@
 			(uuid "343ed28d-f2e1-5cb8-9f05-aaf56030dbae")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/Connector_USB.3dshapes/USB_C_Receptacle_HRO_TYPE-C-31-M-12.step"
+		(model "${KIPRJMOD}/local.3dmodels/USB_C_Receptacle_HRO_TYPE-C-31-M-12.step"
 			(offset
-				(xyz 0 0 0)
+				(xyz 0 1.35 0)
 			)
 			(scale
 				(xyz 1 1 1)
@@ -20035,6 +20035,17 @@
 			(uuid "154b8e6d-5a3c-5d45-a361-8a26f9e5b924")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/local.3dmodels/Bosch_LGA-10_2x2mm_BMP581.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "local:Bosch_LGA-9_3.25x3.25mm"
 		(layer "F.Cu")
@@ -20276,6 +20287,17 @@
 			(uuid "f10f0400-5a3f-52bf-bffa-c7265a3d181c")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/local.3dmodels/Bosch_LGA-9_3.25x3.25mm_BMP585.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "local:ESP32-C6-MINI-1"
 		(layer "F.Cu")
@@ -20961,9 +20983,9 @@
 			(uuid "2f00496f-f760-5c4f-81fb-a2057412b40a")
 		)
 		(embedded_fonts no)
-		(model "${KICAD10_3DMODEL_DIR}/RF_Module.3dshapes/ESP32-C6-MINI-1.step"
+		(model "${KIPRJMOD}/local.3dmodels/ESP32-C6-MINI-1.step"
 			(offset
-				(xyz 0 0 0)
+				(xyz 0 2.7 0)
 			)
 			(scale
 				(xyz 1 1 1)
@@ -21178,6 +21200,17 @@
 			(uuid "1518d1c8-0336-5ca7-b3ed-6e9219d3e78b")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/local.3dmodels/SW_TS-1187A.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "local:SW_TS-1187A"
 		(layer "F.Cu")
@@ -21384,6 +21417,17 @@
 			(uuid "869e559a-6cad-51a5-a56e-751c71c8d6d7")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/local.3dmodels/SW_TS-1187A.step"
+			(offset
+				(xyz 0 0 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(footprint "local:XUNPU_FPC-05FB-24PH20"
 		(layer "F.Cu")
@@ -21828,6 +21872,17 @@
 			(uuid "666169c3-1c16-526d-9856-6a1ba18c45eb")
 		)
 		(embedded_fonts no)
+		(model "${KIPRJMOD}/local.3dmodels/XUNPU_FPC-05FB-24PH20.step"
+			(offset
+				(xyz 0 1.35 0)
+			)
+			(scale
+				(xyz 1 1 1)
+			)
+			(rotate
+				(xyz 0 0 0)
+			)
+		)
 	)
 	(segment
 		(start 100.8 121.9)

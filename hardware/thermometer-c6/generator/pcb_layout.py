@@ -397,6 +397,50 @@ REF_POS = {
 # the module outline rectangle stays on silk.
 SILK_TO_FAB = {"J5": "all", "JP5": "all", "JP6": "all", "U1": "poly"}
 
+# 3D models for the footprints kicad-packages3d can't render: the six local
+# footprints ship no (model) at all, and the two stock KiCad footprints (J1
+# JST, J3 USB-C) reference STEP files absent from the installed 3D library.
+# pcb.py attaches these after FootprintLoad. Keyed by footprint id so one entry
+# covers every instance (SW1/SW2, U5/U6). STEP files live in local.3dmodels/
+# (gitignored; regenerate with ./fetch-3dmodels.sh, which pulls them from the
+# BOM's LCSC ids via easyeda2kicad) and resolve through ${KIPRJMOD}.
+#
+# The EasyEDA models are each authored against their own EasyEDA footprint, whose
+# origin is not our footprint's origin, so the four larger parts need an offset
+# to land their body on our F.Fab outline. Values were measured by rendering each
+# part ALONE (no neighbours) and comparing the model silhouette bbox against the
+# F.Fab rect; see the offset->board mapping below, which depends on the
+# footprint's board rotation:
+#   rot   0 : board displacement = (+ox, -oy)
+#   rot +90: board displacement = (-oy, -ox)
+#   rot -90: board displacement = (+oy, +ox)
+# U1/J4 are rotated on this board, which is why their offsets look transposed.
+# J3 takes rotate 0, NOT 180: at 180 the receptacle mouth faces into the board
+# instead of out over the north edge.
+# U5/U6/SW1/SW2 are symmetric about their origin and need nothing.
+#
+# Verify any change by rendering the part in isolation and checking its body
+# against the F.Fab outline. Do NOT use model-silhouette-vs-pad-centroid
+# metrics: neighbouring models bleed into the measurement window, and a pad
+# bbox is not the body centre for castellated/asymmetric parts.
+# value = (step_filename, offset_mm(x,y,z), rotate_deg(x,y,z), scale(x,y,z))
+MODELS_3D = {
+    "local:ESP32-C6-MINI-1":
+        ("ESP32-C6-MINI-1.step", (0, 2.70, 0), (0, 0, 0), (1, 1, 1)),
+    "local:Bosch_LGA-10_2x2mm":
+        ("Bosch_LGA-10_2x2mm_BMP581.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
+    "local:Bosch_LGA-9_3.25x3.25mm":
+        ("Bosch_LGA-9_3.25x3.25mm_BMP585.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
+    "local:XUNPU_FPC-05FB-24PH20":
+        ("XUNPU_FPC-05FB-24PH20.step", (0, 1.35, 0), (0, 0, 0), (1, 1, 1)),
+    "local:SW_TS-1187A":
+        ("SW_TS-1187A.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
+    "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal":
+        ("JST_PH_S2B-PH-SM4-TB_Horizontal.step", (0.98, -3.25, 0), (0, 0, 0), (1, 1, 1)),
+    "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12":
+        ("USB_C_Receptacle_HRO_TYPE-C-31-M-12.step", (0, 1.35, 0), (0, 0, 0), (1, 1, 1)),
+}
+
 # Functional silkscreen (M7c, LEGIBILITY-FIRST). Every authored label is
 # >=0.8mm text / >=0.15mm stroke (JLCPCB reliable-silk minimum, DRC-enforced via
 # min_text_height/min_text_thickness) and sits on EXPOSED silk beside its part,

@@ -121,6 +121,32 @@ def add_outline(board):
         board.Add(s)
 
 
+MODEL_3D_BASE = "${KIPRJMOD}/local.3dmodels/"
+
+
+def _vec3(t):
+    v = pcbnew.VECTOR3D()
+    v.x, v.y, v.z = (float(n) for n in t)
+    return v
+
+
+def attach_3d_model(fp, fpid):
+    """Override the footprint's 3D model per pcb_layout.MODELS_3D (footprints
+    whose library .kicad_mod has no resolvable model). No-op for the rest."""
+    spec = getattr(pl, "MODELS_3D", {}).get(fpid)
+    if spec is None:
+        return
+    fn, off, rot, scl = spec
+    fp.Models().clear()
+    m = pcbnew.FP_3DMODEL()
+    m.m_Filename = MODEL_3D_BASE + fn
+    m.m_Offset = _vec3(off)
+    m.m_Rotation = _vec3(rot)
+    m.m_Scale = _vec3(scl)
+    m.m_Show = True
+    fp.Models().push_back(m)
+
+
 def add_footprints(board, netinfo, pad_net):
     # Connectors + sensors keep their reference on F.SilkS (assembly/orientation
     # aids); every other refdes moves to F.Fab so the silk stays legible. J2 is
@@ -147,6 +173,7 @@ def add_footprints(board, netinfo, pad_net):
         # FootprintLoad drops the library nickname; restore it or the
         # schematic-parity DRC flags every footprint as substituted.
         fp.SetFPIDAsString(c["footprint"])
+        attach_3d_model(fp, c["footprint"])
         fp.SetField("LCSC", c.get("lcsc", ""))
         for f in fp.GetFields():
             if f.GetName() == "LCSC":
