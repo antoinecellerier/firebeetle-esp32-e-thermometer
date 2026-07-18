@@ -392,10 +392,11 @@ REF_POS = {
 # Footprint F.SilkS graphic items relocated to F.Fab so authored labels can sit
 # where the outline used to be (and to clear residual footprint-graphic DRC).
 # "all" = every F.SilkS graphic; "poly" = only filled SHAPE_T_POLY items.
-# J5 (DNP debug header) and JP5/JP6 (solder jumpers) get functional labels in
-# their own footprint area; U1's pin-1 triangle (a POLY) overlaps C8's pad while
-# the module outline rectangle stays on silk.
-SILK_TO_FAB = {"J5": "all", "JP5": "all", "JP6": "all", "U1": "poly"}
+# J5 (DNP debug header) carries its DBG label + kept refdes over its own
+# footprint area; U1's pin-1 triangle (a POLY) overlaps C8's pad while the
+# module outline rectangle stays on silk. The jumpers (JP1-JP6) keep their
+# stock outline on silk — their value labels sit clear of the footprint.
+SILK_TO_FAB = {"J5": "all", "U1": "poly"}
 
 # 3D models for the footprints kicad-packages3d can't render: the six local
 # footprints ship no (model) at all, and the two stock KiCad footprints (J1
