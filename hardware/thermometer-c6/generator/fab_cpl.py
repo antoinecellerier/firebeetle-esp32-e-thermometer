@@ -43,16 +43,17 @@ import circuit  # noqa: E402
 # The JLC order-preview is ground truth; each entry records source/confidence
 # and gets `verified:` backfilled after eyeballing the first order preview.
 FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match wins
-    # The community tables (matthewlai/KiBot) carry an inverted sign convention
-    # for this exporter: every +180 delta taken from them rendered 180 deg off
-    # in the 2026-07-18 JLC order preview (J1 tails/pin-1 on the wrong side of
-    # the gerber pads, D4/D5/D6 cathode bands flipped), while every 0-delta
-    # part rendered correctly. Delta 0 is the verified correction for all of
-    # them; don't reintroduce table values without a new preview walk.
+    # The community tables (matthewlai/KiBot) mostly carry an inverted sign
+    # convention for this exporter: their +180 deltas rendered 180 deg off in
+    # the 2026-07-18 JLC order preview (J1 tails/pin-1 on the wrong side of
+    # the gerber pads, D4/D5/D6 cathode bands flipped), while 0-delta parts
+    # rendered correctly — EXCEPT the USB-C, whose 180 is genuinely needed
+    # (delta 0 rendered the mouth facing into the board). Per-part JLC model
+    # zeros are arbitrary: never trust a family inference over a preview.
     (r"^TSOT-23", 0),     # U2 RT9080  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
     (r"^SOT-23", 0),      # U3/U4/Q1/Q2/Q4/Q5/Q6  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
     (r"^SOT-323", 0),     # Q3 SC-70  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
-    (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 0),  # J3  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
+    (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 180),  # J3  the family-inference exception: delta 0 rendered the mouth facing into the board (2nd preview pass 2026-07-18); matthewlai's exact entry stands  confidence: verified  verified: 2026-07-18
     (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
     (r"^D_SOD-123", 0),   # D4/D5/D6 MBR0530  source: JLC preview 2026-07-18, cathode bands  confidence: verified  verified: 2026-07-18
     (r"^D_SMA", 0),       # D2 SS14  cathode band WEST in JLC preview  confidence: verified  verified: 2026-07-18
