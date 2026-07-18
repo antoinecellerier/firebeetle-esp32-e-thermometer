@@ -43,16 +43,17 @@ import circuit  # noqa: E402
 # The JLC order-preview is ground truth; each entry records source/confidence
 # and gets `verified:` backfilled after eyeballing the first order preview.
 FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match wins
-    # The community tables (matthewlai/KiBot) mostly carry an inverted sign
-    # convention for this exporter: their +180 deltas rendered 180 deg off in
-    # the 2026-07-18 JLC order preview (J1 tails/pin-1 on the wrong side of
-    # the gerber pads, D4/D5/D6 cathode bands flipped), while 0-delta parts
-    # rendered correctly — EXCEPT the USB-C, whose 180 is genuinely needed
-    # (delta 0 rendered the mouth facing into the board). Per-part JLC model
-    # zeros are arbitrary: never trust a family inference over a preview.
-    (r"^TSOT-23", 0),     # U2 RT9080  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
-    (r"^SOT-23", 0),      # U3/U4/Q1/Q2/Q4/Q5/Q6  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
-    (r"^SOT-323", 0),     # Q3 SC-70  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
+    # JLC model zeros are arbitrary per package — the 2026-07-18 preview walks
+    # (two passes, pad-crosshair overlays) established: 3-pin small packages
+    # (bare SOT-23, SOT-323/SC-70) and the USB-C need +180; SOT-23-5/-6,
+    # TSOT-23-5, SOD-123, D_SMA, JST_PH and everything else need 0. This
+    # matches neither community table wholesale (matthewlai right on SOT-23/
+    # USB-C, wrong on diodes/JST; KiBot the reverse). Never trust a family
+    # inference or a table over an actual order preview.
+    (r"^TSOT-23", 0),     # U2 RT9080  legs-on-pads in 2nd preview pass  confidence: verified  verified: 2026-07-18
+    (r"^SOT-23$", 180),   # Q1/Q2/Q4/Q5/Q6 bare 3-pin SOT-23: JLC zero differs from the 5/6-pin variants; delta 0 rendered legs in the pad gaps (2nd preview pass, pad-crosshair overlay)  confidence: verified  verified: 2026-07-18
+    (r"^SOT-23", 0),      # U3 SOT-23-6 / U4 SOT-23-5  legs-on-pads in 2nd preview pass  confidence: verified  verified: 2026-07-18
+    (r"^SOT-323", 180),   # Q3 SC-70: 3-pin like bare SOT-23 — delta 0 rendered 1-leg-N/2-legs-S over 2-pads-N/1-pad-S (user-confirmed crop, 2nd preview pass)  confidence: verified  verified: 2026-07-18
     (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 180),  # J3  the family-inference exception: delta 0 rendered the mouth facing into the board (2nd preview pass 2026-07-18); matthewlai's exact entry stands  confidence: verified  verified: 2026-07-18
     (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
     (r"^D_SOD-123", 0),   # D4/D5/D6 MBR0530  source: JLC preview 2026-07-18, cathode bands  confidence: verified  verified: 2026-07-18
