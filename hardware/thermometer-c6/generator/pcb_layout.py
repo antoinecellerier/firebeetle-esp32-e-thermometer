@@ -446,6 +446,13 @@ MODELS_3D = {
     "local:Bosch_LGA-9_3.25x3.25mm":
         ("Bosch_LGA-9_3.25x3.25mm_BMP585.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
     "local:XUNPU_FPC-05FB-24PH20":
+        # COSMETIC BUG: at rotation (0,0,0) the STEP seats 180-deg flipped
+        # (tails still register on the pads — the flip is degenerate along
+        # the row — but the mouth renders toward the board interior). The
+        # land pattern is authoritative and correct per the manufacturer
+        # drawing (datasheets/XUNPU_FPC-05FB-NPH20.pdf: rear-flip, tails at
+        # the mouth face, contact-to-anchor rows 3.25mm). Fix = z-rot 180 +
+        # re-tuned offset via the _tune loop; affects renders only.
         ("XUNPU_FPC-05FB-24PH20.step", (0, 1.35, 0), (0, 0, 0), (1, 1, 1)),
     "local:SW_TS-1187A":
         ("SW_TS-1187A.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),

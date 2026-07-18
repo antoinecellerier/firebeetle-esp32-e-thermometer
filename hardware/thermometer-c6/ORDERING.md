@@ -24,12 +24,33 @@ this file is the human procedure around it. Settled fab decisions live in
 - [ ] **Via Covering: "Epoxy Filled & Capped" (POFV) — REQUIRED.** The
       via-in-pad escapes depend on it; the 0.3mm via drills are within JLC's
       fill limit.
-- [ ] **Mark on PCB: let the order number print at the token — do NOT select
-      "Remove Mark".** The `JLCJLCJLCJLC` token is authored on back silk at
-      (6.5, 13.95) rotated 90° — stood vertically just east of the antenna
-      keep-out outline; with the default (no "Remove Mark" / no "2D barcode")
-      JLC replaces the token with the order number there. Selecting "Remove
-      Mark" risks the token printing literally.
+- [ ] **Mark on PCB: keep "Remove Mark"** (2026 UI: a strict two-way choice
+      vs "2D barcode (Serial Number)"; removal is now free and the default —
+      the legacy "Order Number (Specify Position)" flow no longer exists).
+      Leave the 2D-barcode serial option unset (it needs a reserved 2×10mm
+      solid silk square this board doesn't have). The `JLCJLCJLCJLC` token on
+      back silk at (6.5, 13.95) is a legacy no-op under Remove Mark — JLC's
+      CAM scrubs its own magic string; residual worst case is the literal
+      text printing on back silk (cosmetic). Confirm scrubbing via chat if
+      that matters for the run.
+
+## 2b. Open confirmations with JLCPCB support — ASK BEFORE PAYING
+##     (drafted 2026-07-18 for the first order; resolve via chat, then tick)
+
+- [ ] **JLCJLCJLCJLC token under "Remove Mark":** confirm the back-silk token
+      text is scrubbed (not printed literally). If they won't confirm, cut a
+      token-less silk revision (delete the SILK entry in
+      `generator/pcb_layout.py`, `make fab`, re-upload) before ordering.
+- [ ] **J4 orientation:** ask them to confirm the FPC-05FB-24PH20 mounts with
+      its contact-tail/cable-entry side toward the board edge, per the land
+      pattern. Their placement-preview model renders displaced/possibly
+      end-flipped (offset model datum) — the manufacturer drawing
+      (`datasheets/XUNPU_FPC-05FB-NPH20.pdf`: 后翻 = rear-flip; tails at the
+      mouth face; contact-to-anchor rows 3.25mm) and our land pattern are
+      authoritative. Belt-and-suspenders: set **Confirm Parts Placement =
+      Yes** and put J4 in the PCBA remark (see §3).
+- [ ] **Feeder count:** Feeders Loading fee bills 17 × ~€2.75 while the BOM
+      has 16 Extended lines — ask which parts are counted (≈€2.75 delta).
 
 ## 3. Assembly options
 
@@ -40,6 +61,16 @@ this file is the human procedure around it. Settled fab decisions live in
       copper-only, headers are DNP).
 - [ ] Upload `out/fab/thermometer-c6-bom.csv` + `out/fab/thermometer-c6-cpl.csv`.
       **75 placements / 37 BOM lines.**
+- [ ] **Confirm Parts Placement: Yes** (first order with this CPL — their
+      engineer sends placement imagery for approval before assembly; ~+1 day).
+- [ ] **PCBA Remark** (free), paste:
+      "U5 (BMP581) is a vented barometric pressure sensor — do not wash the
+      board, no coating/ink over U5; standard reflow per Bosch guidelines is
+      fine. Bake Y1/MSD parts at your discretion if floor life requires.
+      J4 (C2856831 FPC-05FB-24PH20): mount with the contact-tail/cable-entry
+      side toward the board edge, pin 1 at the '1' silk marker — your
+      placement preview renders this model displaced from its pads; please
+      confirm orientation against the land pattern at DFM."
 - [ ] Expect one feeder-loading fee (~€2.75) per Extended BOM line — 16 lines
       as of 2026-07-18; only D3 (white C2290) and the 10k (C25744) have Basic
       same-footprint options, the rest have none (audited 2026-07-18). If JLC
