@@ -62,7 +62,7 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
 ]
 REF_ROTATION_OVERRIDES = {  # local-library footprints; override beats pattern
     "U1": 0,   # ESP32-C6-MINI-1  verify antenna end at board WEST edge  confidence: low  verified:
-    "J4": 0,   # XUNPU FPC-05FB-24PH20  verify pin1 + latch side  confidence: low  verified:
+    "J4": 180, # XUNPU FPC-05FB-24PH20: delta 0 rendered the flip actuator at the board edge and JLC's pin-1 dot at our pin 24; tilted 3D view confirmed backwards (user, 3rd preview pass). Mouth must face EAST, actuator inboard.  confidence: verified  verified: 2026-07-18
     "U5": 0,   # Bosch LGA-10 BMP581  rotated LGA invisible after reflow - TOP-PRIORITY preview item  confidence: low  verified:
     "SW1": 0, "SW2": 0,  # local:SW_TS-1187A 4-pad tact switches  confidence: low-med  verified:
 }
