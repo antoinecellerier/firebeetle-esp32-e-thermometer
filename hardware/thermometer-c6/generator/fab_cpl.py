@@ -58,13 +58,13 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
     (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
     (r"^D_SOD-123", 0),   # D4/D5/D6 MBR0530  source: JLC preview 2026-07-18, cathode bands  confidence: verified  verified: 2026-07-18
     (r"^D_SMA", 0),       # D2 SS14  cathode band WEST in JLC preview  confidence: verified  verified: 2026-07-18
-    (r"^LED_0603", 0),    # D1/D3  LED tape polarity varies per LCSC part  confidence: low  verified:
+    (r"^LED_0603", 0),    # D1/D3  cathode cues correct in preview (D1 S, D3 E)  confidence: verified  verified: 2026-07-18
 ]
 REF_ROTATION_OVERRIDES = {  # local-library footprints; override beats pattern
-    "U1": 0,   # ESP32-C6-MINI-1  verify antenna end at board WEST edge  confidence: low  verified:
+    "U1": 0,   # ESP32-C6-MINI-1  antenna overhang at board WEST edge in preview  confidence: verified  verified: 2026-07-18
     "J4": 180, # XUNPU FPC-05FB-24PH20: delta 0 rendered the flip actuator at the board edge and JLC's pin-1 dot at our pin 24; tilted 3D view confirmed backwards (user, 3rd preview pass). Mouth must face EAST, actuator inboard.  confidence: verified  verified: 2026-07-18
-    "U5": 0,   # Bosch LGA-10 BMP581  rotated LGA invisible after reflow - TOP-PRIORITY preview item  confidence: low  verified:
-    "SW1": 0, "SW2": 0,  # local:SW_TS-1187A 4-pad tact switches  confidence: low-med  verified:
+    "U5": 0,   # Bosch LGA-10 BMP581  verified by TWO independent render cues vs datasheet p.46 pin-out + p.69 vent-hole position drawing: lid vent pinholes at the pads-7/8 corner (NW at rot 90) AND JLC "1" arrow at the pads-1/10 corner (SW = our black fab dot)  confidence: verified  verified: 2026-07-18
+    "SW1": 0, "SW2": 0,  # local:SW_TS-1187A 4-pad tact switches  pin-1 pad NW in preview  confidence: verified  verified: 2026-07-18
 }
 
 
