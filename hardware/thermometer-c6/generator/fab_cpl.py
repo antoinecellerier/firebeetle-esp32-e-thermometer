@@ -43,13 +43,19 @@ import circuit  # noqa: E402
 # The JLC order-preview is ground truth; each entry records source/confidence
 # and gets `verified:` backfilled after eyeballing the first order preview.
 FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match wins
-    (r"^TSOT-23", 180),   # U2 RT9080  source: matthewlai+KiBot agree  confidence: med-high  verified:
-    (r"^SOT-23", 180),    # U3/U4/Q1/Q2/Q4/Q5/Q6  source: KiBot=180, matthewlai=-90 CONFLICT  confidence: med  verified:
-    (r"^SOT-323", 180),   # Q3 SC-70  source: by analogy w/ SOT-353=180 (matthewlai)  confidence: low  verified:
-    (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 180),  # J3  source: matthewlai exact entry  confidence: med-high  verified:
-    (r"^JST_PH_S", 180),  # J1  source: matthewlai  confidence: med  verified:
-    (r"^D_SOD-123", 180), # D4/D5/D6 MBR0530  source: community consensus  confidence: low  verified:
-    (r"^D_SMA", 0),       # D2 SS14  source: none found; leave 0  confidence: low  verified:
+    # The community tables (matthewlai/KiBot) carry an inverted sign convention
+    # for this exporter: every +180 delta taken from them rendered 180 deg off
+    # in the 2026-07-18 JLC order preview (J1 tails/pin-1 on the wrong side of
+    # the gerber pads, D4/D5/D6 cathode bands flipped), while every 0-delta
+    # part rendered correctly. Delta 0 is the verified correction for all of
+    # them; don't reintroduce table values without a new preview walk.
+    (r"^TSOT-23", 0),     # U2 RT9080  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
+    (r"^SOT-23", 0),      # U3/U4/Q1/Q2/Q4/Q5/Q6  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
+    (r"^SOT-323", 0),     # Q3 SC-70  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
+    (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 0),  # J3  source: JLC preview 2026-07-18 (family inference)  confidence: high  verified:
+    (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
+    (r"^D_SOD-123", 0),   # D4/D5/D6 MBR0530  source: JLC preview 2026-07-18, cathode bands  confidence: verified  verified: 2026-07-18
+    (r"^D_SMA", 0),       # D2 SS14  cathode band WEST in JLC preview  confidence: verified  verified: 2026-07-18
     (r"^LED_0603", 0),    # D1/D3  LED tape polarity varies per LCSC part  confidence: low  verified:
 ]
 REF_ROTATION_OVERRIDES = {  # local-library footprints; override beats pattern
