@@ -464,7 +464,7 @@ SILK = [
     ("+", 20.0, 24.2, 0.9, 0),          # directly above J1.1 (the + pad, x=20)
     # battery-current series-measurement break at J2 (in J2's south edge strip);
     # wick JP1 and insert an ammeter (e.g. PPK2) across J2. Label device-neutral.
-    ("IBAT", 27.7, 34.48, 0.8, 0),
+    ("IBAT", 27.8, 34.48, 0.8, 0),
     # RESE sense jumpers: value beside each JP, vertical in the JP<->J4 corridor
     ("3Ω", 39.8, 8.9, 0.8, 90),         # JP4
     ("2.2Ω", 39.8, 12.5, 0.8, 90),      # JP3
@@ -472,7 +472,7 @@ SILK = [
     # inductor jumpers: value beside each JP. 10µH beside JP5 (south pocket,
     # centred to clear Q6 W / C16 E bodies); 47µH in the pocket W of JP6 between
     # C28 (W) and JP6 (E) — spot found in the GUI working copy and harvested.
-    ("10µH", 30.74, 24.9, 0.8, 0),
+    ("10µH", 30.8, 24.6, 0.8, 0),
     ("47µH", 27.8, 20.0, 0.8, 0),
     # debug header J5: per-pin legend won't fit at >=0.8mm on the crowded top;
     # DBG marker only here, with J5's kept refdes grouped immediately to its
@@ -491,7 +491,7 @@ SILK = [
     # TP1 VBAT / TP3 GND north of their pads; TP2's GND sits SOUTH of its pad so
     # the two GND labels don't read as one row.
     ("VBAT", 18.5, 25.7, 0.8, 0, "B.SilkS"),
-    ("GND", 21.2, 29.3, 0.8, 0, "B.SilkS"),
+    ("GND", 21.2, 29.2, 0.8, 0, "B.SilkS"),
     ("GND", 23.9, 25.7, 0.8, 0, "B.SilkS"),
     # TP4 is the 3V3 rail probe-ONLY pad (RT9080 forbids back-drive); the
     # "probe-only" warning rides on TP4's own label.
@@ -569,7 +569,7 @@ SILK = [
     # to open the rows. Pad columns x = 33.90/36.44/38.98/41.52/44.06. Pins 9&10
     # are BOTH GND -> one centred label. MOUNT TOP: header solders to the TOP.
     ("MOUNT TOP", 39.0, 26.9, 0.8, 0, "B.SilkS"),   # solder-side cue
-    ("J5", 46.7, 32.1, 0.8, 0, "B.SilkS"),          # legend tag, SE corner
+    ("J5", 46.7, 32.325, 0.8, 0, "B.SilkS"),        # legend tag, SE corner
     # even pins 2/4/6/8 (NORTH row) — upper text row
     ("+3V3", 33.90, 28.15, 0.8, 0, "B.SilkS"),      # pin 2
     ("TX",   36.44, 28.15, 0.8, 0, "B.SilkS"),      # pin 4
@@ -595,6 +595,13 @@ SILK_SHAPES = [
     # double. Silk is non-conductive -> RF-safe, and allowed in the copper-only
     # keep-out. Pairs with the "ANTENNA"/"KEEP CLEAR" B.SilkS note inside it.
     ("rect", 0.5, 7.25, 5.3, 20.65, "B.SilkS", 0.15),
+    # JP1<->IBAT link cue on the FRONT: a short vertical line in the gap between
+    # JP1's silk box (bottom edge y27.35) and J2's silk box (top edge y28.16),
+    # under JP1.1 (the Net-(J2-Pin_1) jumper pad, x26.94), materialising the
+    # series-measurement break — wick JP1, insert an ammeter across J2. Ends stop
+    # ~0.2mm short of each box (silk_overlap is flagged at min_silk_clearance 0);
+    # the breaks at the two connectors read as "connects here".
+    ("line", 26.89, 27.6, 26.89, 27.91, "F.SilkS", 0.1),
 ]
 
 # Routed copper (generator/pcb_routes.py, checked in). Since the M5 GUI
