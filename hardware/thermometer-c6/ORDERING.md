@@ -44,13 +44,14 @@ this file is the human procedure around it. Settled fab decisions live in
       as of 2026-07-18; only D3 (white C2290) and the 10k (C25744) have Basic
       same-footprint options, the rest have none (audited 2026-07-18). If JLC
       auto-substitutes the 10k with an Extended part (stock), re-match in the
-      BOM review page: C25744 → C60490 (1%) → **C25531 (±5% Basic, fine for
-      all seven positions — pull-ups, gate series/bleed, and MCP73831 PROG
-      where ±5% = 95–105mA)**. All in-stock 1% alternatives were Extended
-      when audited (2026-07-18: C25744 and C60490 both out of JLC assembly
-      stock); any Extended 1% (e.g. the auto-substitute C174175) works if
-      the feeder fee is acceptable. Third-party part browsers show LCSC
-      retail stock, not JLC assembly stock — trust only the BOM dialog.
+      BOM review page to any in-stock **Basic** 10k 0402 — candidates
+      C25744 (1%) / C60490 (1%) / C25531 (±5%; tolerance fine for all seven
+      positions — pull-ups, gate series/bleed, and MCP73831 PROG where ±5%
+      = 95–105mA). 2026-07-18: all three were out of JLC assembly stock at
+      once and every in-stock 10k 0402 was Extended — in that case just
+      accept the auto-substitute (e.g. C174175) and eat the ~€2.75 feeder
+      fee. Third-party part browsers show LCSC retail stock, not JLC
+      assembly stock — trust only the BOM dialog.
 
 ## 4. Stock re-verification (before quoting)
 
