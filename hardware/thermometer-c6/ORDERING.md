@@ -43,8 +43,14 @@ this file is the human procedure around it. Settled fab decisions live in
 - [ ] Expect one feeder-loading fee (~€2.75) per Extended BOM line — 16 lines
       as of 2026-07-18; only D3 (white C2290) and the 10k (C25744) have Basic
       same-footprint options, the rest have none (audited 2026-07-18). If JLC
-      auto-substitutes the 10k with an Extended part (stock), re-match to
-      C25744 / C60490 in the BOM review page.
+      auto-substitutes the 10k with an Extended part (stock), re-match in the
+      BOM review page: C25744 → C60490 (1%) → **C25531 (±5% Basic, fine for
+      all seven positions — pull-ups, gate series/bleed, and MCP73831 PROG
+      where ±5% = 95–105mA)**. All in-stock 1% alternatives were Extended
+      when audited (2026-07-18: C25744 and C60490 both out of JLC assembly
+      stock); any Extended 1% (e.g. the auto-substitute C174175) works if
+      the feeder fee is acceptable. Third-party part browsers show LCSC
+      retail stock, not JLC assembly stock — trust only the BOM dialog.
 
 ## 4. Stock re-verification (before quoting)
 
@@ -52,7 +58,7 @@ Re-check LCSC/JLC stock — several parts run thin:
 
 - [ ] U1 ESP32-C6-MINI-1-N4 **C5736265**
 - [ ] Q3 Si1308EDL **C469327** (thin — fallback Si1304BDL clone **C7419947**)
-- [ ] 10k **C25744** (alt **C60490**)
+- [ ] 10k **C25744** (alt **C60490**, then **C25531** ±5% Basic — see §3)
 - [ ] **U5 BMP581 C5362283 — if out of stock, populate U6 BMP585 instead:**
       in `generator/circuit.py` set U5 `dnp=True` and U6/C26/C27 `dnp=False`
       (populate-exactly-one — both strap I2C 0x47), `make check`, commit, then
