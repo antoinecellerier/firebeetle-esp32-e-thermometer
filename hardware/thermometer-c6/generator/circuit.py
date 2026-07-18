@@ -116,8 +116,8 @@ COMPONENTS = [
          footprint="local:SW_TS-1187A", lcsc="C318884", zone="D: ESP32-C6"),
     dict(ref="R7", lib_id="Device:R", value="10k", footprint=R0402,
          lcsc="C25744", zone="D: ESP32-C6"),  # GPIO9 pull-up
-    dict(ref="D3", lib_id="Device:LED", value="STATUS green", footprint=LED0603,
-         lcsc="C12624", zone="D: ESP32-C6"),
+    dict(ref="D3", lib_id="Device:LED", value="STATUS white", footprint=LED0603,
+         lcsc="C2290", zone="D: ESP32-C6"),  # basic part (green 0603 has no basic option)
     dict(ref="R8", lib_id="Device:R", value="1k", footprint=R0402,
          lcsc="C11702", zone="D: ESP32-C6"),
     # 32.768 kHz crystal (GPIO0/1 = XTAL_32K_P/N)

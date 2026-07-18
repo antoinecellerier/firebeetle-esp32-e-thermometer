@@ -19448,7 +19448,7 @@
         (justify left)
       )
     )
-    (property "Value" "STATUS green"
+    (property "Value" "STATUS white"
       (at 423.84 107.88 270)
       (effects
         (font
@@ -19475,7 +19475,7 @@
         (hide yes)
       )
     )
-    (property "LCSC" "C12624"
+    (property "LCSC" "C2290"
       (at 421.64 106.68 0)
       (effects
         (font

@@ -10634,7 +10634,7 @@
 				)
 			)
 		)
-		(property "Value" "STATUS green"
+		(property "Value" "STATUS white"
 			(at 0 1.43 180)
 			(layer "F.Fab")
 			(uuid "f572b68b-4dfd-5665-89ab-d626ec217515")
@@ -10679,7 +10679,7 @@
 				)
 			)
 		)
-		(property "LCSC" "C12624"
+		(property "LCSC" "C2290"
 			(at 0 0 180)
 			(layer "F.SilkS")
 			(hide yes)

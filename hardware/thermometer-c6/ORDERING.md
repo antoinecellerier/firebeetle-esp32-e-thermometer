@@ -24,19 +24,27 @@ this file is the human procedure around it. Settled fab decisions live in
 - [ ] **Via Covering: "Epoxy Filled & Capped" (POFV) — REQUIRED.** The
       via-in-pad escapes depend on it; the 0.3mm via drills are within JLC's
       fill limit.
-- [ ] **Mark on PCB: "Order Number (Specify Position)".** The `JLCJLCJLCJLC`
-      token is authored on back silk at (6.5, 13.95) rotated 90° — stood
-      vertically just east of the antenna keep-out outline; JLC prints the order
-      number there instead of a random spot.
+- [ ] **Mark on PCB: let the order number print at the token — do NOT select
+      "Remove Mark".** The `JLCJLCJLCJLC` token is authored on back silk at
+      (6.5, 13.95) rotated 90° — stood vertically just east of the antenna
+      keep-out outline; with the default (no "Remove Mark" / no "2D barcode")
+      JLC replaces the token with the order number there. Selecting "Remove
+      Mark" risks the token printing literally.
 
 ## 3. Assembly options
 
-- [ ] **Economy PCBA, top side only.** All assembled parts are on F.Cu by
-      construction (TPs/jumpers are copper-only, headers are DNP).
+- [ ] **Standard PCBA, top side only.** Economy is impossible for this board:
+      ENIG and POFV each disable it, and U1 (ESP32-C6-MINI-1) + U5 (BMP581)
+      are Standard-only parts (verified against a live quote 2026-07-18).
+      All assembled parts are on F.Cu by construction (TPs/jumpers are
+      copper-only, headers are DNP).
 - [ ] Upload `out/fab/thermometer-c6-bom.csv` + `out/fab/thermometer-c6-cpl.csv`.
       **75 placements / 37 BOM lines.**
-- [ ] Expect extended-part fees on the non-basic parts. If JLC flags a part as
-      not economy-eligible, switch that part or the order type.
+- [ ] Expect one feeder-loading fee (~€2.75) per Extended BOM line — 16 lines
+      as of 2026-07-18; only D3 (white C2290) and the 10k (C25744) have Basic
+      same-footprint options, the rest have none (audited 2026-07-18). If JLC
+      auto-substitutes the 10k with an Extended part (stock), re-match to
+      C25744 / C60490 in the BOM review page.
 
 ## 4. Stock re-verification (before quoting)
 
