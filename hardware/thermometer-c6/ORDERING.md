@@ -41,14 +41,18 @@ this file is the human procedure around it. Settled fab decisions live in
       text is scrubbed (not printed literally). If they won't confirm, cut a
       token-less silk revision (delete the SILK entry in
       `generator/pcb_layout.py`, `make fab`, re-upload) before ordering.
-- [ ] **J4 orientation:** ask them to confirm the FPC-05FB-24PH20 mounts with
-      its contact-tail/cable-entry side toward the board edge, per the land
-      pattern. Their placement-preview model renders displaced/possibly
-      end-flipped (offset model datum) — the manufacturer drawing
-      (`datasheets/XUNPU_FPC-05FB-NPH20.pdf`: 后翻 = rear-flip; tails at the
-      mouth face; contact-to-anchor rows 3.25mm) and our land pattern are
-      authoritative. Belt-and-suspenders: set **Confirm Parts Placement =
-      Yes** and put J4 in the PCBA remark (see §3).
+- [ ] **J4 PLACEMENT ERROR — RESPIN REQUIRED BEFORE ORDERING (found
+      2026-07-19).** Numeric STEP analysis (scratch proof pack + the
+      manufacturer drawing `datasheets/XUNPU_FPC-05FB-NPH20.pdf`) proves the
+      FPC-05FB's SMT tails are at the REAR (actuator) face, ~6.6mm from the
+      mouth. With tails on the east pad column the mouth faces WEST into the
+      board — the panel cable cannot mate. Fix: rotate J4 180° in place
+      (contact pads west, anchors/mouth east), re-derive pin-1/cable mapping
+      vs the DESPI-C02 reference (pin 1 lands SOUTH after rotation — the
+      2026-07-08 numbering resolution must be redone for the new geometry),
+      re-route the FPC fanout, re-run all gates, re-export, re-upload.
+      JLC's preview model showed this correctly all along (tails with
+      actuator); the land pattern was the error.
 - [ ] **Feeder count:** Feeders Loading fee bills 17 × ~€2.75 while the BOM
       has 16 Extended lines — ask which parts are counted (≈€2.75 delta).
 
