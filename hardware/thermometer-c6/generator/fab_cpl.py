@@ -50,9 +50,9 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
     # matches neither community table wholesale (matthewlai right on SOT-23/
     # USB-C, wrong on diodes/JST; KiBot the reverse). Never trust a family
     # inference or a table over an actual order preview.
-    (r"^TSOT-23", 0),     # U2 RT9080  legs-on-pads in 2nd preview pass  confidence: verified  verified: 2026-07-18
+    (r"^TSOT-23", 270),   # U2 RT9080: JLC zero = pin rows N/S (horizontal), KiCad zero = pin columns W/E (vertical) -> -90; matthewlai's -90 was right for the 5/6-pin family (user-confirmed crop, 3rd preview pass)  confidence: verified  verified: 2026-07-18
     (r"^SOT-23$", 180),   # Q1/Q2/Q4/Q5/Q6 bare 3-pin SOT-23: JLC zero differs from the 5/6-pin variants; delta 0 rendered legs in the pad gaps (2nd preview pass, pad-crosshair overlay)  confidence: verified  verified: 2026-07-18
-    (r"^SOT-23", 0),      # U3 SOT-23-6 / U4 SOT-23-5  legs-on-pads in 2nd preview pass  confidence: verified  verified: 2026-07-18
+    (r"^SOT-23", 270),    # U3 SOT-23-6 / U4 SOT-23-5: same -90 as TSOT (delta 0 rendered legs N/S over pad columns W/E; corner-leg coincidence fooled the 2nd-pass check)  confidence: verified  verified: 2026-07-18
     (r"^SOT-323", 180),   # Q3 SC-70: 3-pin like bare SOT-23 — delta 0 rendered 1-leg-N/2-legs-S over 2-pads-N/1-pad-S (user-confirmed crop, 2nd preview pass)  confidence: verified  verified: 2026-07-18
     (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 180),  # J3  the family-inference exception: delta 0 rendered the mouth facing into the board (2nd preview pass 2026-07-18); matthewlai's exact entry stands  confidence: verified  verified: 2026-07-18
     (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
