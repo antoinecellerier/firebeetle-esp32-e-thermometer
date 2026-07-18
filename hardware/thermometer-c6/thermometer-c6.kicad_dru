@@ -21,3 +21,6 @@
 (rule power-track-width-fanout
   (condition "A.NetName == 'EPD_VCC' && A.insideArea('fpc-fanout')")
   (constraint track_width (min 0.25mm)))
+(rule silk-merge
+  (condition "A.insideArea('silk-merge')")
+  (constraint silk_clearance (min -0.3mm)))

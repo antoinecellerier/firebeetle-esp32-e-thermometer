@@ -372,6 +372,19 @@ KEEPOUTS = [
          tracks=False, vias=False, fills=True, pads=False),
     dict(name="U6-sensor", layers=["F.Cu", "B.Cu"], rect=(0.8, 24.7, 4.6, 28.5),
          tracks=False, vias=False, fills=True, pads=False),
+    # DRC-only marker (no restrictions) on F.SilkS: scopes a negative
+    # silk_clearance (see pcb.py .kicad_dru rule 'silk-merge') so the JP1<->IBAT
+    # link line in SILK_SHAPES may run its ends into JP1's/J2's silk boxes for
+    # the intended connected look without tripping silk_overlap. Sits in the
+    # pad-free gap between JP1's pads (bottom mask ~27.09) and J2's (top mask
+    # ~28.70) so the marker's own F.SilkS outline clears every mask aperture
+    # (no silk_over_copper); the line only has to thread the marker, not fill
+    # it, for A.insideArea to match. Rule areas are DRC constructs -- not
+    # plotted to the silk gerber. silk-merge intentionally not in check_pcb.py's
+    # "nothing inside" list (silk, not copper); tracks/vias False keep route.py,
+    # straighten.py and widen.py from ever treating it as a copper keep-out.
+    dict(name="silk-merge", layers=["F.SilkS"], rect=(26.5, 27.4, 27.3, 28.1),
+         tracks=False, vias=False, fills=False, pads=False),
 ]
 
 # Reference-designator overrides for the refs kept on F.SilkS (J1/J5/U5/U6
@@ -595,13 +608,15 @@ SILK_SHAPES = [
     # double. Silk is non-conductive -> RF-safe, and allowed in the copper-only
     # keep-out. Pairs with the "ANTENNA"/"KEEP CLEAR" B.SilkS note inside it.
     ("rect", 0.5, 7.25, 5.3, 20.65, "B.SilkS", 0.15),
-    # JP1<->IBAT link cue on the FRONT: a short vertical line in the gap between
-    # JP1's silk box (bottom edge y27.35) and J2's silk box (top edge y28.16),
-    # under JP1.1 (the Net-(J2-Pin_1) jumper pad, x26.94), materialising the
-    # series-measurement break — wick JP1, insert an ammeter across J2. Ends stop
-    # ~0.2mm short of each box (silk_overlap is flagged at min_silk_clearance 0);
-    # the breaks at the two connectors read as "connects here".
-    ("line", 26.89, 27.6, 26.89, 27.91, "F.SilkS", 0.1),
+    # JP1<->IBAT link cue on the FRONT: a short vertical line under JP1.1 (the
+    # Net-(J2-Pin_1) jumper pad, x26.94), materialising the series-measurement
+    # break — wick JP1, insert an ammeter across J2. Its ends deliberately merge
+    # into JP1's silk box (bottom edge y27.35, incl. an arc) and J2's silk box
+    # (top edge y28.16) for the connected look; the 'silk-merge' rule area
+    # (KEEPOUTS) + .kicad_dru rule (pcb.py) scope a negative silk_clearance so
+    # those intended overlaps don't trip silk_overlap while clashes elsewhere
+    # still gate.
+    ("line", 26.89, 27.29, 26.89, 28.2, "F.SilkS", 0.1),
 ]
 
 # Routed copper (generator/pcb_routes.py, checked in). Since the M5 GUI

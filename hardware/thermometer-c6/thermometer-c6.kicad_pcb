@@ -110,8 +110,8 @@
 		(uuid "ad35e702-abeb-5f6d-83d5-961ca5751037")
 	)
 	(gr_line
-		(start 126.89 127.6)
-		(end 126.89 127.91)
+		(start 126.89 127.289999)
+		(end 126.89 128.199999)
 		(stroke
 			(width 0.1)
 			(type default)
@@ -31223,8 +31223,39 @@
 		(uuid "b2d6830a-72f2-576c-8395-49f371422578")
 	)
 	(zone
-		(layers "F.Cu" "B.Cu")
+		(layer "F.SilkS")
 		(uuid "0639a5bf-eec2-5ed5-8b76-d3463e0f6cac")
+		(name "silk-merge")
+		(hatch edge 0.5)
+		(connect_pads
+			(clearance 0)
+		)
+		(min_thickness 0.25)
+		(keepout
+			(tracks allowed)
+			(vias allowed)
+			(pads allowed)
+			(copperpour allowed)
+			(footprints allowed)
+		)
+		(placement
+			(enabled no)
+			(sheetname "")
+		)
+		(fill
+			(thermal_gap 0.5)
+			(thermal_bridge_width 0.5)
+			(island_removal_mode 0)
+		)
+		(polygon
+			(pts
+				(xy 126.5 127.4) (xy 127.3 127.4) (xy 127.3 128.1) (xy 126.5 128.1)
+			)
+		)
+	)
+	(zone
+		(layers "F.Cu" "B.Cu")
+		(uuid "c3062294-1475-502e-88ac-636fdee58002")
 		(name "U5-sensor")
 		(hatch edge 0.5)
 		(connect_pads
@@ -31255,7 +31286,7 @@
 	)
 	(zone
 		(layers "F.Cu" "B.Cu")
-		(uuid "c3062294-1475-502e-88ac-636fdee58002")
+		(uuid "a3457d7c-8bcb-560e-ba6c-0d5597c2324d")
 		(name "U6-sensor")
 		(hatch edge 0.5)
 		(connect_pads
@@ -31286,7 +31317,7 @@
 	)
 	(zone
 		(layers "F.Cu" "B.Cu")
-		(uuid "a3457d7c-8bcb-560e-ba6c-0d5597c2324d")
+		(uuid "f549616e-8bc1-5925-98e8-91ce2b81ddee")
 		(name "antenna")
 		(hatch edge 0.5)
 		(connect_pads
@@ -31317,7 +31348,7 @@
 	)
 	(zone
 		(layers "F.Cu" "B.Cu")
-		(uuid "f549616e-8bc1-5925-98e8-91ce2b81ddee")
+		(uuid "fc409112-0757-5ff1-afe7-6225a198be54")
 		(name "antenna-margin")
 		(hatch edge 0.5)
 		(connect_pads
@@ -31348,7 +31379,7 @@
 	)
 	(zone
 		(layers "F.Cu" "B.Cu")
-		(uuid "fc409112-0757-5ff1-afe7-6225a198be54")
+		(uuid "3091b0fb-060a-5d3d-b998-c972279df128")
 		(name "fpc-fanout")
 		(hatch edge 0.5)
 		(connect_pads
@@ -31380,7 +31411,7 @@
 	(zone
 		(net "GND")
 		(layer "B.Cu")
-		(uuid "3091b0fb-060a-5d3d-b998-c972279df128")
+		(uuid "9bbb6924-55a1-5ebc-b61f-859b7c5bae61")
 		(hatch edge 0.5)
 		(connect_pads
 			(clearance 0.5)
@@ -32456,7 +32487,7 @@
 	(zone
 		(net "GND")
 		(layer "F.Cu")
-		(uuid "9bbb6924-55a1-5ebc-b61f-859b7c5bae61")
+		(uuid "713683d1-1852-5815-9c40-e5ac8b8a685f")
 		(hatch edge 0.5)
 		(priority 1)
 		(connect_pads

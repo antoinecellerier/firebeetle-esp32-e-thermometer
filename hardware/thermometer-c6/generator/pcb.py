@@ -52,7 +52,8 @@ V = lambda x, y: pcbnew.VECTOR2I(FromMM(x), FromMM(y))  # noqa: E731
 
 ORIGIN = pl.BOARD["origin"]
 
-LAYER = {"F.Cu": pcbnew.F_Cu, "B.Cu": pcbnew.B_Cu}
+LAYER = {"F.Cu": pcbnew.F_Cu, "B.Cu": pcbnew.B_Cu,
+         "F.SilkS": pcbnew.F_SilkS, "B.SilkS": pcbnew.B_SilkS}
 
 # Nets that see the EPD booster's +/-20V-class rails -> 0.3mm clearance rule
 HV_NETS = ["EPD_PREVGH", "EPD_PREVGL", "~EPD_VGH", "~EPD_VGL",
@@ -526,6 +527,20 @@ def write_dru(alias):
                 f"  (condition \"A.NetName == '{alias['EPD_VCC']}' && "
                 "A.insideArea('fpc-fanout')\")\n"
                 "  (constraint track_width (min 0.25mm)))\n")
+        # The JP1<->IBAT link cue (pcb_layout.SILK_SHAPES) deliberately runs its
+        # ends into JP1's and J2's silk boxes so the break reads as "connects
+        # here". Scope a negative silk_clearance to the 'silk-merge' rule area
+        # (a DRC-only F.SilkS marker in the pad-free gap between the two boxes,
+        # pcb_layout.KEEPOUTS) so those intended overlaps don't trip silk_overlap
+        # while every silk clash elsewhere still gates. KiCad's silk checker DOES
+        # consult custom silk_clearance rules; A.insideArea matches the whole line
+        # because it threads through the marker, so its box-region overlaps clear
+        # too. -0.3mm also covers the marker outline's own overlaps with the
+        # neighbouring silk. A per-violation DRC exclusion is rejected: it keys on
+        # UUIDs, which pcb.py renumbers every run, so it would silently detach.
+        f.write("(rule silk-merge\n"
+                "  (condition \"A.insideArea('silk-merge')\")\n"
+                "  (constraint silk_clearance (min -0.3mm)))\n")
 
 
 def write_fp_lib_table():
