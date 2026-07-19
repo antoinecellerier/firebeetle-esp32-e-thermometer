@@ -61,14 +61,14 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
 
 ### Scripting the board (pcbnew, KiCad 10)
 
-Prefer the `verify/` tools below; write ad-hoc pcbnew only for one-off geometry.
-Canonical loader (board origin is (100,100); coords are nm):
+Prefer the `verify/` tools below; write ad-hoc pcbnew only for one-off geometry
+— and start it from the shared helper (board origin is (100,100); coords nm):
 
 ```python
-import pcbnew
-OX = OY = 100.0
-b = pcbnew.LoadBoard("thermometer-c6.kicad_pcb")   # or out/hand/...
-rel = lambda p: (p.x/1e6 - OX, p.y/1e6 - OY)        # nm → board-mm
+import sys; sys.path.insert(0, "verify")
+from geom import load, rel, vi, seg_width
+b = load()                # committed board; load("out/hand/...", fill=False)
+x, y = rel(pad.GetPosition())   # nm → board-mm, origin removed
 ```
 
 - **Track vs via width differ**: `track.GetWidth()` (no arg);
