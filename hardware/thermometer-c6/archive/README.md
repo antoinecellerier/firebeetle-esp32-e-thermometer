@@ -131,6 +131,39 @@ aa55505. Harvested: PLACE (H1/H2/Q1/R22/R23), pcb_routes.py, pcb_layout STITCH/T
 Gate: 0 unconnected, 0 DRC, **courtyards_overlap=0**, make check green, byte-stable,
 out/hand == generated.
 
+## hand-routed-2026-07-19-j4-fanout-reroute.kicad_pcb
+
+GUI board after the **J4 24-pin FPC fanout + a board-wide signal re-route +
+testpoint simplification**. Base: generated at 77c3ebd (J4 re-placed mouth-east
+after the tail-side STEP correction; 21 pads unconnected, fanout pending, seeds
+kept). The session:
+
+- **J4 fanout completed** — every FPC pin routed; the board is now **0
+  unconnected** (was disconnected, GND included) and **GND is one connected
+  system** (gnd_islands `connected: True`, was `False`; narrow-neck SPOFs 8→3).
+- **Significant re-routing beyond the fanout** — ~30 signal nets re-laid
+  (DBG_RX/TX, all EPD_* including CS/DC/SCK/MOSI/RST/BUSY/VCC/GDR/RESE/PREVGL,
+  USB_D+, VBAT, +3V3, J4 pins, JP5); board grew 870→1049 GUI segments.
+- **9 testpoints moved to simplify** (board-relative, side B):
+  TP1 (18.5,27.4)→(15.2,26.108), TP4 (11.6,30.6)→(11.37,23.295),
+  TP5 (24.0,10.0)→(21.34,21.8), TP6 (38.4,23.9)→(38.45,21.95),
+  TP7 (33.4,24.7)→(35.45,25.55), TP8 (29.0,12.6)→(31.29,14.423),
+  TP9 (36.35,10.5)→(35.45,9.813), TP10 (44.4,25.9)→(38.28,25.55),
+  TP11 (13.2,23.4)→(12.12,27.7).
+
+Harvested: `pcb_routes.py` (signals, `--all`), `pcb_layout.py` PLACE (9 TPs via
+`hand_diff --apply`), STITCH (**+6 / −9** vias, 0.6/0.3 overrides preserved),
+GND TRACKS (re-authored from the hand board, 41→42 polylines). Gate: `make
+check` green; **DRC REAL=0, unconnected=0, schematic-parity=0**; `check_pcb`
+green incl. the §9 J4 mouth-east orientation guard. hand_diff A–F/H clean; its G
+(signal) shows sub-µm residual only — every net's board/authored segment counts
+match (topology faithful), differing by `extract_tracks` 3dp rounding on the
+GUI's fine-grid vertices (worst 1.7µm; one 0.5µm degenerate VBAT stub at moved
+TP1 harvests to zero-length and is dropped). **Deferred to a later silk task:**
+5 silk warnings near the moved TPs (`silk_over_copper` PREVGH; `silk_overlap`
+TP5/R9-10M, TP7/MOUNT-TOP, TP10/MOUNT-TOP, TP6/PREVGH) plus stale bench labels
+(3V3-probe-only, EPD_VCC, VBAT_ADC) that still sit at the old TP positions.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
