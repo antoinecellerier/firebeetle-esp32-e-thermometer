@@ -59,6 +59,34 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
   impossible, `rm -rf generator/__pycache__` and re-render before believing
   them.
 
+### Scripting the board (pcbnew, KiCad 10)
+
+Prefer the `verify/` tools below; write ad-hoc pcbnew only for one-off geometry.
+Canonical loader (board origin is (100,100); coords are nm):
+
+```python
+import pcbnew
+OX = OY = 100.0
+b = pcbnew.LoadBoard("thermometer-c6.kicad_pcb")   # or out/hand/...
+rel = lambda p: (p.x/1e6 - OX, p.y/1e6 - OY)        # nm → board-mm
+```
+
+- **Track vs via width differ**: `track.GetWidth()` (no arg);
+  `via.GetWidth(pcbnew.F_Cu)`. Calling `GetWidth()` on a via spams
+  `PCB_VIA::GetWidth called without a layer` asserts to stderr — harmless,
+  drop with `2>/dev/null`.
+- Element type: `t.Type() == pcbnew.PCB_VIA_T` / `PCB_TRACE_T` / `PCB_ARC_T`.
+- To import a `verify/`/`generator/` module, `sys.path.insert(0, "verify")`
+  then `import gnd_islands` etc.; run with `PYTHONDONTWRITEBYTECODE=1`.
+
+`generator/pcb.py` env interface: `PCB_NO_ROUTES=1` (authored copper only),
+`PCB_OUT_DIR=<dir>` (render target), `FAB_STAMP="<hash> <date>"` (silk stamp).
+
+Toolchain present: `kicad-cli` 10.0.4, `pcbnew` python module, `inkscape`,
+`convert`/`magick`, `freecad`/`freecadcmd` (lowercase), `pdftoppm`, `gs`.
+Absent: `rsvg-convert`, `openscad`, `zip` (use `python3 -m zipfile`),
+`pio` on PATH (it lives at `~/.platformio/penv/bin/pio`).
+
 ### What DRC actually enforces (not what `pcb.py` sets)
 
 Netclass clearance **0.2mm** — the 0.15 board minimum is overridden by the
@@ -148,7 +176,7 @@ Loop that works: author a cluster in `pcb_layout.TRACKS` → check it alone with
 `PCB_NO_ROUTES=1 python3 generator/pcb.py && kicad-cli pcb drc ...` → `make
 route` → diff the failure list.
 
-### Review tools (`verify/`, all take `--help`-ish docstrings)
+### Review tools (`verify/` — usage in each module's top docstring; they do NOT parse `--help`)
 
 - `make route` writes `out/stragglers.txt` and prints only the delta vs the
   previous pass: fixed/new stragglers plus which routed nets re-placed
@@ -159,6 +187,9 @@ route` → diff the failure list.
   routed copper, pads, straggler lines.
 - `plot_pcb.py [--crop x1 y1 x2 y2]` — board map, courtyards, ratsnest.
 - `pads.py [REF | REF.PAD | net:N | box:x1,y1,x2,y2]` — pad/courtyard geometry.
+- `gnd_islands.py [BOARD] [--png OUT]` — GND connectivity + single-point-of-
+  failure audit; default board is the committed one, pass `out/hand/...` to
+  audit a GUI copy.
 - `occupancy.py NET WIDTH OUT.png [x1 y1 x2 y2] [--via]` — what A* actually
   sees, driven by `route.py`'s own bitmaps. `PCB_NO_ROUTES=1` shows authored
   corridors, unset shows the current board. Reason about corridors from this,
