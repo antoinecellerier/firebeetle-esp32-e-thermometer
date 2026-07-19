@@ -448,13 +448,17 @@ MODELS_3D = {
     "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal":
         ("JST_PH_S2B-PH-SM4-TB_Horizontal.step", (0.98, -3.25, 0), (0, 0, 0), (1, 1, 1)),
     "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12":
-        # The JLC/EasyEDA model is authored 180 deg off this footprint's land
-        # pattern: its gold SMT tails sit at model +y while the copper pad row is
-        # at local -y (numeric STEP proof 2026-07-19, out/j3-proof/). rotate
-        # (0,0,180) registers the model tails onto the copper pads; J3 is placed
-        # mouth-NORTH (rot 180), so the model then seats with its mouth
-        # overhanging the north board edge, matching the copper.
-        ("USB_C_Receptacle_HRO_TYPE-C-31-M-12.step", (0, 1.35, 0), (0, 0, 180), (1, 1, 1)),
+        # The JLC/EasyEDA STEP has its gold SMT tails at model +y and its origin
+        # at the front-shell reference, ~2.3mm south of the land-pattern centroid
+        # -- so the z-rot-180 that faces the mouth north pivots the body about
+        # that off-centre origin and needs a y offset re-derived in the rotated
+        # frame, not the un-rotated value. rotate (0,0,180) seats the mouth over
+        # the north board edge and the gold tails on the south pad row; offset
+        # (0,-0.94,0) lands the 4 shell legs in their plated slots and the 2
+        # plastic posts in the NPTH holes (numeric STEP proof 2026-07-20,
+        # out/j3-proof/: shell pegs <=0.11mm, NPTH <=0.14mm, tail row 0.11mm; x
+        # exact; model front->rear leg span 4.175mm vs land 4.180mm).
+        ("USB_C_Receptacle_HRO_TYPE-C-31-M-12.step", (0, -0.94, 0), (0, 0, 180), (1, 1, 1)),
 }
 
 # Functional silkscreen (M7c, LEGIBILITY-FIRST). Every authored label is
