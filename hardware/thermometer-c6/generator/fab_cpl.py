@@ -54,7 +54,7 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
     (r"^SOT-23$", 180),   # Q1/Q2/Q4/Q5/Q6 bare 3-pin SOT-23: JLC zero differs from the 5/6-pin variants; delta 0 rendered legs in the pad gaps (2nd preview pass, pad-crosshair overlay)  confidence: verified  verified: 2026-07-18
     (r"^SOT-23", 270),    # U3 SOT-23-6 / U4 SOT-23-5: same -90 as TSOT (delta 0 rendered legs N/S over pad columns W/E; corner-leg coincidence fooled the 2nd-pass check)  confidence: verified  verified: 2026-07-18
     (r"^SOT-323", 180),   # Q3 SC-70: 3-pin like bare SOT-23 — delta 0 rendered 1-leg-N/2-legs-S over 2-pads-N/1-pad-S (user-confirmed crop, 2nd preview pass)  confidence: verified  verified: 2026-07-18
-    (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 180),  # J3  the family-inference exception: delta 0 rendered the mouth facing into the board (2nd preview pass 2026-07-18); matthewlai's exact entry stands  confidence: verified  verified: 2026-07-18
+    (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 180),  # J3  superseded by the REF_ROTATION_OVERRIDES["J3"] entry below (the 2026-07-19 mouth-north respin flipped J3's placement rotation to 180, voiding this delta's 2026-07-18 verification)  confidence: low  verified:
     (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
     (r"^D_SOD-123", 0),   # D4/D5/D6 MBR0530  source: JLC preview 2026-07-18, cathode bands  confidence: verified  verified: 2026-07-18
     (r"^D_SMA", 0),       # D2 SS14  cathode band WEST in JLC preview  confidence: verified  verified: 2026-07-18
@@ -63,6 +63,7 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
 REF_ROTATION_OVERRIDES = {  # local-library footprints; override beats pattern
     "U1": 0,   # ESP32-C6-MINI-1  antenna overhang at board WEST edge in preview  confidence: verified  verified: 2026-07-18
     "J4": 0,   # XUNPU FPC-05FB-24PH20: RESPUN 2026-07-19 -- both the placement rotation AND the footprint pad numbering changed (pads-west/mouth-east at rot 90, pad 1 renumbered to stay north). The old +180 delta is void for the new geometry; delta unverified -- re-walk the JLC preview before ordering.  confidence: low  verified:
+    "J3": 0,   # USB_C_Receptacle_HRO_TYPE-C-31-M-12: RESPUN 2026-07-19 mouth-north (placement rotation 0 -> 180, out/j3-proof/). The FAB_ROTATIONS +180 delta was preview-verified for the old rot-0 placement; with placement now 180 the required CPL delta is unverified -- re-walk the JLC preview before ordering.  confidence: low  verified:
     "U5": 0,   # Bosch LGA-10 BMP581  verified by TWO independent render cues vs datasheet p.46 pin-out + p.69 vent-hole position drawing: lid vent pinholes at the pads-7/8 corner (NW at rot 90) AND JLC "1" arrow at the pads-1/10 corner (SW = our black fab dot)  confidence: verified  verified: 2026-07-18
     "SW1": 0, "SW2": 0,  # local:SW_TS-1187A 4-pad tact switches  pin-1 pad NW in preview  confidence: verified  verified: 2026-07-18
 }

@@ -64,7 +64,7 @@ PLACE = {
     "C3": (11.37, 22.52, 90),
     "C4": (8.11, 23.95, 90),
     "TP4": (11.37, 23.295, 0, "B"),
-    "J3": (23.4, 5.0, 0),
+    "J3": (23.4, 1.745, 180),
     "R1": (20.82, 10.57, 90),
     "R2": (22.01, 10.57, 90),
     "U3": (24.79, 11.34, 0),
@@ -289,11 +289,9 @@ STITCH = [
     (18.36, 30.34, 0.6, 0.3),
     (19.35, 22.05, 0.6, 0.3),
     (20.0, 34.4, 0.6, 0.3),
-    (21.03, 5.78, 0.6, 0.3),
-    (21.55, 6.0),
+    # (four GND stitch vias near y5.8-6.9 pruned: J3's mouth-north respin moved
+    # the USB-C pad row onto them — they fell inside VBUS/CC2/D+/D- pads.)
     (21.98, 12.75, 0.6, 0.3),
-    (22.425, 6.875, 0.6, 0.3),
-    (23.0, 6.5, 0.6, 0.3),
     (25.51, 28.13, 0.6, 0.3),
     (25.77, 28.94, 0.6, 0.3),
     (26.65, 1.025),
@@ -423,8 +421,6 @@ SILK_TO_FAB = {"J5": "all", "U1": "poly"}
 #   rot +90: board displacement = (-oy, -ox)
 #   rot -90: board displacement = (+oy, +ox)
 # U1/J4 are rotated on this board, which is why their offsets look transposed.
-# J3 takes rotate 0, NOT 180: at 180 the receptacle mouth faces into the board
-# instead of out over the north edge.
 # U5/U6/SW1/SW2 are symmetric about their origin and need nothing.
 #
 # Verify any change by rendering the part in isolation and checking its body
@@ -452,7 +448,13 @@ MODELS_3D = {
     "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal":
         ("JST_PH_S2B-PH-SM4-TB_Horizontal.step", (0.98, -3.25, 0), (0, 0, 0), (1, 1, 1)),
     "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12":
-        ("USB_C_Receptacle_HRO_TYPE-C-31-M-12.step", (0, 1.35, 0), (0, 0, 0), (1, 1, 1)),
+        # The JLC/EasyEDA model is authored 180 deg off this footprint's land
+        # pattern: its gold SMT tails sit at model +y while the copper pad row is
+        # at local -y (numeric STEP proof 2026-07-19, out/j3-proof/). rotate
+        # (0,0,180) registers the model tails onto the copper pads; J3 is placed
+        # mouth-NORTH (rot 180), so the model then seats with its mouth
+        # overhanging the north board edge, matching the copper.
+        ("USB_C_Receptacle_HRO_TYPE-C-31-M-12.step", (0, 1.35, 0), (0, 0, 180), (1, 1, 1)),
 }
 
 # Functional silkscreen (M7c, LEGIBILITY-FIRST). Every authored label is

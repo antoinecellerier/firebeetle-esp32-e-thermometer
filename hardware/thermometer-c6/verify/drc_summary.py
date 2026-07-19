@@ -31,8 +31,25 @@ WAIVED = {"starved_thermal", "silk_edge_clearance", "silk_overlap",
 DEFERRED = {"track_dangling", "via_dangling", "unconnected_items"}
 
 
-def classify(vtype):
+def _involves_j3(v):
+    for it in v.get("items", []):
+        if " of J3" in (it.get("description") or ""):
+            return True
+    return False
+
+
+def classify(v):
+    vtype = v.get("type")
     if vtype in WAIVED:
+        return "WAIVED"
+    # J3 (USB-C) is an edge-launch receptacle: its mouth overhangs the north
+    # board edge by design and the front shell (SH) mounting pads sit at/just
+    # over the edge (~0.1mm). KiCad reports that as copper_edge_clearance no
+    # matter the rule min (copper crossing the outline is geometric, not a
+    # threshold). Waive it scoped to J3 only -- mirrors the `.kicad_dru`
+    # edge-clearance-usb-c exception; any OTHER footprint's edge violation
+    # still gates as REAL.
+    if vtype == "copper_edge_clearance" and _involves_j3(v):
         return "WAIVED"
     if vtype in DEFERRED:
         return "DEFERRED"
@@ -68,7 +85,7 @@ def main():
         buckets = {"REAL": [], "DEFERRED": [], "WAIVED": []}
         for c in CATS:
             for v in d.get(c, []):
-                buckets[classify(v.get("type"))].append(v)
+                buckets[classify(v)].append(v)
         print(f"GATE: REAL={len(buckets['REAL'])} "
               f"DEFERRED={len(buckets['DEFERRED'])} "
               f"WAIVED={len(buckets['WAIVED'])}")

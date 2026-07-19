@@ -57,6 +57,27 @@ this file is the human procedure around it. Settled fab decisions live in
       re-walk the JLC preview for J4 before paying. JLC's preview model showed
       the true orientation all along (tails with actuator); the land pattern
       was the error.
+- [ ] **J3 PLACEMENT FIXED — USB ROUTING PENDING before re-export (respin
+      2026-07-19).** Numeric STEP + datasheet analysis (`out/j3-proof/` + the
+      manufacturer drawing `HRO_TYPE-C-31-M-12_datasheet.pdf`) proved the old
+      placement (rot 0) sat the HRO USB-C mouth facing SOUTH into the board with
+      the solder-tail row at the north edge — an unpluggable connector; the JLC
+      3D model was mis-registered 180° and masked it. **Done:** J3 re-placed
+      mouth-NORTH (rot 180, anchor y 5.0→1.745) so the 16-tail pad row lands
+      5.79mm from the north edge (datasheet-exact) and the mouth overhangs the
+      edge ~1.9mm; the STEP model got a `(0,0,180)` rotation so the preview now
+      matches the copper. The old USB fan-out to the north pad row was cut, and
+      three through-nets that had threaded the old under-body space (VSYS spine,
+      EPD_RST jog, CHG_STAT north-edge link) plus a VBUS bus→booster branch were
+      cut back where the flipped pad row/shell now sits. **Still to do before
+      ordering:** re-route J3's VBUS/CC1/CC2/D+/D- to the new south pad row and
+      re-connect the three displaced through-nets around the connector
+      (currently 12 non-GND unconnected items by design; GND pour-handled),
+      re-run `make fab`, and re-upload; the J3 CPL rotation delta was reset to 0
+      (unverified — the old +180 was verified for rot-0 placement only) so
+      re-walk the JLC preview for J3 before paying. The mouth-side shell (SH)
+      pads sit ~0.1mm over the north edge by design (edge-launch USB-C); the
+      `edge-clearance-usb-c` DRU + drc_summary waive it scoped to J3.
 - [ ] **Feeder count:** Feeders Loading fee bills 17 × ~€2.75 while the BOM
       has 16 Extended lines — ask which parts are counted (≈€2.75 delta).
 

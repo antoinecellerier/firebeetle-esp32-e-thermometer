@@ -324,6 +324,40 @@ def main():
             fail(f"J4 mouth extent (max-x={fab_max_x:.2f}) does not reach the "
                  f"east edge (x={east}); is the connector flipped mouth-west?")
 
+    # 9b. J3 USB-C orientation guard. Same trap as J4: a 180-deg flip keeps every
+    #     pad on its intended net and stays DRC-clean, so only the STEP/land-
+    #     pattern geometry distinguishes mouth-north from mouth-south (the error
+    #     that shipped to preview -- 2026-07-19 respin fixed it, out/j3-proof/).
+    #     Pin it: the connector is rotated 180, its solder-tail/signal pad row is
+    #     SOUTH of the body centre (inboard of the mouth), and the mouth extent
+    #     reaches/overhangs the NORTH board edge (y=0).
+    j3 = next((fp for fp in board.Footprints()
+               if fp.GetReference() == "J3"), None)
+    if j3 is None:
+        fail("J3 footprint missing")
+    else:
+        cx, cy = rel(j3.GetPosition())
+        rot = j3.GetOrientationDegrees() % 360
+        pads = {str(p.GetNumber()): rel(p.GetPosition())
+                for p in j3.Pads() if str(p.GetNumber()) not in ("", "SH")}
+        # (a) rotation 180 (mouth-north)
+        if abs(rot - 180) > 1:
+            fail(f"J3 rotation is {rot:.0f}, expected 180 (mouth-north)")
+        # (b) signal pad row south of the body centre: the 16-tail row sits
+        #     inboard of the mouth, not at the edge
+        row = pads.get("A1")
+        if row is None:
+            fail("J3 pad A1 missing")
+        elif not row[1] > cy:
+            fail(f"J3 pad row (y={row[1]:.2f}) not south of centre y={cy:.2f}; "
+                 f"is the connector flipped mouth-south?")
+        # (c) mouth extent reaches/overhangs the north board edge (y=0)
+        bb = j3.GetBoundingBox(False, False)
+        fab_min_y = bb.GetTop() / 1e6 - ORIGIN[1]
+        if fab_min_y > 0.5:
+            fail(f"J3 mouth extent (min-y={fab_min_y:.2f}) does not reach the "
+                 f"north edge (y=0); is the connector flipped mouth-south?")
+
     if report:
         pts = {}
         for fp in board.Footprints():

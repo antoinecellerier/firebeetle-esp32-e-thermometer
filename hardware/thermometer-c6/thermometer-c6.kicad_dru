@@ -11,7 +11,7 @@
   (constraint clearance (min 0.18mm)))
 (rule edge-clearance-usb-c
   (condition "A.memberOfFootprint('J3')")
-  (constraint edge_clearance (min 0.2mm)))
+  (constraint edge_clearance (min 0mm)))
 (rule hole-to-hole-samenet
   (condition "A.NetName == B.NetName")
   (constraint hole_to_hole (min 0.25mm)))

@@ -501,15 +501,16 @@ def write_dru(alias):
         f.write("(rule hv-clearance-j4\n"
                 "  (condition \"A.memberOfFootprint('J4') && B.memberOfFootprint('J4')\")\n"
                 "  (constraint clearance (min 0.18mm)))\n")
-        # J3 (USB-C receptacle) overhangs the north board edge by design, so its
-        # contact-pad row inherently sits 0.23mm from the edge -- inside the
-        # 0.3mm global copper-to-edge floor. JLC builds edge-launch USB-C
-        # routinely; scope a 0.2mm edge floor to J3's own copper (the value the
-        # board used globally before this DFM pass) while every other net keeps
-        # the tightened 0.3mm. Matches the hv-clearance-j4 scoped-exception idiom.
+        # J3 (USB-C receptacle) is an edge-launch part: its mouth overhangs the
+        # north board edge by design, and mouth-north (respin 2026-07-19) puts the
+        # front shell (SH GND) mounting pads AT/just over the edge (~0.1mm) while
+        # the 16 signal tails sit safely inboard at y5.79. JLC builds edge-launch
+        # USB-C routinely, so drop the copper-to-edge floor to 0 for J3's own
+        # copper (every other net keeps the tightened 0.3mm). Matches the
+        # hv-clearance-j4 scoped-exception idiom.
         f.write("(rule edge-clearance-usb-c\n"
                 "  (condition \"A.memberOfFootprint('J3')\")\n"
-                "  (constraint edge_clearance (min 0.2mm)))\n")
+                "  (constraint edge_clearance (min 0mm)))\n")
         # Global hole-to-hole is 0.5mm (JLC). Relax it to 0.25mm between holes
         # of the SAME net: a drill-breakout there can only merge already-common
         # copper, so there is no short risk (JLC accepts same-net hole spacing
