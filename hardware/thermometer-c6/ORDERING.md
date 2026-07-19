@@ -41,18 +41,22 @@ this file is the human procedure around it. Settled fab decisions live in
       text is scrubbed (not printed literally). If they won't confirm, cut a
       token-less silk revision (delete the SILK entry in
       `generator/pcb_layout.py`, `make fab`, re-upload) before ordering.
-- [ ] **J4 PLACEMENT ERROR — RESPIN REQUIRED BEFORE ORDERING (found
-      2026-07-19).** Numeric STEP analysis (scratch proof pack + the
-      manufacturer drawing `datasheets/XUNPU_FPC-05FB-NPH20.pdf`) proves the
-      FPC-05FB's SMT tails are at the REAR (actuator) face, ~6.6mm from the
-      mouth. With tails on the east pad column the mouth faces WEST into the
-      board — the panel cable cannot mate. Fix: rotate J4 180° in place
-      (contact pads west, anchors/mouth east), re-derive pin-1/cable mapping
-      vs the DESPI-C02 reference (pin 1 lands SOUTH after rotation — the
-      2026-07-08 numbering resolution must be redone for the new geometry),
-      re-route the FPC fanout, re-run all gates, re-export, re-upload.
-      JLC's preview model showed this correctly all along (tails with
-      actuator); the land pattern was the error.
+- [ ] **J4 PLACEMENT FIXED — FANOUT ROUTING PENDING before re-export (respin
+      2026-07-19).** Numeric STEP analysis (`out/j4-proof/` + the manufacturer
+      drawing `datasheets/XUNPU_FPC-05FB-NPH20.pdf`) proved the FPC-05FB's SMT
+      tails are at the REAR (actuator) face, ~6.6mm from the mouth; the old
+      placement (tails on the east pad column) pointed the mouth WEST into the
+      board so the panel cable could not mate. **Done:** J4 re-placed mouth-EAST
+      (flush with the x=48 board edge), contact-tail/pad column WEST (x41.45),
+      and the footprint pads renumbered so pad 1 = panel circuit 1 stays at the
+      NORTH end (circuit.py and the README FPC pin table unchanged). The old
+      east FPC fanout copper was cut back to the pad column. **Still to do
+      before ordering:** re-route the 24-pin FPC fanout to the new pad column
+      (currently 21 J4 pads unconnected by design), re-run `make fab`, and
+      re-upload; the J4 CPL rotation delta was reset to 0 (unverified) so
+      re-walk the JLC preview for J4 before paying. JLC's preview model showed
+      the true orientation all along (tails with actuator); the land pattern
+      was the error.
 - [ ] **Feeder count:** Feeders Loading fee bills 17 × ~€2.75 while the BOM
       has 16 Extended lines — ask which parts are counted (≈€2.75 delta).
 

@@ -166,7 +166,7 @@ PLACE = {
     # walled the only free north-south B.Cu seam east of the booster, which
     # DBG_IO8's descent and ~EPD_VGH's C20-to-J4.5 hook both need.
     "TP9": (36.35, 10.5, 0, "B"),
-    "J4": (44.6, 16.8, 270),
+    "J4": (43.075, 16.8, 90),
     "C19": (30.8, 11.3, 90),
     "C20": (33.27, 12.0, 90),
     "C21": (40.6, 27.3, 270),
@@ -214,7 +214,6 @@ TRACKS = [
     ('GND', 'F.Cu', 0.25, [(29.1, 24.8), (29.3, 24.8), (29.6, 24.5), (31.5, 24.5), (31.6, 24.4), (31.9, 24.4), (32.0, 24.3)]),
     ('GND', 'F.Cu', 0.25, [(10.125, 26.125), (9.955, 24.33), (9.875, 24.25), (9.25, 24.25), (8.11, 23.47)]),
     ('GND', 'F.Cu', 0.25, [(15.025, 24.375), (15.025, 23.425), (14.65, 23.05), (14.214, 23.05), (13.02, 22.49)]),
-    ('GND', 'F.Cu', 0.25, [(46.225, 14.55), (45.342, 14.55), (45.232, 14.5), (44.832, 14.1), (42.8, 14.1), (41.9, 15.0)]),
     ('GND', 'F.Cu', 0.25, [(5.12, 21.5), (5.12, 21.38), (6.6, 19.9), (6.72, 19.9)]),
     ('GND', 'F.Cu', 0.25, [(32.7, 16.81), (34.239, 17.765), (34.474, 18.0), (36.7, 18.0), (37.95, 16.75), (39.6, 18.4), (39.6, 19.042), (38.992, 19.65), (38.834, 19.65)]),
     ('GND', 'F.Cu', 0.25, [(22.01, 10.06), (22.665, 10.715), (22.665, 10.741), (23.264, 11.34), (23.08, 11.34), (21.98, 12.75), (21.98, 12.739), (21.356, 12.115), (20.535, 12.115), (20.315, 12.335), (20.315, 16.415), (19.58, 17.15), (16.7, 17.15), (15.8, 17.6), (15.8, 19.85), (15.8, 20.5), (15.23, 21.5)]),
@@ -242,7 +241,6 @@ TRACKS = [
     ('GND', 'F.Cu', 0.2, [(44.0, 6.6), (46.5, 6.6)]),
     ('GND', 'F.Cu', 0.3, [(0.8, 21.9), (1.84, 21.9), (1.84, 22.4)]),
     ('GND', 'F.Cu', 0.3, [(4.35, 22.95), (3.412, 22.95), (3.362, 22.9)]),
-    ('GND', 'F.Cu', 0.3, [(47.5, 19.05), (44.55, 19.05), (44.5, 19.0), (41.2, 19.0)]),
     ('GND', 'F.Cu', 0.3, [(14.7, 7.0), (16.3, 7.0), (16.75, 8.0)]),
     ('GND', 'F.Cu', 0.4, [(4.4, 22.9), (4.35, 22.95), (4.25, 22.85)]),
     ('GND', 'B.Cu', 0.5, [(27.0, 1.7), (26.6, 1.075), (26.65, 1.025), (27.495, 1.87)]),
@@ -307,9 +305,6 @@ STITCH = [
     (37.275, 24.65),
     (38.05, 26.825, 0.6, 0.3),
     (38.8, 5.13, 0.6, 0.3),
-    (40.9, 13.9, 0.6, 0.3),
-    (41.9, 15.0, 0.6, 0.3),
-    (42.35, 14.525),
     (44.0, 6.6, 0.6, 0.3),
     (46.5, 6.6, 0.6, 0.3),
     (46.5, 7.6, 0.6, 0.3),
@@ -348,7 +343,7 @@ KEEPOUTS = [
     # marker area (no restrictions): HV clearance relaxes to 0.18mm here so
     # the 0.5mm-pitch FPC escape routing is legal (see pcb.py .kicad_dru)
     dict(name="fpc-fanout", layers=["F.Cu", "B.Cu"],
-         rect=(39.5, 8.0, BOARD["size"][0], 25.5),
+         rect=(37.5, 10.0, 43.5, 23.5),
          tracks=False, vias=False, fills=False, pads=False),
     # MINI-1 antenna section (module x 0.5..5.2 at rot 90) to the board
     # edge, all copper kept out on both layers per Espressif HDG
@@ -446,13 +441,12 @@ MODELS_3D = {
     "local:Bosch_LGA-9_3.25x3.25mm":
         ("Bosch_LGA-9_3.25x3.25mm_BMP585.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
     "local:XUNPU_FPC-05FB-24PH20":
-        # The model renders the truth: SMT tails are at the REAR (actuator)
-        # face — numeric STEP proof 2026-07-19: gold-contact feet at depth
-        # -0.25 against the rear wall (+0.25), slot lips at -6.80 (mouth on
-        # the anchor side, ~6.6mm from the tails). With J4 placed tails-east
-        # the mouth faces WEST into the board = 180-deg placement error;
-        # J4 must be re-placed rotated 180 (tails west, mouth east) and the
-        # FPC fanout re-routed before ordering.
+        # The model renders the physical truth: SMT tails at the REAR
+        # (actuator) face, mouth/cable-entry slot on the far side. Numeric
+        # STEP proof (2026-07-19, out/j4-proof/): gold-contact feet 0.5mm
+        # inside the rear wall, mouth lips 6.55mm away. J4 is placed pads-west
+        # / mouth-east (rot 90), so the model seats with the mouth at the east
+        # board edge, matching the panel-cable approach.
         ("XUNPU_FPC-05FB-24PH20.step", (0, 1.35, 0), (0, 0, 0), (1, 1, 1)),
     "local:SW_TS-1187A":
         ("SW_TS-1187A.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
@@ -501,11 +495,13 @@ SILK = [
     # below) — the pins are through-hole and land on the back, so the mirrored
     # legend aligns with them.
     ("DBG", 37.5, 28.6, 0.8, 0),
-    # EPD FPC J4 (24-pin, cable exits east): end markers for cable orientation,
-    # on exposed silk east of the connector body (body east x45.97). "1" by the
-    # north end (pin 1); "2/4" stacked by the south end (pin 24).
-    ("1", 46.9, 9.9, 0.8, 0),           # beside J4 pin 1 (north end)
-    ("2\n4", 46.9, 24.4, 0.8, 0),       # beside J4 pin 24 (south end)
+    # EPD FPC J4 (24-pin): the contact-tail pad column is WEST (x41.45) and the
+    # mouth/cable entry faces EAST to the board edge. Pin 1 (north end) is
+    # marked by the footprint's own pin-1 silk dot at (40.48, 11.05), just W of
+    # pad 1 — the ~1.4mm corridor between JP2/3/4's silk and the pad column has
+    # no room for a second >=0.8mm glyph beside the dot. "2/4" marks the south
+    # (pin-24) end where the corridor is jumper-free.
+    ("2\n4", 40.4, 22.6, 0.8, 0),       # W of J4 pin 24 (south end)
 
     # === BACK (B.SilkS, mirrored) — bench test points, label beside each pad ===
     # TP1 VBAT / TP3 GND north of their pads; TP2's GND sits SOUTH of its pad so

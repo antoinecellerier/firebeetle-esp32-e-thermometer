@@ -291,6 +291,39 @@ def main():
             if req not in blob:
                 fail(f"required silk text missing: '{req}'")
 
+    # 9. J4 FPC orientation guard. A 180-deg body flip (mouth-west vs mouth-east)
+    #    passes BOTH netlist parity and DRC: the pads carry the intended nets
+    #    whichever way the housing opens, and clearance is face-agnostic. Only
+    #    the STEP/land-pattern geometry tells the two apart -- exactly the error
+    #    that shipped to preview (2026-07-19 respin fixed it). Pin the geometry:
+    #    contact tails / pad column WEST, mouth EAST flush with the board edge,
+    #    pad 1 at the NORTH end (rot 90; pad numbering flipped to keep it north).
+    j4 = next((fp for fp in board.Footprints()
+               if fp.GetReference() == "J4"), None)
+    if j4 is None:
+        fail("J4 footprint missing")
+    else:
+        cx, cy = rel(j4.GetPosition())
+        pads = {str(p.GetNumber()): rel(p.GetPosition())
+                for p in j4.Pads() if str(p.GetNumber()) not in ("", "MP")}
+        # (a) pin 1 north: pad 1 sits above (smaller y than) the body centre
+        if "1" not in pads:
+            fail("J4 pad 1 missing")
+        elif not pads["1"][1] < cy:
+            fail(f"J4 pad 1 (y={pads['1'][1]:.2f}) not north of centre y={cy:.2f}")
+        # (b) contact tails west: the signal pad column is west of the body centre
+        colx = pads["1"][0] if "1" in pads else cx
+        if not colx < cx - 0.5:
+            fail(f"J4 pad column (x={colx:.2f}) not west of centre x={cx:.2f}")
+        # (c) mouth reaches the east board edge: footprint extent (fab/courtyard)
+        #     comes within 0.5mm of it
+        bb = j4.GetBoundingBox(False, False)
+        fab_max_x = bb.GetRight() / 1e6 - ORIGIN[0]
+        east = pl.BOARD["size"][0]
+        if fab_max_x < east - 0.5:
+            fail(f"J4 mouth extent (max-x={fab_max_x:.2f}) does not reach the "
+                 f"east edge (x={east}); is the connector flipped mouth-west?")
+
     if report:
         pts = {}
         for fp in board.Footprints():

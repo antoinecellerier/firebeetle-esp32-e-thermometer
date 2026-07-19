@@ -62,7 +62,7 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
 ]
 REF_ROTATION_OVERRIDES = {  # local-library footprints; override beats pattern
     "U1": 0,   # ESP32-C6-MINI-1  antenna overhang at board WEST edge in preview  confidence: verified  verified: 2026-07-18
-    "J4": 180, # XUNPU FPC-05FB-24PH20: delta 0 rendered the flip actuator at the board edge and JLC's pin-1 dot at our pin 24; tilted 3D view confirmed backwards (user, 3rd preview pass). Mouth must face EAST, actuator inboard.  confidence: verified  verified: 2026-07-18
+    "J4": 0,   # XUNPU FPC-05FB-24PH20: RESPUN 2026-07-19 -- both the placement rotation AND the footprint pad numbering changed (pads-west/mouth-east at rot 90, pad 1 renumbered to stay north). The old +180 delta is void for the new geometry; delta unverified -- re-walk the JLC preview before ordering.  confidence: low  verified:
     "U5": 0,   # Bosch LGA-10 BMP581  verified by TWO independent render cues vs datasheet p.46 pin-out + p.69 vent-hole position drawing: lid vent pinholes at the pads-7/8 corner (NW at rot 90) AND JLC "1" arrow at the pads-1/10 corner (SW = our black fab dot)  confidence: verified  verified: 2026-07-18
     "SW1": 0, "SW2": 0,  # local:SW_TS-1187A 4-pad tact switches  pin-1 pad NW in preview  confidence: verified  verified: 2026-07-18
 }
