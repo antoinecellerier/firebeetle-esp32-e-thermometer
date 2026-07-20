@@ -12,7 +12,8 @@ guarantee regardless of how pcb.py generated it:
     (JLCPCB economy assembly is single-sided).
  5. Tracks on the battery-current nets are >= 0.5mm wide, and the +3V3 trunk
     (LDO -> module -> panel load switch) is joined by 0.5mm copper alone.
- 6. The board outline is closed and matches pcb_layout.BOARD.
+ 6. The board outline is closed, matches pcb_layout.BOARD, and rounds all four
+    corners with R=corner_r arcs concentric with the corner insets (H1/H2).
  7. Both M2 mounting holes exist with 2.2mm drills.
  8. Required silkscreen strings exist (only once SILK is authored).
 
@@ -55,6 +56,68 @@ def fail(msg):
 def rel(pos):
     """Absolute VECTOR2I -> board-relative mm."""
     return (pos.x / 1e6 - ORIGIN[0], pos.y / 1e6 - ORIGIN[1])
+
+
+def check_corner_arcs(board):
+    """All four corners rounded R=BOARD['corner_r'], each arc a quarter turn
+    centred on that corner's (r, r) inset, joined by the four straight edges.
+
+    The centres are the point of the whole shape: H1/H2 sit on the NE/SW ones,
+    so hole and edge stay concentric and the ring of material around each mount
+    is uniform (r - hole_radius all the way round). A radius change, a moved
+    mount or a corner that reverted to a square would each break that, and none
+    of them shows up in a bounding-box check -- so assert the arcs themselves.
+    """
+    r = pl.BOARD.get("corner_r")
+    if not r:
+        fail("pcb_layout.BOARD has no corner_r: the rounded outline is part of "
+             "the design, a square board is a regression")
+        return
+    w, h = pl.BOARD["size"]
+    want = {(r, r), (w - r, r), (r, h - r), (w - r, h - r)}
+    arcs, segs, other = [], [], 0
+    for d in board.GetDrawings():
+        if d.GetLayer() != pcbnew.Edge_Cuts:
+            continue
+        shape = getattr(d, "GetShape", None)
+        if shape is None:
+            other += 1
+        elif shape() == pcbnew.SHAPE_T_ARC:
+            arcs.append(d)
+        elif shape() == pcbnew.SHAPE_T_SEGMENT:
+            segs.append(d)
+        else:
+            other += 1
+    if len(arcs) != 4 or len(segs) != 4 or other:
+        fail(f"Edge.Cuts is {len(arcs)} arcs + {len(segs)} segments "
+             f"+ {other} other, want exactly 4 arcs + 4 segments")
+        return
+    seen = set()
+    for a in arcs:
+        cx, cy = rel(a.GetCenter())
+        rad = a.GetRadius() / 1e6
+        ang = abs(a.GetArcAngle().AsDegrees())
+        if abs(rad - r) > 0.01:
+            fail(f"corner arc at ({cx:.2f},{cy:.2f}) is R{rad:.3f}, want R{r}")
+        if abs(ang - 90.0) > 0.5:
+            fail(f"corner arc at ({cx:.2f},{cy:.2f}) sweeps {ang:.1f} deg, want 90")
+        hit = [c for c in want
+               if abs(c[0] - cx) < 0.01 and abs(c[1] - cy) < 0.01]
+        if hit:
+            seen.add(hit[0])
+        else:
+            fail(f"corner arc centre ({cx:.2f},{cy:.2f}) is not a corner inset")
+    for c in sorted(want - seen):
+        fail(f"corner ({c[0]:.2f},{c[1]:.2f}) has no R{r} arc")
+    for ref, centre in (("H1", (w - r, r)), ("H2", (r, h - r))):
+        fp = board.FindFootprintByReference(ref)
+        if fp is None:
+            fail(f"{ref} mounting hole missing")
+            continue
+        x, y = rel(fp.GetPosition())
+        if abs(x - centre[0]) > 0.01 or abs(y - centre[1]) > 0.01:
+            fail(f"{ref} at ({x:.2f},{y:.2f}) is not concentric with its corner "
+                 f"arc at ({centre[0]:.2f},{centre[1]:.2f})")
 
 
 def pt_in_rect(p, rect, grow=0.0):
@@ -259,7 +322,8 @@ def main():
     if not trunk_connected(board, "+3V3", TRUNK_3V3, pcbnew.FromMM(0.499)):
         fail("+3V3 trunk (U2.5 - U1.3 - Q2.2) is not connected by 0.5mm copper")
 
-    # 6. closed outline, expected size
+    # 6. closed outline, expected size, four corner arcs concentric with the
+    #    corner insets (H1/H2 sit on two of those centres).
     outlines = pcbnew.SHAPE_POLY_SET()
     if not board.GetBoardPolygonOutlines(outlines, False):
         fail("board outline is not closed")
@@ -269,6 +333,7 @@ def main():
         ew, eh = pl.BOARD["size"]
         if abs(w - ew) > 0.2 or abs(h - eh) > 0.2:
             fail(f"outline {w:.1f}x{h:.1f} != pcb_layout.BOARD {ew}x{eh}")
+    check_corner_arcs(board)
 
     # 7. mounting holes
     holes = 0

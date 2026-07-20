@@ -21,6 +21,7 @@ pcbnew API notes (KiCad 10):
   sequence in main().
 """
 
+import math
 import os
 import re
 import sys
@@ -107,18 +108,54 @@ def build_net_maps():
     return exported, pad_net, alias
 
 
-def add_outline(board):
+def outline_geometry():
+    """The Edge.Cuts profile as real primitives, clockwise from the north edge:
+    four straight runs alternating with four R=corner_r arcs, each arc centred
+    on its corner's inset point (see pcb_layout.BOARD). Returns
+    ([(x1,y1,x2,y2), ...] segments, [(cx,cy,start,mid,end), ...] arcs) in
+    board-relative mm. Emitting arcs (not a chord approximation) is what keeps
+    the outline a closed profile for `kicad-cli pcb export gerbers`; consecutive
+    primitives share endpoints EXACTLY so the profile never opens up."""
     w, h = pl.BOARD["size"]
-    pts = [(0, 0), (w, 0), (w, h), (0, h)]
-    for i in range(4):
-        x1, y1 = pts[i]
-        x2, y2 = pts[(i + 1) % 4]
+    r = pl.BOARD["corner_r"]
+    d = r / math.sqrt(2.0)
+    # (centre, arc start, arc end) per corner, walking clockwise
+    corners = [
+        ((w - r, r), (w - r, 0.0), (w, r)),          # NE
+        ((w - r, h - r), (w, h - r), (w - r, h)),    # SE
+        ((r, h - r), (r, h), (0.0, h - r)),          # SW
+        ((r, r), (0.0, r), (r, 0.0)),                # NW
+    ]
+    # the arc midpoint is the 45-degree point on the far side of the centre
+    mids = [(+d, -d), (+d, +d), (-d, +d), (-d, -d)]
+    arcs = [(cx, cy, st, (cx + mx, cy + my), en)
+            for ((cx, cy), st, en), (mx, my) in zip(corners, mids)]
+    segs = []
+    for i, (_, _, _, _, end) in enumerate(arcs):
+        nxt_start = arcs[(i + 1) % 4][2]
+        segs.append((end[0], end[1], nxt_start[0], nxt_start[1]))
+    return segs, arcs
+
+
+def add_outline(board):
+    segs, arcs = outline_geometry()
+
+    def _shape():
         s = pcbnew.PCB_SHAPE(board)
+        s.SetLayer(pcbnew.Edge_Cuts)
+        s.SetWidth(FromMM(0.1))
+        return s
+
+    for x1, y1, x2, y2 in segs:
+        s = _shape()
         s.SetShape(pcbnew.SHAPE_T_SEGMENT)
         s.SetStart(bmm(x1, y1))
         s.SetEnd(bmm(x2, y2))
-        s.SetLayer(pcbnew.Edge_Cuts)
-        s.SetWidth(FromMM(0.1))
+        board.Add(s)
+    for _cx, _cy, st, mid, en in arcs:
+        s = _shape()
+        s.SetShape(pcbnew.SHAPE_T_ARC)
+        s.SetArcGeometry(bmm(*st), bmm(*mid), bmm(*en))
         board.Add(s)
 
 

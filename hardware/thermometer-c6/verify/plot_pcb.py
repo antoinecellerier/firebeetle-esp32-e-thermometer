@@ -88,8 +88,17 @@ def main():
     except OSError:
         font = font_s = ImageFont.load_default()
 
-    # board outline
-    d.rectangle([*to_px(OX, OY), *to_px(OX + W, OY + H)], outline="black", width=3)
+    # board outline: four straight edges + the R=corner_r rounded corners, so
+    # the map shows the real profile a part near a corner has to clear
+    r = pl.BOARD.get("corner_r", 0.0)
+    for a, b in (((r, 0), (W - r, 0)), ((W, r), (W, H - r)),
+                 ((W - r, H), (r, H)), ((0, H - r), (0, r))):
+        d.line([*to_px(OX + a[0], OY + a[1]), *to_px(OX + b[0], OY + b[1])],
+               fill="black", width=3)
+    for cx, cy, start in ((r, r, 180), (W - r, r, 270),
+                          (W - r, H - r, 0), (r, H - r, 90)):
+        d.arc([*to_px(OX + cx - r, OY + cy - r), *to_px(OX + cx + r, OY + cy + r)],
+              start, start + 90, fill="black", width=3)
 
     # keep-out rule areas
     for z in board.Zones():

@@ -477,6 +477,14 @@ def check_outline(board, rep):
             lines.append(f"outline origin ({x0:.3f},{y0:.3f}) != board (0,0)")
         if abs(w - ew) > 0.05 or abs(h - eh) > 0.05:
             lines.append(f"outline {w:.3f}x{h:.3f} != BOARD size {ew}x{eh}")
+    # The bbox alone cannot see a squared-off corner, so count the rounding
+    # arcs too (check_pcb.py asserts their radius and concentricity).
+    arcs = sum(1 for d in board.GetDrawings()
+               if d.GetLayer() == pcbnew.Edge_Cuts
+               and getattr(d, "GetShape", lambda: None)() == pcbnew.SHAPE_T_ARC)
+    if arcs != 4:
+        lines.append(f"{arcs} Edge.Cuts arcs, want 4 rounded corners "
+                     f"(R{pl.BOARD.get('corner_r')})")
     rep.section("H. outline", lines)
 
 

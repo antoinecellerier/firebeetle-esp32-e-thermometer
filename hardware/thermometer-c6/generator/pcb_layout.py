@@ -43,7 +43,16 @@ booster HV clearances and the routable-density limit):
   9 VBUS_SENSE, 10 IO5, 11 GND.
 """
 
-BOARD = dict(origin=(100.0, 100.0), size=(48.0, 35.0))
+# corner_r rounds all four corners with arcs centred on each corner's
+# (corner_r, corner_r) inset point. Those inset points are exactly where the M2
+# mounts sit (H1 at (45.8, 2.2) = NE, H2 at (2.2, 32.8) = SW), so every arc is
+# CONCENTRIC with its corner and each 2.2mm hole keeps a uniform 1.10mm of
+# material out to the edge. The NW/SE corners carry the same arc with no hole so
+# the outline reads as one shape. Radius == the mount inset is what makes the
+# arc tangent to both edges: shrink one without the other and the outline stops
+# closing on the straight edges. size stays the 48x35 CENTRELINE rectangle (the
+# 48.1x35.1 seen in plots is that plus the 0.1mm Edge.Cuts stroke).
+BOARD = dict(origin=(100.0, 100.0), size=(48.0, 35.0), corner_r=2.2)
 
 DEFAULT_VIA = dict(diameter=0.6, drill=0.3)
 # GND stitch/spur vias use the 0.5mm/0.3mm board minimum: the dense pockets
@@ -99,8 +108,18 @@ PLACE = {
     # channel north of U1 where all six EPD signals and both UART lines cross
     "R6": (16.6, 21.5, 0),
     "C9": (14.75, 21.5, 0),
-    "SW1": (3.9, 2.9, 0),
-    "SW2": (11.6, 2.9, 0),
+    # Both buttons ride 0.90mm east of their original x so SW1's NW pad clears
+    # the R2.2 NW corner arc (0.41mm to the edge; the rule is 0.30). They move
+    # as a pair to hold the y2.9 row and the 7.70mm pitch, and because SW1's
+    # courtyard alone cannot grow east past SW2's. The shift is capped near
+    # here from the east as well: SW2's west GND stitch closes on the VSYS B.Cu
+    # diagonal, which is why that stitch sits at the NW of its pad rather than
+    # on the pad centre (see STITCH). SW1's courtyard corner still overhangs
+    # the arc by ~0.31mm -- unavoidable, it starts 0.055mm off the north edge,
+    # so no eastward shift can pull it inside an arc tangent to that edge. The
+    # 5.1mm switch BODY is fully on the board (0.35mm to the arc).
+    "SW1": (4.8, 2.9, 0),
+    "SW2": (12.5, 2.9, 0),
     # R7 (BOOT pull-up) lies in the pocket between SW2's and U1's courtyards:
     # BOOT taps R7.2 right in its U1.23->SW2 crossing zone, and R7.1's +3V3
     # branch reaches the trunk over the module paddle on F.Cu. At its old
@@ -215,7 +234,7 @@ TRACKS = [
     ('GND', 'F.Cu', 0.5, [(8.425, 21.625), (8.503, 21.703), (9.543, 21.703), (9.8, 21.446), (9.8, 20.9)]),
     ('GND', 'F.Cu', 0.5, [(33.27, 19.19), (35.55, 19.65)]),
     ('GND', 'F.Cu', 0.5, [(30.5, 33.4), (30.87, 32.4)]),
-    ('GND', 'F.Cu', 0.5, [(14.6, 4.775), (18.98, 4.775), (19.08, 4.875)]),
+    ('GND', 'F.Cu', 0.5, [(15.5, 4.775), (18.98, 4.775), (19.08, 4.875)]),
     ('GND', 'F.Cu', 0.5, [(13.02, 22.49), (11.37, 21.745)]),
     ('GND', 'F.Cu', 0.25, [(26.97, 5.79), (29.59, 5.79), (30.61, 4.77)]),
     ('GND', 'F.Cu', 0.25, [(19.4, 22.7), (18.75, 22.05), (18.65, 22.05), (16.75, 20.15), (16.75, 19.9), (16.7, 19.85), (15.8, 19.85), (15.8, 17.6), (16.7, 17.15), (19.58, 17.15), (20.315, 16.415), (20.315, 12.335), (20.535, 12.115), (20.8, 12.115), (20.79, 12.105), (20.79, 11.14), (21.98, 11.14)]),
@@ -299,13 +318,20 @@ STITCH = [
     (37.95, 13.15, 0.6, 0.3),
     (38.28, 23.65, 0.6, 0.3),
     # hand_diff harvest
-    (0.9, 4.775, 0.6, 0.3),
-    (6.9, 4.775, 0.6, 0.3),
-    (8.6, 4.775, 0.6, 0.3),
+    # SW1.2/SW2.2 pad stitches, carried +0.90mm east with the button row.
+    (1.8, 4.775, 0.6, 0.3),
+    (7.8, 4.775, 0.6, 0.3),
+    # SW2.2-west: parked at the NW corner of its pad instead of the centre.
+    # The VSYS 0.5mm B.Cu diagonal (8.95,5.789)->(13.036,3.736) runs under this
+    # pad and closes in as the row moves east; at the pad centre (9.5, 4.775)
+    # the gap is 0.66mm against a 0.75mm requirement (0.3 annulus + 0.25 track
+    # + 0.2 clearance). Here it is 0.82mm, and the via stays wholly inside the
+    # pad. This stitch is what caps the button row's eastward travel.
+    (9.3, 4.7, 0.6, 0.3),
     (10.4, 10.0, 0.6, 0.3),
     (11.3, 10.0, 0.6, 0.3),
     (14.0, 18.3, 0.6, 0.3),
-    (14.6, 4.775, 0.6, 0.3),
+    (15.5, 4.775, 0.6, 0.3),   # SW2.2-east pad stitch, +0.90mm with the row
     (15.0, 18.3, 0.6, 0.3),
     (20.9, 33.2, 0.6, 0.3),
     (23.652, 11.34, 0.6, 0.3),
@@ -317,6 +343,12 @@ STITCH = [
 
 # B.Cu ground pour over the full board (the antenna keep-out excludes it
 # from the antenna region); F.Cu pour added with the routing passes.
+# These stay the plain 48x35 rectangle even though the board has R2.2 corners:
+# pcbnew's filler intersects every zone with the real Edge.Cuts profile minus
+# copper_edge_clearance, so both pours already stop 0.30mm short of the arcs
+# (measured max fill radius 1.899mm about each corner centre). Mitring the
+# corners here would only duplicate that -- and duplicate it wrong the next
+# time corner_r moves.
 COPPER_ZONES = [
     ("GND", "B.Cu", [(0, 0), (BOARD["size"][0], 0),
                      BOARD["size"], (0, BOARD["size"][1])]),
@@ -500,8 +532,8 @@ MODELS_3D = {
 SILK = [
     # === TOP (F.SilkS) — position-specific, beside the part it labels ===
     # buttons / LEDs
-    ("RST", 3.9, 6.5, 0.8, 0),          # S of SW1
-    ("BOOT", 11.6, 6.5, 0.8, 0),        # S of SW2
+    ("RST", 4.8, 6.5, 0.8, 0),          # S of SW1
+    ("BOOT", 12.5, 6.5, 0.8, 0),        # S of SW2
     # D1 (charge LED) sits in the packed charger cluster with no adjacent silk
     # gap; CHG goes in the nearest clear pocket, NE of D1 past R17 (D1 is the
     # only LED here, so the cue is unambiguous).
