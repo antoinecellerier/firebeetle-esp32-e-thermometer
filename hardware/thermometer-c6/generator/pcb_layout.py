@@ -133,7 +133,7 @@ PLACE = {
     "R24": (26.02, 18.47, 270),
     "R12": (27.21, 18.47, 90),
     "C28": (28.4, 18.45, 90),
-    "C14": (23.0, 24.0, 0),
+    "C14": (24.0, 24.1, 0),
     "C15": (21.5, 12.75, 0),
     "TP5": (21.34, 21.8, 0, "B"),
     "L1": (22.84, 15.7, 0),
@@ -235,6 +235,7 @@ TRACKS = [
     ('GND', 'F.Cu', 0.3, [(4.35, 22.95), (3.412, 22.95), (3.362, 22.9)]),
     ('GND', 'F.Cu', 0.2, [(41.45, 14.55), (41.5, 14.6), (42.7, 14.6)]),
     ('GND', 'F.Cu', 0.4, [(4.4, 22.9), (4.35, 22.95), (4.25, 22.85)]),
+    ('GND', 'F.Cu', 0.2, [(24.775, 24.1), (26.118, 24.1), (26.5, 23.718)]),
     ('GND', 'B.Cu', 0.25, [(29.1, 24.8), (27.582, 24.8), (26.5, 23.718)]),
     ('GND', 'B.Cu', 0.25, [(14.925, 24.475), (15.025, 24.375), (15.0, 24.4), (10.025, 24.4), (9.875, 24.25)]),
     ('GND', 'B.Cu', 0.25, [(13.02, 22.49), (13.0, 22.51), (13.0, 24.4), (12.988, 24.412)]),
@@ -276,8 +277,8 @@ STITCH = [
     (44.0, 6.6, 0.6, 0.3),
     # hand_diff harvest
     (9.8, 20.9),
-    (23.775, 24.0),
-    (26.5, 23.718),
+    (24.775, 24.1, 0.6, 0.3),
+    (26.5, 23.718, 0.6, 0.3),
     (29.1, 24.8, 0.6, 0.3),
     (32.0, 24.3, 0.6, 0.3),
     (33.27, 11.05, 0.6, 0.3),
@@ -479,13 +480,14 @@ SILK = [
     ("RST", 3.9, 6.5, 0.8, 0),          # S of SW1
     ("BOOT", 11.6, 6.5, 0.8, 0),        # S of SW2
     # D1 (charge LED) sits in the packed charger cluster with no adjacent silk
-    # gap; CHG goes in the nearest clear pocket, S of D1 past R4 (D1 is the only
-    # LED here, so the cue is unambiguous).
-    ("CHG", 33.1, 7.9, 0.8, 0),         # near D1 (charge LED)
+    # gap; CHG goes in the nearest clear pocket, NE of D1 past R17 (D1 is the
+    # only LED here, so the cue is unambiguous).
+    ("CHG", 36.1, 6.7, 0.8, 0),         # near D1 (charge LED)
     ("STATUS", 14.5, 34.2, 0.8, 0),     # S of D3 (status LED), nudged W of J1.MP
     # battery connector J1: BAT + polarity in the clear pocket N of J1's body
     ("BAT", 18.0, 24.2, 0.8, 0),
     ("+", 20.0, 24.2, 0.9, 0),          # directly above J1.1 (the + pad, x=20)
+    ("-", 22.0, 24.2, 0.9, 0),          # directly above J1.2 (the - pad, x=22)
     # battery-current series-measurement break at J2 (in J2's south edge strip);
     # wick JP1 and insert an ammeter (e.g. PPK2) across J2. Label device-neutral.
     ("IBAT", 27.8, 34.48, 0.8, 0),
@@ -563,10 +565,10 @@ SILK = [
     # the east edge). ===
     # NW-corner block, TOP-LEFT anchored at (1.0, 0.6): project URL, the full
     # product name, "rev A" (holds the check_pcb "rev " token) and the indoor
-    # charge range as one contiguous phrase. A blank line separates the URL from
-    # the name. Sits in the bare NW back corner (pour-free, no back parts), north
-    # of J3's front footprint; DRC-clean silk clearance.
-    ("github.com/antoinecellerier\n\nLow Power ePaper Thermometer\nrev A\n"
+    # charge range as one contiguous phrase, four tight lines. Sits in the bare
+    # NW back corner (pour-free, no back parts), north of J3's front footprint;
+    # DRC-clean silk clearance.
+    ("github.com/antoinecellerier\nLow Power ePaper Thermometer\nrev A\n"
      "CHARGE INDOORS 0-45°C", 1.0, 0.6, 0.8, 0, "B.SilkS", "R", "T"),
     # populate-ONE legend (bridge/fit exactly one per group), as ONE TOP-RIGHT
     # anchored block in the clean NE back corner (right edge x44.0), north of the
@@ -594,10 +596,11 @@ SILK = [
     # NORTH (even) pin, lower text row = the SOUTH (odd) pin. Looser 1.25mm pitch,
     # bounded south by the pad tops (y30.21) and north by the TP7/TP10 silk
     # rings. Pad columns x = 33.90/36.44/38.98/41.52/44.06. Pins 9&10 are BOTH
-    # GND -> one centred label. MOUNT TOP (header solders to the TOP) sits NW of
-    # the legend, above the pin-1/2 column and W of TP7's ring — the strip
-    # directly N of the legend is now filled by the TP7/TP10 rings.
-    ("MOUNT TOP", 30.6, 25.9, 0.8, 0, "B.SilkS"),   # solder-side cue, NW of legend
+    # GND -> one centred label. MOUNT ON TOP (header solders to the TOP) stands
+    # vertically (rot 90, two lines) in the clear back strip W of the legend,
+    # on the legend's own y-centre — the strip directly N of the legend is
+    # filled by the TP7/TP10 rings.
+    ("MOUNT\nON TOP", 31.0, 32.325, 0.8, 90, "B.SilkS"),  # solder-side cue, W of legend
     ("J5", 46.7, 32.325, 0.8, 0, "B.SilkS"),        # legend tag, SE corner
     # even pins 2/4/6/8 (NORTH row) — upper text row
     ("+3V3", 33.90, 28.15, 0.8, 0, "B.SilkS"),      # pin 2

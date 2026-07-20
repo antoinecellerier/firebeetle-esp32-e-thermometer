@@ -197,6 +197,45 @@ Gate: `make check` green; **DRC REAL=0, unconnected=0, schematic-parity=0**;
 TP7/MOUNT-TOP, TP10/MOUNT-TOP, TP6/PREVGH -- the 5 moves added none) plus the
 stale bench labels (3V3-probe-only, EPD_VCC, VBAT_ADC) still at old TP spots.
 
+## hand-routed-2026-07-20-cleanup-round.kicad_pcb
+
+GUI board after a small **C14 re-place + copper/silk cleanup round**. Base:
+generated at e567982 (the silk rework; 5e5cf42/309333e are tooling-only, so the
+working copy was current). The session:
+
+- **C14 moved** (23.0,24.0) -> (24.0,24.1), taking its GND stitch with it
+  (23.775,24.0 -> 24.775,24.1, the moved pad's own via) and forcing a short
+  reroute of the three nets that terminate on it: `EPD_VCC`'s via follows to
+  (23.225,24.1) on a new vertical+45° leg, `~BAT_IN` shifts its east-west run
+  y22.9 -> 23.0 and lands on Q6.3 through a 45° drop, and a new 0.2mm F.Cu GND
+  spur ties the stitch east to Q6.1's via (which grew 0.5 -> 0.6mm).
+- **`+3V3` 0.5mm staircase straightened** north of TP5: the (22.3,18.05)/
+  (22.34,15.765) dogleg with its 40µm jog becomes one exact 45° —
+  (20.5,18.05)-(21.887,18.05)-(23.105,16.832)-(23.105,15.0).
+- **Two degenerate zero-length stubs deleted**: `EPD_CS` at (35.57,15.05) and
+  `USB_D-` at (25.927,10.39). The board now has **0 zero-length segments**.
+- **Silk cleanup**: `CHG` moved (33.1,7.9) -> (36.1,6.7) (NE of D1, past R17);
+  a `-` polarity marker added at (22.0,24.2) over J1.2 to pair with the
+  existing `+` over J1.1; the B.SilkS footer lost its blank line (four tight
+  lines now); `MOUNT TOP` became `MOUNT\nON TOP`, stood vertical (rot 90) at
+  (31.0,32.325) on the J5 legend's own y-centre.
+
+Harvested: `pcb_routes.py` (signals, `--all`), `pcb_layout.py` PLACE (C14 via
+`hand_diff --apply`), STITCH (**+1 / -1** via plus Q6.1's 0.5->0.6 size
+override), GND TRACKS (+1 polyline for the new spur), SILK (4 edits,
+hand-mirrored — `hand_diff` F is report-only). No harvest-time copper nudge was
+needed: the round is DRC-clean as drawn, and the only geometric liberty taken is
+authoring the GND spur's diagonal at (26.118,24.1)->(26.5,23.718) so it is an
+exact 45° landing on the via centre (0.5µm off the GUI's 26.1175/23.7175).
+No alignment nudge survived: C14 lands on (24.0,24.1), already exact on the
+0.1mm grid in both axes, with no local row/column partner to share an axis with.
+Gate: `make check` green; **DRC REAL=0, DEFERRED=0, unconnected=0,
+schematic-parity=0** (the 2 J3 edge-launch `copper_edge_clearance` waivers
+remain, pending the J3 re-place); `check_pcb` green incl. the §9/§9b
+J4-mouth-east / J3-mouth-north guards; `gnd_islands` connected (6 single-via
+SPOF ties, 3 narrow necks — unchanged). **Silk is now 0 violations at full
+severity** — the e567982 rework holds and this round's four edits added none.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
