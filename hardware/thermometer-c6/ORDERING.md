@@ -257,7 +257,15 @@ a bare total (~€205), which made "did that change?" unanswerable.
 | — Depanel + edge rail | 2.58 | opt-in; advanced options add a build day |
 | Build time | 0.00 | PCB 3d, assembly 3–4d (2–3d would be +€43.01) |
 
-Coupon (~€17.46) not yet applied. Weight 527.10g.
+Coupon €17.46 applied → €198.94. Weight 527.10g (5 boards + edge rails; JLC
+grows the panel to 70×71mm because Standard PCBA needs ≥70mm a side).
+
+**Shipping: the quoted estimate is a lie for this order.** The quote and cart
+pages advertise "Global Standard Direct Line" (€1.31 / €9.72), but at
+checkout that line is restricted to orders **under $150** — this order is
+~€199, so it is not selectable and the real carrier costs more. Budget for
+the actual checkout options, not the estimate. Splitting the order to get
+under the cap is not worth it: the €22.32 PCBA setup fee is per-order.
 
 **The 35-vs-37 gap is benign — resolved 2026-07-20 in the BOM tab.** JLC
 reported "37 parts detected / 37 parts confirmed"; it bills 35 because two
