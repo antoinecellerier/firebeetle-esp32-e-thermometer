@@ -8,7 +8,7 @@ TODAY     = $(shell date +%Y-%m-%d)
 FAB_STAMP = $(GITHASH) $(TODAY)
 FABPCB   := $(FAB)/board/$(PCB)
 
-.PHONY: all gen erc netlist check invariants pdf svg fab clean pcb route route-pf freeroute drc pcb-img
+.PHONY: all gen erc netlist check invariants pdf svg fab clean pcb route route-pf freeroute drc pcb-img hand
 
 all: check pdf
 
@@ -111,6 +111,32 @@ fab: check
 	cd $(FAB)/gerbers && python3 -m zipfile -c ../thermometer-c6-gerbers-$(GITHASH)-$(TODAY).zip *
 	PYTHONDONTWRITEBYTECODE=1 python3 verify/check_fab.py $(FAB) --stamp "$(FAB_STAMP)"
 	@echo "FAB EXPORT OK: $(FAB) (stamp: rev A $(FAB_STAMP))"
+
+# GUI hand-routing copy (HAND-ROUTING.md step 1). Run `make pcb` first.
+#
+# The .kicad_dru MUST come along: without it the GUI -- and any kicad-cli drc
+# run from this directory -- silently loses every scoped waiver rule and
+# reports violations the real board does not have (68 vs 7, observed).
+#
+# local.3dmodels is SYMLINKED, not copied: the board stores its model paths as
+# ${KIPRJMOD}/local.3dmodels/<part>.step, and KIPRJMOD resolves to whichever
+# directory holds the .kicad_pro -- so in out/hand/ the local STEP models go
+# unresolved and the 3D viewer falls back to bare pads. A symlink fixes that
+# without duplicating the files or baking an absolute path into the board.
+#
+# Refuses if the existing copy is newer than the generated board, since that
+# means un-harvested GUI edits. FORCE=1 discards them.
+hand: | $(OUT)
+	@if [ -e $(OUT)/hand/$(PCB) ] && [ $(OUT)/hand/$(PCB) -nt $(PCB) ] && [ -z "$(FORCE)" ]; then \
+	  echo "REFUSING: $(OUT)/hand/$(PCB) is newer than $(PCB)."; \
+	  echo "  It may hold un-harvested GUI edits, which this would overwrite."; \
+	  echo "  Harvest first (HAND-ROUTING.md step 3), or re-run with FORCE=1."; \
+	  exit 1; \
+	fi
+	mkdir -p $(OUT)/hand
+	cp $(PCB) thermometer-c6.kicad_pro thermometer-c6.kicad_dru $(OUT)/hand/
+	ln -sfn ../../local.3dmodels $(OUT)/hand/local.3dmodels
+	@echo "HAND COPY READY: $(OUT)/hand/$(PCB) (DRU + local 3D models linked)"
 
 pcb-img: pcb | $(OUT)
 	kicad-cli pcb export svg --mode-multi --layers F.Cu,B.Cu,Edge.Cuts,F.SilkS,B.SilkS,F.Fab -o $(OUT)/pcb-svg $(PCB)

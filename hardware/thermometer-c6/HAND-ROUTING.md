@@ -19,13 +19,27 @@ make pcb            # fresh render of placement + checked-in routes
 ## 1. Make the working copy
 
 ```bash
-mkdir -p out/hand
-cp thermometer-c6.kicad_pcb thermometer-c6.kicad_pro thermometer-c6.kicad_dru out/hand/
+make hand
 ```
 
 Open `out/hand/thermometer-c6.kicad_pcb`. Same basenames = the GUI DRC
 enforces the real rules (0.2mm netclass clearance, HV 0.3mm, 0.18mm inside
 the `fpc-fanout` area, 0.5mm power widths). `out/` is gitignored.
+
+The target copies the `.kicad_dru` along — **do not skip it.** Without it the
+GUI, and any `kicad-cli pcb drc` run from that directory, silently drops every
+scoped waiver rule and reports violations the real board does not have (68 vs
+7, observed 2026-07-20).
+
+It also symlinks `local.3dmodels/` into the copy, so the local STEP models
+(MINI-1, USB-C, FPC, JST, both Bosch LGAs, the switch) render in the GUI's 3D
+viewer. The board stores model paths as `${KIPRJMOD}/local.3dmodels/…`, and
+`KIPRJMOD` resolves to whatever directory holds the `.kicad_pro` — so without
+the link those parts show as bare pads in `out/hand/` while looking fine at
+the top level.
+
+`make hand` refuses if the existing copy is newer than the generated board,
+since that means un-harvested GUI edits; `make hand FORCE=1` discards them.
 
 ## 2. Route in the GUI
 
