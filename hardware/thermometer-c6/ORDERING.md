@@ -17,7 +17,8 @@ this file is the human procedure around it. Settled fab decisions live in
 ## 2. Board fabrication options
 
 - [ ] Dimensions **48×35mm**, **2 layers**, **1.6mm**, outer copper **1oz**,
-      qty **≥5**, solder mask green, TG **≥135**.
+      qty **≥5**, solder mask **white** with black silk (deliberate,
+      2026-07-20), TG **≥135**.
 - [ ] **Surface finish: ENIG.** Chosen for flat pads under the 0.5mm-pitch
       LGA-10 sensor and the 0.5mm FPC — the board sits at JLC's 0.20mm HASL
       clearance floor, so HASL bumps are a risk there.
@@ -153,9 +154,10 @@ this file is the human procedure around it. Settled fab decisions live in
       board, no coating/ink over U5; standard reflow per Bosch guidelines is
       fine. Bake Y1/MSD parts at your discretion if floor life requires.
       J4 (C2856831 FPC-05FB-24PH20): mount with the contact-tail/cable-entry
-      side toward the board edge, pin 1 at the '1' silk marker. Your placement
-      preview renders this model displaced from its pads — please confirm the
-      orientation against the land pattern at DFM.
+      side toward the board edge. **Pin 1 is the filled silk dot beside the
+      north end of the pad row** — there is no '1' glyph (the footprint marks
+      it with an `fp_circle` at local (5.75, −2.6), directly beside pad 1 at
+      local x +5.75).
       J3 (C165948 USB-C): please place J3 to the LAND PATTERN, not to the
       model body. In your placement preview the J3 model — body, solder tails
       and shell legs together — renders about 1.3mm off the pads and holes.
@@ -239,7 +241,7 @@ a bare total (~€205), which made "did that change?" unanswerable.
 | — Special Offer | 1.75 | |
 | — Confirm Production file | 0.91 | |
 | **Standard PCBA** | **140.46** | |
-| — Components (35 items) | 49.62 | vs **37** BOM lines — reconcile in the BOM tab |
+| — Components (35 items) | 49.62 | 37 BOM lines, 35 unique parts — see below |
 | — Feeders Loading | 46.75 | **= 17 × €2.75 exactly** — the open feeder question |
 | — Setup Fee | 22.32 | |
 | — X-Ray Inspection | 11.46 | likely mandatory for U5's LGA; confirm |
@@ -254,5 +256,18 @@ a bare total (~€205), which made "did that change?" unanswerable.
 
 Coupon (~€17.46) not yet applied. Weight 527.10g.
 
-Deltas worth watching next round: the feeder count (17 vs 16), the 35-vs-37
-component-line gap, and whether X-Ray and depanel are optional.
+**The 35-vs-37 gap is benign — resolved 2026-07-20 in the BOM tab.** JLC
+reported "37 parts detected / 37 parts confirmed"; it bills 35 because two
+pairs of BOM lines share one LCSC part and get merged: R18/R19/R22/R23/R5
+with R20/R21 (both **C25741**), and SW1 with SW2 (both **C318884**). The ⚠
+icons on those rows are merge notices, not problems. Checked the one that
+would have mattered: R20/R21 are the VBAT_ADC divider and are spec'd 1% —
+C25741 is `0402WGF1003TCE`, whose `F` code IS ±1%, so the merge does not
+quietly downgrade battery-sense accuracy.
+
+Deltas worth watching next round: the feeder count (17 billed vs 15 Extended
+lines counted in the BOM tab 2026-07-20), and whether X-Ray and depanel are
+optional.
+
+Settled deliberately 2026-07-20, do not "correct" these: **white** solder
+mask (not green) and **lead-free / high-temp** solder paste.
