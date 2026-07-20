@@ -242,6 +242,30 @@ against circuit.py (anonymous `~` nets matched by pin set).
   (EPD on GPIO18–23, gate GPIO14, LED GPIO15, divider GPIO2/3, 32k crystal
   sdkconfig).
 
+## Routed-copper census (rev A final vs the pre-connector-fix board)
+
+`python3 verify/copper_stats.py --vs 9100758` — baseline `9100758` is the last
+commit before the J4 mouth-east respin, the J3 datum/land fork and the R2.2
+corners. Tracks and vias only; pours are regenerated fill, not authored copper.
+
+```
+segments   977 ->  906     -71  (-7.3%)
+vias       189 ->  154     -35 (-18.5%)
+F.Cu mm  756.1 -> 643.5  -112.5 (-14.9%)
+B.Cu mm  840.6 -> 736.2  -104.4 (-12.4%)
+total   1596.6 ->1379.7  -216.9 (-13.6%)
+nets shorter 40   longer 2   ~unchanged 18   (of 60)
+
+vias by region   FPC/east x>36  36 -> 27      USB/north y<9  51 -> 28
+                 west x<20      84 -> 72
+```
+
+Putting both connectors on their true datums made the board measurably
+simpler rather than merely correct: the USB/north region shed 45% of its vias
+and CHG_STAT/EPD_SCK/VBUS/VBAT each lost 12–19mm. Routing style is
+deliberately free-angle (≈48% of copper length off the 45/90 grid) — that is
+a choice, not drift.
+
 ## Rev B candidates
 
 Deliberately NOT taken for rev A — each is real but none justifies a respin

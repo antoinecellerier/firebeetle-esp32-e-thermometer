@@ -41,23 +41,27 @@ this file is the human procedure around it. Settled fab decisions live in
       text is scrubbed (not printed literally). If they won't confirm, cut a
       token-less silk revision (delete the SILK entry in
       `generator/pcb_layout.py`, `make fab`, re-upload) before ordering.
-- [ ] **J4 PLACEMENT FIXED — FANOUT ROUTING PENDING before re-export (respin
-      2026-07-19).** Numeric STEP analysis (`out/j4-proof/` + the manufacturer
-      drawing `datasheets/XUNPU_FPC-05FB-NPH20.pdf`) proved the FPC-05FB's SMT
-      tails are at the REAR (actuator) face, ~6.6mm from the mouth; the old
-      placement (tails on the east pad column) pointed the mouth WEST into the
-      board so the panel cable could not mate. **Done:** J4 re-placed mouth-EAST
-      (flush with the x=48 board edge), contact-tail/pad column WEST (x41.45),
-      and the footprint pads renumbered so pad 1 = panel circuit 1 stays at the
-      NORTH end (circuit.py and the README FPC pin table unchanged). The old
-      east FPC fanout copper was cut back to the pad column. **Still to do
-      before ordering:** re-route the 24-pin FPC fanout to the new pad column
-      (currently 21 J4 pads unconnected by design), re-run `make fab`, and
-      re-upload; the J4 CPL rotation delta was reset to 0 (unverified) so
-      re-walk the JLC preview for J4 before paying. JLC's preview model showed
-      the true orientation all along (tails with actuator); the land pattern
-      was the error.
-- [ ] **J3 PLACEMENT DATUM-CORRECT — USB ROUTING PENDING before re-export
+- [ ] **J4 GEOMETRY + ROUTING DONE — PREVIEW RE-WALK STILL OPEN (respin
+      2026-07-19, depth corrected 2026-07-20).** Numeric STEP analysis
+      (`out/j4-proof/` + the manufacturer drawing
+      `datasheets/XUNPU_FPC-05FB-NPH20.pdf`) proved the FPC-05FB's SMT tails
+      are at the REAR (actuator) face; the old placement (tails on the east pad
+      column) pointed the mouth WEST into the board so the panel cable could
+      not mate. J4 is re-placed mouth-EAST, contact-tail/pad column WEST
+      (x41.45), footprint pads renumbered so pad 1 = panel circuit 1 stays at
+      the NORTH end (circuit.py and the README FPC pin table unchanged).
+      Body depth is **5.40** and the mouth sits **4.95mm** east of the pad row
+      at x46.40 — 1.60mm inboard of the edge, not flush. (The earlier 6.55/6.6
+      figures came from bounding-boxing raw CARTESIAN_POINTs, which include
+      LINE/AXIS2_PLACEMENT_3D entities owning no geometry; VERTEX_POINT-only
+      gives 5.40, matching the XUNPU drawing exactly — `out/j3-land/` §7.)
+      The 24-pin fanout is **re-routed and complete**: 0 unconnected, DRC
+      REAL=0 DEFERRED=0 WAIVED=0 at full severity. **Still to do before
+      paying:** the J4 CPL rotation delta was reset to 0 (unverified), so
+      re-walk the JLC preview for J4. JLC's preview model showed the true
+      orientation all along (tails with actuator); the land pattern was the
+      error.
+- [ ] **J3 DATUM + LAND + ROUTING DONE — PREVIEW RE-WALK STILL OPEN
       (respins 2026-07-19 + 2026-07-20).** The 2026-07-19 pass (`out/j3-proof/`)
       fixed the ORIENTATION: the old rot-0 placement sat the HRO USB-C mouth
       facing SOUTH into the board with the solder tails at the north edge — an
@@ -89,13 +93,12 @@ this file is the human procedure around it. Settled fab decisions live in
       chain (front slot 2.110 from the edge, 4.180 slot span, 3.650 to the NPTH,
       4.925 to the pad row) plus "no shell pad overhangs the edge", so a datum
       regression fails the gate instead of being waived.
-      **Still to do before ordering:** re-route the cut copper — VBUS, D+ and D−
-      to the new y7.035 pad row, plus EPD_BUSY, EPD_RST and the VSYS north
-      crossing which the datum-correct body now sits on (CC1 and CC2 survived
-      the move and are still routed). Currently 11 unconnected items + 9 dangling
-      track ends + 2 dangling vias, all by design. Then re-run `make fab` and
-      re-upload; the J3 CPL rotation delta is 0 and **unverified**, so **re-walk
-      the JLC order preview for J3** before paying.
+      The cut copper is **re-routed and complete** — VBUS, D+ and D− to the
+      y7.035 pad row, plus EPD_BUSY, EPD_RST and the VSYS north crossing the
+      datum-correct body sits on. Board-wide: 0 unconnected, 0 dangling, DRC
+      REAL=0 DEFERRED=0 WAIVED=0 at full severity, schematic parity 0.
+      **Still to do before paying:** the J3 CPL rotation delta is 0 and
+      **unverified**, so **re-walk the JLC order preview for J3**.
 - [ ] **D1 CPL DELTA RESET (respin 2026-07-20).** The mouth-north J3 USB
       reroute re-placed D1 (status LED) rot 90 → 180, voiding its 2026-07-18
       LED_0603 preview verification; its CPL delta was reset to 0 (unverified)
