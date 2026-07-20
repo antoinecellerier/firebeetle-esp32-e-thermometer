@@ -166,11 +166,15 @@ FPC-05FB-NPH20 manufacture drawing (pads 0.3×1.2 @0.5mm, tabs 2.0×1.8 at
 ±7.3/+1.625 center-to-center) and cross-checked against the EasyEDA/JLC
 C2856831 land pattern — the two agree exactly. The FPC-05FB is a rear-flip
 connector: the SMT contact tails / pad row sit at the REAR (actuator) face,
-and the mouth / cable entry is on the far side, ~6.55mm from the pad centers
-(numeric STEP proof + drawing, `out/j4-proof/` 2026-07-19). On the board J4
-is placed at rot 90 with the tail/pad column WEST (x41.45) and the mouth
-EAST, flush with the board edge, so the panel cable approaches from the east
-edge. Pad 1 = panel circuit 1 sits at the NORTH end (the footprint pads are
+and the mouth / cable entry is on the far side, 4.95mm from the pad centers
+(body depth 5.40 = the XUNPU drawing; VERTEX_POINT-only STEP bbox,
+`out/j3-land/` §7 2026-07-20 — the earlier 6.55 came from bounding-boxing
+raw CARTESIAN_POINTs, which include LINE/AXIS2_PLACEMENT_3D entities that
+own no geometry). On the board J4 is placed at rot 90 with the tail/pad
+column WEST (x41.45) and the mouth EAST at x46.40, so the panel cable
+approaches from the east edge. The mouth sits 1.60mm inboard of the edge
+rather than flush — harmless for an FPC (the cable bottoms out inside the
+housing either way) and it leaves the body fully supported. Pad 1 = panel circuit 1 sits at the NORTH end (the footprint pads are
 numbered to keep pin 1 north despite the rear-flip geometry; the pin-1 silk
 dot marks it). Pin-1 direction is verified against the DESPI-C02 manual
 photos (P1 silk: "1" and "24" end markers, "24" at the P1-refdes end); note
@@ -223,8 +227,8 @@ against circuit.py (anonymous `~` nets matched by pin set).
 6. **FPC footprint**: done — hand-drawn `local:XUNPU_FPC-05FB-24PH20`
    (see BOM section). Respun 2026-07-19 after a numeric STEP proof
    (`out/j4-proof/`): J4 now seats mouth-EAST / tails-WEST with pad 1 kept
-   at the north end. The FPC fanout still needs re-routing to the new pad
-   column before re-export (see ORDERING.md §2b).
+   at the north end, body depth corrected to 5.40 on 2026-07-20. Fanout
+   re-routed by hand; see ORDERING.md §2b for the remaining preview walk.
 7. **32k crystal populated by default** — ~0.1–0.5µA for real timekeeping;
    DNP it if vetoed (firmware falls back to internal RC).
 8. Old `hardware/kicad/` Copilot draft: delete or archive — your call.
@@ -237,3 +241,40 @@ against circuit.py (anonymous `~` nets matched by pin set).
 - Firmware (not in this deliverable): new board define with this pin map
   (EPD on GPIO18–23, gate GPIO14, LED GPIO15, divider GPIO2/3, 32k crystal
   sdkconfig).
+
+## Rev B candidates
+
+Deliberately NOT taken for rev A — each is real but none justifies a respin
+of a board that is otherwise order-ready.
+
+- **Shrink the board east (48×35 → 47×35 or further).** J4's mouth is at
+  x46.40, already 1.60mm inboard of the east edge, and there is no copper
+  east of x46.0 (easternmost feature: the GND via at (45.60, 28.25)). The
+  binding constraint on the 48.0 edge is **H1**, not J4: a ⌀2.2 hole at
+  (45.8, 2.2) with the R2.2 corner arc concentric with it, giving a uniform
+  1.100mm ring of FR4 around the corner. Shrinking means moving H1 west with
+  the edge and re-centring both east corner arcs — the FR4 ring survives at
+  1.100mm, but H1's ⌀4.993 screw-head keepout then overlaps Q1's courtyard
+  by 0.806mm. No fab saving (1680 → 1645mm² is the same JLC tier), so this
+  is only worth doing as part of a placement pass that gives Q1 somewhere to
+  go. Study, scripts and renders: `out/east-shave/`.
+- **Q1 clears H1's ⌀4.993 screw-head keepout by only 0.105mm** on the
+  current board (nearest Q1 courtyard corner (43.345, 3.062) is 2.602mm from
+  H1's centre). Independent of any shrink; worth a deliberate look in a rev B
+  placement pass.
+- **USB connector-segment symmetry.** `USB_D+`/`USB_D-` (U3→U1) are matched
+  to 0.024mm, but the connector segment is not: D+ is daisy-chained *through*
+  B6 to A6 (a series node, not a tap) while D- gets a balanced tee, so
+  end-to-end skew is +2.31mm (B-row mated) or +5.21mm (A-row). 1.90mm of
+  that is pure USBLC6 pinout — pins 1 and 3 sit 1.90mm apart on the same
+  SOT-23-6 edge — and would vanish for free by swapping which (symmetric)
+  channel carries which polarity. Irrelevant at the C6's 12 Mbps full speed
+  (~31ps against an 83,333ps bit period, 4–20ns edges); it would start to
+  matter only if this path ever carried High Speed.
+- **No GND reference under the USB path.** Opposite-layer pour coverage is
+  16.8% / 0.0% / 2.4% / 0.0% across the four USB nets against 28%/40%
+  board-wide — the 0.5mm zone clearance starves the pour out in the dense
+  x18–27, y6.7–15 window. The long D+ vertical crosses six foreign nets on
+  B.Cu in 4.9mm and the two western signal vias have no GND stitch within
+  4mm. Acceptable at full speed and the EPD boost switching nodes are not
+  among the crossings, but it is the condition the path runs in.
