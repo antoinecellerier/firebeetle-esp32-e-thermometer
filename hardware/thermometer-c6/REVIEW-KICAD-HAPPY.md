@@ -1,5 +1,138 @@
 # thermometer-c6 Design Review (kicad-happy)
 
+> Newest review first. **Run 2 (2026-07-20)** re-ran the full suite at commit
+> `e567982` after the J3/J4 respin. The original pre-order review (**Run 1**,
+> 2026-07-17) is preserved unchanged below.
+
+---
+
+# Run 2 — Incremental Respin Review (2026-07-20)
+
+**Commit:** `e567982` (clean tree, verified) · **Tool:** kicad-happy @ `f765dc0`
+(identical to Run 1 — not updated, so results are directly comparable) · **Run
+dir:** `out/kicad-happy/2026-07-20_0355` (gitignored) · **Prior run diffed
+against:** `2026-07-17_1727` (d609762/7b587b7).
+
+**What changed since Run 1** (per the task brief and confirmed from git):
+J4 FPC re-placed 180° mouth-east + 24-pin fanout rerouted (77c3ebd, d17b6bb);
+J3 USB-C re-placed 180° mouth-north at the edge + USB/collateral rerouted
+(e22be63, 26cebbc, c8009ec); 9 testpoints + D1/R4/R17/R1/R2 moved, GND
+re-stitched, 12 silk labels relocated; scoped waivers `edge-clearance-usb-c`
+(J3) and `footer-silk-j3` in `.kicad_dru`. Also folded in are the Run-1
+post-review fixes, now committed to source (were applied at e6828d8 *after*
+Run 1's analyzed sources): 9× 4.7µF caps 25V→50V (C1779→**C98192**), D7
+`D_TVS`→`D_Zener` (unidirectional), D3 green→**white C2290** (basic part).
+
+## Analyzers re-run (fresh at e567982)
+
+Full suite, same invocation style as Run 1. Gerbers were exported straight from
+the committed board (`kicad-cli pcb export gerbers/drill`, JLC layer set) because
+`make fab` is currently blocked (see Process finding) — extents/layers reflect
+e567982.
+
+| Analyzer | Result | Δ vs Run 1 |
+|---|---|---|
+| analyze_schematic.py | 63 findings, 0 error* | PD-DET 2→1, VD-004 2→3 (both from the D7/cap value swaps) |
+| analyze_pcb.py --full | 182 findings | KO-001 27→22, VP-001 46→67, CP-003 8→10, PM-002 13→12, TB-001 22→21 |
+| analyze_gerbers.py | 1 finding (GR-004) | unchanged; board 48.1×35.1mm unchanged |
+| cross_analysis.py | 3 findings | PS-002 4→3 |
+| analyze_emc.py | 42 findings, 8 error | ES-002 error→info, RP-001 err 2→3, GP-001 err net CC1→CC2 (total errors still 8) |
+| analyze_thermal.py | 0 findings | unchanged |
+| simulate_subcircuits.py (200 MC + parasitics) | 13 subcircuits: 11 pass / 1 warn / 1 skip | 14→13 (D7 protection-device sim dropped — D7 is now a Zener) |
+| lifecycle_audit.py | 0 (LCSC-only, no MPN) | unchanged |
+
+\* `SS-001` (MPN coverage) is reported error-severity but overridden in Run 1
+(LCSC codes are the JLC sourcing identity). Structural parity holds: 101
+footprints / 76 nets both runs (vias 194→158 — fewer after the fanout +
+testpoint simplification).
+
+## Independent gate cross-checks (project's own tooling)
+
+- **Raw kicad-cli DRC on the committed board:** 2 violations, both
+  `copper_edge_clearance` on J3 SH shell pads; 0 unconnected, 0 schematic
+  parity. `verify/drc_summary.py --gate` → **REAL=0 DEFERRED=0 WAIVED=2** (pass).
+- **`verify/gnd_islands.py`:** GND connected = **True** (6 single-via + 3
+  narrow-neck SPOF ties — pre-existing reliability characteristics of a dense
+  2-layer board, not disconnections).
+- **J3/J4 edge geometry measured directly (pcbnew):** J4 pads sit **2.45mm
+  inside** the east edge — only its courtyard clearance ring laps 0.245mm
+  (this is the new PM-002 "error"). J3's SH shell pads lap the north edge by
+  **0.055mm** — the known WAIVED edge-launch USB-C case. No pad/copper of either
+  connector sits off-board beyond the waived J3 shell.
+
+## Findings & dispositions (Run 2)
+
+Every finding maps to a Run-1 disposition or is a direct, expected consequence
+of a previously-recommended fix. **No new REAL board defect.**
+
+| Finding | Location | Sev | Disposition |
+|---|---|---|---|
+| PM-002 J4 courtyard overhangs edge 0.245mm (was warning, now error) | J4 east edge | error | **Cosmetic/by-design** — pads 2.45mm inside edge; only courtyard ring laps. Edge-launch FPC mouth faces off-board east, same class as J5/SW1/SW2/J1 (Run-1 accepted) |
+| KO-001 D4/JP2/JP3/TP6 (+others) "inside fpc-fanout" (27→22) | fpc-fanout marker | error | **False positive** (Run-1) — tool ignores KiCad per-type allow flags; marker allows everything; DRC clean |
+| VP-001 untented via-in-pad 46→67 | J3/J4 reroute + GND stitch | warning | **Waived** (Run-1) — POFV selected at order time |
+| EMC RP-001 EPD_SCK now error-tier (32k nets still error) | EPD_SCK layer transition | error | **Accepted** (Run-1 2-layer EMC bucket) — write-only SPI clock, active only during infrequent EPD refresh; 8 total EMC errors unchanged |
+| EMC GP-001 significant plane gap moved J3-CC1→J3-CC2 | J3 CC line | error | **False positive** (Run-1) — CC is a DC config line (5.1k Rd), no return current |
+| cross PS-002 plane-split island churn (GND 8 / VBAT 4 / VBUS_SENSE 3) | pours | warning | **Watch item** (Run-1) — routing-channel islands; DRC connectivity + gnd_islands pass |
+| CP-003 touch-pad "0.0mm GND clearance" +TP4/TP11 (now all 11 TPs) | testpoints | info | **False positive** — heuristic measures to zone *outline*, not the DRC clearance carve-out; DRC clean, no short (incl. TP4=+3V3, TP11=VBAT_ADC) |
+| schematic VD-004 "C5 4.7µF/50V over-designed for VBUS" | C5 | info | **Cosmetic/expected** — direct result of the Run-1-recommended 25V→50V upgrade (one BOM line C98192) |
+| GR-004 bottom paste 2%; CK-003 EPD_SCK near J3/J4; SP-WARN C29 | — | warn/info | **Unchanged** Run-1 dispositions (DNP provisions / accepted / C29 is an ADC sampling cap misclassified) |
+
+## Deltas vs Run 1
+
+**Fixed / improved**
+- **PM-002 R4 edge violation (error) GONE** — R4 moved off the edge; Run-1's
+  residual "V-cut/tab stress on R4" risk is resolved. TB-001 R4 tombstoning
+  also dropped.
+- **EMC ES-002 U3 "no ground via near ESD device" error → info** ("single
+  ground via near U3") — the GND re-stitch added a GND via by U3, effectively
+  addressing Run-1's "spare via next to U3.2 nice-to-have."
+- **Run-1 post-review schematic fixes now in committed source** (50V caps, D7
+  unidirectional Zener, D3 white basic) — the PD-DET 2→1, VD-004 +1 (C5),
+  and SPICE 14→13 (D7 no longer a protection-device sim) deltas are all
+  direct, expected consequences of these approved changes, not regressions.
+
+**New (all triaged non-blocking)** — PM-002 J4 courtyard overhang (error,
+by-design), VP-001 +21 (POFV waived), KO-001 recomposition (FP), RP-001 EPD_SCK
+error-tier (accepted 2-layer), GP-001 CC1→CC2 (FP), PS-002 island churn (watch),
+CP-003 +TP4/TP11 (FP), VD-004 C5 (expected). See table.
+
+**Unchanged** — GR-004, CK-003, SS-001 override, SP-WARN C29, and the entire
+Run-1 datasheet/pinout Deep Review layer (not re-executed — `datasheets/` is
+gitignored and vendor-PDF-gated; it remains valid because netlist connectivity
+is unchanged at 101/76 parity and the only source changes are the three
+Run-1-recommended value swaps).
+
+## Process / tooling finding (not a board defect)
+
+**`make fab` is blocked at e567982.** Its `drc` prerequisite runs raw
+`kicad-cli pcb drc` (no J3 waiver) and halts on the 2 J3 `copper_edge_clearance`
+violations that the project's own `verify/drc_summary.py --gate` correctly
+WAIVES (edge-launch USB-C). Because J3 was moved onto the north edge in this
+respin, its SH shell pads now geometrically cross Edge.Cuts — a condition a
+0mm `edge-clearance-usb-c` DRU min cannot suppress (copper-crossing-outline is
+geometric, not a threshold). Consequence: the on-disk orderable fab package
+`out/fab/thermometer-c6-gerbers-9100758-2026-07-18.zip` is **stale** (pre-respin,
+commit 9100758) and cannot be regenerated via `make fab` as-is. The board itself
+is gate-clean (REAL=0); this is a fab-export tooling gap, not a layout error.
+*Fix (user's call, outside this review's edit scope): route the `fab` target's
+DRC gate through `drc_summary.py --gate`, or add the 2 J3 shell-pad violations
+as DRC exclusions in `thermometer-c6.kicad_pro`.*
+
+## Run 2 verdict
+
+**No new board defect; the respin is clean and, on the changed axes, better than
+Run 1** (R4 off-edge, U3 ESD ground via added, J3/J4 fanouts simplified to fewer
+vias). All new/changed analyzer findings resolve to existing Run-1 dispositions
+or to expected consequences of the three already-approved value swaps. The board
+gate (`drc_summary --gate` REAL=0, gnd_islands connected, 101/76 parity) passes.
+The one actionable item is the **`make fab` gate blockage** above — a build-tool
+gap that must be closed before a fresh e567982 fab package can be exported for
+ordering.
+
+---
+
+# Run 1 — Pre-Order Review (2026-07-17)
+
 **Project:** hardware/thermometer-c6 (KiCad 10, single sheet, 2-layer 48×35mm PCB)
 **Date:** 2026-07-17 (run `2026-07-17_1727`, sources at git d609762/7b587b7)
 **Tool:** [kicad-happy](https://github.com/aklofas/kicad-happy) @ f765dc0
