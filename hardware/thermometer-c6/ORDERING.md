@@ -100,20 +100,33 @@ this file is the human procedure around it. Settled fab decisions live in
       y7.035 pad row, plus EPD_BUSY, EPD_RST and the VSYS north crossing the
       datum-correct body sits on. Board-wide: 0 unconnected, 0 dangling, DRC
       REAL=0 DEFERRED=0 WAIVED=0 at full severity, schematic parity 0.
-      **Preview walked 2026-07-20 — placement CONFIRMED, body render is an
-      artifact.** JLC's 3D preview draws the J3 housing ~2.7mm past the north
-      edge while the pads render correctly on their land. Pads and body are
-      rigidly linked in one footprint, so copper-right/body-wrong can only be
-      model seating in their viewer, not a placement error. Cross-checked by
-      parsing the shipped gerber+drill zip directly: front shell slot 2.110
-      from the edge (HRO 2.1078), rear 6.290 (6.2794), NPTH 5.760 — and the
-      intended mouth overhang is **0.490** = HRO's own 2.600 − 2.110.
-      `check_pcb.py` §9b(b) pins the front slot absolutely at 2.110 ±0.05, so
-      a 2.7mm datum error would fail the gate by 50×; it passes.
-      Residual risk carried into the order: **it is unknown whether JLC's
-      pick-and-place origin matches their renderer's origin.** Mitigated by
-      Confirm Parts Placement = Yes plus a J3 clause in the PCBA Remark (§3)
-      telling them to place to the land pattern, not the model body.
+      **Preview walked 2026-07-20 — placement CONFIRMED, the render is a JLC
+      model artifact, and JLC support confirmed it.** Their 3D preview draws
+      the whole J3 model — housing, solder tails AND shell legs together —
+      about 1.3mm off the land pattern, so the tails miss the pads and the
+      legs miss the holes. That is a rigid-body displacement of the model,
+      which is exactly the (0, −1.050, 0) correction `pcb_layout.MODELS_3D`
+      already applies to seat this EasyEDA STEP (its origin is the
+      front-shell reference, not the land centroid); JLC's viewer applies no
+      such correction. Cross-checked by parsing the shipped gerber+drill zip
+      directly: front shell slot 2.110 from the edge (HRO 2.1078), rear 6.290
+      (6.2794), NPTH 5.760 — and the intended mouth overhang is **0.490** =
+      HRO's own 2.600 − 2.110. `check_pcb.py` §9b(b) pins the front slot
+      absolutely at 2.110 ±0.05, so a datum error of this size would fail the
+      gate by ~25×; it passes.
+      **JLC chat 2026-07-20 (agent Oscar), verbatim:** *"you can proceed to
+      order … sometimes our system's 3d model have issue causing the part
+      misalign … our engineer will manually correct it for you"*, and *"if
+      there is any issue our engineer will inform you via email"*. Asked
+      whether misalignment has to be flagged explicitly or is caught anyway:
+      *"yes it will be pause if issue were found … our engineer will review
+      for you first … if there is any issue it will pause and send you email
+      … **it will not proceed without your confirmation**"*. So DFM review is
+      a hard gate on their side, not an opt-in. That closes the residual
+      pick-and-place-origin question as far as a frontline answer can.
+      Keep the J3 clause in the PCBA Remark (§3) and Confirm Parts Placement
+      = Yes anyway — they cost nothing and leave a paper trail, and the
+      remark explicitly asks them NOT to silently adjust the placement.
       **Still to do before paying:** the J3 CPL *rotation* delta is 0 and
       still **unverified** — confirm mouth-north/pin-1 in the preview.
 - [ ] **D1 CPL DELTA RESET (respin 2026-07-20).** The mouth-north J3 USB
