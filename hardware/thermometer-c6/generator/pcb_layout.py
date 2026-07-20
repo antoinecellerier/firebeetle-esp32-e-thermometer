@@ -601,15 +601,6 @@ SILK = [
     # R9 10M (crystal bias) sits N of R9, clear of TP5's silk ring to its SE.
     ("R9 10M", 18.5, 19.2, 0.8, 0, "B.SilkS"),
 
-    # JLCPCB order-number placement token (JLC's "specify a location" option):
-    # JLC swaps this 12-char string for the board's order number (~same 8.5mm
-    # footprint). Rotated 90 and stood vertically just E of the antenna keep-out
-    # outline (rect E edge x5.3), centered on the rect's y-center (13.95) so it
-    # runs parallel to the outline. ~0.7mm gap W to the rect, and it stays
-    # OUTSIDE the keep-clear zone; the tall clear back band E of the antenna has
-    # no back pads here, so it reads cleanly.
-    ("JLCJLCJLCJLC", 6.5, 13.95, 0.8, 90, "B.SilkS"),
-
     # battery type by J1: J1 is a front SMD JST whose north pocket (BAT/+) has no
     # >=0.8mm exposed FRONT-silk gap (Q4 W, C14 E, caps N, J1 pads S), so the LiPo
     # spec goes on the BACK, south of J1's body — exposed there (J1 has no THT pads).

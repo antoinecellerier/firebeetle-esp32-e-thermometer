@@ -240,5 +240,7 @@ route` → diff the failure list.
 
 LDO not buck; indoor-only charging 0–45°C (silkscreen); 100mA charge;
 JLCPCB economy assembly; GND-first debug header without VBAT; ENIG finish;
-POFV (epoxy filled & capped) via covering; JLC order number printed at the
-authored `JLCJLCJLCJLC` back-silk token.
+POFV (epoxy filled & capped) via covering; **no order mark on the board**
+("Remove Mark"; JLC support confirmed 2026-07-20 that the order-number-at-a-
+specified-position service is discontinued, so the authored `JLCJLCJLCJLC`
+back-silk token was deleted rather than left as a stale artifact).

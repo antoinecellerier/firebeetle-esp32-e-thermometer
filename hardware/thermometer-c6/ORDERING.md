@@ -28,19 +28,22 @@ this file is the human procedure around it. Settled fab decisions live in
       vs "2D barcode (Serial Number)"; removal is now free and the default —
       the legacy "Order Number (Specify Position)" flow no longer exists).
       Leave the 2D-barcode serial option unset (it needs a reserved 2×10mm
-      solid silk square this board doesn't have). The `JLCJLCJLCJLC` token on
-      back silk at (6.5, 13.95) is a legacy no-op under Remove Mark — JLC's
-      CAM scrubs its own magic string; residual worst case is the literal
-      text printing on back silk (cosmetic). Confirm scrubbing via chat if
-      that matters for the run.
+      solid silk square this board doesn't have). The board carries **no
+      order-mark token**: JLC support confirmed 2026-07-20 that the
+      specify-position service "is already unavailable", so the
+      `JLCJLCJLCJLC` back-silk string was deleted from
+      `generator/pcb_layout.py` rather than shipped as a stale artifact whose
+      only two outcomes were "silently scrubbed" or "printed literally".
 
 ## 2b. Open confirmations with JLCPCB support — ASK BEFORE PAYING
 ##     (drafted 2026-07-18 for the first order; resolve via chat, then tick)
 
-- [ ] **JLCJLCJLCJLC token under "Remove Mark":** confirm the back-silk token
-      text is scrubbed (not printed literally). If they won't confirm, cut a
-      token-less silk revision (delete the SILK entry in
-      `generator/pcb_layout.py`, `make fab`, re-upload) before ordering.
+- [x] **JLCJLCJLCJLC token under "Remove Mark" — RESOLVED 2026-07-20, token
+      DELETED.** Support's answer was that the order-number-at-a-specified-
+      position service "is already unavailable", i.e. the token could never do
+      its job — leaving it risked only the literal string printing on back
+      silk. The `SILK` entry was removed from `generator/pcb_layout.py`; the
+      board now ships with no order mark. Nothing left to confirm.
 - [ ] **J4 GEOMETRY + ROUTING DONE — PREVIEW RE-WALK STILL OPEN (respin
       2026-07-19, depth corrected 2026-07-20).** Numeric STEP analysis
       (`out/j4-proof/` + the manufacturer drawing
@@ -133,11 +136,14 @@ this file is the human procedure around it. Settled fab decisions live in
       BOM review page to any in-stock **Basic** 10k 0402 — candidates
       C25744 (1%) / C60490 (1%) / C25531 (±5%; tolerance fine for all seven
       positions — pull-ups, gate series/bleed, and MCP73831 PROG where ±5%
-      = 95–105mA). 2026-07-18: all three were out of JLC assembly stock at
-      once and every in-stock 10k 0402 was Extended — in that case just
-      accept the auto-substitute (e.g. C174175) and eat the ~€2.75 feeder
-      fee. Third-party part browsers show LCSC retail stock, not JLC
-      assembly stock — trust only the BOM dialog.
+      = 95–105mA). 2026-07-18 all three were out of JLC assembly stock at once
+      and every in-stock 10k 0402 was Extended; **2026-07-20 C25744 is back in
+      stock**, so the BOM's own part should go through as Basic and this
+      contingency likely never fires. If it is gone again by order time, accept
+      the auto-substitute (e.g. C174175) and eat the ~€2.75 feeder fee.
+      Third-party part browsers show LCSC retail stock, not JLC assembly stock
+      — **confirm C25744 in the BOM dialog itself**, which is the only view
+      that reflects assembly availability.
 
 ## 4. Stock re-verification (before quoting)
 
@@ -145,7 +151,8 @@ Re-check LCSC/JLC stock — several parts run thin:
 
 - [ ] U1 ESP32-C6-MINI-1-N4 **C5736265**
 - [ ] Q3 Si1308EDL **C469327** (thin — fallback Si1304BDL clone **C7419947**)
-- [ ] 10k **C25744** (alt **C60490**, then **C25531** ±5% Basic — see §3)
+- [ ] 10k **C25744** — back in stock 2026-07-20; re-confirm in the BOM dialog
+      (alt **C60490**, then **C25531** ±5% Basic — see §3)
 - [ ] **U5 BMP581 C5362283 — if out of stock, populate U6 BMP585 instead:**
       in `generator/circuit.py` set U5 `dnp=True` and U6/C26/C27 `dnp=False`
       (populate-exactly-one — both strap I2C 0x47), `make check`, commit, then

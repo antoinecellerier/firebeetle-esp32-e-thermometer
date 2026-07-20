@@ -12,8 +12,8 @@ Conventions:
   IO18..23=24..29, RXD0(GPIO17)=30, TXD0(GPIO16)=31, EN=8, 3V3=3).
 
 LCSC C-numbers verified against JLCPCB stock 2026-07-07 unless marked
-verified (all jellybean passives re-confirmed via JLCPCB API 2026-07-07;
-C25744 10k was transiently 0 stock — fallback YAGEO C60490).
+verified (all jellybean passives re-confirmed via JLCPCB API 2026-07-07).
+C25744 10k stocks in and out — in stock 2026-07-20; fallback YAGEO C60490.
 """
 
 R0402 = "Resistor_SMD:R_0402_1005Metric"
