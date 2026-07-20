@@ -58,12 +58,13 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
     (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
     (r"^D_SOD-123", 0),   # D4/D5/D6 MBR0530  source: JLC preview 2026-07-18, cathode bands  confidence: verified  verified: 2026-07-18
     (r"^D_SMA", 0),       # D2 SS14  cathode band WEST in JLC preview  confidence: verified  verified: 2026-07-18
-    (r"^LED_0603", 0),    # D1/D3  cathode cues correct in preview (D1 S, D3 E)  confidence: verified  verified: 2026-07-18
+    (r"^LED_0603", 0),    # D3 cathode cue correct in preview (E); D1 now has its own REF_ROTATION_OVERRIDES entry below (mouth-north J3 reroute respun D1 rot 90 -> 180)  confidence: verified  verified: 2026-07-18
 ]
 REF_ROTATION_OVERRIDES = {  # local-library footprints; override beats pattern
     "U1": 0,   # ESP32-C6-MINI-1  antenna overhang at board WEST edge in preview  confidence: verified  verified: 2026-07-18
     "J4": 0,   # XUNPU FPC-05FB-24PH20: RESPUN 2026-07-19 -- both the placement rotation AND the footprint pad numbering changed (pads-west/mouth-east at rot 90, pad 1 renumbered to stay north). The old +180 delta is void for the new geometry; delta unverified -- re-walk the JLC preview before ordering.  confidence: low  verified:
     "J3": 0,   # USB_C_Receptacle_HRO_TYPE-C-31-M-12: RESPUN 2026-07-19 mouth-north (placement rotation 0 -> 180, out/j3-proof/). The FAB_ROTATIONS +180 delta was preview-verified for the old rot-0 placement; with placement now 180 the required CPL delta is unverified -- re-walk the JLC preview before ordering.  confidence: low  verified:
+    "D1": 0,   # LED_0603 status LED: RESPUN 2026-07-20 (mouth-north J3 reroute re-placed D1 rot 90 -> 180). The LED_0603 +0 delta was preview-verified for the old rot-90 placement (cathode cue S); with placement now 180 the required CPL delta is unverified -- re-walk the JLC preview before ordering.  confidence: low  verified:
     "U5": 0,   # Bosch LGA-10 BMP581  verified by TWO independent render cues vs datasheet p.46 pin-out + p.69 vent-hole position drawing: lid vent pinholes at the pads-7/8 corner (NW at rot 90) AND JLC "1" arrow at the pads-1/10 corner (SW = our black fab dot)  confidence: verified  verified: 2026-07-18
     "SW1": 0, "SW2": 0,  # local:SW_TS-1187A 4-pad tact switches  pin-1 pad NW in preview  confidence: verified  verified: 2026-07-18
 }

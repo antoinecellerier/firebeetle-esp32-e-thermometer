@@ -78,6 +78,11 @@ this file is the human procedure around it. Settled fab decisions live in
       re-walk the JLC preview for J3 before paying. The mouth-side shell (SH)
       pads sit ~0.1mm over the north edge by design (edge-launch USB-C); the
       `edge-clearance-usb-c` DRU + drc_summary waive it scoped to J3.
+- [ ] **D1 CPL DELTA RESET (respin 2026-07-20).** The mouth-north J3 USB
+      reroute re-placed D1 (status LED) rot 90 → 180, voiding its 2026-07-18
+      LED_0603 preview verification; its CPL delta was reset to 0 (unverified)
+      via a `REF_ROTATION_OVERRIDES["D1"]` entry. Re-walk the JLC preview for
+      D1 alongside J3 and J4 before paying.
 - [ ] **Feeder count:** Feeders Loading fee bills 17 × ~€2.75 while the BOM
       has 16 Extended lines — ask which parts are counted (≈€2.75 delta).
 

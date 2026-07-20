@@ -164,6 +164,39 @@ TP1 harvests to zero-length and is dropped). **Deferred to a later silk task:**
 TP5/R9-10M, TP7/MOUNT-TOP, TP10/MOUNT-TOP, TP6/PREVGH) plus stale bench labels
 (3V3-probe-only, EPD_VCC, VBAT_ADC) that still sit at the old TP positions.
 
+## hand-routed-2026-07-20-j3-usb-reroute.kicad_pcb
+
+GUI board after the **J3 USB-C reroute + cleanup pass**. Base: generated at
+26cebbc (J3 re-placed mouth-north / rot 180, USB fan-out to the old north pad
+row cut; 12 non-GND unconnected items pending). The session:
+
+- **J3 USB routing completed** — VBUS / D+ / D- / CC1 / CC2 / VSYS / CHG_STAT /
+  EPD_RST re-laid to the new south pad row and the displaced through-nets
+  reconnected; the board is now **0 unconnected** and **GND is one connected
+  system** (gnd_islands `connected: True`; single-via SPOF ties 10->6,
+  narrow-neck SPOFs 4->3 vs the rough pass).
+- **5 components hand-moved** (harvested via `hand_diff --apply`):
+  D1 (16.5,3.7,90)->(34.4875,5.1,180), R4 (16.5,1.1,270)->(33.9,6.5,180),
+  R17 (34.9,5.33,0)->(31.8,5.28,90), R1/R2 swapped to
+  (21.98,10.63,270)/(20.79,10.63,270). D1's rotation change (90->180) voids its
+  LED_0603 CPL preview verification -- reset to a low-confidence
+  REF_ROTATION_OVERRIDES["D1"] entry (re-walk the JLC preview with J3/J4).
+
+Harvested: `pcb_routes.py` (signals, `--all`), `pcb_layout.py` PLACE (5 parts),
+STITCH (**+16 / -18** vias, 0.6/0.3 overrides preserved), GND TRACKS
+re-authored from the hand board (33 polylines; the orphaned (22.01,10.06) stub
+serving R2's old courtyard is gone). Two harvest-time copper nudges kept the
+generated board DRC-clean: a ~11um shift of a GND spur off a U4-PROG via
+(0.6um 3dp-rounding artifact), and lowering the `~EPD_VGL` (J4-Pin_4) HV track
+y8.654->8.63 -- the cleanup pass had raised it to 0.2838mm from TP9's EPD_RESE
+pad (hv-clearance needs 0.3), a real violation present on the hand board.
+Gate: `make check` green; **DRC REAL=0, unconnected=0, schematic-parity=0**;
+`check_pcb` green incl. the §9/§9b J4-mouth-east / J3-mouth-north guards.
+**Deferred to a later silk task:** the same 6 silk warnings as the J4 harvest
+(`silk_over_copper` PREVGH + the rev-A footer; `silk_overlap` TP5/R9-10M,
+TP7/MOUNT-TOP, TP10/MOUNT-TOP, TP6/PREVGH -- the 5 moves added none) plus the
+stale bench labels (3V3-probe-only, EPD_VCC, VBAT_ADC) still at old TP spots.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
