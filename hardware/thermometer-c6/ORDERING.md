@@ -149,7 +149,10 @@ this file is the human procedure around it. Settled fab decisions live in
       **75 placements / 37 BOM lines.**
 - [ ] **Confirm Parts Placement: Yes** (first order with this CPL — their
       engineer sends placement imagery for approval before assembly; ~+1 day).
-- [ ] **PCBA Remark** (free), paste:
+- [ ] **PCBA Remark** — NOT free: filling it in adds an Advanced Options line
+      `PCBA remark: "Quote after review"`, excluded from the displayed total
+      and charged after their engineer reads it (observed 2026-07-20). Worth
+      it for the U5 no-wash instruction. Paste:
       "U5 (BMP581) is a vented barometric pressure sensor — do not wash the
       board, no coating/ink over U5; standard reflow per Bosch guidelines is
       fine. Bake Y1/MSD parts at your discretion if floor life requires.
