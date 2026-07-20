@@ -33,6 +33,28 @@ def load_netlist(path):
     return nets
 
 
+def load_components(path):
+    """{ref: {value, footprint, lcsc, dnp, exclude_from_bom}} from the
+    exported netlist's components section."""
+    with open(path) as f:
+        root = sexp.parse_one(f.read())
+    comps = {}
+    for comp in sexp.children(sexp.child(root, "components"), "comp"):
+        ref = str(sexp.atom_after(comp, "ref"))
+        props = {}
+        for prop in sexp.children(comp, "property"):
+            pname = str(sexp.atom_after(prop, "name"))
+            props[pname] = sexp.atom_after(prop, "value")
+        comps[ref] = dict(
+            value=str(sexp.atom_after(comp, "value", "")),
+            footprint=str(sexp.atom_after(comp, "footprint", "")),
+            lcsc=str(props.get("LCSC") or ""),
+            dnp="dnp" in props,
+            exclude_from_bom="exclude_from_bom" in props,
+        )
+    return comps
+
+
 def main():
     netlist_path = sys.argv[1]
     actual = load_netlist(netlist_path)
@@ -94,6 +116,47 @@ def main():
     for name, pins in sorted(remaining.items()):
         failures.append(f"UNEXPECTED NET: {name} with pins {sorted(pins)}")
 
+    # NC is bidirectional: every declared-NC pin must actually appear on an
+    # unconnected- net (a pin mistakenly moved into NC, or dropped from the
+    # sheet entirely, fails here instead of silently losing its requirement).
+    unconnected_pins = set()
+    for name, pins in actual.items():
+        if name.startswith("unconnected-"):
+            unconnected_pins |= pins
+    for r, p in circuit.NC:
+        if (str(r), str(p)) not in unconnected_pins:
+            failures.append(f"DECLARED NC BUT NOT UNCONNECTED ON SHEET: ({r}, {p})")
+
+    # Component metadata: the sheet must carry exactly circuit.py's
+    # value/footprint/LCSC/dnp for every part (the netlist components
+    # section is what KiCad-side exports see; drift here is invisible to
+    # the nets comparison above).
+    comps = load_components(netlist_path)
+    expected_comps = {c["ref"]: c for c in circuit.COMPONENTS}
+    for ref in sorted(set(comps) | set(expected_comps)):
+        if ref not in comps:
+            failures.append(f"COMPONENT MISSING FROM SHEET: {ref}")
+            continue
+        if ref not in expected_comps:
+            failures.append(f"UNEXPECTED COMPONENT ON SHEET: {ref}")
+            continue
+        want, got = expected_comps[ref], comps[ref]
+        for key, wanted in (("value", want["value"]),
+                            ("footprint", want["footprint"]),
+                            ("lcsc", want.get("lcsc", "")),
+                            ("dnp", bool(want.get("dnp", False)))):
+            if got[key] != wanted:
+                failures.append(
+                    f"COMPONENT {ref} {key.upper()} MISMATCH: "
+                    f"sheet={got[key]!r} circuit.py={wanted!r}")
+        # generator policy: anything DNP or without an orderable part number
+        # must be excluded from KiCad-side BOM exports
+        want_exbom = bool(want.get("dnp", False)) or not want.get("lcsc", "")
+        if got["exclude_from_bom"] != want_exbom:
+            failures.append(
+                f"COMPONENT {ref} EXCLUDE_FROM_BOM MISMATCH: "
+                f"sheet={got['exclude_from_bom']} expected={want_exbom}")
+
     if failures:
         print(f"check_netlist: {len(failures)} FAILURES")
         for f_ in failures:
@@ -102,7 +165,9 @@ def main():
     print(f"check_netlist: OK — {len(expected)} named + {len(anon)} anonymous "
           f"nets match exactly, "
           f"{sum(len(p) for p in expected.values()) + sum(len(p) for p in anon.values())} "
-          f"pin connections verified")
+          f"pin connections verified, {len(circuit.NC)} NC pins confirmed "
+          f"unconnected, {len(comps)} components match on "
+          f"value/footprint/LCSC/dnp")
 
 
 if __name__ == "__main__":

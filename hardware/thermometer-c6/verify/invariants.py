@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "generator"))
 sys.path.insert(0, HERE)
 
-from check_netlist import load_netlist  # noqa: E402
+from check_netlist import load_netlist, load_components  # noqa: E402
 
 FAIL = []
 
@@ -34,9 +34,16 @@ def check(desc, cond):
 
 def main():
     nets = load_netlist(sys.argv[1])
+    comps = load_components(sys.argv[1])
 
     def N(ref, pin):
         return net_of(nets, ref, pin)
+
+    def V(ref):
+        return comps.get(ref, {}).get("value", "<absent>")
+
+    def dnp(ref):
+        return comps.get(ref, {}).get("dnp", False)
 
     def unconnected(ref, pin):
         n = N(ref, pin)
@@ -60,6 +67,16 @@ def main():
           N("D2", 2) == N("U4", 4) and N("D2", 1) == N("U2", 1))
     check("Charger BAT pin and its 4.7uF sit on system-side VBAT with divider + TP",
           N("U4", 3) == N("C6", 1) == N("Q4", 2) == N("TP1", 1))
+    check("Charger PROG: U4 pin 5 through R3 to GND, nothing else on the node",
+          nets.get(N("U4", 5), set()) == {("U4", "5"), ("R3", "1")}
+          and N("R3", 2) == "GND")
+    check("Charge current 100mA: R3 = 10k (MCP73831 IREG = 1000V/R, 0.25C for "
+          "a 400-500mAh pouch)",
+          V("R3") == "10k")
+    check("LDO output on +3V3 with 10uF + 100nF caps to GND",
+          N("U2", 5) == "+3V3" and N("C3", 1) == "+3V3" and N("C4", 1) == "+3V3"
+          and N("C3", 2) == "GND" and N("C4", 2) == "GND"
+          and V("C3") == "10uF" and V("C4") == "100nF")
 
     # --- USB ------------------------------------------------------------
     check("CC1/CC2 each have their own 5.1k to GND",
@@ -193,6 +210,43 @@ def main():
           and N("J5", 5) == N("U1", 30) and N("J5", 6) == N("U1", 9)
           and N("J5", 7) == N("U1", 10) and N("J5", 8) == N("U1", 22)
           and N("J5", 9) == "GND" and N("J5", 10) == "GND")
+
+    # --- component values (datasheet-derived, read from the exported -------
+    # --- netlist's components section, not from circuit.py) ----------------
+    check("EN reset RC = 10k + 1uF (Espressif C6 HDG CHIP_PU recommendation)",
+          V("R6") == "10k" and V("C9") == "1uF")
+    check("BOOT pull-up R7 = 10k", V("R7") == "10k")
+    check("32k load caps = 20pF each (FC-135 CL 12.5pF, 2*(CL-~2.5pF stray))",
+          V("C10") == "20pF" and V("C11") == "20pF")
+    check("I2C pull-ups = 4.7k to the always-on rail",
+          V("R10") == "4.7k" and V("R11") == "4.7k")
+    check("USB-C CC pull-downs = 5.1k (UFP Rd)",
+          V("R1") == "5.1k" and V("R2") == "5.1k")
+    check("Battery divider = matched 100k 1% pair (VBAT/2 into the ADC)",
+          V("R20") == "100k 1%" and V("R21") == "100k 1%")
+    check("Divider switch + VBUS sense resistors all 100k (leak-bounded)",
+          V("R18") == "100k" and V("R19") == "100k"
+          and V("R22") == "100k" and V("R23") == "100k" and V("R5") == "100k")
+    check("EPD gate: 10k pull-up, 10k series + 10nF soft-start (~100us ramp)",
+          V("R12") == "10k" and V("R24") == "10k" and V("C28") == "10nF")
+    check("RESE ladder = 0.47R / 2.2R / 3.0R at 1% (DESPI-C02 + GDEH0576T81 "
+          "datasheet options)",
+          V("R14") == "0.47R 1%" and V("R15") == "2.2R 1%"
+          and V("R16") == "3.0R 1%")
+    check("Boost inductors: L1 = 10uH (proven default), L2 = 47uH (T81 pairing)",
+          V("L1").startswith("10uH") and V("L2").startswith("47uH"))
+    check("Every cap that can see boost rails is 50V-rated "
+          "(VGH/VGL reach ~±20V; DESPI reference used 25V)",
+          all(V(r) == "4.7uF/50V" for r in
+              ("C16", "C17", "C18", "C19", "C20", "C23", "C24"))
+          and all(V(r) == "1uF/50V" for r in ("C21", "C22", "C25")))
+    check("Populate-exactly-one sensor: U5 BMP581 fitted, U6 BMP585 (+ its "
+          "caps) DNP — both strap I2C 0x47",
+          not dnp("U5") and dnp("U6") and dnp("C26") and dnp("C27"))
+    check("DNP roster: J2 MEAS header, J5 debug header, R9 crystal bias, "
+          "D7 VBUS TVS — everything else populated",
+          {r for r, c in comps.items() if c["dnp"]}
+          == {"J2", "J5", "R9", "D7", "U6", "C26", "C27"})
 
     print()
     if FAIL:
