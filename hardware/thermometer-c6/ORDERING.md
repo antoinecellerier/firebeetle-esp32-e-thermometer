@@ -207,3 +207,37 @@ Re-check LCSC/JLC stock — several parts run thin:
       JLC order number, and the options chosen (ENIG / POFV / order-number
       position).
 - [ ] Commit.
+
+## 8. Quote history
+
+Record every itemised quote here — earlier rounds were only ever remembered as
+a bare total (~€205), which made "did that change?" unanswerable.
+
+### 2026-07-20, bundle `87f5d93` — €204.94, qty 5 PCB / 4 assembled
+
+| line | € | note |
+|---|---|---|
+| **PCB** | **64.49** | |
+| — Via Covering (POFV) | 44.07 | the single largest cost on the board |
+| — Surface Finish (ENIG) | 14.84 | |
+| — Via Plating Method | 2.92 | |
+| — Special Offer | 1.75 | |
+| — Confirm Production file | 0.91 | |
+| **Standard PCBA** | **140.46** | |
+| — Components (35 items) | 49.62 | vs **37** BOM lines — reconcile in the BOM tab |
+| — Feeders Loading | 46.75 | **= 17 × €2.75 exactly** — the open feeder question |
+| — Setup Fee | 22.32 | |
+| — X-Ray Inspection | 11.46 | likely mandatory for U5's LGA; confirm |
+| — Stencil | 7.17 | |
+| — SMT Assembly | 2.32 | |
+| — Packaging | 0.43 | |
+| — Confirm Parts Placement | 0.39 | wanted — see §3 |
+| — Panel / Large Size | 0.00 | |
+| **Advanced** | | |
+| — Depanel + edge rail | 2.58 | opt-in; advanced options add a build day |
+| Build time | 0.00 | PCB 3d, assembly 3–4d (2–3d would be +€43.01) |
+
+Coupon (~€17.46) not yet applied. Weight 527.10g.
+
+Deltas worth watching next round: the feeder count (17 vs 16), the 35-vs-37
+component-line gap, and whether X-Ray and depanel are optional.
