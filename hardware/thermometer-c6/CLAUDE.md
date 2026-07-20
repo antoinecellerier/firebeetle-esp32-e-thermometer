@@ -40,6 +40,19 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
   --gate`, REAL=0) + `python3 verify/check_pcb.py`. `starved_thermal` waits
   for M6's pours, `silk_*` for M7; unconnected = GND-only until the pour.
   Beware `out/drc.json` staleness — regenerate before reading it.
+- **Cutting a new revision is one character**: `circuit.REV` (`generator/
+  circuit.py`) is the single source of truth, consumed by `generate.py` (the
+  schematic title block), `pcb_layout.SILK` (the back-silk line), `pcb.py`
+  (the `FAB_STAMP` injection target) and `check_fab.py` (the stamp
+  assertion). `check_pcb.py` only asserts the `"rev "` token, so it is
+  revision-agnostic by design. Change `REV`, `make check`, `make fab`.
+  **Only the LETTER is committed.** The hash and date cannot be — a file
+  cannot contain the hash of the commit that contains it. They are injected
+  at fab-export time into the throwaway `out/fab/board/` copy from a clean
+  tree, which is exactly what lets `rev A 3ed40fe 2026-07-20` on a physical
+  board name an exact commit; `check_fab` asserts the COMMITTED board carries
+  no stamp to keep that guarantee. Never bump `REV` retroactively: the stamp
+  is physically on boards already built and `archive/order-*/` describes them.
 - **Fab export: `make fab`** = stamped render (`FAB_STAMP` + `PCB_OUT_DIR`
   into `out/fab/board/`, `rev A <hash> <date>` on silk) → **full-severity
   DRC** on the stamped board (`kicad-cli ... --severity-all`) gated by

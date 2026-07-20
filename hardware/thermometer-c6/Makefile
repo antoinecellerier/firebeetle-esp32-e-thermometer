@@ -6,6 +6,9 @@ FAB      := $(OUT)/fab
 GITHASH   = $(shell git rev-parse --short HEAD)
 TODAY     = $(shell date +%Y-%m-%d)
 FAB_STAMP = $(GITHASH) $(TODAY)
+# Revision letter comes from circuit.py (the single source of truth) so this
+# echo can never disagree with what is actually on the silk.
+REV       = $(shell python3 -c 'import sys; sys.path.insert(0,"generator"); import circuit; print(circuit.REV)')
 FABPCB   := $(FAB)/board/$(PCB)
 
 .PHONY: all gen erc netlist check invariants pdf svg fab clean pcb route route-pf freeroute drc pcb-img hand
@@ -110,7 +113,7 @@ fab: check
 	cp bom/thermometer-c6-bom.csv $(FAB)/
 	cd $(FAB)/gerbers && python3 -m zipfile -c ../thermometer-c6-gerbers-$(GITHASH)-$(TODAY).zip *
 	PYTHONDONTWRITEBYTECODE=1 python3 verify/check_fab.py $(FAB) --stamp "$(FAB_STAMP)"
-	@echo "FAB EXPORT OK: $(FAB) (stamp: rev A $(FAB_STAMP))"
+	@echo "FAB EXPORT OK: $(FAB) (stamp: rev $(REV) $(FAB_STAMP))"
 
 # GUI hand-routing copy (HAND-ROUTING.md step 1). Run `make pcb` first.
 #

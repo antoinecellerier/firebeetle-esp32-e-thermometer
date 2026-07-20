@@ -16,6 +16,22 @@ verified (all jellybean passives re-confirmed via JLCPCB API 2026-07-07).
 C25744 10k stocks in and out — in stock 2026-07-20; fallback YAGEO C60490.
 """
 
+# Board revision letter — THE single source of truth. Consumed by
+# generate.py (schematic title block), pcb_layout.py (back-silk stamp line),
+# pcb.py (FAB_STAMP injection target) and check_fab.py (stamp assertion), so
+# cutting a new revision is this one character.
+#
+# Only the LETTER lives here. The commit hash and date deliberately do NOT:
+# a file cannot contain the hash of the commit that contains it. They are
+# injected at fab-export time into the throwaway out/fab/board/ copy via
+# FAB_STAMP, from a clean tree, which is what makes "rev A 3ed40fe
+# 2026-07-20" on a physical board name an exact commit. check_fab asserts the
+# COMMITTED board carries no stamp, precisely to keep that guarantee.
+#
+# Bump only when cutting a respin, and never retroactively: the silk stamp is
+# physically on boards already built, and archive/order-*/ describes them.
+REV = "A"
+
 R0402 = "Resistor_SMD:R_0402_1005Metric"
 R0805 = "Resistor_SMD:R_0805_2012Metric"
 C0402 = "Capacitor_SMD:C_0402_1005Metric"

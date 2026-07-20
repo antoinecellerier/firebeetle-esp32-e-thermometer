@@ -43,6 +43,8 @@ booster HV clearances and the routable-density limit):
   9 VBUS_SENSE, 10 IO5, 11 GND.
 """
 
+from circuit import REV  # board revision letter; single source of truth
+
 # corner_r rounds all four corners with arcs centred on each corner's
 # (corner_r, corner_r) inset point. Those inset points are exactly where the M2
 # mounts sit (H1 at (45.8, 2.2) = NE, H2 at (2.2, 32.8) = SW), so every arc is
@@ -617,7 +619,7 @@ SILK = [
     # charge range as one contiguous phrase, four tight lines. Sits in the bare
     # NW back corner (pour-free, no back parts), north of J3's front footprint;
     # DRC-clean silk clearance.
-    ("github.com/antoinecellerier\nLow Power ePaper Thermometer\nrev A\n"
+    (f"github.com/antoinecellerier\nLow Power ePaper Thermometer\nrev {REV}\n"
      "CHARGE INDOORS 0-45°C", 1.2, 2.0, 0.8, 0, "B.SilkS", "R", "T"),
     # populate-ONE legend (bridge/fit exactly one per group), as ONE TOP-RIGHT
     # anchored block in the clean NE back corner (right edge x44.0), north of the

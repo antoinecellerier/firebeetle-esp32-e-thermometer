@@ -435,16 +435,17 @@ SILK_VJUST = {"T": pcbnew.GR_TEXT_V_ALIGN_TOP,
 
 
 def add_silk(board):
-    # FAB_STAMP appends a fab-export tag (git hash + date) to the "rev A" silk
-    # line; empty/unset leaves the committed silk untouched.
+    # FAB_STAMP appends a fab-export tag (git hash + date) to the "rev <REV>"
+    # silk line; empty/unset leaves the committed silk untouched.
     stamp = os.environ.get("FAB_STAMP", "").strip()
+    rev_line = f"\nrev {circuit.REV}\n"
     stamped = 0
     for entry in pl.SILK:
         text, x, y, size, rot = entry[:5]
         if stamp:
-            n = text.count("\nrev A\n")
+            n = text.count(rev_line)
             if n:
-                text = text.replace("\nrev A\n", f"\nrev A {stamp}\n")
+                text = text.replace(rev_line, f"\nrev {circuit.REV} {stamp}\n")
                 stamped += n
         layer = entry[5] if len(entry) > 5 else "F.SilkS"
         # Optional horizontal/vertical justification (default centre/centre).
@@ -475,7 +476,8 @@ def add_silk(board):
             t.SetVertJustify(SILK_VJUST[vjust])
         board.Add(t)
     if stamp and stamped != 1:
-        raise SystemExit("pcb: FAB_STAMP found no unique 'rev A' silk line")
+        raise SystemExit(
+            f"pcb: FAB_STAMP found no unique 'rev {circuit.REV}' silk line")
 
 
 def add_silk_shapes(board):

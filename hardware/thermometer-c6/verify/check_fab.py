@@ -127,7 +127,7 @@ def main():
     # 1. stamp format + presence on the exported board, absence on the committed
     check(bool(STAMP_RE.match(stamp)),
           f"stamp: {stamp!r} does not match '<7-12 hex> YYYY-MM-DD'")
-    needle = f"rev A {stamp}"
+    needle = f"rev {circuit.REV} {stamp}"
     btext = read_text(fab_board)
     check(btext is not None, f"stamp: exported board {fab_board} missing")
     if btext is not None:
