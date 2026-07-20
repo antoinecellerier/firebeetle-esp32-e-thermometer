@@ -64,7 +64,11 @@ PLACE = {
     "C3": (11.37, 22.52, 90),
     "C4": (8.11, 23.95, 90),
     "TP4": (11.37, 23.295, 0, "B"),
-    "J3": (23.4, 1.745, 180),
+    # Datum-correct per out/j3-datum/: HRO's "5.79" is PCB EDGE -> NPTH post
+    # CENTRELINE, and "4.18" is shell-slot centre to shell-slot centre, so the
+    # front shell slot belongs 2.11mm from the edge (not 0.695). Aligning both
+    # shell-slot rows on nominal gives exactly +1.415mm south for each.
+    "J3": (23.4, 3.160, 180),
     "R1": (21.98, 10.63, 270),
     "R2": (20.79, 10.63, 270),
     "U3": (24.79, 11.34, 0),
@@ -213,7 +217,7 @@ TRACKS = [
     ('GND', 'F.Cu', 0.5, [(30.5, 33.4), (30.87, 32.4)]),
     ('GND', 'F.Cu', 0.5, [(14.6, 4.775), (18.98, 4.775), (19.08, 4.875)]),
     ('GND', 'F.Cu', 0.5, [(13.02, 22.49), (11.37, 21.745)]),
-    ('GND', 'F.Cu', 0.25, [(26.65, 5.79), (29.59, 5.79), (30.61, 4.77)]),
+    ('GND', 'F.Cu', 0.25, [(26.97, 5.79), (29.59, 5.79), (30.61, 4.77)]),
     ('GND', 'F.Cu', 0.25, [(19.4, 22.7), (18.75, 22.05), (18.65, 22.05), (16.75, 20.15), (16.75, 19.9), (16.7, 19.85), (15.8, 19.85), (15.8, 17.6), (16.7, 17.15), (19.58, 17.15), (20.315, 16.415), (20.315, 12.335), (20.535, 12.115), (20.8, 12.115), (20.79, 12.105), (20.79, 11.14), (21.98, 11.14)]),
     ('GND', 'F.Cu', 0.25, [(5.12, 21.5), (5.12, 21.38), (6.6, 19.9), (6.72, 19.9)]),
     ('GND', 'F.Cu', 0.25, [(30.8, 10.35), (33.27, 11.05), (33.57, 10.75), (36.75, 10.75), (37.95, 9.55)]),
@@ -265,8 +269,11 @@ STITCH = [
     (17.51, 30.34, 0.6, 0.3),
     (18.36, 30.34, 0.6, 0.3),
     (19.35, 22.05, 0.6, 0.3),
-    # (four GND stitch vias near y5.8-6.9 pruned: J3's mouth-north respin moved
-    # the USB-C pad row onto them — they fell inside VBUS/CC2/D+/D- pads.)
+    # (six GND stitch vias near y5.8-6.9 pruned across two J3 respins: the
+    # mouth-north flip moved the USB-C pad row onto four of them, and the
+    # 2026-07-20 datum move (+1.415mm south) put the two survivors at the old
+    # GND pad x — (20.15,5.79) and (26.65,5.79) — inside the NPTH plastic-post
+    # holes' clearance rings. All six served J3's old pad row only.)
     (25.51, 28.13, 0.6, 0.3),
     (25.77, 28.94, 0.6, 0.3),
     (29.375, 13.775),
@@ -300,10 +307,8 @@ STITCH = [
     (14.0, 18.3, 0.6, 0.3),
     (14.6, 4.775, 0.6, 0.3),
     (15.0, 18.3, 0.6, 0.3),
-    (20.15, 5.79, 0.6, 0.3),
     (20.9, 33.2, 0.6, 0.3),
     (23.652, 11.34, 0.6, 0.3),
-    (26.65, 5.79, 0.6, 0.3),
     (28.12, 10.39, 0.6, 0.3),
     (37.95, 16.75, 0.6, 0.3),
     (43.6, 28.25, 0.6, 0.3),
@@ -367,11 +372,18 @@ KEEPOUTS = [
     # DRC-only marker (no restrictions) on B.SilkS: scopes a negative
     # silk_clearance (see pcb.py .kicad_dru rule 'footer-silk-j3') so the
     # rev-A/github build-stamp footer (SILK, B.SilkS top-left corner block) may
-    # clip J3's mouth-north back pads without tripping silk_over_copper. The
+    # clip J3's back-side features without tripping silk_over_copper. The footer
+    # text bbox reaches x20.68/y5.71; J3's datum-correct placement puts its FRONT
+    # shell (SH/GND) pad at x18.58..19.58 y1.31..2.91, its REAR shell pad at the
+    # same x y5.24..7.34 and the west NPTH post's mask aperture at x20.21..20.81
+    # y5.46..6.06 -- all three inside that bbox. Re-verified 2026-07-20 after the
+    # +1.415mm move by rendering with the rule REMOVED: 1 silk_over_copper
+    # survives, so the waiver is still load-bearing (the edge-clearance-usb-c
+    # waiver, by contrast, was deleted -- it waived a placement bug). The
     # footer is pinned to the west edge, can't shrink (>=0.8mm text) and can't
     # drop south (antenna labels + JLC token), so its east end unavoidably
-    # overlaps J3's NW pads; the stamp's position is cosmetic, so waive there
-    # rather than relocate it off its corner. Same idiom as silk-merge: the
+    # reaches J3's west shell column; the stamp's position is cosmetic, so waive
+    # there rather than relocate it off its corner. Same idiom as silk-merge: the
     # marker sits in the pad-free WEST portion of the footer block (x2..6, over
     # the URL/name lines, no back pad within reach) so its own B.SilkS outline
     # trips no silk_over_copper, and A.insideArea matches the WHOLE footer object
@@ -440,28 +452,39 @@ MODELS_3D = {
         ("Bosch_LGA-9_3.25x3.25mm_BMP585.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
     "local:XUNPU_FPC-05FB-24PH20":
         # The model renders the physical truth: SMT tails at the REAR
-        # (actuator) face, mouth/cable-entry slot on the far side. Numeric
-        # STEP proof (2026-07-19, out/j4-proof/): gold-contact feet 0.5mm
-        # inside the rear wall, mouth lips 6.55mm away. J4 is placed pads-west
-        # / mouth-east (rot 90), so the model seats with the mouth at the east
-        # board edge, matching the panel-cable approach.
-        ("XUNPU_FPC-05FB-24PH20.step", (0, 1.35, 0), (0, 0, 0), (1, 1, 1)),
+        # (actuator) face, mouth/cable-entry slot on the far side. J4 is placed
+        # pads-west / mouth-east (rot 90), so the model seats mouth-east.
+        # oy=1.825 registers THREE independent features exactly (err 0.000 on
+        # each), against the footprint's corrected outline: rear/actuator wall
+        # on F.Fab -2.075, mouth face on F.Fab +3.325, and the gold feet centred
+        # on the pad row at -1.625. The former 1.35 was fitted against the
+        # 7.05mm-deep body outline that the raw-CARTESIAN_POINT bbox artifact
+        # produced (out/j3-land/ section 7), and it sat the whole model 0.475mm
+        # east -- far enough that the feet (local -1.500..-0.800) hung off the
+        # south end of their own 1.2mm pads (-2.225..-1.025).
+        ("XUNPU_FPC-05FB-24PH20.step", (0, 1.825, 0), (0, 0, 0), (1, 1, 1)),
     "local:SW_TS-1187A":
         ("SW_TS-1187A.step", (0, 0, 0), (0, 0, 0), (1, 1, 1)),
     "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal":
         ("JST_PH_S2B-PH-SM4-TB_Horizontal.step", (0.98, -3.25, 0), (0, 0, 0), (1, 1, 1)),
-    "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12":
+    "local:USB_C_Receptacle_HRO_TYPE-C-31-M-12":
         # The JLC/EasyEDA STEP has its gold SMT tails at model +y and its origin
         # at the front-shell reference, ~2.3mm south of the land-pattern centroid
         # -- so the z-rot-180 that faces the mouth north pivots the body about
         # that off-centre origin and needs a y offset re-derived in the rotated
         # frame, not the un-rotated value. rotate (0,0,180) seats the mouth over
-        # the north board edge and the gold tails on the south pad row; offset
-        # (0,-0.94,0) lands the 4 shell legs in their plated slots and the 2
-        # plastic posts in the NPTH holes (numeric STEP proof 2026-07-20,
-        # out/j3-proof/: shell pegs <=0.11mm, NPTH <=0.14mm, tail row 0.11mm; x
-        # exact; model front->rear leg span 4.175mm vs land 4.180mm).
-        ("USB_C_Receptacle_HRO_TYPE-C-31-M-12.step", (0, -0.94, 0), (0, 0, 180), (1, 1, 1)),
+        # the north board edge and the gold tails on the south pad row.
+        # oy=-1.050 is PEG-EXACT: it puts the front shell legs and both plastic
+        # posts dead on their holes (residual 0.000mm) and the rear legs 0.005mm
+        # out -- that 0.005 is the model's own 4.175mm front->rear leg span vs
+        # the land's 4.180mm and is irreducible. The feet then land at 6.560..
+        # 7.410 inside the 6.310..7.760 pad, i.e. heel +0.250 / toe +0.350, so
+        # pegs, posts AND feet register simultaneously. (The former -0.94 was a
+        # compromise splitting 0.22mm between pegs and feet; that 0.22mm WAS the
+        # land error the out/j3-land pad shift removes.) Measured from FACE
+        # VERTICES only -- a raw CARTESIAN_POINT bbox picks up LINE /
+        # AXIS2_PLACEMENT_3D parameterisation origins that own no geometry.
+        ("USB_C_Receptacle_HRO_TYPE-C-31-M-12.step", (0, -1.050, 0), (0, 0, 180), (1, 1, 1)),
 }
 
 # Functional silkscreen (M7c, LEGIBILITY-FIRST). Every authored label is

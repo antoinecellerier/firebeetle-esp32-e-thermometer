@@ -76,9 +76,9 @@ for k in ('violations','unconnected_items','schematic_parity') for v in d.get(k,
 # the exact committed source (FAB_FORCE=1 warns instead of failing). The fab DRC
 # is the full-severity run on the *stamped* board (what actually ships) gated by
 # `drc_summary --gate-fab` (REAL=0 AND DEFERRED=0; every remaining violation must
-# be explicitly waived by a scoped rule -- currently the 2 J3 edge-launch USB-C
-# shell-pad copper_edge_clearance waivers, which the raw `make drc` target would
-# instead halt on). `git checkout -- $(PCB)` is a defensive restore of the
+# be explicitly waived by a scoped rule -- currently NONE, since the J3
+# edge-launch copper_edge_clearance waiver was deleted with the 2026-07-20 datum
+# respin that removed its cause). `git checkout -- $(PCB)` is a defensive restore of the
 # committed board against any stray non-byte-stable zone-fill noise before the
 # tree-clean guard, so only real source changes trip it.
 fab: check

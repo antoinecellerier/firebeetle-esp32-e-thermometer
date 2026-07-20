@@ -16,8 +16,10 @@ instead of the raw drc.json (or DRC PNGs) keeps the routing loop cheap.
 --gate-fab: the STRICT ship gate for `make fab`. Same classification, but a
 finished board may not merely postpone anything, so it exits 0 iff REAL == 0
 AND DEFERRED == 0 -- every remaining violation must be explicitly waived by a
-scoped rule (the J3 edge-launch USB-C shell pads). It prints the WAIVED list
-with a reason per entry so the fab log records exactly what shipped and why.
+scoped rule. It prints the WAIVED list with a reason per entry so the fab log
+records exactly what shipped and why. (The J3 edge-launch copper_edge_clearance
+waiver is GONE as of the 2026-07-20 datum respin: it waived a placement error,
+not a design intent. WAIVED is expected to be empty.)
 """
 import json
 import os
@@ -37,26 +39,16 @@ WAIVED = {"starved_thermal", "silk_edge_clearance", "silk_overlap",
 DEFERRED = {"track_dangling", "via_dangling", "unconnected_items"}
 
 
-def _involves_j3(v):
-    for it in v.get("items", []):
-        if " of J3" in (it.get("description") or ""):
-            return True
-    return False
-
-
 def classify(v):
     vtype = v.get("type")
     if vtype in WAIVED:
         return "WAIVED"
-    # J3 (USB-C) is an edge-launch receptacle: its mouth overhangs the north
-    # board edge by design and the front shell (SH) mounting pads sit at/just
-    # over the edge (~0.1mm). KiCad reports that as copper_edge_clearance no
-    # matter the rule min (copper crossing the outline is geometric, not a
-    # threshold). Waive it scoped to J3 only -- mirrors the `.kicad_dru`
-    # edge-clearance-usb-c exception; any OTHER footprint's edge violation
-    # still gates as REAL.
-    if vtype == "copper_edge_clearance" and _involves_j3(v):
-        return "WAIVED"
+    # NOTE: copper_edge_clearance is REAL for every footprint including J3.
+    # The old J3-scoped waiver covered the front shell pad hanging 0.105mm off
+    # the north edge, which out/j3-datum/ proved was a 1.415mm placement error
+    # (HRO's "5.79" is edge -> NPTH post centreline). Post-respin the edge web
+    # is 1.510mm and nothing is waived. A J3 edge violation now means the
+    # placement regressed -- fix the placement, do not re-add this branch.
     if vtype in DEFERRED:
         return "DEFERRED"
     return "REAL"
@@ -79,8 +71,6 @@ def fmt_violation(v):
 
 def waive_reason(v):
     """Why a WAIVED violation is accepted -- named in the fab log."""
-    if v.get("type") == "copper_edge_clearance" and _involves_j3(v):
-        return "J3 edge-launch USB-C shell pads at board edge (by design)"
     return "later-milestone waiver (M6 GND pour / M7 silk)"
 
 

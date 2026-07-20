@@ -44,9 +44,11 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
   into `out/fab/board/`, `rev A <hash> <date>` on silk) → **full-severity
   DRC** on the stamped board (`kicad-cli ... --severity-all`) gated by
   `drc_summary --gate-fab` (STRICT: passes iff REAL=0 AND DEFERRED=0, so every
-  remaining violation must be explicitly waived by a scoped rule — the 2 J3
-  edge-launch USB-C shell-pad `copper_edge_clearance`; the accepted WAIVED list
-  is printed to the fab log). The raw `make drc` target still halts on ANY
+  remaining violation must be explicitly waived by a scoped rule — currently
+  none; the accepted WAIVED list is printed to the fab log). The J3 edge-launch
+  `copper_edge_clearance` waiver was deleted on 2026-07-20: it was waiving a
+  1.415mm placement error (`out/j3-datum/`), not a design intent. Fix geometry,
+  don't add waivers. The raw `make drc` target still halts on ANY
   violation (routing/manual use); it is deliberately NOT a `fab` prereq. →
   gerbers/drill + `fab_cpl.py` CPL/BOM/rotation-checklist → zip →
   `verify/check_fab.py` (re-derives the same REAL=0/DEFERRED=0/waived-allowed

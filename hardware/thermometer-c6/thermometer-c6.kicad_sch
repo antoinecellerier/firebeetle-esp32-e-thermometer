@@ -17583,7 +17583,7 @@
         )
       )
     )
-    (property "Footprint" "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12"
+    (property "Footprint" "local:USB_C_Receptacle_HRO_TYPE-C-31-M-12"
       (at 203.2 53.34 0)
       (effects
         (font

@@ -501,16 +501,15 @@ def write_dru(alias):
         f.write("(rule hv-clearance-j4\n"
                 "  (condition \"A.memberOfFootprint('J4') && B.memberOfFootprint('J4')\")\n"
                 "  (constraint clearance (min 0.18mm)))\n")
-        # J3 (USB-C receptacle) is an edge-launch part: its mouth overhangs the
-        # north board edge by design, and mouth-north (respin 2026-07-19) puts the
-        # front shell (SH GND) mounting pads AT/just over the edge (~0.1mm) while
-        # the 16 signal tails sit safely inboard at y5.79. JLC builds edge-launch
-        # USB-C routinely, so drop the copper-to-edge floor to 0 for J3's own
-        # copper (every other net keeps the tightened 0.3mm). Matches the
-        # hv-clearance-j4 scoped-exception idiom.
-        f.write("(rule edge-clearance-usb-c\n"
-                "  (condition \"A.memberOfFootprint('J3')\")\n"
-                "  (constraint edge_clearance (min 0mm)))\n")
+        # (No J3 edge_clearance exception. The former 'edge-clearance-usb-c' rule
+        # waived 2 copper_edge_clearance errors on the front shell pads, which
+        # were the SYMPTOM of a placement error, not a property of an edge-launch
+        # part: out/j3-datum/ showed HRO's "5.79" datum lands on the NPTH post
+        # centreline, so J3 belonged 1.415mm further south. Before the move the
+        # front shell pad hung 0.105mm OFF the board edge and its drill left a
+        # 0.095mm web; after it, the web is 1.510mm and both violations vanish on
+        # their own. Do not reinstate -- a J3 edge_clearance error now means the
+        # placement regressed.)
         # Global hole-to-hole is 0.5mm (JLC). Relax it to 0.25mm between holes
         # of the SAME net: a drill-breakout there can only merge already-common
         # copper, so there is no short risk (JLC accepts same-net hole spacing
@@ -544,7 +543,9 @@ def write_dru(alias):
                 "  (constraint silk_clearance (min -0.3mm)))\n")
         # The rev-A/github build-stamp footer (pcb_layout.SILK, B.SilkS NW-corner
         # block) is edge-pinned and can't shrink, so its east end unavoidably
-        # clips J3's mouth-north back pads. Its position is cosmetic, so waive
+        # clips J3's west shell column (both SH pads + the west NPTH mask
+        # aperture -- re-verified 2026-07-20 against the datum-correct placement
+        # by rendering with this rule removed). Its position is cosmetic, so waive
         # silk_over_copper only there, scoped to the 'footer-silk-j3' rule area
         # (pcb_layout.KEEPOUTS) in the footer's pad-free WEST portion. Same idiom
         # as silk-merge: A.insideArea matches the WHOLE footer object because it

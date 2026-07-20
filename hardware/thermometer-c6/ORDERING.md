@@ -57,27 +57,45 @@ this file is the human procedure around it. Settled fab decisions live in
       re-walk the JLC preview for J4 before paying. JLC's preview model showed
       the true orientation all along (tails with actuator); the land pattern
       was the error.
-- [ ] **J3 PLACEMENT FIXED — USB ROUTING PENDING before re-export (respin
-      2026-07-19).** Numeric STEP + datasheet analysis (`out/j3-proof/` + the
-      manufacturer drawing `HRO_TYPE-C-31-M-12_datasheet.pdf`) proved the old
-      placement (rot 0) sat the HRO USB-C mouth facing SOUTH into the board with
-      the solder-tail row at the north edge — an unpluggable connector; the JLC
-      3D model was mis-registered 180° and masked it. **Done:** J3 re-placed
-      mouth-NORTH (rot 180, anchor y 5.0→1.745) so the 16-tail pad row lands
-      5.79mm from the north edge (datasheet-exact) and the mouth overhangs the
-      edge ~1.9mm; the STEP model got a `(0,0,180)` rotation so the preview now
-      matches the copper. The old USB fan-out to the north pad row was cut, and
-      three through-nets that had threaded the old under-body space (VSYS spine,
-      EPD_RST jog, CHG_STAT north-edge link) plus a VBUS bus→booster branch were
-      cut back where the flipped pad row/shell now sits. **Still to do before
-      ordering:** re-route J3's VBUS/CC1/CC2/D+/D- to the new south pad row and
-      re-connect the three displaced through-nets around the connector
-      (currently 12 non-GND unconnected items by design; GND pour-handled),
-      re-run `make fab`, and re-upload; the J3 CPL rotation delta was reset to 0
-      (unverified — the old +180 was verified for rot-0 placement only) so
-      re-walk the JLC preview for J3 before paying. The mouth-side shell (SH)
-      pads sit ~0.1mm over the north edge by design (edge-launch USB-C); the
-      `edge-clearance-usb-c` DRU + drc_summary waive it scoped to J3.
+- [ ] **J3 PLACEMENT DATUM-CORRECT — USB ROUTING PENDING before re-export
+      (respins 2026-07-19 + 2026-07-20).** The 2026-07-19 pass (`out/j3-proof/`)
+      fixed the ORIENTATION: the old rot-0 placement sat the HRO USB-C mouth
+      facing SOUTH into the board with the solder tails at the north edge — an
+      unpluggable connector, masked by a 3D model mis-registered 180°. J3 was
+      re-placed mouth-NORTH (rot 180). The 2026-07-20 pass fixed the DATUM and
+      the LAND, and both were wrong:
+      * **Datum** (`out/j3-datum/`, datasheet content-stream parse + 1200dpi
+        raster + STEP, three methods agreeing to ≤0.005mm). HRO's `5.79` is
+        measured **PCB EDGE → ⌀0.60 NPTH post CENTRELINE**, not to the pad row,
+        and `4.18` is **shell-slot centre to shell-slot centre**. The front
+        shell slot therefore belongs **2.11mm** from the edge, not 0.695 — J3
+        was **1.415mm too far north**. Fixed: `PLACE["J3"]` y 1.745 → 3.160.
+      * **Land** (`out/j3-land/`, solder foot isolated from the STEP by
+        colour + planarity + z=0, measured 0.850mm). The stock KiCad land left
+        only **+0.080mm heel** protrusion (below IPC-7351B *Least* 0.25, and
+        negative under the tolerance stack) while spending +0.520 on toe. The
+        footprint is now a project fork,
+        `local:USB_C_Receptacle_HRO_TYPE-C-31-M-12`, with the SMT row shifted
+        0.170mm toward the mouth and the NPTH posts 0.65 → 0.60mm (HRO's own
+        value — it is what makes the shift legal at the 0.25mm `hole_clearance`
+        rule). Result: heel **+0.250** / toe **+0.350**, 100% of the 0.200mm
+        heel-fillet zone covered.
+      The `edge-clearance-usb-c` DRU rule and its `drc_summary` waiver are
+      **DELETED**. They existed only to waive 2 `copper_edge_clearance` errors
+      caused by the front shell pad hanging 0.105mm OFF the board edge — a
+      symptom of the placement error, not a property of an edge-launch part.
+      The edge web is now 1.510mm and full-severity DRC is REAL=0 **WAIVED=0**
+      with no J3 exception. `check_pcb.py` §9b now asserts the whole datasheet
+      chain (front slot 2.110 from the edge, 4.180 slot span, 3.650 to the NPTH,
+      4.925 to the pad row) plus "no shell pad overhangs the edge", so a datum
+      regression fails the gate instead of being waived.
+      **Still to do before ordering:** re-route the cut copper — VBUS, D+ and D−
+      to the new y7.035 pad row, plus EPD_BUSY, EPD_RST and the VSYS north
+      crossing which the datum-correct body now sits on (CC1 and CC2 survived
+      the move and are still routed). Currently 11 unconnected items + 9 dangling
+      track ends + 2 dangling vias, all by design. Then re-run `make fab` and
+      re-upload; the J3 CPL rotation delta is 0 and **unverified**, so **re-walk
+      the JLC order preview for J3** before paying.
 - [ ] **D1 CPL DELTA RESET (respin 2026-07-20).** The mouth-north J3 USB
       reroute re-placed D1 (status LED) rot 90 → 180, voiding its 2026-07-18
       LED_0603 preview verification; its CPL delta was reset to 0 (unverified)

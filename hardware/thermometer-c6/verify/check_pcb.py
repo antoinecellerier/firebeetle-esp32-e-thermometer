@@ -315,47 +315,116 @@ def main():
         colx = pads["1"][0] if "1" in pads else cx
         if not colx < cx - 0.5:
             fail(f"J4 pad column (x={colx:.2f}) not west of centre x={cx:.2f}")
-        # (c) mouth reaches the east board edge: footprint extent (fab/courtyard)
-        #     comes within 0.5mm of it
-        bb = j4.GetBoundingBox(False, False)
-        fab_max_x = bb.GetRight() / 1e6 - ORIGIN[0]
-        east = pl.BOARD["size"][0]
-        if fab_max_x < east - 0.5:
-            fail(f"J4 mouth extent (max-x={fab_max_x:.2f}) does not reach the "
-                 f"east edge (x={east}); is the connector flipped mouth-west?")
+        # (c) the body opens EAST, and is the depth the part actually has.
+        #     Datum = the SMT contact row. Measured from the STEP's FACE
+        #     VERTICES (local.3dmodels/XUNPU_FPC-05FB-24PH20.step, bbox
+        #     Y[-5.150,+0.250]): mouth face 4.95mm from the feet, rear/actuator
+        #     wall 0.45mm behind them, body 5.40mm deep. A 180-deg flip makes
+        #     mouth_off negative, so this catches the same error the old
+        #     "reaches the east edge" test did -- but it ALSO pins the depth,
+        #     which the old test could not: the footprint shipped a 7.05mm body
+        #     until 2026-07-20, because bounding-boxing raw CARTESIAN_POINTs
+        #     picked up LINE / AXIS2_PLACEMENT_3D origins owning no geometry
+        #     (out/j3-land/ section 7). The mouth is now ~1.6mm inboard of the
+        #     east edge instead of flush -- fine for an FPC, the cable just
+        #     inserts deeper -- so "near the edge" is no longer the invariant.
+        fabx = [rel(p)[0] for g in j4.GraphicalItems()
+                if g.GetLayerName() == "F.Fab" and g.GetClass().startswith("PCB_SHAPE")
+                for p in (g.GetStart(), g.GetEnd())]
+        if not fabx:
+            fail("J4 F.Fab body outline missing")
+        else:
+            mouth_off, rear_off = max(fabx) - colx, colx - min(fabx)
+            if abs(mouth_off - 4.95) > 0.10:
+                fail(f"J4 mouth face is {mouth_off:+.3f}mm east of the contact row, "
+                     f"expected +4.95 (STEP); flipped mouth-west, or the body "
+                     f"depth regressed?")
+            if abs(rear_off - 0.45) > 0.10:
+                fail(f"J4 rear wall is {rear_off:+.3f}mm west of the contact row, "
+                     f"expected +0.45 (STEP)")
+            east = pl.BOARD["size"][0]
+            if max(fabx) > east:
+                fail(f"J4 body (max-x={max(fabx):.2f}) overhangs the east edge "
+                     f"(x={east})")
 
-    # 9b. J3 USB-C orientation guard. Same trap as J4: a 180-deg flip keeps every
-    #     pad on its intended net and stays DRC-clean, so only the STEP/land-
-    #     pattern geometry distinguishes mouth-north from mouth-south (the error
-    #     that shipped to preview -- 2026-07-19 respin fixed it, out/j3-proof/).
-    #     Pin it: the connector is rotated 180, its solder-tail/signal pad row is
-    #     SOUTH of the body centre (inboard of the mouth), and the mouth extent
-    #     reaches/overhangs the NORTH board edge (y=0).
+    # 9b. J3 USB-C orientation AND datum guard. Same flip trap as J4 (a 180-deg
+    #     flip keeps every pad on its net and stays DRC-clean), plus the datum
+    #     error that flip masked. Both are asserted against HRO's own drawing
+    #     rather than against whatever the board currently says:
+    #
+    #       out/j3-datum/ parsed the datasheet's vector content stream and
+    #       proved "5.79" is PCB EDGE -> NPTH POST CENTRELINE (not to the pad
+    #       row) and "4.18" is shell-slot centre to shell-slot centre. So off
+    #       the north board edge the chain is, in mm:
+    #         front shell slot  2.11   (drawing 2.1078, HRO tol +-0.05)
+    #         + 4.18 -> rear shell slot        (drawing 4.1716)
+    #         + 3.65 -> NPTH plastic post      (STEP-measured post axis; the
+    #                                           drawing's 3.6716 is the outlier)
+    #         + 4.925 -> SMT pad row centre    (out/j3-land land: heel 4.200
+    #                                           from the front slot + 1.45/2)
+    #       Until 2026-07-20 the board read 0.695 for the front slot, i.e.
+    #       1.415mm too far north, which hung the front shell pad 0.105mm OFF
+    #       the board and produced the 2 copper_edge_clearance errors that the
+    #       (now deleted) edge-clearance-usb-c DRU rule waived. Test (e) is that
+    #       waiver's replacement: assert the pad is ON the board, so a datum
+    #       regression fails here instead of being silently waived at fab time.
     j3 = next((fp for fp in board.Footprints()
                if fp.GetReference() == "J3"), None)
     if j3 is None:
         fail("J3 footprint missing")
     else:
-        cx, cy = rel(j3.GetPosition())
         rot = j3.GetOrientationDegrees() % 360
         pads = {str(p.GetNumber()): rel(p.GetPosition())
                 for p in j3.Pads() if str(p.GetNumber()) not in ("", "SH")}
+        shell = sorted({round(rel(p.GetPosition())[1], 3)
+                        for p in j3.Pads() if str(p.GetNumber()) == "SH"})
+        npth = sorted({round(rel(p.GetPosition())[1], 3)
+                       for p in j3.Pads() if str(p.GetNumber()) == ""})
         # (a) rotation 180 (mouth-north)
         if abs(rot - 180) > 1:
             fail(f"J3 rotation is {rot:.0f}, expected 180 (mouth-north)")
-        # (b) signal pad row south of the body centre: the 16-tail row sits
-        #     inboard of the mouth, not at the edge
-        row = pads.get("A1")
-        if row is None:
-            fail("J3 pad A1 missing")
-        elif not row[1] > cy:
-            fail(f"J3 pad row (y={row[1]:.2f}) not south of centre y={cy:.2f}; "
-                 f"is the connector flipped mouth-south?")
-        # (c) mouth extent reaches/overhangs the north board edge (y=0)
-        bb = j3.GetBoundingBox(False, False)
-        fab_min_y = bb.GetTop() / 1e6 - ORIGIN[1]
-        if fab_min_y > 0.5:
-            fail(f"J3 mouth extent (min-y={fab_min_y:.2f}) does not reach the "
+        # (b) the datasheet chain off the north board edge
+        if len(shell) != 2:
+            fail(f"J3: expected 2 distinct shell-slot rows, got {shell}")
+        elif len(npth) != 1:
+            fail(f"J3: expected 1 NPTH post row, got {npth}")
+        else:
+            front, rear = shell
+            for got, want, what in ((front, 2.110, "front shell slot from the north edge"),
+                                    (rear - front, 4.180, "front->rear shell slot span"),
+                                    (npth[0] - front, 3.650, "front slot->NPTH post")):
+                if abs(got - want) > 0.05:
+                    fail(f"J3 {what} is {got:.3f}, expected {want:.3f} "
+                         f"(HRO drawing, tol +-0.05)")
+            # (c) the SMT land sits where out/j3-land put it (heel +0.250 /
+            #     toe +0.350 against the measured 0.850mm solder foot)
+            row = pads.get("A1")
+            if row is None:
+                fail("J3 pad A1 missing")
+            else:
+                if abs((row[1] - front) - 4.925) > 0.05:
+                    fail(f"J3 pad row is {row[1] - front:.3f} from the front shell "
+                         f"slot, expected 4.925 (land: heel 4.200 + 1.45/2)")
+                # (d) mouth-north: the tail row is INBOARD of both shell rows
+                if not row[1] > rear:
+                    fail(f"J3 pad row (y={row[1]:.3f}) is not south of the rear "
+                         f"shell slot (y={rear:.3f}); flipped mouth-south?")
+        # (e) every shell pad is ON the board (replaces the deleted
+        #     edge-clearance-usb-c waiver -- see the note above)
+        for p in j3.Pads():
+            if str(p.GetNumber()) != "SH":
+                continue
+            top = p.GetBoundingBox().GetTop() / 1e6 - ORIGIN[1]
+            if top < 0:
+                fail(f"J3 shell pad at x={rel(p.GetPosition())[0]:.2f} overhangs "
+                     f"the north board edge by {-top:.3f}mm; J3 is placed too far "
+                     f"north (datum regression)")
+        # (f) the mouth itself still overhangs the north edge (edge-launch)
+        fabmy = [rel(p)[1] for g in j3.GraphicalItems()
+                 if g.GetLayerName() == "F.Fab" and g.GetClass().startswith("PCB_SHAPE")
+                 for p in (g.GetStart(), g.GetEnd())]
+        if fabmy and min(fabmy) > 0:
+            fail(f"J3 mouth (F.Fab min-y={min(fabmy):.3f}) does not reach the "
                  f"north edge (y=0); is the connector flipped mouth-south?")
 
     if report:
