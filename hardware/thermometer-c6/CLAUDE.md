@@ -193,6 +193,9 @@ route` → diff the failure list.
   routed copper, pads, straggler lines.
 - `plot_pcb.py [--crop x1 y1 x2 y2]` — board map, courtyards, ratsnest.
 - `pads.py [REF | REF.PAD | net:N | box:x1,y1,x2,y2]` — pad/courtyard geometry.
+- `copper_stats.py [BOARD] [--vs REF]` — routed-copper census (segments, vias,
+  per-layer/per-net length); `--vs` takes a board file or a git rev and prints
+  the A/B delta with per-net movers and vias by region.
 - `gnd_islands.py [BOARD] [--png OUT]` — GND connectivity + single-point-of-
   failure audit; default board is the committed one, pass `out/hand/...` to
   audit a GUI copy.
