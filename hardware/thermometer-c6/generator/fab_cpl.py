@@ -54,7 +54,11 @@ FAB_ROTATIONS = [  # (regex vs footprint lib item name, delta_deg) - first match
     (r"^SOT-23$", 180),   # Q1/Q2/Q4/Q5/Q6 bare 3-pin SOT-23: JLC zero differs from the 5/6-pin variants; delta 0 rendered legs in the pad gaps (2nd preview pass, pad-crosshair overlay)  confidence: verified  verified: 2026-07-18
     (r"^SOT-23", 270),    # U3 SOT-23-6 / U4 SOT-23-5: same -90 as TSOT (delta 0 rendered legs N/S over pad columns W/E; corner-leg coincidence fooled the 2nd-pass check)  confidence: verified  verified: 2026-07-18
     (r"^SOT-323", 180),   # Q3 SC-70: 3-pin like bare SOT-23 — delta 0 rendered 1-leg-N/2-legs-S over 2-pads-N/1-pad-S (user-confirmed crop, 2nd preview pass)  confidence: verified  verified: 2026-07-18
-    (r"^USB_C_Receptacle_HRO_TYPE-C-31-M-12", 180),  # J3  superseded by the REF_ROTATION_OVERRIDES["J3"] entry below (the 2026-07-19 mouth-north respin flipped J3's placement rotation to 180, voiding this delta's 2026-07-18 verification)  confidence: low  verified:
+    # (USB_C_Receptacle_HRO_TYPE-C-31-M-12 handled per-ref via
+    #  REF_ROTATION_OVERRIDES["J3"] since the 2026-07-19 mouth-north respin; the
+    #  old +180 pattern is gone because the override wins in delta_for, leaving
+    #  the pattern dead — check_invariants rejects dead rules. Delta stays
+    #  unverified on the override pending a JLC preview re-walk.)
     (r"^JST_PH_S", 0),    # J1  source: JLC preview 2026-07-18, tails/pin-1 dot vs pads  confidence: verified  verified: 2026-07-18
     (r"^D_SOD-123", 0),   # D4/D5/D6 MBR0530  source: JLC preview 2026-07-18, cathode bands  confidence: verified  verified: 2026-07-18
     (r"^D_SMA", 0),       # D2 SS14  cathode band WEST in JLC preview  confidence: verified  verified: 2026-07-18

@@ -24,3 +24,6 @@
 (rule silk-merge
   (condition "A.insideArea('silk-merge')")
   (constraint silk_clearance (min -0.3mm)))
+(rule footer-silk-j3
+  (condition "A.insideArea('footer-silk-j3')")
+  (constraint silk_clearance (min -0.5mm)))

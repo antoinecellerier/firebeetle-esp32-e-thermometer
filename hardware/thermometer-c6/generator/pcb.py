@@ -542,6 +542,20 @@ def write_dru(alias):
         f.write("(rule silk-merge\n"
                 "  (condition \"A.insideArea('silk-merge')\")\n"
                 "  (constraint silk_clearance (min -0.3mm)))\n")
+        # The rev-A/github build-stamp footer (pcb_layout.SILK, B.SilkS NW-corner
+        # block) is edge-pinned and can't shrink, so its east end unavoidably
+        # clips J3's mouth-north back pads. Its position is cosmetic, so waive
+        # silk_over_copper only there, scoped to the 'footer-silk-j3' rule area
+        # (pcb_layout.KEEPOUTS) in the footer's pad-free WEST portion. Same idiom
+        # as silk-merge: A.insideArea matches the WHOLE footer object because it
+        # threads the marker, so the negative silk_clearance covers the footer's
+        # clip over J3 (silk_clearance governs the "silk clipped by solder mask"
+        # check too -- a global negative min zeroes it), while the marker's own
+        # outline sits over bare back copper and trips nothing. memberOfFootprint
+        # does NOT work here: the derived solder-mask shape is not a J3 member.
+        f.write("(rule footer-silk-j3\n"
+                "  (condition \"A.insideArea('footer-silk-j3')\")\n"
+                "  (constraint silk_clearance (min -0.5mm)))\n")
 
 
 def write_fp_lib_table():

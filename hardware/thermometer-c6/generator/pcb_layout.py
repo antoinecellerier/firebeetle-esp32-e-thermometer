@@ -155,16 +155,12 @@ PLACE = {
     "C17": (35.55, 20.6, 90),
     "C18": (35.45, 24.6, 90),
     "TP6": (38.45, 21.95, 0, "B"),
-    # TP7 (EPD_PREVGL bench pad) lives between C16 and D6 on the bottom face:
-    # its 2.1mm HV B.Cu wall sits out of the south corridor's east-running band
-    # (y26.5..29.2) and out of the pinch band x28.7..31.1, next to the copper
-    # it senses (D6.2/C18.1), leaving B.Cu descent slots either side.
+    # TP7 (EPD_PREVGL bench pad): SE bench cluster with TP6/TP10 on the bottom
+    # face, just N of the J5 pinout legend; senses D6.2/C18.1 (EPD_PREVGL).
     "TP7": (35.45, 25.55, 0, "B"),
     "TP8": (31.29, 14.4225, 0, "B"),
-    # TP9 (EPD_RESE bench pad) kisses its own net's B.Cu sense column at
-    # x35.45 (same net, zero-length hookup): at its old (32.3, 13.5) spot it
-    # walled the only free north-south B.Cu seam east of the booster, which
-    # DBG_IO8's descent and ~EPD_VGH's C20-to-J4.5 hook both need.
+    # TP9 (EPD_RESE bench pad): on the x35.45 RESE sense column (R14/R15/R16,
+    # JP2-4), a same-net zero-length hookup, N of R16 in the NE booster area.
     "TP9": (35.45, 9.8125, 0, "B"),
     "J4": (43.075, 16.8, 90),
     "C19": (30.8, 11.3, 90),
@@ -367,6 +363,22 @@ KEEPOUTS = [
     # straighten.py and widen.py from ever treating it as a copper keep-out.
     dict(name="silk-merge", layers=["F.SilkS"], rect=(26.5, 27.4, 27.3, 28.1),
          tracks=False, vias=False, fills=False, pads=False),
+    # DRC-only marker (no restrictions) on B.SilkS: scopes a negative
+    # silk_clearance (see pcb.py .kicad_dru rule 'footer-silk-j3') so the
+    # rev-A/github build-stamp footer (SILK, B.SilkS top-left corner block) may
+    # clip J3's mouth-north back pads without tripping silk_over_copper. The
+    # footer is pinned to the west edge, can't shrink (>=0.8mm text) and can't
+    # drop south (antenna labels + JLC token), so its east end unavoidably
+    # overlaps J3's NW pads; the stamp's position is cosmetic, so waive there
+    # rather than relocate it off its corner. Same idiom as silk-merge: the
+    # marker sits in the pad-free WEST portion of the footer block (x2..6, over
+    # the URL/name lines, no back pad within reach) so its own B.SilkS outline
+    # trips no silk_over_copper, and A.insideArea matches the WHOLE footer object
+    # because it threads the marker -> the negative clearance then covers the
+    # footer's clip over J3 too. Tightly scoped: no other B.SilkS threads this
+    # box. Not in check_pcb.py's "nothing inside" list (silk, not copper).
+    dict(name="footer-silk-j3", layers=["B.SilkS"], rect=(2.0, 0.5, 6.0, 7.0),
+         tracks=False, vias=False, fills=False, pads=False),
 ]
 
 # Reference-designator overrides for the refs kept on F.SilkS (J1/J5/U5/U6
@@ -466,7 +478,10 @@ SILK = [
     # buttons / LEDs
     ("RST", 3.9, 6.5, 0.8, 0),          # S of SW1
     ("BOOT", 11.6, 6.5, 0.8, 0),        # S of SW2
-    ("CHG", 16.5, 6.5, 0.8, 0),         # S of D1 (charge LED)
+    # D1 (charge LED) sits in the packed charger cluster with no adjacent silk
+    # gap; CHG goes in the nearest clear pocket, S of D1 past R4 (D1 is the only
+    # LED here, so the cue is unambiguous).
+    ("CHG", 33.1, 7.9, 0.8, 0),         # near D1 (charge LED)
     ("STATUS", 14.5, 34.2, 0.8, 0),     # S of D3 (status LED), nudged W of J1.MP
     # battery connector J1: BAT + polarity in the clear pocket N of J1's body
     ("BAT", 18.0, 24.2, 0.8, 0),
@@ -499,31 +514,32 @@ SILK = [
     ("2\n4", 40.4, 22.6, 0.8, 0),       # W of J4 pin 24 (south end)
 
     # === BACK (B.SilkS, mirrored) — bench test points, label beside each pad ===
-    # TP1 VBAT / TP3 GND north of their pads; TP2's GND sits SOUTH of its pad so
-    # the two GND labels don't read as one row.
-    ("VBAT", 18.5, 25.7, 0.8, 0, "B.SilkS"),
-    ("GND", 21.2, 29.2, 0.8, 0, "B.SilkS"),
-    ("GND", 23.9, 25.7, 0.8, 0, "B.SilkS"),
+    # One label per TP, on that TP's most open side, clear of its silk ring.
+    # TP3's GND sits north of its pad, TP2's GND south, so the two GND labels
+    # don't read as one row.
+    ("VBAT", 15.2, 24.1, 0.8, 0, "B.SilkS"),       # N of TP1
+    ("GND", 21.2, 29.2, 0.8, 0, "B.SilkS"),        # S of TP2
+    ("GND", 23.9, 25.7, 0.8, 0, "B.SilkS"),        # N of TP3
     # TP4 is the 3V3 rail probe-ONLY pad (RT9080 forbids back-drive); the
     # "probe-only" warning rides on TP4's own label.
-    ("3V3 probe-only", 11.6, 32.3, 0.8, 0, "B.SilkS"),
-    ("EPD_VCC", 24.0, 11.9, 0.8, 0, "B.SilkS"),
-    # PREVGH/PREVGL/VCOM sit NORTH of their pads (smaller y) so they don't
-    # crowd the J5 pinout legend that occupies the strip to their south.
-    ("PREVGH", 38.4, 22.0, 0.8, 0, "B.SilkS"),
-    ("PREVGL", 33.4, 22.8, 0.8, 0, "B.SilkS"),
-    ("GDR", 29.0, 14.4, 0.8, 0, "B.SilkS"),
-    ("RESE", 36.35, 12.3, 0.8, 0, "B.SilkS"),
-    ("VCOM", 44.4, 24.0, 0.8, 0, "B.SilkS"),
-    ("VBAT_ADC", 13.2, 21.5, 0.8, 0, "B.SilkS"),   # tracks TP11 (moved +0.2 in x)
+    ("3V3 probe-only", 11.37, 21.3, 0.8, 0, "B.SilkS"),  # N of TP4
+    ("EPD_VCC", 25.5, 21.8, 0.8, 0, "B.SilkS"),    # E of TP5
+    # PREVGH/PREVGL sit NORTH of their pads; VCOM sits EAST of TP10 (the gap
+    # north of TP10 is pinched between TP6's and TP10's silk rings). All clear
+    # the J5 pinout legend that occupies the strip to their south.
+    ("PREVGH", 38.45, 20.0, 0.8, 0, "B.SilkS"),    # N of TP6
+    ("PREVGL", 34.7, 23.6, 0.8, 0, "B.SilkS"),     # N of TP7
+    ("GDR", 28.7, 14.42, 0.8, 0, "B.SilkS"),       # W of TP8
+    ("RESE", 38.5, 9.81, 0.8, 0, "B.SilkS"),       # E of TP9
+    ("VCOM", 41.35, 25.55, 0.8, 0, "B.SilkS"),     # E of TP10
+    ("VBAT_ADC", 12.12, 29.65, 0.8, 0, "B.SilkS"), # S of TP11
 
     # Optional DNP hand-solder BACK parts: refdes + value beside each pad so the
     # assembler knows what fits there (both bottom-side, populated only if the
     # respective ring/startup issue proves real).
     ("D7 SMF5.0A", 30.5, 10.0, 0.8, 0, "B.SilkS"),  # VBUS surge clamp, S of D7
-    # R9 10M (crystal bias) moved E of R9, clear of the VBAT_ADC TP label to its
-    # west (VBAT_ADC right edge x15.98; this label left edge x19.55).
-    ("R9 10M", 22.0, 20.5, 0.8, 0, "B.SilkS"),
+    # R9 10M (crystal bias) sits N of R9, clear of TP5's silk ring to its SE.
+    ("R9 10M", 18.5, 19.2, 0.8, 0, "B.SilkS"),
 
     # JLCPCB order-number placement token (JLC's "specify a location" option):
     # JLC swaps this 12-char string for the board's order number (~same 8.5mm
@@ -576,10 +592,12 @@ SILK = [
     # lives here on the back, north of the header, column-aligned over the
     # through-hole pin pairs: each x-column is a pin pair, upper text row = the
     # NORTH (even) pin, lower text row = the SOUTH (odd) pin. Looser 1.25mm pitch,
-    # bounded south by the pad tops (y30.21) and north by TP6 — MOUNT TOP moves up
-    # to open the rows. Pad columns x = 33.90/36.44/38.98/41.52/44.06. Pins 9&10
-    # are BOTH GND -> one centred label. MOUNT TOP: header solders to the TOP.
-    ("MOUNT TOP", 39.0, 26.9, 0.8, 0, "B.SilkS"),   # solder-side cue
+    # bounded south by the pad tops (y30.21) and north by the TP7/TP10 silk
+    # rings. Pad columns x = 33.90/36.44/38.98/41.52/44.06. Pins 9&10 are BOTH
+    # GND -> one centred label. MOUNT TOP (header solders to the TOP) sits NW of
+    # the legend, above the pin-1/2 column and W of TP7's ring — the strip
+    # directly N of the legend is now filled by the TP7/TP10 rings.
+    ("MOUNT TOP", 30.6, 25.9, 0.8, 0, "B.SilkS"),   # solder-side cue, NW of legend
     ("J5", 46.7, 32.325, 0.8, 0, "B.SilkS"),        # legend tag, SE corner
     # even pins 2/4/6/8 (NORTH row) — upper text row
     ("+3V3", 33.90, 28.15, 0.8, 0, "B.SilkS"),      # pin 2
