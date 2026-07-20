@@ -140,16 +140,18 @@ this file is the human procedure around it. Settled fab decisions live in
       board, no coating/ink over U5; standard reflow per Bosch guidelines is
       fine. Bake Y1/MSD parts at your discretion if floor life requires.
       J4 (C2856831 FPC-05FB-24PH20): mount with the contact-tail/cable-entry
-      side toward the board edge, pin 1 at the '1' silk marker — your
-      placement preview renders this model displaced from its pads; please
-      confirm orientation against the land pattern at DFM.
-      J3 (C165948 USB-C): this is an edge-launch part — the housing is MEANT
-      to overhang the north board edge by 0.49mm (HRO's own recommended
-      layout), while every pad and shell slot stays on the board. Your
-      placement preview renders the J3 body ~2.7mm past the edge, i.e. ~2.2mm
-      further out than the land pattern; the pads render correctly. Please
-      place J3 to the LAND PATTERN, not to the model body, and confirm at DFM
-      that the front shell slot sits 2.110mm from the board edge."
+      side toward the board edge, pin 1 at the '1' silk marker. Your placement
+      preview renders this model displaced from its pads — please confirm the
+      orientation against the land pattern at DFM.
+      J3 (C165948 USB-C): please place J3 to the LAND PATTERN, not to the
+      model body. In your placement preview the J3 model — body, solder tails
+      and shell legs together — renders about 1.3mm off the pads and holes.
+      J3 is an edge-launch part, so I do intend a small housing overhang past
+      the north board edge; I make it 0.49mm, with every pad and shell slot
+      still on the board, and I make the front shell slot 2.110mm from that
+      edge per the HRO TYPE-C-31-M-12 drawing. If your DFM check reads any of
+      that differently, please tell me before assembly rather than adjusting
+      it."
 - [ ] Expect one feeder-loading fee (~€2.75) per Extended BOM line — 16 lines
       as of 2026-07-18; only D3 (white C2290) and the 10k (C25744) have Basic
       same-footprint options, the rest have none (audited 2026-07-18). If JLC
