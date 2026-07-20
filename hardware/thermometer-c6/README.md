@@ -8,7 +8,9 @@ charging, LDO power tree. Design driven by the PPK2 measurement campaign in
 **Status: layout + routing complete** (48×35mm 2-layer, hand-routed,
 DRC-clean at full severity), silkscreen done. Fab export is `make fab`
 (gerbers/drill + CPL/BOM zip, git-hash+date stamped, gated by
-`verify/check_fab.py`); order per `ORDERING.md`.
+`verify/check_fab.py`); order per `ORDERING.md`. Pre-order schematic
+sign-off (requirements proven against primary sources, findings +
+dispositions): `SCHEMATIC-VERIFICATION.md`.
 
 ## Why these choices (measurement rationale)
 
