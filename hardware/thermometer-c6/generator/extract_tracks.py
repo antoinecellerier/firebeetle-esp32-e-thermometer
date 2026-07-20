@@ -15,10 +15,15 @@ whole board (every net with copper except GND) as a complete pcb_routes.py:
 (-o writes atomically; NEVER use a shell `>` redirect to pcb_routes.py --
 it truncates the file before python imports run.)
 
-Coordinates come out board-relative, matching BOARD["origin"]. In per-net
-mode net names are the exported KiCad names (rename anonymous nets to their
-circuit.py "~" names by hand); --all renames them automatically via pcb.py's
-netlist alias map (needs out/netlist.net, i.e. run `make netlist` first).
+Coordinates come out board-relative, matching BOARD["origin"], at the board's
+own nm resolution (6 decimals). Rounding them to µm is NOT safe: the GUI's
+interactive router lands 45° elbows on half-µm coordinates, and a 0.5µm shift
+towards a neighbour turns an exactly-0.2000mm clearance into a DRC error
+(EPD_VCC/DBG_TX at (21.63,16.67) did exactly that) and keeps hand_diff from
+ever reaching a clean round-trip. In per-net mode net names are the exported
+KiCad names (rename anonymous nets to their circuit.py "~" names by hand);
+--all renames them automatically via pcb.py's netlist alias map (needs
+out/netlist.net, i.e. run `make netlist` first).
 """
 import os
 import sys
@@ -43,6 +48,11 @@ file while HAND_ROUTED is set (FORCE_REROUTE=1 overrides and DESTROYS it)."""
 
 HAND_ROUTED = True
 '''
+
+
+def _mm(nm, origin):
+    """Board coordinate nm -> board-relative mm, lossless (1nm == 1e-6mm)."""
+    return round(nm / 1e6 - origin, 6)
 
 
 def main():
@@ -77,15 +87,13 @@ def main():
         net = rename.get(net, net)
         if t.GetClass() == "PCB_VIA":
             p = t.GetPosition()
-            vias.append((net, round(p.x / 1e6 - OX, 3),
-                         round(p.y / 1e6 - OY, 3)))
+            vias.append((net, _mm(p.x, OX), _mm(p.y, OY)))
         else:
             s, e = t.GetStart(), t.GetEnd()
             key = (net, layer_name.get(t.GetLayer(), "?"),
                    round(t.GetWidth() / 1e6, 3))
-            tracks[key].append(
-                ((round(s.x / 1e6 - OX, 3), round(s.y / 1e6 - OY, 3)),
-                 (round(e.x / 1e6 - OX, 3), round(e.y / 1e6 - OY, 3))))
+            tracks[key].append(((_mm(s.x, OX), _mm(s.y, OY)),
+                                (_mm(e.x, OX), _mm(e.y, OY))))
 
     if wholesale:
         print("TRACKS = [")

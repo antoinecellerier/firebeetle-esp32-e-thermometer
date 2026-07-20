@@ -111,6 +111,14 @@ Commit `pcb_layout.py` + regenerated `pcb_routes.py` + board file together
 (one cluster per commit, imperative message). If a pass leaves dangling
 authored copper on a *routed* net, the router bypassed your stub — delete it.
 
+Then refresh the working copy from the freshly rendered board (step 1's `cp`
+again) so the next GUI session starts from the generator's truth. Do it only
+once hand_diff has nothing left to report but differences the harvest is
+*meant* to absorb — pcb.py drops copper the GUI left redundant (a segment
+lying wholly inside a longer collinear one on the same net/layer) and carries
+any generator-side geometry fix you made on top of the harvest, and those two
+are the only reasons the round-trip legitimately does not close.
+
 ## Debugging a stubborn net
 
 `verify/reach.py NET W out.png` first (flood fill from the seed island —

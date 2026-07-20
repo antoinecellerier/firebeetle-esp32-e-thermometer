@@ -41,6 +41,7 @@ sys.path.insert(0, HERE)
 # import pcb_layout with routes suppressed and pcb_routes on its own.
 os.environ["PCB_NO_ROUTES"] = "1"
 import pcb_layout as pl  # noqa: E402
+import pcb  # noqa: E402
 import circuit  # noqa: E402
 from check_netlist import load_netlist  # noqa: E402
 
@@ -49,7 +50,7 @@ LAYOUT_PY = os.path.join(PROJECT, "generator", "pcb_layout.py")
 NETLIST = os.path.join(PROJECT, "out", "netlist.net")
 
 OX, OY = pl.BOARD["origin"]
-FromMM = pcbnew.FromMM
+FromMM = pcb.FromMM  # rounding, not pcbnew's truncating one (see pcb.py)
 LAYER_NAME = {pcbnew.F_Cu: "F.Cu", pcbnew.B_Cu: "B.Cu"}
 LAYER = {"F.Cu": pcbnew.F_Cu, "B.Cu": pcbnew.B_Cu}
 SILK_LAYER = {"F.SilkS": pcbnew.F_SilkS, "B.SilkS": pcbnew.B_SilkS}
@@ -112,7 +113,9 @@ def _node_nm(node, padctr):
         if p is None:
             raise SystemExit(f"hand_diff: track node {node}: no such pad")
         return (p.x, p.y)
-    return (FromMM(OX + node[0]), FromMM(OY + node[1]))
+    # origin added in nm, mirroring pcb.bmm: folding the 100mm origin in first
+    # costs the last nm of an nm-exact harvested vertex to float cancellation
+    return (FromMM(OX) + FromMM(node[0]), FromMM(OY) + FromMM(node[1]))
 
 
 def _on_seg(p, a, b):

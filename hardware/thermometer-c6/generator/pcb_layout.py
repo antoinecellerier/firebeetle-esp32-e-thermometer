@@ -108,25 +108,24 @@ PLACE = {
     # channel north of U1 where all six EPD signals and both UART lines cross
     "R6": (16.6, 21.5, 0),
     "C9": (14.75, 21.5, 0),
-    # Both buttons ride 0.90mm east of their original x so SW1's NW pad clears
-    # the R2.2 NW corner arc (0.41mm to the edge; the rule is 0.30). They move
-    # as a pair to hold the y2.9 row and the 7.70mm pitch, and because SW1's
-    # courtyard alone cannot grow east past SW2's. The shift is capped near
-    # here from the east as well: SW2's west GND stitch closes on the VSYS B.Cu
-    # diagonal, which is why that stitch sits at the NW of its pad rather than
-    # on the pad centre (see STITCH). SW1's courtyard corner still overhangs
-    # the arc by ~0.31mm -- unavoidable, it starts 0.055mm off the north edge,
-    # so no eastward shift can pull it inside an arc tangent to that edge. The
-    # 5.1mm switch BODY is fully on the board (0.35mm to the arc).
-    "SW1": (4.8, 2.9, 0),
-    "SW2": (12.5, 2.9, 0),
+    # The two buttons are one unit: same y2.9 row, 7.70mm pitch, and they only
+    # ever move as a pair (SW1's courtyard cannot grow east past SW2's). Far
+    # enough east that SW1 has left the R2.2 NW corner arc entirely -- its
+    # courtyard NW corner (2.405, 0.055) is east of the arc centre x2.2, so it
+    # measures against the straight north edge, and the nearest pad copper
+    # corner (2.700, 0.650) keeps 0.65mm to that edge against a 0.30 rule.
+    # Eastward travel is capped by SW2's east GND pad, which has to stay on the
+    # y4.775 GND lane, and by the VSYS 0.5mm B.Cu diagonal
+    # (8.95,5.789)->(13.036,3.736) running under the row.
+    "SW1": (6.2, 2.9, 0),
+    "SW2": (13.9, 2.9, 0),
     # R7 (BOOT pull-up) lies in the pocket between SW2's and U1's courtyards:
     # BOOT taps R7.2 right in its U1.23->SW2 crossing zone, and R7.1's +3V3
     # branch reaches the trunk over the module paddle on F.Cu. At its old
     # (19.0, 23.4) spot it halved the x17.1..19.15 F.Cu column -- the south
     # corridor's only crossing of the VBAT wall -- and sat 13mm from U1.23
     # with the crystal block and the +3V3 trunk in between.
-    "R7": (9.0, 6.4, 0),
+    "R7": (11.1, 6.4, 0),
     # status LED at the south edge: U1's east flank (x17.9..19.4, y9.4..14.6)
     # is the only F.Cu window for the east column's escapes, and it is the only
     # pocket between U1's and J3's courtyards, so nothing may sit there
@@ -190,8 +189,8 @@ PLACE = {
     "C20": (33.27, 12.0, 90),
     "C21": (40.6, 27.3, 270),
     "C22": (33.27, 20.14, 90),
-    "C23": (43.6, 27.3, 270),
-    "C24": (46.6, 27.3, 270),
+    "C23": (43.1, 27.3, 270),
+    "C24": (45.6, 27.3, 270),
     "C25": (38.28, 24.6, 90),
     "R17": (31.8, 5.28, 90),
     "TP10": (38.28, 25.55, 0, "B"),
@@ -230,40 +229,48 @@ PLACE = {
 # board DRC's copper-clean; regenerate both blocks by harvesting GND from the
 # hand board (extract_tracks.py GND) after a GUI GND editing pass.
 TRACKS = [
+    ('GND', 'F.Cu', 0.25, [(21.98, 11.14), (20.789999, 11.14), (20.165002, 10.515003), (20.105602, 10.2), (20.15, 9.323604), (20.15, 7.035)]),
+    ('GND', 'F.Cu', 0.25, [(38.3, 0.5), (38.3, 1.401), (37.451, 2.25), (37.062, 2.25), (37.716999, 2.258), (38.341999, 2.883), (38.35, 4.68), (38.8, 5.13)]),
+    ('GND', 'F.Cu', 0.25, [(21.98, 12.75), (21.98, 12.739), (21.356, 12.115), (20.8, 12.115), (20.789999, 12.105), (20.789999, 11.14)]),
+    ('GND', 'F.Cu', 0.25, [(8.362, 28.35), (9.5, 28.699999), (9.5, 30.63), (10.09, 31.22)]),
+    ('GND', 'F.Cu', 0.25, [(26.5, 23.7175), (24.775, 24.1)]),
+    ('GND', 'F.Cu', 0.25, [(19.4, 22.7), (18.75, 22.05), (18.65, 22.05), (16.75, 20.15), (16.75, 19.9), (16.7, 19.85), (15.8, 19.85), (15.8, 17.6), (16.7, 17.15), (19.58, 17.15), (20.315, 16.414999), (20.315, 12.335), (20.535, 12.115), (20.8, 12.115)]),
+    ('GND', 'F.Cu', 0.25, [(16.75, 8.0), (17.0, 8.25), (17.884, 8.25), (19.08, 7.054), (19.08, 4.875)]),
+    ('GND', 'F.Cu', 0.25, [(32.699999, 16.81), (34.239, 17.765), (34.9, 17.879133), (36.0, 17.893333), (37.1, 17.6), (37.95, 16.75), (39.6, 18.4), (40.25, 19.05), (41.45, 19.05)]),
+    ('GND', 'F.Cu', 0.25, [(5.12, 21.5), (5.12, 21.38), (6.6, 19.9), (6.72, 19.9)]),
+    ('GND', 'F.Cu', 0.25, [(15.8, 19.85), (15.8, 20.5), (15.23, 21.5)]),
+    ('GND', 'F.Cu', 0.25, [(26.65, 7.035), (27.395, 6.29), (27.72, 6.29), (27.73, 6.3), (29.08, 6.3), (30.61, 4.77)]),
+    ('GND', 'F.Cu', 0.25, [(29.925, 28.449999), (29.925, 31.454999), (30.87, 32.4)]),
+    ('GND', 'F.Cu', 0.25, [(1.838, 22.4), (1.1, 22.4), (0.8, 22.7)]),
+    ('GND', 'F.Cu', 0.25, [(13.08, 27.7), (11.91, 26.0)]),
+    ('GND', 'F.Cu', 0.25, [(31.9, 24.4), (32.0, 24.3)]),
+    ('GND', 'F.Cu', 0.25, [(10.125, 26.125), (9.955, 24.33), (9.875, 24.25), (9.25, 24.25), (8.11, 23.47)]),
+    ('GND', 'F.Cu', 0.25, [(41.45, 14.55), (42.85, 14.55)]),
+    ('GND', 'F.Cu', 0.25, [(30.8, 10.35), (33.27, 11.05), (33.57, 10.75), (36.75, 10.75), (37.95, 9.55)]),
+    ('GND', 'F.Cu', 0.25, [(15.025, 24.375), (15.025, 23.425), (14.65, 23.05), (13.02, 22.49)]),
+    ('GND', 'F.Cu', 0.25, [(29.1, 24.8), (29.3, 24.8)]),
+    # The west end runs 0.4mm further east at y4.775 before dropping to the
+    # y7.17 lane: dropped straight from the (3.2,4.775) stitch the diagonal
+    # shaved the antenna keep-out's NE corner (0,7.25)-(5.3,20.65) to 0.015mm
+    # of copper-to-corner, which check_pcb (conservative, square corners) reads
+    # as an intersection. Starting the drop at x3.6 puts the same lane 0.298mm
+    # clear of that corner.
+    ('GND', 'F.Cu', 0.5, [(3.2, 4.775), (3.6, 4.775), (5.995, 7.17), (11.991056, 7.17), (14.386056, 4.775), (15.5, 4.775), (18.98, 4.775), (19.08, 4.875)]),
     ('GND', 'F.Cu', 0.5, [(38.025, 26.85), (37.875, 27.0), (37.2, 27.0), (37.375, 26.825), (39.025, 26.825), (40.45, 28.25), (40.6, 28.25)]),
+    ('GND', 'F.Cu', 0.5, [(13.02, 22.49), (11.37, 21.745)]),
+    ('GND', 'F.Cu', 0.5, [(30.5, 33.4), (30.87, 32.4)]),
     ('GND', 'F.Cu', 0.5, [(8.425, 21.625), (8.503, 21.703), (9.543, 21.703), (9.8, 21.446), (9.8, 20.9)]),
     ('GND', 'F.Cu', 0.5, [(33.27, 19.19), (35.55, 19.65)]),
-    ('GND', 'F.Cu', 0.5, [(30.5, 33.4), (30.87, 32.4)]),
-    ('GND', 'F.Cu', 0.5, [(15.5, 4.775), (18.98, 4.775), (19.08, 4.875)]),
-    ('GND', 'F.Cu', 0.5, [(13.02, 22.49), (11.37, 21.745)]),
-    ('GND', 'F.Cu', 0.25, [(26.97, 5.79), (29.59, 5.79), (30.61, 4.77)]),
-    ('GND', 'F.Cu', 0.25, [(19.4, 22.7), (18.75, 22.05), (18.65, 22.05), (16.75, 20.15), (16.75, 19.9), (16.7, 19.85), (15.8, 19.85), (15.8, 17.6), (16.7, 17.15), (19.58, 17.15), (20.315, 16.415), (20.315, 12.335), (20.535, 12.115), (20.8, 12.115), (20.79, 12.105), (20.79, 11.14), (21.98, 11.14)]),
-    ('GND', 'F.Cu', 0.25, [(5.12, 21.5), (5.12, 21.38), (6.6, 19.9), (6.72, 19.9)]),
-    ('GND', 'F.Cu', 0.25, [(30.8, 10.35), (33.27, 11.05), (33.57, 10.75), (36.75, 10.75), (37.95, 9.55)]),
-    ('GND', 'F.Cu', 0.25, [(32.7, 16.81), (34.239, 17.765), (34.474, 18.0), (36.7, 18.0), (37.95, 16.75), (39.6, 18.4), (40.25, 19.05), (41.45, 19.05)]),
-    ('GND', 'F.Cu', 0.25, [(15.025, 24.375), (15.025, 23.425), (14.65, 23.05), (14.214, 23.05), (13.02, 22.49)]),
-    ('GND', 'F.Cu', 0.25, [(38.3, 0.5), (38.3, 1.401), (37.451, 2.25), (37.062, 2.25), (37.717, 2.258), (38.342, 2.883), (38.35, 4.68), (38.8, 5.13)]),
-    ('GND', 'F.Cu', 0.25, [(11.91, 26.0), (11.91, 26.213), (13.08, 27.383), (13.08, 27.7)]),
-    ('GND', 'F.Cu', 0.25, [(16.75, 8.0), (17.0, 8.25), (17.884, 8.25), (19.08, 7.054), (19.08, 4.875)]),
-    ('GND', 'F.Cu', 0.25, [(29.925, 28.45), (29.925, 31.455), (30.87, 32.4)]),
-    ('GND', 'F.Cu', 0.25, [(10.125, 26.125), (9.955, 24.33), (9.875, 24.25), (9.25, 24.25), (8.11, 23.47)]),
-    ('GND', 'F.Cu', 0.25, [(31.9, 24.4), (32.0, 24.3), (29.1, 24.8), (29.3, 24.8)]),
-    ('GND', 'F.Cu', 0.25, [(1.838, 22.4), (1.1, 22.4), (0.8, 22.7)]),
-    ('GND', 'F.Cu', 0.25, [(21.98, 12.75), (21.98, 12.739), (21.356, 12.115), (20.8, 12.115)]),
-    ('GND', 'F.Cu', 0.25, [(8.362, 28.35), (9.5, 28.7), (9.5, 30.63), (10.09, 31.22)]),
-    ('GND', 'F.Cu', 0.25, [(15.8, 19.85), (15.8, 20.5), (15.23, 21.5)]),
-    ('GND', 'F.Cu', 0.45, [(29.375, 13.775), (29.375, 10.455), (29.48, 10.35), (30.8, 10.35)]),
-    ('GND', 'F.Cu', 0.45, [(29.375, 10.455), (29.31, 10.39), (28.12, 10.39)]),
+    ('GND', 'F.Cu', 0.4, [(4.4, 22.9), (4.35, 22.95)]),
+    ('GND', 'F.Cu', 0.45, [(29.375, 13.775), (29.375, 10.455), (29.31, 10.39), (28.12, 10.39)]),
+    ('GND', 'F.Cu', 0.45, [(29.375, 10.455), (29.479999, 10.35), (30.8, 10.35)]),
     ('GND', 'F.Cu', 0.3, [(0.8, 21.9), (1.84, 21.9), (1.84, 22.4)]),
     ('GND', 'F.Cu', 0.3, [(4.35, 22.95), (3.412, 22.95), (3.362, 22.9)]),
-    ('GND', 'F.Cu', 0.2, [(41.45, 14.55), (41.5, 14.6), (42.7, 14.6)]),
-    ('GND', 'F.Cu', 0.4, [(4.4, 22.9), (4.35, 22.95), (4.25, 22.85)]),
-    ('GND', 'F.Cu', 0.2, [(24.775, 24.1), (26.118, 24.1), (26.5, 23.718)]),
+    ('GND', 'B.Cu', 0.25, [(13.02, 22.49), (13.0, 22.51), (13.0, 24.4), (12.988, 24.412)]),
     ('GND', 'B.Cu', 0.25, [(29.1, 24.8), (27.582, 24.8), (26.5, 23.718)]),
     ('GND', 'B.Cu', 0.25, [(14.925, 24.475), (15.025, 24.375), (15.0, 24.4), (10.025, 24.4), (9.875, 24.25)]),
-    ('GND', 'B.Cu', 0.25, [(13.02, 22.49), (13.0, 22.51), (13.0, 24.4), (12.988, 24.412)]),
+    ('GND', 'B.Cu', 0.25, [(23.652, 11.34), (27.47, 11.039999), (28.12, 10.39)]),
     ('GND', 'B.Cu', 0.5, [(2.7, 25.375), (2.7, 24.6)]),
-    ('GND', 'B.Cu', 0.2, [(23.652, 11.34), (23.952, 11.04), (27.47, 11.04), (28.12, 10.39)]),
 ]
 VIAS = []
 
@@ -293,7 +300,6 @@ STITCH = [
     # 2026-07-20 datum move (+1.415mm south) put the two survivors at the old
     # GND pad x — (20.15,5.79) and (26.65,5.79) — inside the NPTH plastic-post
     # holes' clearance rings. All six served J3's old pad row only.)
-    (25.51, 28.13, 0.6, 0.3),
     (25.77, 28.94, 0.6, 0.3),
     (29.375, 13.775),
     (29.925, 28.45),
@@ -318,27 +324,24 @@ STITCH = [
     (37.95, 13.15, 0.6, 0.3),
     (38.28, 23.65, 0.6, 0.3),
     # hand_diff harvest
-    # SW1.2/SW2.2 pad stitches, carried +0.90mm east with the button row.
-    (1.8, 4.775, 0.6, 0.3),
-    (7.8, 4.775, 0.6, 0.3),
-    # SW2.2-west: parked at the NW corner of its pad instead of the centre.
-    # The VSYS 0.5mm B.Cu diagonal (8.95,5.789)->(13.036,3.736) runs under this
-    # pad and closes in as the row moves east; at the pad centre (9.5, 4.775)
-    # the gap is 0.66mm against a 0.75mm requirement (0.3 annulus + 0.25 track
-    # + 0.2 clearance). Here it is 0.82mm, and the via stays wholly inside the
-    # pad. This stitch is what caps the button row's eastward travel.
-    (9.3, 4.7, 0.6, 0.3),
-    (10.4, 10.0, 0.6, 0.3),
-    (11.3, 10.0, 0.6, 0.3),
     (14.0, 18.3, 0.6, 0.3),
-    (15.5, 4.775, 0.6, 0.3),   # SW2.2-east pad stitch, +0.90mm with the row
+    # On the 0.5mm y4.775 GND lane just west of SW2.2-east (16.9, 4.775), which
+    # the lane runs straight through. Off the pad centre because the VSYS 0.5mm
+    # B.Cu diagonal (8.95,5.789)->(13.036,3.736) passes under the button row.
+    (15.5, 4.775, 0.6, 0.3),
     (15.0, 18.3, 0.6, 0.3),
     (20.9, 33.2, 0.6, 0.3),
     (23.652, 11.34, 0.6, 0.3),
     (28.12, 10.39, 0.6, 0.3),
     (37.95, 16.75, 0.6, 0.3),
-    (43.6, 28.25, 0.6, 0.3),
-    (46.6, 28.25, 0.6, 0.3),
+    # hand_diff harvest
+    # SW1's two GND pads, stitched on the pad centres.
+    (3.2, 4.775, 0.6, 0.3),
+    (9.2, 4.775, 0.6, 0.3),
+    (11.0, 9.6, 0.6, 0.3),
+    (23.9, 27.4, 0.6, 0.3),
+    (43.1, 28.25, 0.6, 0.3),
+    (45.6, 28.25, 0.6, 0.3),
 ]
 
 # B.Cu ground pour over the full board (the antenna keep-out excludes it
@@ -532,8 +535,8 @@ MODELS_3D = {
 SILK = [
     # === TOP (F.SilkS) — position-specific, beside the part it labels ===
     # buttons / LEDs
-    ("RST", 4.8, 6.5, 0.8, 0),          # S of SW1
-    ("BOOT", 12.5, 6.5, 0.8, 0),        # S of SW2
+    ("RST", 6.2, 6.5, 0.8, 0),          # S of SW1
+    ("BOOT", 13.9, 6.5, 0.8, 0),        # S of SW2
     # D1 (charge LED) sits in the packed charger cluster with no adjacent silk
     # gap; CHG goes in the nearest clear pocket, NE of D1 past R17 (D1 is the
     # only LED here, so the cue is unambiguous).
@@ -618,13 +621,13 @@ SILK = [
     # justify is verbatim: SetMirrored does not flip it, so "R"/top reads
     # left-aligned from the west edge on the back, "L"/top reads right-aligned to
     # the east edge). ===
-    # NW-corner block, TOP-LEFT anchored at (1.0, 0.6): project URL, the full
+    # NW-corner block, TOP-LEFT anchored at (1.2, 2.0): project URL, the full
     # product name, "rev A" (holds the check_pcb "rev " token) and the indoor
     # charge range as one contiguous phrase, four tight lines. Sits in the bare
     # NW back corner (pour-free, no back parts), north of J3's front footprint;
     # DRC-clean silk clearance.
     ("github.com/antoinecellerier\nLow Power ePaper Thermometer\nrev A\n"
-     "CHARGE INDOORS 0-45°C", 1.0, 0.6, 0.8, 0, "B.SilkS", "R", "T"),
+     "CHARGE INDOORS 0-45°C", 1.2, 2.0, 0.8, 0, "B.SilkS", "R", "T"),
     # populate-ONE legend (bridge/fit exactly one per group), as ONE TOP-RIGHT
     # anchored block in the clean NE back corner (right edge x44.0), north of the
     # charger and clear of the WEST antenna keep-out and H1. Keyed off component

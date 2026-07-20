@@ -48,7 +48,11 @@ BOARD_PATH = os.path.join(OUT_DIR, "thermometer-c6.kicad_pcb")
 DRU_PATH = os.path.join(OUT_DIR, "thermometer-c6.kicad_dru")
 NETLIST = os.path.join(PROJECT, "out", "netlist.net")
 
-FromMM = pcbnew.FromMM
+# NOT pcbnew.FromMM: that one TRUNCATES (FromMM(8.11) == 8109999,
+# FromMM(16.383058) == 16383057), so every harvested vertex whose mm value is
+# not exactly representable in binary comes back a nanometre light and the
+# round-trip against the hand board never closes. Round instead.
+FromMM = lambda mm: int(round(mm * 1e6))  # noqa: E731
 V = lambda x, y: pcbnew.VECTOR2I(FromMM(x), FromMM(y))  # noqa: E731
 
 ORIGIN = pl.BOARD["origin"]
@@ -68,8 +72,14 @@ POWER_NETS = ["VBAT", "VSYS", "EPD_VCC", "~VBAT_RAW", "~BAT_IN"]
 
 
 def bmm(x, y):
-    """Board-relative mm -> absolute VECTOR2I."""
-    return V(ORIGIN[0] + x, ORIGIN[1] + y)
+    """Board-relative mm -> absolute VECTOR2I.
+
+    The origin is added in NANOMETRES, not millimetres: FromMM truncates, so
+    FromMM(100.0 + 28.699999) is 1nm short of FromMM(100.0) + FromMM(28.699999)
+    and every nm-exact harvested vertex would drift on the way back in.
+    """
+    return pcbnew.VECTOR2I(FromMM(ORIGIN[0]) + FromMM(x),
+                           FromMM(ORIGIN[1]) + FromMM(y))
 
 
 def resolve_fp_dir(lib):
