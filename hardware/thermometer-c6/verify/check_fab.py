@@ -33,6 +33,9 @@ import circuit  # noqa: E402
 import fab_cpl  # noqa: E402
 import pcb_layout as pl  # noqa: E402
 
+sys.path.insert(0, HERE)
+import drc_summary  # noqa: E402  (verify/; shares the fab DRC classification)
+
 NAME = "thermometer-c6"
 COMMITTED_BOARD = os.path.join(PROJECT, NAME + ".kicad_pcb")
 BOM_SRC = os.path.join(PROJECT, "bom", NAME + "-bom.csv")
@@ -136,7 +139,9 @@ def main():
         check(needle not in ctext,
               f"stamp: committed board unexpectedly carries {needle!r}")
 
-    # 2. DRC clean, generated after the stamped board
+    # 2. DRC clean by the strict fab gate (REAL=0 AND DEFERRED=0; only scoped-
+    #    rule waivers allowed), generated after the stamped board. Same
+    #    classification the `make fab` gate (drc_summary --gate-fab) applied.
     drc_path = os.path.join(fab_dir, "drc.json")
     check(os.path.exists(drc_path), "drc: drc.json missing")
     if os.path.exists(drc_path):
@@ -149,9 +154,16 @@ def main():
             drc = None
             check(False, "drc: drc.json is not valid JSON")
         if drc is not None:
-            for k in ("violations", "unconnected_items", "schematic_parity"):
-                m = len(drc.get(k, []))
-                check(m == 0, f"drc: {k} = {m} (want 0)")
+            buckets = {"REAL": [], "DEFERRED": [], "WAIVED": []}
+            for k in drc_summary.CATS:
+                for v in drc.get(k, []):
+                    buckets[drc_summary.classify(v)].append(v)
+            check(not buckets["REAL"],
+                  f"drc: REAL violations present: "
+                  f"{[v.get('type') for v in buckets['REAL']]}")
+            check(not buckets["DEFERRED"],
+                  f"drc: DEFERRED (postponed) violations present: "
+                  f"{[v.get('type') for v in buckets['DEFERRED']]}")
 
     # 3. CPL structure vs circuit.py assembled set
     cpl_path = os.path.join(fab_dir, NAME + "-cpl.csv")

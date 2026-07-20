@@ -42,11 +42,17 @@ procedures); `LAYOUT-PLAN.md` (next-phase instructions).
   Beware `out/drc.json` staleness — regenerate before reading it.
 - **Fab export: `make fab`** = stamped render (`FAB_STAMP` + `PCB_OUT_DIR`
   into `out/fab/board/`, `rev A <hash> <date>` on silk) → **full-severity
-  DRC** (`kicad-cli ... --severity-all`, NOT the waiving `drc_summary --gate`)
-  → gerbers/drill + `fab_cpl.py` CPL/BOM/rotation-checklist → zip →
-  `verify/check_fab.py` (55 assertions). The committed board is **never**
-  stamped (the guard rejects a dirty tree so the stamp names the exact
-  commit); ordering steps are in `ORDERING.md`.
+  DRC** on the stamped board (`kicad-cli ... --severity-all`) gated by
+  `drc_summary --gate-fab` (STRICT: passes iff REAL=0 AND DEFERRED=0, so every
+  remaining violation must be explicitly waived by a scoped rule — the 2 J3
+  edge-launch USB-C shell-pad `copper_edge_clearance`; the accepted WAIVED list
+  is printed to the fab log). The raw `make drc` target still halts on ANY
+  violation (routing/manual use); it is deliberately NOT a `fab` prereq. →
+  gerbers/drill + `fab_cpl.py` CPL/BOM/rotation-checklist → zip →
+  `verify/check_fab.py` (re-derives the same REAL=0/DEFERRED=0/waived-allowed
+  DRC verdict). The committed board is **never** stamped (the guard rejects a
+  dirty tree so the stamp names the exact commit); ordering steps are in
+  `ORDERING.md`.
 - pcbnew's zone fill is **not byte-stable**: back-to-back `pcb.py` runs can
   leave `thermometer-c6.kicad_pcb` dirty with nothing but `(xy ...)` fill
   coordinates changed. `git diff` it before believing you changed the board.

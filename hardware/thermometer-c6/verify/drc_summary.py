@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compact text digest of out/drc.json (kicad-cli pcb drc --format json).
 
-Usage: python3 verify/drc_summary.py [out/drc.json] [--top N] [--gate]
+Usage: python3 verify/drc_summary.py [out/drc.json] [--top N] [--gate|--gate-fab]
 
 Default: one summary line + up to N items per non-empty category (type,
 description, mm coords). Exits 1 if any item exists, 0 if clean.
@@ -12,6 +12,12 @@ M7 silk; DEFERRED = dangling copper / unconnected nets that vanish once every
 net routes and the GND pour lands; REAL = actual clearance/width/hole/short
 violations -- the only ones that gate PathFinder's go/no-go. Reading this
 instead of the raw drc.json (or DRC PNGs) keeps the routing loop cheap.
+
+--gate-fab: the STRICT ship gate for `make fab`. Same classification, but a
+finished board may not merely postpone anything, so it exits 0 iff REAL == 0
+AND DEFERRED == 0 -- every remaining violation must be explicitly waived by a
+scoped rule (the J3 edge-launch USB-C shell pads). It prints the WAIVED list
+with a reason per entry so the fab log records exactly what shipped and why.
 """
 import json
 import os
@@ -63,6 +69,21 @@ def pos_str(item):
     return ""
 
 
+def fmt_violation(v):
+    items = v.get("items", [])
+    coords = " ".join(s for s in (pos_str(it) for it in items) if s)
+    desc = v.get("description") or v.get("type", "?")
+    return (f"{v.get('severity', '?')} {v.get('type', '?')}: "
+            f"{desc} {coords}").rstrip()
+
+
+def waive_reason(v):
+    """Why a WAIVED violation is accepted -- named in the fab log."""
+    if v.get("type") == "copper_edge_clearance" and _involves_j3(v):
+        return "J3 edge-launch USB-C shell pads at board edge (by design)"
+    return "later-milestone waiver (M6 GND pour / M7 silk)"
+
+
 def main():
     args = list(sys.argv[1:])
     top = 5
@@ -70,6 +91,9 @@ def main():
         i = args.index("--top")
         top = int(args[i + 1])
         del args[i:i + 2]
+    gate_fab = "--gate-fab" in args
+    if gate_fab:
+        args.remove("--gate-fab")
     gate = "--gate" in args
     if gate:
         args.remove("--gate")
@@ -81,31 +105,37 @@ def main():
         print(f"DRC: no report ({e})")
         return 2
 
-    if gate:
+    if gate or gate_fab:
+        import collections
         buckets = {"REAL": [], "DEFERRED": [], "WAIVED": []}
         for c in CATS:
             for v in d.get(c, []):
                 buckets[classify(v)].append(v)
-        print(f"GATE: REAL={len(buckets['REAL'])} "
+        label = "FAB GATE" if gate_fab else "GATE"
+        print(f"{label}: REAL={len(buckets['REAL'])} "
               f"DEFERRED={len(buckets['DEFERRED'])} "
               f"WAIVED={len(buckets['WAIVED'])}")
-        import collections
+        # The strict fab gate accepts only explicitly-waived violations, so it
+        # names every one it let through -- the fab log records what shipped.
+        if gate_fab and buckets["WAIVED"]:
+            print(f"  WAIVED ({len(buckets['WAIVED'])}):")
+            for v in buckets["WAIVED"]:
+                print(f"    {fmt_violation(v)}  <- {waive_reason(v)}")
+        # REAL always detailed; DEFERRED detailed too under the fab gate, where
+        # it is a hard failure rather than an expected mid-route state.
         for bucket in ("REAL", "DEFERRED"):
             vs = buckets[bucket]
             if not vs:
                 continue
             hist = collections.Counter(v.get("type") for v in vs)
             print(f"  {bucket}: {dict(hist)}")
-            if bucket == "REAL":
+            if bucket == "REAL" or gate_fab:
                 for v in vs[:top]:
-                    items = v.get("items", [])
-                    coords = " ".join(s for s in (pos_str(it) for it in items)
-                                      if s)
-                    desc = v.get("description") or v.get("type", "?")
-                    print(f"    {v.get('severity','?')} {v.get('type','?')}: "
-                          f"{desc} {coords}".rstrip())
+                    print(f"    {fmt_violation(v)}")
                 if len(vs) > top:
                     print(f"    ... +{len(vs) - top} more")
+        if gate_fab:
+            return 1 if (buckets["REAL"] or buckets["DEFERRED"]) else 0
         return 1 if buckets["REAL"] else 0
 
     counts = {c: len(d.get(c, [])) for c in CATS}
@@ -120,12 +150,7 @@ def main():
             continue
         print(f"  [{c}] {len(vs)}:")
         for v in vs[:top]:
-            items = v.get("items", [])
-            coords = " ".join(s for s in (pos_str(it) for it in items) if s)
-            desc = v.get("description") or v.get("type", "?")
-            sev = v.get("severity", "?")
-            typ = v.get("type", "?")
-            print(f"    {sev} {typ}: {desc} {coords}".rstrip())
+            print(f"    {fmt_violation(v)}")
         if len(vs) > top:
             print(f"    ... +{len(vs) - top} more")
     return 1 if total else 0
