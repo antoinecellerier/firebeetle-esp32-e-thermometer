@@ -236,6 +236,67 @@ J4-mouth-east / J3-mouth-north guards; `gnd_islands` connected (6 single-via
 SPOF ties, 3 narrow necks — unchanged). **Silk is now 0 violations at full
 severity** — the e567982 rework holds and this round's four edits added none.
 
+## order-2026-07-20/ — the rev A production order (FIRST ORDER)
+
+The exact files uploaded to JLCPCB, kept verbatim. This is the only record of
+what was physically built, so nothing here is regenerated — `make fab` at any
+later commit produces a different stamp and would not describe these boards.
+
+- `thermometer-c6-gerbers-3ed40fe-2026-07-20.zip` — 12 members (9 gerbers +
+  drill + drill map + job). sha256
+  `f025e08ac4a70a5289ad974c08c9be281db49b9dec091edb9515b8177fbb1e7c`
+- `thermometer-c6-cpl.csv` (75 placements) · `thermometer-c6-bom.csv`
+  (37 lines) · `rotation-checklist.md` (22 orientation-critical parts)
+
+**Provenance.** Commit `3ed40fe` ("Delete the JLCJLCJLCJLC order-mark token
+from back silk"), silk stamp **`rev A 3ed40fe 2026-07-20`** — the stamp is
+physically on the boards, so that hash identifies them forever. Clean tree at
+export. Gates at the time: `make check` green, DRC **REAL=0 DEFERRED=0
+WAIVED=0** at full severity (the first strict pass with zero waivers),
+`check_pcb` OK, `check_fab` OK (54 assertions), 0 unconnected.
+
+**The order number is deliberately NOT recorded here** — the owner asked to
+keep it out of the repo. This is a choice, not an omission; do not "fix" it.
+
+**Options ordered.** 5 PCBs / 4 assembled. FR-4, 2 layers, 1.6mm, 1oz outer,
+TG135, min via 0.3mm, outline tolerance ±0.2mm. **ENIG** (1 U"). **Via
+covering: Epoxy Filled & Capped (POFV)**, horizontal electroless copper
+plating. **Mark on PCB: Remove Mark** — the board carries no order-mark token
+at all (JLC support confirmed 2026-07-20 that the specify-position service is
+discontinued, so the `JLCJLCJLCJLC` string was deleted rather than shipped).
+Flying-probe fully tested, IPC Class 2, ink-jet silkscreen. **White solder
+mask with black silk** and **lead-free / high-temp solder paste** — both
+deliberate. Standard PCBA, **top side only**, parts selection by customer,
+Confirm Production File **and** Confirm Parts Placement both Yes. Board
+cleaning **No**, conformal coating **No** (U5 is a vented sensor). JLC grew
+the panel to 70×71mm for its own edge rails; depanel-before-delivery Yes.
+X-Ray inspection auto-added.
+
+**Cost.** PCB €64.49 + Standard PCBA €140.46 = €204.94 merchandise, less a
+€17.46 coupon → €198.94, plus shipping and two charges quoted only after
+review (`Depanel` €2.58, `PCBA remark` "quote after review"). Note the
+advertised "Global Standard Direct Line" shipping is capped to orders under
+$150 and was therefore unavailable — see ORDERING.md §8.
+
+**Known items carried into the order, all consciously accepted:**
+- **J3 (USB-C) renders ~1.3mm off its land in JLC's preview.** Established as
+  a JLC 3D-model seating artifact, not a placement error: the whole model
+  (housing, tails, shell legs) displaces as one rigid body, matching the
+  `(0,−1.050,0)` correction `MODELS_3D` applies to that EasyEDA STEP. Board
+  copper verified against the HRO drawing straight from the shipped gerbers
+  (front shell slot 2.110, rear 6.290, NPTH 5.760). JLC support confirmed the
+  model issue and that their engineer corrects it, with DFM pausing the job
+  rather than proceeding. A PCBA remark asks them to place to the land
+  pattern and not silently adjust it.
+- **J3 and J4 CPL rotation deltas were never preview-verified** (both `0`,
+  `confidence: low`). Covered by Confirm Parts Placement + the DFM gate.
+- **D1's delta needed no re-verification** despite its `unverified` marker:
+  its `0` was directly preview-verified 2026-07-18 (cathode cue S), and a
+  rotation delta corrects a footprint↔library convention offset, so it is
+  independent of the 90°→180° placement change that voided the annotation.
+- Deferred polish, unchanged: 6 single-via GND SPOF ties, 4 narrow necks,
+  34 sub-0.05mm slivers, 15 acute corners.
+
 ## worktrees/*.patch
 
 Uncommitted diffs of the 2026-07-11 routing-agent worktrees at deletion time.
