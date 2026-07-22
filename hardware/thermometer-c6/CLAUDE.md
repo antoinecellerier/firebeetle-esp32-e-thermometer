@@ -1,7 +1,8 @@
 # CLAUDE.md — hardware/thermometer-c6 (custom PCB)
 
 Read first: `README.md` (design rationale, pin map, jumper tables, bench
-procedures); `LAYOUT-PLAN.md` (next-phase instructions).
+procedures); `LAYOUT-PLAN.md` (next-phase instructions); `BRINGUP.md`
+(first-article checklist once boards arrive).
 
 ## Schematic workflow
 
