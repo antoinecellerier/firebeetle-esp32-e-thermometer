@@ -89,7 +89,16 @@ PREVGL, VCOM, GDR, RESE, GND ×2. VSYS is reachable at J2 pin 2.
       floor via the 66k VBUS pulldowns; PMEG6010-class is the fallback (no
       SMA drop-in — board change for rev B if needed). [REVIEW-KICAD-HAPPY ○]
 - [ ] VBAT_ADC accuracy across 3.5–4.2V vs DMM; confirm the 5ms divider
-      settle is ample (τ = 0.5ms).
+      settle is ample (τ = 0.5ms). While looking at this trace, also check
+      whether the settle wait shows as a visible chunk of a non-refresh
+      wake. Analysis 2026-07-22 (deferred pending these numbers): the read
+      runs only on CPU wakes, so the blocking 5ms costs ~0.075mC (5ms ×
+      ~15mA) against a multi-mC wake — <1%, an 8× smaller target than the
+      already-declined 40ms EPD-reset light-sleep. If it ever matters, the
+      known fixes are (a) hoist the VDIV_EN enable to setup() entry with an
+      elapsed-time remainder guard in read_battery_level() (logging hides
+      the settle only in debug builds), or (b) trim 5ms→3ms (6τ, ~10mV
+      battery-scale error) for a zero-complexity 60% cut.
 - [ ] Charging self-heat: quantify how far BMP581 reads high while charging
       (README notes it; get a number for logging).
 
