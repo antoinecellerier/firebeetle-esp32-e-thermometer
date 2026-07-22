@@ -198,6 +198,29 @@ Re-check LCSC/JLC stock — several parts run thin:
       in `generator/circuit.py` set U5 `dnp=True` and U6/C26/C27 `dnp=False`
       (populate-exactly-one — both strap I2C 0x47), `make check`, commit, then
       re-run `make fab`. The BOM/CPL pick up the swap automatically.
+      (2026-07-22 research flagged BMP581 assembly stock as possibly gone
+      again — the restock note in README dates to 2026-07-17.)
+
+Cost-reduction checks from the 2026-07-22 research (see README "Rev B
+candidates → Cost reduction"; all from search-engine reads of jlcpcb.com —
+the BOM dialog is ground truth where they disagree):
+
+- [ ] **Try matching D4–D6 MBR0530 → B5819W C8598** (same SOD-123, 40V/1A,
+      reportedly Basic) in the BOM dialog — one Extended feeder line saved
+      if it takes. Leakage/Vf deltas are fine for the gated booster.
+- [ ] **Verify tiers the research couldn't confirm** on the part pages /
+      dialog: C98192 (4.7µF/50V), C5204746 (MBR0530), C469327 (Si1308EDL),
+      C2856831 (FPC). If C98192 turns out Extended, keep it anyway — there
+      is no Basic 4.7µF ≥50V 0805, and 25V is too marginal for the ~22V
+      EPD rails.
+- [ ] **Check the feeder-fee rate on the itemised quote**: reportedly cut
+      to ~€1.28/$1.50 per line on 2025-12-19, yet the 2026-07-20 quote
+      billed 17 × €2.75 exactly. Also note whether Standard PCBA charges
+      only Extended lines (what the 2026-07-20 quote implies: 17 fees vs
+      35 unique parts) or every unique part, as one 2025 writeup claims.
+- [ ] **Quote POFV at qty 5/10/20** once, to learn whether the €44.07 is
+      flat per order (amortises with volume) or scales — this decides how
+      urgent the POFV-free rev B re-route is.
 
 ## 5. FPC connector warning
 

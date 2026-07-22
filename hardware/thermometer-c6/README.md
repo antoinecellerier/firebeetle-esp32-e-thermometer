@@ -305,3 +305,98 @@ of a board that is otherwise order-ready.
   B.Cu in 4.9mm and the two western signal vias have no GND stitch within
   4mm. Acceptable at full speed and the EPD boost switching nodes are not
   among the crossings, but it is the condition the path runs in.
+
+### Cost reduction (researched 2026-07-22)
+
+Baseline: the €204.94 qty 5 PCB / 4 assembled itemised quote in ORDERING.md
+§8. Three structural facts frame everything: **Economy PCBA is unreachable
+regardless of PCB options** (U1 and U5 are Standard-PCBA-only parts, both
+locked), **X-Ray (€11.46) is mandatory** for U5's LGA (flat per-order fee,
+not removable), and **no wireless SoC or environmental sensor exists in the
+JLC Basic tier at all** (2026 library: Basic MCUs are STM32F1/F0/STM8-class
+only, zero radio parts) — so feeder-fee optimisation is small-bore and the
+real levers are POFV, quantity, and BOM-line count. JLC tier facts below
+came from search-engine reads of jlcpcb.com (the direct pages were
+unreachable at research time); where they conflict with the 2026-07-18/20
+in-dialog audits recorded in ORDERING.md, **the dialog audit wins**.
+
+- **Drop POFV in a rev B re-route: −€44.07/order, the single largest line.**
+  Not a touch-up: a full via audit of the committed board found **81 vias in
+  solderable pads** — via-in-pad is the board's core 2-layer escape strategy.
+  ~50 have a legal dog-bone spot against today's copper (FPC-east fanout
+  column, central EPD-driver discretes, all GND stitches); **26 are
+  hard-boxed** with no clear spot within 1mm — dominated by 12 ESP32-C6 QFN
+  pins (0.4mm pads narrower than the 0.6mm via), the 32k crystal pair, the
+  sensor pins, and the USB-C VBUS/CC joints. J4 (0.5mm FPC) and U5 (LGA)
+  are already via-in-pad-free, so nothing is geometrically impossible.
+  Opportunity cost: days — grow the outline (free up to JLC's 100×100mm
+  tier), re-place the west/QFN cluster, re-route essentially from scratch,
+  full-severity DRC again, and a fresh first-article risk. Best bundled
+  with the Q1/H1 placement pass above and the production-copper trim below
+  (the freed bench-pad corridors are exactly where the dog-bones must go).
+  Before committing to it, confirm POFV is a flat charge vs qty (quote at
+  5/10/20) — if flat, large orders amortise it and weaken the case.
+- **Panel-lock BOM collapse: −€3–9/order.** Locking the panel family to the
+  proven 10µH/0.47Ω config deletes L2 (47µH, Extended), R15 (2.2Ω) and R16
+  (3Ω) plus their placements; JP2–JP6 are copper-only and can stay.
+  Opportunity cost: the board loses the GDEH0576T81-datasheet booster
+  option (47µH + 2.2Ω RESE) and the 3Ω SSD16xx leg — fine iff the panel
+  choice is final; the copper jumpers keep a hand-solder escape hatch.
+- **MBR0530 → B5819W (C8598) candidate Basic swap: −~€2.75/order.** Same
+  SOD-123 footprint, 40V/1A vs 30V/0.5A, reported Basic and in stock
+  (unverified in the dialog — the 2026-07-18 audit's "no Basic alternates"
+  finding predates this lead). Higher reverse leakage is irrelevant (the
+  whole booster hangs off gated EPD_VCC); slightly higher Vf costs a hair
+  of refresh efficiency. Try the match in the BOM dialog at next order.
+- **Production-copper trim (dev board → production board): −~€1–6/order,
+  but mainly routing room.** The board already carries its debug features
+  as DNP/copper-only (J5, J2, JP1–6, all TPs, R9, U6), so they cost
+  nothing at assembly. What a production variant can still cut: SW1/SW2 →
+  tweezer-shortable pads (keeps the unbrick path — USB-Serial-JTAG download
+  works but the device deep-sleeps ~99% of the time, so a physical
+  BOOT-at-power-on path is worth keeping in some form) and D3 (status is
+  the EPD's job). Keep D1: CHG_STAT reaches no GPIO, so it is the only
+  charge indication. The real value is deleting TP/J5/J2/U6 copper in the
+  same pass — TP7 alone pinches the B.Cu channel south of the booster to a
+  0.30mm slot, and the bench pads impose 2.1mm HV keepout walls — which is
+  exactly the room the POFV dog-bones need. Opportunity cost: the PPK2
+  bench procedures above stop working on that variant; only strip after
+  the rev-A first-article campaign is done.
+- **Quantity is the dominant per-unit lever, no design change needed.**
+  ~€90+/order is fixed (setup 22.32, feeders 46.75, stencil 7.17, X-Ray
+  11.46, confirm fees) — at qty 4 assembled that is ~€23/board of pure
+  overhead. Qty 15–20 takes unit cost from ~€51 to ~€20–25 with the design
+  untouched.
+
+Ruled out, with reasons (don't re-research):
+
+- **SoC alternatives — U1 stays.** Requirements bar (docs/notes.md): hold
+  the 14–16µA system deep-sleep floor, sample I2C every 60s in deep sleep
+  at ~50nA average without booting the HP core (LP core), 32.768kHz XTAL,
+  WiFi. ESP32-C3/C2/ESP8685/ESP8266/BL602/W800 all fail the LP-sampling
+  bar (no LP/ULP coprocessor; ESP8266 also ~20µA floor) and save ≤€1.
+  Nordic nRF52x has best-in-class sleep and a CPU-off TWIM sampling path
+  but is BLE-only — fails WiFi outright. Bare ESP32-C6FH4 saves ~$0.5 and
+  costs antenna design + modular RF certification. No wireless part is
+  Basic tier, so there is no feeder-fee escape either.
+- **Sensor alternatives — U5 stays.** BMP581 is ~$1.44 at LCSC — already
+  the cheapest pressure-capable part that passes the power bar (~0.5µA
+  standby, ~3µC/forced reading). BMP390L costs *more* (~$5) despite the
+  existing driver; BMP280 saves pennies and is equally Standard-only.
+  SHT40 is the standout if pressure were expendable (80nA, ~2.4µC, ±0.2°C,
+  ~$1.3) but its Economy-capability is moot (U1 forces Standard) and it
+  drops pressure. AHT20/21 fail per-reading energy (~80ms conversions);
+  MCP9808 (~50µC/reading at 0.1°C res), STTS22H (1.75µA standby), LM75B
+  (±2°C) all fail the bars. An NTC divider (~$0.01, GPIO-gated → zero
+  standby, like the battery divider) passes the power bars trivially but
+  is ±0.5–1°C uncalibrated (±0.2–0.3°C with single-point cal), needs C6
+  SAR ADC characterisation to reach 0.1°C resolution, and drops pressure.
+- **ENIG stays** (€14.84): the locked 0.5mm-pitch LGA and FPC sit at JLC's
+  0.20mm HASL clearance floor, and dropping it cannot unlock Economy
+  anyway. **X-Ray stays**: mandatory for LGA. **D1, USBLC6, Q6, Y1 stay**:
+  charge indication, ESD, reverse-battery survival and timekeeping are
+  functionality, and each saves pennies at best.
+
+Net: cheap wins (panel lock + diode swap + production trim) ≈ €15–25/order
+with rev-A-class effort; the POFV rev B adds ~€44/order more but is a real
+re-layout; quantity halves unit cost on its own.
