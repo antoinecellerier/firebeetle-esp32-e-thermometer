@@ -135,10 +135,24 @@ low-value multiplier (×0.01), not ×1000 — `220K`=2.2Ω, `300K`=3.0Ω
 (family siblings: `2201`=2.2kΩ, `2700`=270Ω, `3001`=3.0kΩ,
 `3300`=330Ω). FOJAN `FR470` = 0.47Ω.
 
+## U5 orientation — positively confirmed (follow-up to the walk above)
+
+A tighter crop of the hires render resolves both independent cues from
+the `verified: 2026-07-18` entry in `generator/fab_cpl.py`:
+
+- lid **vent pinhole at the NW corner** (the pads-7/8 corner — matches
+  the BMP581 datasheet p.69 vent-hole drawing at our rot 90);
+- JLC's numbered **"1" arrow at the SW corner** (pads-1/10 corner,
+  matching our black fab dot).
+
+The lone magenta dot at NW is JLC's unreliable marker — ignored, as
+established in the 2026-07-18 walk. Vent NW, pin 1 SW: U5 orientation
+is verified outright, superseding the "consistent with" caveat below.
+
 ## Residual notes (not blockers)
 
-- U5 (LGA-10) orientation cannot be strongly discriminated from a top
-  render (pads underneath); fitment and position are definitive and the
-  pin-1 index is consistent with pin1-SOUTH.
+- U5 (LGA-10): the agent's top-render walk alone could not strongly
+  discriminate orientation (pads underneath) — resolved by the vent
+  pinhole + "1" arrow crop above.
 - SW1/SW2 are 2-net tactile switches, near-symmetric; position/package
   correct and the pin row is on the correct side.
