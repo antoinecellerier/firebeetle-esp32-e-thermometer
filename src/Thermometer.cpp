@@ -739,7 +739,10 @@ static void maybe_ntp_resync(time_t now)
 // 2026-07-05 (docs/notes.md): 3.7V is the lowest verified-healthy point,
 // 3.6V is already inside the sag band — so shut down at the electrical
 // cliff, not the battery's own limit (~12-15% SoC abandoned per OCV curve).
-// Only meaningful once read_battery_level() gets a real VBAT source here.
+// The custom thermometer-c6 board (RT9080 LDO, not a buck) keeps the same
+// numbers: worst-case LDO dropout at the refresh peak sits right at this
+// cutoff, and SCHEMATIC-VERIFICATION.md says keep shutdown ≥3.6V pending
+// the first-article dropout measurement.
 const uint32_t low_battery_mv = 3800;
 const uint32_t no_battery_mv = 3700;
 #else
@@ -801,12 +804,91 @@ uint32_t read_battery_level()
   uint32_t battery_mv = (uint32_t)mv * 2;
   LOGI("Battery level: %d mV", (int)battery_mv);
   return battery_mv;
+#elif defined(THERMOMETER_C6_BOARD)
+  // Custom thermometer-c6 board: high-side switched 100k/100k divider
+  // (R20/R21). VDIV_EN (GPIO3) high → Q5 NFET → Q4 P-FET connects VBAT;
+  // the external 100k pull-down keeps it hard-off in deep sleep. C29 10nF
+  // reservoir on the ADC node charges through 100k — give it a few ms.
+  // VBAT_ADC = GPIO2 = ADC1_CH2. While VBUS is present this node reads the
+  // charger CV output, not battery SoC — see vbus_present().
+  // ADC-failure fallback sits between no_battery_mv and low_battery_mv:
+  // visible as a warning, can never trigger permanent shutdown.
+  const uint32_t adc_fail_mv = 3750;
+
+  gpio_out_init(3 /* VDIV_EN */);
+  gpio_set_level(GPIO_NUM_3, 1);
+  sleep_ms(5);
+
+  adc_oneshot_unit_handle_t unit;
+  adc_oneshot_unit_init_cfg_t ucfg = {};
+  ucfg.unit_id = ADC_UNIT_1;
+  if (adc_oneshot_new_unit(&ucfg, &unit) != ESP_OK)
+  {
+    gpio_set_level(GPIO_NUM_3, 0);
+    LOGI("ERROR: ADC unit init failed");
+    return adc_fail_mv;
+  }
+  adc_oneshot_chan_cfg_t ccfg = {};
+  ccfg.atten = ADC_ATTEN_DB_12;
+  ccfg.bitwidth = ADC_BITWIDTH_DEFAULT;
+  adc_oneshot_config_channel(unit, ADC_CHANNEL_2, &ccfg);
+
+  adc_cali_handle_t cali = nullptr;
+  adc_cali_curve_fitting_config_t cfcfg = {};
+  cfcfg.unit_id = ADC_UNIT_1;
+  cfcfg.chan = ADC_CHANNEL_2;
+  cfcfg.atten = ADC_ATTEN_DB_12;
+  cfcfg.bitwidth = ADC_BITWIDTH_DEFAULT;
+  adc_cali_create_scheme_curve_fitting(&cfcfg, &cali);
+
+  int raw = 0, mv = 0;
+  bool read_ok = (adc_oneshot_read(unit, ADC_CHANNEL_2, &raw) == ESP_OK);
+  if (cali)
+  {
+    adc_cali_raw_to_voltage(cali, raw, &mv);
+    adc_cali_delete_scheme_curve_fitting(cali);
+  }
+  else
+  {
+    mv = raw * 3300 / 4095; // uncalibrated fallback, 12dB full scale ~3.3V
+  }
+  adc_oneshot_del_unit(unit);
+  gpio_set_level(GPIO_NUM_3, 0); // divider off; external pull-down holds it in sleep
+
+  if (!read_ok)
+  {
+    LOGI("ERROR: ADC read failed");
+    return adc_fail_mv;
+  }
+
+  uint32_t battery_mv = (uint32_t)mv * 2;
+  LOGI("Battery level: %d mV", (int)battery_mv);
+  return battery_mv;
 #elif defined(ARDUINO_XIAO_ESP32C6)
   // https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/#reading-battery-voltage
   // Requires wiring A0/GPIO0 to VBAT see https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/#check-the-battery-voltage
   return 4321; // TODO: remove this once proper circuit has been soldered
 #else
   #error "Unknown board type"
+#endif
+}
+
+// USB presence. With VBUS attached, VBAT_ADC reads the charger CV node, so
+// SoC-based decisions (especially permanent shutdown) must be suppressed.
+bool vbus_present()
+{
+#if defined(THERMOMETER_C6_BOARD)
+  // R22/R23 100k/100k from VBUS → ~2.5V at GPIO4 with USB attached; the
+  // divider is dead (0V, zero drain) with USB unplugged.
+  gpio_config_t cfg = {};
+  cfg.pin_bit_mask = 1ULL << 4;
+  cfg.mode = GPIO_MODE_INPUT;
+  cfg.pull_up_en = GPIO_PULLUP_DISABLE;
+  cfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
+  gpio_config(&cfg);
+  return gpio_get_level(GPIO_NUM_4) != 0;
+#else
+  return false;
 #endif
 }
 
@@ -902,7 +984,9 @@ void handle_permanent_shutdown(uint32_t battery_mv)
 {
   uint16_t pin27 = buttonRead(SHUTDOWN_BUTTON_PIN);
   LOGI("Button read %d: %d", SHUTDOWN_BUTTON_PIN, pin27);
-  if (pin27 == 0 || battery_mv < no_battery_mv)
+  // On USB power the measured voltage is the charger CV node, not battery
+  // SoC — never let it trigger the permanent shutdown while charging.
+  if (pin27 == 0 || (battery_mv < no_battery_mv && !vbus_present()))
   {
     // If button is pressed or battery is dead, powerdown
     if (pin27 == 0)

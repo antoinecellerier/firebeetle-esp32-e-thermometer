@@ -1,0 +1,10 @@
+# Custom thermometer-c6 board only (applied on top of sdkconfig.defaults +
+# sdkconfig.defaults.esp32c6 via SDKCONFIG_DEFAULTS in platformio.ini's
+# thermometer_c6_* envs). The board carries an FC-135 32.768kHz crystal on
+# GPIO0/1: use it as the RTC slow clock — the internal RC drifts hours over
+# weeks. Startup falls back to the internal RC (with a boot warning) if the
+# crystal doesn't oscillate; R9 10M bias is the DNP hardware fallback.
+# NOTE: PlatformIO's stale-build check only watches sdkconfig.defaults —
+# after editing THIS file, delete the generated sdkconfig.thermometer_c6_*
+# (or run pio run -t fullclean) to force a reconfigure.
+CONFIG_RTC_CLK_SRC_EXT_CRYS=y

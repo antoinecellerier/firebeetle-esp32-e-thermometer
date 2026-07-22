@@ -5,6 +5,7 @@
 ```bash
 pio run -e dfrobot_firebeetle2_esp32e_debug    # ESP32-E (default env)
 pio run -e seeed_xiao_esp32c6_debug            # C6
+pio run -e thermometer_c6_debug                # custom rev A board (THERMOMETER_C6_BOARD)
 make -C tools/sim screenshots                  # render all display sizes → tools/mock_*.png
 ```
 

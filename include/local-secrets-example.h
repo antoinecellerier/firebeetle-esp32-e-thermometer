@@ -19,7 +19,10 @@
 // Uncomment to disable display
 // #define DISABLE_DISPLAY
 
-// Uncomment if DESPI-C02 VCC is power-gated via P-FET on GPIO13/D7
+// Uncomment if DESPI-C02 VCC is power-gated via P-FET on GPIO13/D7.
+// REQUIRED (and enforced) for the custom thermometer-c6 board, whose panel
+// rail is always hardware-gated (thermometer_c6_* envs; pair with
+// USE_576_T81 + USE_BMP58x).
 // #define EPD_POWER_GATE
 
 // Select active display

@@ -19,6 +19,16 @@
 // The shield has no panel power gate (3V3 hardwired to booster/FPC), so
 // override an EPD_POWER_GATE left enabled in local-secrets.h.
 #undef EPD_POWER_GATE
+#elif defined(THERMOMETER_C6_BOARD)
+// Custom thermometer-c6 board (hardware/thermometer-c6): EPD deliberately on
+// the SDIO strap group — boot-time toggles drive an unpowered (gated) panel.
+#define EPD_DC    21
+#define EPD_CS    20
+#define EPD_BUSY  23
+#define EPD_RESET 22 // 10k pull-up to gated EPD_VCC (not 3V3)
+#ifndef EPD_POWER_GATE
+#error "THERMOMETER_C6_BOARD requires EPD_POWER_GATE in local-secrets.h (the panel rail is hardware-gated)"
+#endif
 #else
 // DESPI-C02, same Dx labels as Firebeetle — see docs/wiring.md for C6 GPIO mapping
 #define EPD_DC    20 // D9
@@ -37,6 +47,8 @@
 #ifdef EPD_POWER_GATE
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
 #define EPD_POWER 13 // D7 — P-FET gate: LOW = on, HIGH = off
+#elif defined(THERMOMETER_C6_BOARD)
+#define EPD_POWER 14 // EPD_PWR_EN → Q2 P-FET via R24 soft-start; 10k pull-up = off at reset/sleep
 #elif defined(ARDUINO_XIAO_ESP32C6)
 #define EPD_POWER 17 // D7
 #else
@@ -51,6 +63,19 @@ static void epd_power_on()
 static void epd_power_off()
 {
   digitalWrite(EPD_POWER, HIGH);
+#if defined(THERMOMETER_C6_BOARD)
+  // With the rail gated off, a high EPD output back-powers the panel through
+  // its input protection diodes (CS and RST both idle high). Float the
+  // plain-GPIO control pins — epd_configure_pins() re-arms them on next use.
+  // MOSI/SCK stay bound to the SPI peripheral (idle low, harmless).
+  const int pins[] = {EPD_CS, EPD_DC, EPD_RESET};
+  for (size_t i = 0; i < sizeof(pins) / sizeof(pins[0]); i++)
+  {
+    gpio_set_direction((gpio_num_t)pins[i], GPIO_MODE_INPUT);
+    gpio_pullup_dis((gpio_num_t)pins[i]);
+    gpio_pulldown_dis((gpio_num_t)pins[i]);
+  }
+#endif
 }
 #else
 static void epd_power_on() {}

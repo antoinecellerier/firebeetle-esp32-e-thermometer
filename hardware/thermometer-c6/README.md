@@ -240,9 +240,10 @@ against circuit.py (anonymous `~` nets matched by pin set).
 - PCB layout (2-layer) — **DONE**: booster switch loop tight, RESE sense
   short, no-copper zone under BMP581, antenna keep-out per Espressif HDG,
   JLCPCB gerbers/drill + CPL/BOM via `make fab` (order per `ORDERING.md`).
-- Firmware (not in this deliverable): new board define with this pin map
-  (EPD on GPIO18–23, gate GPIO14, LED GPIO15, divider GPIO2/3, 32k crystal
-  sdkconfig).
+- Firmware — **DONE**: `THERMOMETER_C6_BOARD` variant (`thermometer_c6_*`
+  envs in platformio.ini): EPD on GPIO18–23 + gate GPIO14 with float-on-off,
+  battery divider GPIO2/3, VBUS sense GPIO4 (suppresses SoC shutdown on USB),
+  LED GPIO15, 32k crystal via `sdkconfig.defaults.thermometer_c6`.
 
 ## Routed-copper census (rev A final vs the pre-connector-fix board)
 
