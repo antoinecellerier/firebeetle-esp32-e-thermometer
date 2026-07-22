@@ -6,6 +6,7 @@
 // BMP58x register map
 #define BMP58X_I2C_ADDR       0x47
 #define BMP58X_REG_CHIP_ID    0x01
+#define BMP58X_REG_INT_CONFIG 0x14
 #define BMP58X_REG_TEMP_XLSB  0x1D
 #define BMP58X_REG_OSR_CONFIG 0x36
 #define BMP58X_REG_ODR_CONFIG 0x37
@@ -18,6 +19,12 @@
 #define BMP58X_OSR_TEMP_1X 0x00
 // ODR_CONFIG: forced mode (pwr_mode = BMP5_POWERMODE_FORCED per Bosch bmp5_defs.h)
 #define BMP58X_FORCED_MODE 0x02
+// INT_CONFIG: int_en=1 + push-pull + active-high + pad_int_drv=0. With no
+// sources routed (INT_SOURCE stays 0) the pad is actively parked at its
+// inactive level (low) — required on the custom thermometer-c6 board where
+// INT is unconnected (hardware/thermometer-c6/README.md bench notes), and
+// harmless on breakouts that ground INT (parked low = GND).
+#define BMP58X_INT_PARKED 0x0A
 
 // --- ULP FSM path (ESP32 original, HULP bit-bang I2C) ---
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
@@ -82,6 +89,7 @@ void BMP58xSensor::Initialize()
     }
 
     WriteRegister(BMP58X_REG_OSR_CONFIG, BMP58X_OSR_TEMP_1X);
+    WriteRegister(BMP58X_REG_INT_CONFIG, BMP58X_INT_PARKED);
 
     _isInitialized = true;
 }

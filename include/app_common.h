@@ -102,6 +102,11 @@ static inline void gpio_out_init(int pin)
 // D13/GPIO12 → PPK2 D2: HIGH while ULP is executing (RTC GPIO, toggled by ULP itself)
 //   ⚠ PPK2_DEBUG_ULP_GPIO requires RTC peripherals to stay powered during deep sleep,
 //     which increases sleep current. Enable separately only when needed.
+// On THERMOMETER_C6_BOARD the same numbers work but land differently:
+// GPIO17/16 are UART0 RX/TX = J5 pins 5/4 (probe there; mutually exclusive
+// with a wired UART console — the primary console is USB-Serial-JTAG), and
+// GPIO12 is USB D−, usable only with USB detached (true for any floor
+// measurement anyway).
 #ifdef PPK2_DEBUG
 #define PPK2_PIN_CPU_ACTIVE 17
 #define PPK2_PIN_DISPLAY    16
