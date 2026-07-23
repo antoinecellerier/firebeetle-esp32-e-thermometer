@@ -311,18 +311,24 @@ of a board that is otherwise order-ready.
 Baseline: the €204.94 qty 5 PCB / 4 assembled itemised quote in ORDERING.md
 §8. Three structural facts frame everything: **Economy PCBA is unreachable
 regardless of PCB options** (U1 and U5 are Standard-PCBA-only parts, both
-locked), **X-Ray (€11.46) is mandatory** for U5's LGA (flat per-order fee,
-not removable), and **no wireless SoC or environmental sensor exists in the
-JLC Basic tier at all** (2026 library: Basic MCUs are STM32F1/F0/STM8-class
-only, zero radio parts) — so feeder-fee optimisation is small-bore and the
-real levers are POFV, quantity, and BOM-line count. JLC tier facts below
-came from search-engine reads of jlcpcb.com (the direct pages were
-unreachable at research time); where they conflict with the 2026-07-18/20
-in-dialog audits recorded in ORDERING.md, **the dialog audit wins**.
+locked; Economy is also single-sided-placement, ≤50pcs), **X-Ray is
+mandatory** for U5's LGA and U1's shield (tiered per inspected piece —
+$1.57/pc at 1–10; the €11.46 ≈ 2 parts × 4 boards — so it scales with
+quantity, it is not a flat order fee), and **no wireless SoC or
+environmental sensor exists in the JLC Basic tier at all** (verified
+2026-07-23: Basic-filtered library probes for ESP32/ESP8266/nRF/BL602/
+W800/CH57x/CC25xx/RTL87xx all return zero) — so feeder-fee optimisation is
+small-bore and the real levers are POFV, quantity, and BOM-line count.
+Tier/stock facts below re-verified 2026-07-23 against JLC's own part API
+(`getComponentDetail`); fee-policy facts against jlcpcb.com's live
+assembly-price page. The order dialog remains ground truth at order time.
 
 - **Drop POFV in a rev B re-route: −€44.07/order, the single largest line.**
   Not a touch-up: a full via audit of the committed board found **81 vias in
-  solderable pads** — via-in-pad is the board's core 2-layer escape strategy.
+  solderable pads** (independently reproduced 2026-07-23 with a pcbnew
+  script: 84 via centres in mask-open SMD pads, 81 excluding the JP2/3/5
+  copper-jumper pads) — via-in-pad is the board's core 2-layer escape
+  strategy.
   ~50 have a legal dog-bone spot against today's copper (FPC-east fanout
   column, central EPD-driver discretes, all GND stitches); **26 are
   hard-boxed** with no clear spot within 1mm — dominated by 12 ESP32-C6 QFN
@@ -335,19 +341,35 @@ in-dialog audits recorded in ORDERING.md, **the dialog audit wins**.
   with the Q1/H1 placement pass above and the production-copper trim below
   (the freed bench-pad corridors are exactly where the dog-bones must go).
   Before committing to it, confirm POFV is a flat charge vs qty (quote at
-  5/10/20) — if flat, large orders amortise it and weaken the case.
+  5/10/20) — if flat, large orders amortise it and weaken the case. The
+  scaling is not documented anywhere public (checked 2026-07-23: JLC's
+  extra-charges article doesn't list POFV; the only official pricing fact
+  is that POFV is free on 6–20-layer boards, paid on 2/4-layer), so the
+  quote calculator is the only oracle.
 - **Panel-lock BOM collapse: −€3–9/order.** Locking the panel family to the
   proven 10µH/0.47Ω config deletes L2 (47µH, Extended), R15 (2.2Ω) and R16
   (3Ω) plus their placements; JP2–JP6 are copper-only and can stay.
   Opportunity cost: the board loses the GDEH0576T81-datasheet booster
   option (47µH + 2.2Ω RESE) and the 3Ω SSD16xx leg — fine iff the panel
   choice is final; the copper jumpers keep a hand-solder escape hatch.
-- **MBR0530 → B5819W (C8598) candidate Basic swap: −~€2.75/order.** Same
-  SOD-123 footprint, 40V/1A vs 30V/0.5A, reported Basic and in stock
-  (unverified in the dialog — the 2026-07-18 audit's "no Basic alternates"
-  finding predates this lead). Higher reverse leakage is irrelevant (the
-  whole booster hangs off gated EPD_VCC); slightly higher Vf costs a hair
-  of refresh efficiency. Try the match in the BOM dialog at next order.
+- **MBR0530 → B5819W (C8598) confirmed-Basic swap: −~€2.75/order.** Same
+  SOD-123 package, 40V/1A vs 30V/0.5A. Verified 2026-07-23 via the JLC
+  part API: **Basic tier, 621k stock, $0.029** (MBR0530 C5204746 confirmed
+  Extended). Vf 600mV@1A vs 500mV@500mA costs a hair of refresh
+  efficiency; reverse leakage is irrelevant (the whole booster hangs off
+  gated EPD_VCC). Caveat: the −€2.75 assumes the per-Extended-line feeder
+  billing the 2026-07-20 quote exhibited — under JLC's *documented*
+  Standard-PCBA policy ($1.50 × every unique line, Basic included) the
+  swap is feeder-neutral and saves only pennies of part cost. Resolve the
+  feeder question (ORDERING.md §3/§4) before counting this saving.
+- **C98192 (4.7µF/50V, 9 placements, one Extended line) → C440198
+  candidate Basic swap: −~€2.75/order, same caveat.** There is no Basic
+  4.7µF ≥50V 0805 (verified 2026-07-23; the only Basic 4.7µF 0805 is
+  25V), but **C440198 10µF 50V X5R 0805 is Basic** with 2.4M stock.
+  Doubling the pump/reservoir caps (C16–C24) and the VBUS-side C5/C6
+  needs booster re-validation (startup surge, pump timing) — try only
+  with a bench board to compare against, and mind X5R DC-bias derating
+  at the ~22V rails is similar for both parts.
 - **Production-copper trim (dev board → production board): −~€1–6/order,
   but mainly routing room.** The board already carries its debug features
   as DNP/copper-only (J5, J2, JP1–6, all TPs, R9, U6), so they cost
@@ -363,10 +385,11 @@ in-dialog audits recorded in ORDERING.md, **the dialog audit wins**.
   bench procedures above stop working on that variant; only strip after
   the rev-A first-article campaign is done.
 - **Quantity is the dominant per-unit lever, no design change needed.**
-  ~€90+/order is fixed (setup 22.32, feeders 46.75, stencil 7.17, X-Ray
-  11.46, confirm fees) — at qty 4 assembled that is ~€23/board of pure
-  overhead. Qty 15–20 takes unit cost from ~€51 to ~€20–25 with the design
-  untouched.
+  ~€78/order is fixed (setup 22.32, feeders 46.75, stencil 7.17, confirm
+  fees 1.30); X-Ray (€11.46) is tiered per inspected piece so it shrinks
+  per-board with volume but never disappears. At qty 4 assembled that is
+  ~€20–23/board of pure overhead. Qty 15–20 takes unit cost from ~€51 to
+  ~€20–25 with the design untouched (modulo how POFV scales — see above).
 
 Ruled out, with reasons (don't re-research):
 
@@ -379,9 +402,9 @@ Ruled out, with reasons (don't re-research):
   but is BLE-only — fails WiFi outright. Bare ESP32-C6FH4 saves ~$0.5 and
   costs antenna design + modular RF certification. No wireless part is
   Basic tier, so there is no feeder-fee escape either.
-- **Sensor alternatives — U5 stays.** BMP581 is ~$1.44 at LCSC — already
-  the cheapest pressure-capable part that passes the power bar (~0.5µA
-  standby, ~3µC/forced reading). BMP390L costs *more* (~$5) despite the
+- **Sensor alternatives — U5 stays.** BMP581 is ~$1.44 at LCSC ($2.35–3.03
+  through JLC assembly) — already the cheapest pressure-capable part that
+  passes the power bar (~0.5µA standby, ~3µC/forced reading). BMP390L costs *more* (~$5) despite the
   existing driver; BMP280 saves pennies and is equally Standard-only.
   SHT40 is the standout if pressure were expendable (80nA, ~2.4µC, ±0.2°C,
   ~$1.3) but its Economy-capability is moot (U1 forces Standard) and it
