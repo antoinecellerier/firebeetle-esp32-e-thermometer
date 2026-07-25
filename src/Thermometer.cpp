@@ -308,7 +308,19 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
   hour_tm.tm_sec = 0;
   time_t hour_start = mktime(&hour_tm);
 
-  if (historical_data.current_hour_start != 0 && hour_start != historical_data.current_hour_start)
+  // Finalize only when the clock has moved into a genuinely later hour than
+  // anything already stored. An NTP resync correcting a slow RTC steps the
+  // clock BACKWARDS (−9559s on the ESP32-E, docs/clock-drift.md): the negative
+  // hours_elapsed below already skips the fill, but a plain "hour changed"
+  // test would still advance hourly_idx while moving hourly_latest_time
+  // backwards, permanently offsetting the index→time mapping in Display.h that
+  // every later entry inherits. Re-lived hours therefore keep accumulating
+  // into the current entry and produce exactly one entry once the clock passes
+  // the newest stored hour again — no duplicate, no gap.
+  bool hour_advanced = historical_data.current_hour_start != 0 &&
+                       hour_start > historical_data.current_hour_start;
+  bool extends_history = (hour_start - 3600) > historical_data.hourly_latest_time;
+  if (hour_advanced && extends_history)
   {
     // Clock hour changed — finalize the completed hour's entry
     HourlyEntry entry;
@@ -350,9 +362,12 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
     historical_data.current_hour_max_x10 = TEMP_INIT_MAX_X10;
   }
 
-  // First reading after boot — initialize reference time
+  // First reading after boot — initialize reference time. It names the newest
+  // *finalized* entry and there are none yet, so it sits one hour before the
+  // in-progress hour; the first finalize then lands on the boot hour and
+  // extends_history above is satisfied.
   if (historical_data.current_hour_start == 0)
-    historical_data.hourly_latest_time = hour_start;
+    historical_data.hourly_latest_time = hour_start - 3600;
 
   historical_data.current_hour_start = hour_start;
 
