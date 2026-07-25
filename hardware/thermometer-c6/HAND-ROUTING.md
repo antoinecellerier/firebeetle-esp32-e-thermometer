@@ -137,5 +137,5 @@ are the only reasons the round-trip legitimately does not close.
 
 `verify/reach.py NET W out.png` first (flood fill from the seed island —
 shows exactly where it is walled in), then `who.py`/`gap.py`/`occupancy.py`
-(see CLAUDE.md "Review tools"). Corridor truths live in LAYOUT-PLAN.md's M5
-survey; router semantics (seeding, ordering, boxes) in CLAUDE.md.
+(the `pcb-edit` skill indexes them). Corridor truths live in LAYOUT-PLAN.md's M5
+survey; router semantics (seeding, ordering, boxes) in ROUTER-NOTES.md.

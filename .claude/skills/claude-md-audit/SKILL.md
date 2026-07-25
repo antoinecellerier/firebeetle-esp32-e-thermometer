@@ -27,17 +27,23 @@ Scope is `CLAUDE.md`, `.claude/rules/*.md`, `.claude/skills/*/SKILL.md` and
 Every file path, make target, script, env name, `docs/` link, commit hash,
 function name, macro and CLI flag named in these files must still resolve:
 
-**Resolve paths relative to the naming file's own directory first, then the repo
-root.** A directory-scoped CLAUDE.md names its own scripts (the PCB one names its
-generator/ and verify/ trees), which exist only under that directory — checking
-them against the repo root reports a dozen phantom misses.
+**Resolve each path against three bases: the naming file's own directory, the
+directory its commands run from, and the repo root.** A directory-scoped
+CLAUDE.md names its own scripts (the PCB one names its generator/ and verify/
+trees). A *per-directory skill* is worse: it lives in
+`<area>/.claude/skills/<name>/` but its commands run from `<area>/`, two levels
+up. Checking either against the repo root alone reports a dozen phantom misses.
 
 ```bash
-set -- CLAUDE.md .claude/rules/*.md .claude/skills/*/SKILL.md hardware/*/CLAUDE.md
-for f in "$@"; do d=$(dirname "$f")
-  grep -ohE '`[a-zA-Z0-9_./-]+\.(md|py|c|h|cpp|csv|ini|json)`' "$f" | tr -d '`' | sort -u \
+set -- CLAUDE.md .claude/rules/*.md .claude/skills/*/SKILL.md \
+       hardware/*/CLAUDE.md hardware/*/.claude/skills/*/SKILL.md
+for f in "$@"; do
+  d=$(dirname "$f")
+  # for <area>/.claude/skills/<name>/SKILL.md, commands run from <area>
+  a=$(printf '%s' "$d" | sed 's#/\.claude/skills/[^/]*$##')
+  grep -ohE '`[a-zA-Z0-9_./-]+\.(md|py|c|h|cpp|csv|ini|json|dru)`' "$f" | tr -d '`' | sort -u \
     | while read -r p; do case "$p" in */*)
-        test -e "$d/$p" || test -e "$p" || echo "MISSING $p  (in $f)";; esac; done
+        test -e "$d/$p" || test -e "$a/$p" || test -e "$p" || echo "MISSING $p  (in $f)";; esac; done
 done
 # commit hashes
 grep -ohE '`[0-9a-f]{7,40}`' "$@" | tr -d '`' | sort -u \

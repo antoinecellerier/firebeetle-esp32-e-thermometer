@@ -82,9 +82,9 @@ Path-scoped, loaded when their files are touched — read before editing:
 `.claude/rules/display.md` (renderer, badges, simulator),
 `.claude/rules/ulp.md` (ULP FSM / LP core),
 `.claude/rules/rtc-state.md` (RTC memory, version bumps).
-The custom PCB has its own `hardware/thermometer-c6/CLAUDE.md`: generated KiCad
-schematic (`make check` gates everything), never hand-edit the `.kicad_sch`.
-Next phase there: `hardware/thermometer-c6/LAYOUT-PLAN.md`.
+The custom PCB has its own `hardware/thermometer-c6/CLAUDE.md`: `.kicad_sch`,
+`.kicad_pcb` and `.kicad_dru` are all generated — never hand-edit them; `make
+check` gates everything. Next phase there: `BRINGUP.md` (rev A ordered, inbound).
 
 ## Code conventions
 
