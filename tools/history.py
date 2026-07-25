@@ -439,6 +439,32 @@ def cmd_restore(args):
     print("restored; the device rebuilds RTC state from it on next boot")
 
 
+DRIFT_CSV_HEADER = ["sync_time", "drift_s", "window_s", "ppm", "ambient_c",
+                    "ambient_hours", "boot_count", "d_boot", "refresh_count",
+                    "d_refresh"]
+
+
+def _drift_rows(drifts, at=None):
+    """The clock-drift table docs/clock-drift.md asks for, deltas computed.
+
+    boot_count and refresh_count are journaled absolute so the day-over-day
+    deltas — the duty-cycle correlates — are derived here instead of costing an
+    RTC variable on the device.
+    """
+    prev = None
+    for d in drifts:
+        if at and d["sync_time"] > at:
+            continue
+        db = d["boot_count"] - prev["boot_count"] if prev else ""
+        dr = d["refresh_count"] - prev["refresh_count"] if prev else ""
+        amb = ("" if d["ambient_mean_x10"] == HOURLY_NO_DATA
+               else d["ambient_mean_x10"] / 10.0)
+        yield [_iso(d["sync_time"]), d["drift_ms"] / 1000.0, d["window_s"],
+               d["ppm"], amb, d["ambient_hours"], d["boot_count"], db,
+               d["refresh_count"], dr]
+        prev = d
+
+
 def cmd_dump(args):
     with open(args.file, "rb") as f:
         arc = Archive(f.read())
@@ -452,21 +478,9 @@ def cmd_dump(args):
         print(f"# {line}")
 
     if args.drift:
-        w.writerow(["sync_time", "drift_s", "window_s", "ppm", "ambient_c",
-                    "ambient_hours", "boot_count", "d_boot", "refresh_count",
-                    "d_refresh"])
-        prev = None
-        for d in arc.drifts:
-            if at and d["sync_time"] > at:
-                continue
-            db = d["boot_count"] - prev["boot_count"] if prev else ""
-            dr = d["refresh_count"] - prev["refresh_count"] if prev else ""
-            amb = ("" if d["ambient_mean_x10"] == HOURLY_NO_DATA
-                   else d["ambient_mean_x10"] / 10.0)
-            w.writerow([_iso(d["sync_time"]), d["drift_ms"] / 1000.0,
-                        d["window_s"], d["ppm"], amb, d["ambient_hours"],
-                        d["boot_count"], db, d["refresh_count"], dr])
-            prev = d
+        w.writerow(DRIFT_CSV_HEADER)
+        for row in _drift_rows(arc.drifts, at):
+            w.writerow(row)
         return
 
     w.writerow(["kind", "time", "min_c", "max_c", "avg_c"])
@@ -489,6 +503,11 @@ def cmd_merge(args):
     On-device capacity is years, but the ring does eventually wrap and
     `erase_flash` does not care how long you collected — merged backups on the
     PC are the copy that outlives all of it.
+
+    Drift records have their own shape, so they go to a sibling `-drift.csv`
+    next to --output, or after a `#` separator when writing to stdout. They
+    used to be counted in the summary and then written nowhere, which made
+    losing the drift dataset invisible until the backups were gone.
     """
     hourly, samples, drifts, macs = {}, {}, {}, set()
     for path in args.files:
@@ -516,11 +535,24 @@ def cmd_merge(args):
             w.writerow(["hourly", _iso(ts), mn / 10.0, mx / 10.0, av / 10.0])
     for ts in sorted(samples):
         w.writerow(["sample", _iso(ts), "", "", samples[ts][1] / 10.0])
+
+    drift_rows = list(_drift_rows([drifts[k] for k in sorted(drifts)]))
     if args.output:
         out.close()
+        stem, ext = os.path.splitext(args.output)
+        dpath = f"{stem}-drift{ext or '.csv'}"
+        with open(dpath, "w", newline="") as df:
+            dw = csv.writer(df)
+            dw.writerow(DRIFT_CSV_HEADER)
+            dw.writerows(drift_rows)
         print(f"merged {len(args.files)} backups -> {args.output} "
-              f"({len(hourly)} hourly, {len(samples)} sparkline, "
-              f"{len(drifts)} drift)", file=sys.stderr)
+              f"({len(hourly)} hourly, {len(samples)} sparkline) "
+              f"and {dpath} ({len(drift_rows)} drift)", file=sys.stderr)
+    elif drift_rows:
+        w.writerow([])
+        print("# drift table follows")
+        w.writerow(DRIFT_CSV_HEADER)
+        w.writerows(drift_rows)
 
 
 def main(argv=None):
