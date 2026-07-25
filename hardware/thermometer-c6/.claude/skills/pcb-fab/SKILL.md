@@ -45,9 +45,9 @@ The raw `make drc` target halts on *any* violation and is deliberately **not** a
 
 The one waiver this board ever carried, `copper_edge_clearance` on the J3
 edge-launch, was deleted 2026-07-20. It was not expressing a design intent: it
-was waiving a **1.415mm placement error** (`out/j3-datum/`). A scoped rule that
-silences a real defect is worse than no rule, because the gate then certifies the
-defect.
+was waiving a **1.415mm placement error**, found by re-deriving J3's true datum.
+A scoped rule that silences a real defect is worse than no rule, because the gate
+then certifies the defect.
 
 Before adding a waiver, prove the geometry is correct — numerically, per the
 "physical reality beats inference" rule in `CLAUDE.md`.

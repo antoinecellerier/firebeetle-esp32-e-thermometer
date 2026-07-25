@@ -19,8 +19,20 @@ or a trap, nothing *removes*. This audit is the forcing function. It produces a
 punch list of concrete add / remove / relocate edits — **present them to the
 user; do not auto-apply.**
 
-Scope is `CLAUDE.md`, `.claude/rules/*.md`, `.claude/skills/*/SKILL.md` and
-`hardware/thermometer-c6/CLAUDE.md`.
+## Scope — discover it, don't hardcode it
+
+Every tracked instruction file, at any depth, including `.claude/` directories
+nested under a subproject. `git ls-files` is the right discovery tool: it finds
+them wherever they are and excludes untracked and gitignored noise
+(`settings.local.json`, `out/`, worktrees) for free.
+
+```bash
+set -- $(git ls-files '*CLAUDE.md' '*.claude/rules/*.md' '*.claude/skills/*/SKILL.md')
+printf 'auditing %d files:\n' "$#"; printf '  %s\n' "$@"
+```
+
+Every snippet below assumes `"$@"` is set this way. Add new instruction
+locations to that one line, not to a list repeated in each check.
 
 ## 1. Reference accuracy
 
@@ -35,11 +47,9 @@ trees). A *per-directory skill* is worse: it lives in
 up. Checking either against the repo root alone reports a dozen phantom misses.
 
 ```bash
-set -- CLAUDE.md .claude/rules/*.md .claude/skills/*/SKILL.md \
-       hardware/*/CLAUDE.md hardware/*/.claude/skills/*/SKILL.md
 for f in "$@"; do
   d=$(dirname "$f")
-  # for <area>/.claude/skills/<name>/SKILL.md, commands run from <area>
+  # <area>/.claude/skills/<name>/SKILL.md -> commands run from <area>, any depth
   a=$(printf '%s' "$d" | sed 's#/\.claude/skills/[^/]*$##')
   grep -ohE '`[a-zA-Z0-9_./-]+\.(md|py|c|h|cpp|csv|ini|json|dru)`' "$f" | tr -d '`' | sort -u \
     | while read -r p; do case "$p" in */*)
@@ -51,10 +61,20 @@ grep -ohE '`[0-9a-f]{7,40}`' "$@" | tr -d '`' | sort -u \
 # pio envs (anchored to `pio run`, so grep's own -e flag isn't mistaken for one)
 grep -ohE 'pio run [^|]*-e [a-z0-9_]+' "$@" | grep -oE '\-e [a-z0-9_]+$' | awk '{print $2}' | sort -u \
   | while read -r e; do grep -q "^\[env:$e\]" platformio.ini || echo "NO ENV $e"; done
-# make targets
+# make targets: `make -C <dir> <t>`, and a bare `make <t>` in a subproject file
 grep -ohE 'make -C [a-zA-Z0-9/_-]+ [a-z]+' "$@" | sort -u | while read -r _ _ d t; do
   grep -qE "^$t:" "$d/Makefile" 2>/dev/null || echo "NO TARGET make -C $d $t"; done
+for f in "$@"; do
+  a=$(printf '%s' "$(dirname "$f")" | sed 's#/\.claude/skills/[^/]*$##')
+  [ -f "$a/Makefile" ] || continue
+  grep -ohE '`make [a-z]+`' "$f" | tr -d '`' | awk '{print $2}' | sort -u \
+    | while read -r t; do grep -qE "^$t:" "$a/Makefile" || echo "NO TARGET make $t  (in $f)"; done
+done
 ```
+
+**A check that reports nothing may be broken rather than clean.** Before
+believing a zero-finding result, feed the pipeline one known-bad input and
+confirm it complains.
 
 A bare filename in prose (`common.h`, `idf.py`, `ulp.py`) is usually an external
 tool or IDF-internal file, not a repo path — confirm rather than flag. Also check
@@ -72,7 +92,7 @@ instead (`$HOME`, `$(pwd)`, repo-relative). `~/.platformio/...` is fine — that
 where PlatformIO installs for everyone.
 
 ```bash
-grep -rnE '/home/[a-z]+|/Users/[a-z]+' CLAUDE.md .claude/rules .claude/skills docs/*.md
+grep -nE '/home/[a-z]+|/Users/[a-z]+' "$@" $(git ls-files 'docs/*.md')
 ```
 
 **References to specific gitignored files** — they rot on clone.
@@ -118,15 +138,28 @@ number (see check 7).
 
 ## 3. Bloat
 
-Report the **loaded** line count vs the budget in the house-rules header
-(currently ~130). Count only what enters context — exclude the leading
-block-level HTML comment, which Claude Code strips before injection:
+**Every** CLAUDE.md carries its own budget in its house-rules header — check each
+against its own stated number, not against the root's. Count only what enters
+context: the leading block-level HTML comment is stripped before injection, so it
+is free and does not count.
 
 ```bash
-python3 -c "
-import re; s=open('CLAUDE.md').read()
-print(len(re.sub(r'<!--.*?-->','',s,flags=re.S).splitlines()))"
+for f in $(git ls-files '*CLAUDE.md'); do
+  python3 - "$f" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+n = len(re.sub(r'<!--.*?-->', '', s, flags=re.S).splitlines())
+m = re.search(r'Target <= ~(\d+) lines', s)
+budget = int(m.group(1)) if m else None
+flag = '' if budget is None or n <= budget else '  <-- OVER'
+print(f"{p}: {n} loaded, budget {budget if budget else '(none stated)'}{flag}")
+PY
+done
 ```
+
+A file over its own budget is a finding either way — trim it, or state the number
+it actually needs. Leaving the two disagreeing is what makes the budget stop
+meaning anything. The docs' hard cap is 200 lines per file.
 
 If over, flag the longest prose passages and propose relocating: rationale to
 `docs/`, a multi-step procedure to a skill, and anything that only matters when

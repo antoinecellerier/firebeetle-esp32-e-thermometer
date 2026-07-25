@@ -4,7 +4,7 @@
     under hardware/thermometer-c6/, NOT at launch, and it is NOT re-injected
     after /compact. Anything catastrophic must also be one line in the root
     CLAUDE.md, which does survive compaction.
-  - Target <= ~90 lines of loaded content (Claude Code docs cap CLAUDE.md at
+  - Target <= ~110 lines of loaded content (Claude Code docs cap CLAUDE.md at
     < 200). Prune one stale line before adding one.
   - Deep procedure -> a skill in .claude/skills/. Long rationale or a finished
     phase -> a doc beside README.md. This file holds only what stays true
@@ -73,8 +73,9 @@ everything else combined; J3 and J4 each flipped more than once.
 - **"Verified" is unearned until one check confirms it end to end.** J3 once read
   as correct because two errors cancelled: the 3D model was mis-seated 180° *and*
   the placement was wrong.
-- **Fix geometry; don't add a DRC waiver.** The deleted `copper_edge_clearance`
-  waiver was masking a 1.415mm placement error, not expressing design intent.
+- **Fix geometry; don't add a DRC waiver.** The only waiver this board carried
+  turned out to be masking a placement error, not expressing design intent — the
+  `pcb-fab` skill has the case.
 
 ## Revisions
 
