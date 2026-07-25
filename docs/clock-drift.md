@@ -96,25 +96,138 @@ device clock behind real time.
 ## Open questions
 
 - **Is the rate stable?** A single point can't tell drift from a one-off (RC
-  recalibration, a long WiFi stall, a missed resync). Two or three consecutive
-  windows at a similar ppm would justify compensation.
+  recalibration, a long WiFi stall, a missed resync). See the collection
+  protocol below — this is the question the daily samples exist to answer.
 - **Temperature coefficient.** The RC oscillator is temperature-dependent and
-  this device sits in the room whose temperature it plots — which is also the
+  this device sits in the room whose temperature it plots, which is the
   cheapest experiment available: ambient swung 21–32°C over the first window,
-  so if the tempco matters, the daily rates should track each day's mean
-  temperature instead of scattering. The device already holds 30 days of hourly
-  temperature in RTC, so the mean ambient over each drift window could be
-  stored beside its rate (1 byte per sample) and the correlation read straight
-  off the screen. Worth doing once a few daily samples exist to correlate
-  against.
-- **The loop can't converge at this rate.** −1.58% needs a ~63min interval to
+  so if the tempco dominates, the daily rates should track each day's mean
+  temperature instead of scattering.
+- **The loop can't converge at this rate.** −5265ppm needs a ~3.2h interval to
   keep drift under a minute, but `RESYNC_INTERVAL_MIN` is 1 day. So the device
-  now resyncs daily and still shows up to ~23min of error just before each
-  sync, at the cost of a daily WiFi wake.
-- **Compensation** (deferred until the rate looks stable): persist a ppm figure
-  and correct at wake, or bias the deep-sleep duration. Would also let the
-  resync interval grow back out and drop the daily WiFi wake.
+  resyncs daily and still shows up to ~7.6min of error just before each sync,
+  at the cost of a daily WiFi wake.
 - **Why did 2 of 3 resyncs fail?** (2026-07-25) Open. The `! NOSYNC xN` badge
   now makes a run of failures visible while it is happening, but not whether
   the cause is the AP, the 30s SNTP timeout, or something else — the serial log
-  distinguishes them (`WiFi failed` vs `sync failed`).
+  distinguishes them (`WiFi failed` vs `sync failed`). This is the dominant
+  energy risk (see below), not the successful resync.
+
+## Compensation: analysis and decision (2026-07-25)
+
+Decision: **no compensation code**, and no extra RTC diagnostic fields, until
+several daily samples exist. Recorded here so the reasoning isn't re-derived.
+
+### What compensation could buy
+
+A constant-ppm correction leaves a residual equal to the rate's instability.
+At R = 5265ppm = 455s/day:
+
+| Rate stability | Residual | Error @1d sync | @7d | @28d |
+|---|---|---|---|---|
+| ±1% | 4.5 s/day | 5 s | 32 s | 2.1 min |
+| ±2% | 9 s/day | 9 s | 64 s | 4.2 min |
+| ±5% | 23 s/day | 23 s | 2.7 min | 10.6 min |
+| ±10% | 46 s/day | 46 s | 5.3 min | 21 min |
+| none (today) | 455 s/day | 7.6 min | 53 min | 3.5 h |
+
+Staying under 60s of error needs ±13% stability at daily sync, ±1.9% weekly,
+±0.47% at the 28-day cap. **Because the resync floor is 1 day, a stability
+worse than ~±10% buys nothing at all** — the interval cannot shrink to
+compensate.
+
+The payoff is not really display accuracy (7.6min on an e-paper thermometer
+whose reading is already minutes stale). It is:
+
+1. **Energy.** Floor is 19.4µA = 1.68 C/day; refreshes add ~2.7 C/day at one
+   per hour. A successful WiFi+NTP wake is **unmeasured anywhere in this repo**
+   — the only defensible construction is 20.6mC (measured active phase) plus
+   radio-on time. A *failed* attempt burns 15s (association timeout) or 45s
+   (SNTP timeout too), i.e. 1.5–4.5 C, up to a full day's budget. With 2 of 3
+   attempts failing here, going from 365 attempts/year to 13 is the real prize.
+2. **The RTC-rendezvous design** in [multi-device-research.md](multi-device-research.md)
+   (master wakes 200ms early, listens 500ms) is impossible at 455s/day. At ±1%
+   residual the error after an hour is 0.16s, which fits.
+
+### What ESP-IDF already provides
+
+Checked before designing anything custom: **IDF has no frequency/drift
+compensation.** What exists:
+
+| Lever | Verdict |
+|---|---|
+| `CONFIG_RTC_CLK_SRC_INT_8MD256` (ESP32 only) — "internal 8.5MHz oscillator ÷256 (~33kHz)… better frequency stability than the internal 150kHz oscillator… higher deep sleep current (by 5µA)" (`esp_hw_support/port/esp32/Kconfig.rtc`) | **Try this before writing code.** One sdkconfig line, zero application logic. +5µA on a 19.4µA floor = +0.43 C/day, against a daily-resync regime that plausibly costs ~1 C/day given the failure rate. Not available on the C6 (INT_RC / EXT_CRYS / EXT_OSC only). Verify ULP FSM timing survives the slow-clock change (`ULP_WAKEUP_PERIOD_US`). |
+| `CONFIG_RTC_CLK_CAL_CYCLES` (1024 today, range to 32766) | Improves calibration precision at boot-time cost. Won't fix a systematic awake-vs-asleep offset; cheap second arm. |
+| `SNTP_SYNC_MODE_SMOOTH` / `adjtime()` (`esp_libc/src/time.c`) | **Rejected.** Slews a one-shot *offset*, not a frequency; only engages under 35min of error (ours steps); and its slew state is plain `static`, not RTC — it does not survive deep sleep, and this device sleeps seconds after syncing. |
+| `CONFIG_RTC_CLK_SRC_EXT_CRYS` | Needs a 32.768kHz crystal the WROOM-32E module doesn't have. This is how the custom board avoids the problem entirely. |
+
+### Why the clock is slow (mechanism)
+
+`esp_clk_init()` → `select_rtc_slow_clk()` recalibrates the RC against the
+40MHz crystal on **every** boot including each deep-sleep wake;
+`sleep_modes.c` recalibrates again at sleep entry; `esp_rtc_get_time_us()`
+converts only ticks-since-its-last-call using the calibration current at that
+moment. Calibration is therefore fresh at both ends of every sleep window, so
+a persistent one-directional error is most likely the RC running at a
+different frequency **asleep** than **awake being calibrated** (power state,
+self-heating). That predicts the rate tracks wake/sleep duty cycle rather than
+ambient — which would make the 21–32°C first window an adversarial worst case,
+not a typical one.
+
+Corollary, and a correction to an earlier note here: **biasing the deep-sleep
+duration cannot work.** Wall clock is `boot_time + ticks × cal`; it advances
+whether or not the CPU is asleep and regardless of what the sleep timer was
+programmed to. Changing the sleep duration only changes *when* wakes happen.
+
+### Collection protocol
+
+The interval is pinned at the 1-day floor, so a sample lands daily. Record per
+reading, all from the screen — no firmware support needed:
+
+| From | Token | Why |
+|---|---|---|
+| status line | `! DRIFT ±Ns/<window>` | the raw measurement |
+| status line | `±ppm nN +-M%` | mean rate, sample count, dispersion |
+| footer | `#N` boot count | **delta vs the previous day = HP wakes that day** — the duty-cycle correlate |
+| footer | `rN` refresh count | refresh-heavy days are the high-self-heating days |
+| footer | `s<age>`, uptime `NdNh` | confirms the sample is fresh and the window is real |
+| 30-day chart | that day's min/max | the temperature correlate |
+
+`DRIFT_PPM_HIST_SIZE` is 6, so at the floor the ring holds exactly six days and
+the seventh sample evicts the first — transcribe daily rather than reading the
+ring at the end. Stay on battery: tethering for serial changes charger and
+regulator dissipation, hence die temperature, perturbing the thing being
+measured.
+
+### Decision rules once ~6 samples exist
+
+- **`+-M%` ≤ ~2%, uncorrelated with both correlates** → constant-rate model; a
+  single ppm constant, interval out to 7–28d.
+- **Tracks daily temperature** → `R(T) = R0 + k(T−Tref)`, integrated over the
+  device's own hourly history.
+- **Tracks the boot-count delta** → duty-cycle model, confirming the
+  awake-vs-asleep asymmetry above; correction needs a per-wake term.
+- **`+-M%` > ~10%** → compensation is futile at the 1-day floor. Drop it and
+  spend the effort on the resync failure path instead.
+
+### If compensation is built (design held ready)
+
+`settimeofday()` at each HP wake, placed right after `boot_count++` so every
+consumer — crash breadcrumb, `update_hourly_history()`, the 04:00 clear
+schedule, the rendered `%H:%M` — sees one consistent clock. Correcting via
+`esp_clk_slowclk_cal_set()` is foreclosed: `sleep_modes.c` overwrites it at
+sleep entry, and the sleep window is already converted to wall-clock before
+`app_main` runs.
+
+The critical detail: once armed, the resync measures the **residual**. Store
+`residual + applied_ppm` into `drift_ppm_hist` so the history keeps meaning the
+raw oscillator rate — otherwise the ring collapses toward zero and the model
+re-fits itself to nothing. Log the `raw ≈ residual + applied` identity at every
+resync as a self-check. Keep `! DRIFT` as the ≥60s alarm and add a footer token
+for "compensation armed", so a working correction doesn't hide its own
+existence.
+
+Note the RTC constraint: on the ESP32-E only **60 bytes** separate the app's
+RTC sections from `ULP_DATA_BASE` (the build prints the headroom every time —
+see `scripts/post_build_check_rtc.py`). Per-sample covariate arrays would not
+fit today without raising the base.
