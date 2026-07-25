@@ -268,14 +268,22 @@ int main(int argc, char **argv)
   g_hist.hourly_count = 1;
   history_store_flush(&g_hist, &g_drift, T0);
   CHECK(s_base_seq == 1, "base should exist after the first flush");
-  // And again once a sector of records has gone by, so replay stays bounded.
+  // And again on the RPO: 24 hourly records is 24 clock hours, so a day of data
+  // is the most a reflash can cost. Checked exactly, since firing early would
+  // quietly multiply the snapshot energy and firing late would break the
+  // guarantee. This must hold without any NTP resync marking the base dirty.
   s_base_dirty = false;
-  for (size_t i = 0; i < HS_SECTOR / HS_REC; i++)
+  for (size_t i = 0; i < HS_BASE_MAX_RECORDS - 1; i++)
   {
     HourlyEntry se = { 200, 210, 205 };
     history_store_append_hourly(T0 + (time_t)i * 3600, &se);
+    CHECK(!s_base_dirty, "base requested after only %u records", (unsigned)(i + 1));
   }
-  CHECK(s_base_dirty, "a sector of records must request a fresh base");
+  {
+    HourlyEntry se = { 200, 210, 205 };
+    history_store_append_hourly(T0 + (time_t)HS_BASE_MAX_RECORDS * 3600, &se);
+  }
+  CHECK(s_base_dirty, "a day of records must request a fresh base");
 
   // ---- 9. foreign content (old app image) is detected and formatted ----
   power_on(true);

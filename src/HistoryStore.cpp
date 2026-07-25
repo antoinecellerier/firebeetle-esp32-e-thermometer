@@ -55,6 +55,15 @@ void history_store_flush(const RtcHistory *, const HistoryDriftState *, time_t) 
 #define HS_JOURNAL_OFF  0x5000u
 #define HS_REC          16u          // journal slot size
 
+// Recovery-point objective: at most one day of data may be lost to a reflash,
+// a panic or a battery swap. Expressed in records rather than wall-clock
+// seconds because hourly entries are journaled exactly one per clock hour —
+// gap fills included — so 24 records IS 24 hours, and enforcing it needs
+// neither a flash read on quiet wakes nor an RTC variable. A drift record
+// occupies two slots and so counts double, which can only make a snapshot
+// early. Cost is one 7.14mC snapshot per day (docs/notes.md), 0.1% of budget.
+#define HS_BASE_MAX_RECORDS 24
+
 #define REC_FREE    0xFF
 #define REC_HOURLY  1
 // 2 was REC_SAMPLE: the 24h sparkline is restored from the base snapshot
@@ -508,16 +517,17 @@ static void journal_append(const void *rec, uint8_t slots)
   if (s_cursor / HS_SECTOR != before || s_cursor == 0)
     journal_erase_ahead();
 
-  // Make sure a base eventually exists, and bound how far a restore has to
-  // replay. The NTP-resync trigger alone is not enough: restore needs a base to
-  // anchor to, so a device that never syncs would journal records it could
-  // never restore, and a long resync outage would stretch the replay without
-  // limit. One sector is 256 hourly records, i.e. ~10.7 days, so in practice
-  // the daily resync fires first and this is the backstop.
+  // Enforce the recovery-point objective, and bound how far a restore has to
+  // replay. The NTP-resync trigger alone cannot do either: restore needs a base
+  // to anchor to, so a device that never syncs would journal records it could
+  // never restore, and the resync interval is adaptive over [1d, 28d] — a board
+  // with an accurate clock would go 28 days between snapshots, so the better the
+  // oscillator the worse the data loss. Owning the cadence here makes it a
+  // property of the store instead of a side effect of clock quality.
   uint32_t since = (s_cursor >= s_base_cursor)
                        ? s_cursor - s_base_cursor
                        : s_jrn_size - s_base_cursor + s_cursor;
-  if (s_base_seq == 0 || since >= HS_SECTOR)
+  if (s_base_seq == 0 || since >= HS_BASE_MAX_RECORDS * HS_REC)
     s_base_dirty = true;
 }
 

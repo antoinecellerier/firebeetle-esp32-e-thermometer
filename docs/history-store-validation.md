@@ -33,7 +33,17 @@ pass in `make -C tools/hstest`.
 
 Full numbers and setup in `docs/notes.md`. Headline: **170.2 ms at 41.94 mA =
 7.14 mC** per base snapshot (3300 mV), which is **0.1%** of this rig's
-~7.1 C/day at the current ~daily cadence. Hourly would be 2.4%.
+~7.1 C/day at the one-per-day cadence. Hourly would be 2.4%.
+
+That cadence is now a stated recovery-point objective — **at most one day of
+data at risk** — enforced by the store itself at 24 journaled hourly records
+(`HS_BASE_MAX_RECORDS`). It used to be an accident: the only non-NTP trigger was
+a full journal sector (256 records, 10.7 days), so the effective cadence was
+whatever the adaptive resync interval happened to be. That is 1 day on this rig
+only because its −5265 ppm drift pins the interval at its floor; the custom C6's
+crystal would let it stretch to the 28-day cap, so the board with the *better*
+clock would have had the worse RPO. Cost on such a board goes from ~0.7 to
+7.1 mC/day — still 0.1%.
 
 On-device timing of the flash calls alone, which is what the cadence work was
 based on before the PPK2 pass:
