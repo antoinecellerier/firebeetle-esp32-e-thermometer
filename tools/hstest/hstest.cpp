@@ -144,9 +144,14 @@ int main(int argc, char **argv)
   // ---- 2. append, snapshot, restore round-trip ----
   for (int i = 0; i < 50; i++)
     ring_push(T0 + i * 3600, (int16_t)(200 + i), (int16_t)(210 + i), (int16_t)(205 + i));
+  // Sparkline points sit AFTER the newest finalized hour, as on a live device:
+  // it is written on every refresh, the ring only on an hour boundary. A
+  // fixture with it trailing the ring would trip the backfill and make the
+  // round-trip check below compare against something restore never claims.
   g_hist.temp_count = 0;
   for (int i = 0; i < 20; i++)
-    temp_history_record(g_hist.temp, &g_hist.temp_count, T0 + i * 600, (int16_t)(200 + i));
+    temp_history_record(g_hist.temp, &g_hist.temp_count,
+                        T0 + 49 * 3600 + i * 600, (int16_t)(200 + i));
 
   g_drift.resync_interval_s = 86400;
   g_drift.last_drift_ms = -9559000;
@@ -328,6 +333,48 @@ int main(int argc, char **argv)
   reset_hist();
   CHECK(history_store_available(), "store should format over foreign content");
   CHECK(!history_store_restore(&got, &gotd), "nothing to restore after format");
+
+  // ---- 9a. the ring rebuilds from the journal when no base survives ----
+  // Both ping-pong slots gone but the journal intact: every record carries its
+  // own hour and CRC, so the archive is not lost. This used to bail out and
+  // strand years of perfectly readable data.
+  power_on(true);
+  reset_hist();
+  history_store_available();
+  for (int i = 0; i < 30; i++)
+    ring_push(T0 + i * 3600, (int16_t)(150 + i), (int16_t)(250 + i), (int16_t)(200 + i));
+  history_store_mark_base_dirty();
+  history_store_flush(&g_hist, &g_drift, T0 + 30 * 3600);
+  for (int i = 30; i < 40; i++)   // journal-only tail, after the snapshot
+    ring_push(T0 + i * 3600, (int16_t)(150 + i), (int16_t)(250 + i), (int16_t)(200 + i));
+  memset(g_flash.data() + HS_BASE_A_OFF, 0x00, HS_BASE_SIZE);   // clobber both
+  memset(g_flash.data() + HS_BASE_B_OFF, 0x00, HS_BASE_SIZE);
+  reboot();
+  memset(&got, 0, sizeof(got));
+  // Guarded: with the rebuild absent every check below would index an empty
+  // ring, and a segfault is a worse regression report than a failed CHECK.
+  if (!history_store_restore(&got, &gotd) || got.hourly_count != 40)
+  {
+    CHECK(false, "journal-only restore rebuilt %u hours, want 40",
+          (unsigned)got.hourly_count);
+  }
+  else
+  {
+    CHECK(got.hourly_latest_time == T0 + 39 * 3600, "rebuilt anchor %lld != %lld",
+          (long long)got.hourly_latest_time, (long long)(T0 + 39 * 3600));
+    // Oldest and newest must land where Display.h expects to read them.
+    uint16_t s0 = (got.hourly_count < HOURLY_HISTORY_SIZE) ? 0 : got.hourly_idx;
+    const HourlyEntry &oldest = got.hourly[s0];
+    const HourlyEntry &newest =
+        got.hourly[(uint16_t)((s0 + got.hourly_count - 1) % HOURLY_HISTORY_SIZE)];
+    CHECK(oldest.avg_x10 == 200, "rebuilt oldest avg %d != 200", oldest.avg_x10);
+    CHECK(newest.avg_x10 == 239, "rebuilt newest avg %d != 239", newest.avg_x10);
+    // The sparkline lives only in the snapshot, so it must come from the ring.
+    CHECK(got.temp_count > 0, "sparkline not backfilled from hourly data");
+    CHECK(got.temp_count > 0 &&
+              (time_t)got.temp[got.temp_count - 1].timestamp == T0 + 39 * 3600,
+          "backfilled sparkline does not end at the newest hour");
+  }
 
   // ---- 9b. a format bump must never erase the archive ----
   // The whole point of the partition is surviving firmware updates, so a

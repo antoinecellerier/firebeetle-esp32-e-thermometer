@@ -45,7 +45,7 @@ void history_store_flush(const RtcHistory *, const HistoryDriftState *, time_t) 
 #include "esp_chip_info.h"
 #include "esp_mac.h"
 #include "esp_partition.h"
-#include "TempHistory.h"  // temp_history_record() — replay reuses the real eviction
+#include "TempHistory.h"  // temp_history_record() — sparkline backfill reuses the real eviction
 
 // --- geometry ---------------------------------------------------------------
 
@@ -697,6 +697,112 @@ static bool store_init(void)
   return true;
 }
 
+// Physical slot of logical entry `i` (0 = oldest, count-1 = newest), matching
+// the mapping Display.h documents and DisplayRenderer walks.
+static inline uint16_t ring_slot(const RtcHistory *h, uint16_t i)
+{
+  uint16_t start = (h->hourly_count < HOURLY_HISTORY_SIZE) ? 0 : h->hourly_idx;
+  return (uint16_t)((start + i) % HOURLY_HISTORY_SIZE);
+}
+
+// Seed the 24h sparkline from the hourly ring for hours it does not already
+// cover. Hourly resolution rather than per-refresh, but a coarse chart beats
+// the empty one a restore used to produce.
+//
+// The sparkline is never journaled, so it is only ever as fresh as the base
+// snapshot — and since it is a 24h window, a snapshot a day old restored a
+// chart whose every point had already aged out. Backfilling from the ring
+// closes exactly that gap, and it is the only way to show anything at all when
+// the ring itself came from the journal with no snapshot behind it.
+//
+// Goes through temp_history_record() rather than writing the buffer directly,
+// so ordering and Visvalingam eviction stay the real implementation's problem.
+static void sparkline_backfill(RtcHistory *out)
+{
+  if (out->hourly_count == 0) return;
+
+  const time_t newest_spark =
+      out->temp_count ? (time_t)out->temp[out->temp_count - 1].timestamp : 0;
+
+  uint16_t n = out->hourly_count < 24 ? out->hourly_count : 24;
+  int added = 0;
+  for (uint16_t k = n; k >= 1; k--)
+  {
+    const time_t t = out->hourly_latest_time - (time_t)(k - 1) * 3600;
+    if (t <= newest_spark) continue;   // real per-refresh points win
+    const HourlyEntry &e = out->hourly[ring_slot(out, out->hourly_count - k)];
+    if (e.min_x10 == HOURLY_NO_DATA) continue;   // device was off; leave the gap
+    temp_history_record(out->temp, &out->temp_count, t, e.avg_x10);
+    added++;
+  }
+  if (added)
+    LOGI("HistoryStore: sparkline backfilled with %d hourly points", added);
+}
+
+// Rebuild the hourly ring from the journal alone, for when no base snapshot
+// validates. Every record carries its own hour and CRC, so the ring is fully
+// reconstructible without a snapshot — the snapshot is a fast path, not the
+// only copy. Without this, losing both ping-ponged base slots stranded an
+// archive that was still perfectly readable, which is a poor way for something
+// meant to hold years to fail.
+//
+// Two passes: the newest hour has to be known before the window can be placed,
+// and a wrapped ring puts address order out of step with time order. Scans slot
+// by slot rather than walking records, since without a base there is no cursor
+// hint to walk from; the 16-bit CRC is what makes that safe, and the only
+// non-record slots it can land on are the second halves of REC_DRIFT entries
+// (~1/day), so false positives are far below one per archive lifetime.
+//
+// ~3.8MB of reads (~1.6s, ~50mC). Only ever on a cold boot that found no base,
+// so it never runs in normal operation.
+static bool journal_rebuild_hourly(RtcHistory *out)
+{
+  if (!journal_locate()) return false;
+
+  uint8_t raw[HS_REC];
+  time_t newest = 0, oldest = 0;
+  for (uint32_t off = 0; off + HS_REC <= s_jrn_size; off += HS_REC)
+  {
+    if (!part_read(jrn_abs(off), raw, HS_REC)) continue;
+    if (raw[0] != REC_HOURLY || !rec_crc_ok(raw, REC_HOURLY)) continue;
+    const time_t t = (time_t)((const HsRec *)raw)->time;
+    if (!time_is_plausible(t)) continue;
+    if (t > newest) newest = t;
+    if (oldest == 0 || t < oldest) oldest = t;
+  }
+  if (newest == 0) return false;
+
+  // Window: the newest HOURLY_HISTORY_SIZE hours that actually exist, so a
+  // young archive does not claim a ring full of gaps it never lived through.
+  if (newest - oldest >= (time_t)HOURLY_HISTORY_SIZE * 3600)
+    oldest = newest - (time_t)(HOURLY_HISTORY_SIZE - 1) * 3600;
+  const uint16_t n = (uint16_t)((newest - oldest) / 3600) + 1;
+
+  for (uint16_t i = 0; i < HOURLY_HISTORY_SIZE; i++)
+    out->hourly[i] = { HOURLY_NO_DATA, HOURLY_NO_DATA, HOURLY_NO_DATA };
+
+  int found = 0;
+  for (uint32_t off = 0; off + HS_REC <= s_jrn_size; off += HS_REC)
+  {
+    if (!part_read(jrn_abs(off), raw, HS_REC)) continue;
+    if (raw[0] != REC_HOURLY || !rec_crc_ok(raw, REC_HOURLY)) continue;
+    const HsRec *r = (const HsRec *)raw;
+    const time_t t = (time_t)r->time;
+    if (t < oldest || t > newest) continue;
+    // Filled linearly from index 0, so hourly_idx below is the write head and
+    // ring_slot() resolves entry 0 to the oldest hour.
+    out->hourly[(uint16_t)((t - oldest) / 3600)] = { r->a, r->b, r->c };
+    found++;
+  }
+
+  out->hourly_count = n;
+  out->hourly_idx = (uint16_t)(n % HOURLY_HISTORY_SIZE);
+  out->hourly_latest_time = newest;
+  LOGI("HistoryStore: no base — rebuilt %u hours from %d journal records",
+       (unsigned)n, found);
+  return true;
+}
+
 bool history_store_available(void) { return store_init(); }
 uint8_t history_store_fault(void) { return s_fault; }
 uint16_t history_store_flash_format(void) { return s_flash_format; }
@@ -709,8 +815,18 @@ bool history_store_restore(RtcHistory *out, HistoryDriftState *drift)
   uint32_t off = base_find(&h);
   if (off == UINT32_MAX)
   {
-    LOGI("HistoryStore: no valid base snapshot");
-    return false;
+    // No snapshot, but the journal may still hold years of timestamped,
+    // CRC-checked hours. Rebuild from it rather than declaring the archive
+    // lost. The drift block and the per-refresh sparkline live only in the
+    // snapshot, so they do not come back — the ring does, and it is what the
+    // partition exists for.
+    LOGI("HistoryStore: no valid base snapshot — trying the journal");
+    if (!out || !store_init()) return false;
+    memset(out, 0, sizeof(*out));
+    out->version = RTC_HISTORY_VERSION;
+    if (!journal_rebuild_hourly(out)) return false;
+    sparkline_backfill(out);
+    return true;
   }
 
   if (drift)
@@ -801,8 +917,11 @@ bool history_store_restore(RtcHistory *out, HistoryDriftState *drift)
     pos = jrn_next(pos, (uint32_t)n * HS_REC);
   }
 
-  // The sparkline count comes wholly from the base snapshot, so it is as fresh
-  // as the last base write (see the header comment) — no journal replay.
+  // The sparkline is not journaled, so what came out of the snapshot is as old
+  // as the snapshot. Top it up from the hours replayed above, which covers the
+  // window between the two at hourly resolution.
+  sparkline_backfill(out);
+
   LOGI("History restored: %u hourly (+%d replayed), %u sparkline, base seq %u",
        (unsigned)out->hourly_count, hourly, (unsigned)out->temp_count,
        (unsigned)h.seq);
