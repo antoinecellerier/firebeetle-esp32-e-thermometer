@@ -83,6 +83,22 @@ struct HistoryDriftSample {
   uint32_t refresh_count;
 };
 
+// Why the archive is not recording, for the status line. A disabled archive is
+// silent by nature — the device keeps measuring and displaying perfectly well
+// while permanently losing every hour it should have kept — and the only other
+// signal is a serial log line that DISABLE_SERIAL removes from release builds.
+// So it has to reach the panel.
+enum HistoryStoreFault : uint8_t {
+  HS_FAULT_NONE = 0,
+  HS_FAULT_NO_PARTITION,    // old partition table, no `history` entry
+  HS_FAULT_FOREIGN_FORMAT,  // on-flash format this firmware cannot read
+  HS_FAULT_IO,              // erase or write failed
+};
+
+// Zero once the store is up. Meaningful only after history_store_available().
+uint8_t history_store_fault(void);
+uint16_t history_store_flash_format(void);  // on-flash format for FOREIGN_FORMAT
+
 // True when the store is usable (partition present and initialized).
 bool history_store_available(void);
 

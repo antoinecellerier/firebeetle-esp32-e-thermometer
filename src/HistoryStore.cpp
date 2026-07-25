@@ -31,6 +31,10 @@
 // safety property; the message is just so it cannot happen silently.
 #pragma message("MOCK_DISPLAY_DATA: HistoryStore disabled, flash archive not touched")
 bool history_store_available(void) { return false; }
+// No fault to report: a mock build has no archive ON PURPOSE, and its "! MOCK"
+// badge already says the screen is synthetic.
+uint8_t history_store_fault(void) { return HS_FAULT_NONE; }
+uint16_t history_store_flash_format(void) { return 0; }
 bool history_store_restore(RtcHistory *, HistoryDriftState *) { return false; }
 void history_store_append_hourly(time_t, const HourlyEntry *) {}
 void history_store_append_drift(const HistoryDriftSample *) {}
@@ -200,6 +204,8 @@ static uint32_t s_base_seq = 0;     // seq of the active base (0 = none yet)
 static uint16_t s_base_hourly = 0;  // hourly_count recorded in the active base
 static uint32_t s_base_cursor = 0;  // journal cursor at the active base's write
 static uint32_t s_base_off = UINT32_MAX;  // slot the active base lives in
+static uint8_t  s_fault = HS_FAULT_NONE;  // why the archive is not recording
+static uint16_t s_flash_format = 0;       // on-flash format, when it is foreign
 
 static inline uint32_t jrn_abs(uint32_t off) { return HS_JOURNAL_OFF + off; }
 static inline uint32_t jrn_next(uint32_t off, uint32_t n)
@@ -595,8 +601,10 @@ static bool store_init(void)
                                     ESP_PARTITION_SUBTYPE_ANY, "history");
   if (!s_part)
   {
-    // Old partition table. Degrade silently rather than panic a battery device.
+    // Old partition table. Degrade rather than panic a battery device — but the
+    // status line says so, since nothing is being archived.
     LOGI("HistoryStore: no 'history' partition — archive disabled");
+    s_fault = HS_FAULT_NO_PARTITION;
     return false;
   }
 
@@ -619,6 +627,8 @@ static bool store_init(void)
          "intact and DISABLED. Back it up (tools/history.py backup), then "
          "erase_flash to start a new one.",
          (unsigned)h.format, (unsigned)HS_FORMAT);
+    s_fault = HS_FAULT_FOREIGN_FORMAT;
+    s_flash_format = h.format;
     return false;
   }
 
@@ -639,10 +649,11 @@ static bool store_init(void)
     {
       LOGI("HistoryStore: header damaged but base seq %u is intact — "
            "rewriting the header only", (unsigned)probe.seq);
-      if (!store_write_header()) return false;
+      if (!store_write_header()) { s_fault = HS_FAULT_IO; return false; }
     }
     else if (!store_format())
     {
+      s_fault = HS_FAULT_IO;
       return false;
     }
   }
@@ -669,6 +680,8 @@ static bool store_init(void)
 }
 
 bool history_store_available(void) { return store_init(); }
+uint8_t history_store_fault(void) { return s_fault; }
+uint16_t history_store_flash_format(void) { return s_flash_format; }
 
 bool history_store_restore(RtcHistory *out, HistoryDriftState *drift)
 {

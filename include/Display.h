@@ -89,6 +89,8 @@ struct DisplayStats {
   int32_t drift_window_s;    // measured span the drift accumulated over (since the clock was last set)
   time_t  last_sync_time;    // wall-clock of last successful NTP sync (0 = never)
   uint16_t resync_fail_count; // resync attempts failed since the last success (0 = healthy)
+  uint8_t  archive_fault;     // HistoryStoreFault; nonzero = nothing is being archived
+  uint16_t archive_flash_format;  // on-flash format, when archive_fault says it is foreign
   const int16_t *drift_ppm_hist;  // rate of each retained resync, newest last
   const uint16_t *drift_win_min;  // window each rate was measured over, minutes
   uint8_t drift_ppm_count;        // valid entries (0..DRIFT_PPM_HIST_SIZE)

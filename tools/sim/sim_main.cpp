@@ -8,6 +8,7 @@
 
 #include "Adafruit_GFX.h"
 #include "DisplayRenderer.h"
+#include "HistoryStore.h"   // HistoryStoreFault, for the "! NOARCH" scenario
 #include "MockData.h"
 #include <cstdio>
 #include <cstring>
@@ -210,6 +211,23 @@ int main(int argc, char **argv)
                       22.3f, 3842, false,
                       now, &nowtm, nosync_stats);
     save_and_convert(cfg.name, "_nosync", canvas);
+
+    // Scenario 9: the archive stopped recording — what a device looks like
+    // after being flashed with a firmware that speaks a different on-flash
+    // format. Everything else works, so this badge is the only sign that
+    // history is being lost; render it in an otherwise clean field build to
+    // confirm it survives on the narrowest panel.
+    canvas.fillScreen(0xFFFF);
+    DisplayStats noarch_stats = stats;
+    noarch_stats.dummy_sensor = false;
+    noarch_stats.mock_data = false;
+    noarch_stats.power_efficient = true;
+    noarch_stats.archive_fault = HS_FAULT_FOREIGN_FORMAT;
+    noarch_stats.archive_flash_format = 3;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, noarch_stats);
+    save_and_convert(cfg.name, "_noarch", canvas);
   }
 
   return 0;

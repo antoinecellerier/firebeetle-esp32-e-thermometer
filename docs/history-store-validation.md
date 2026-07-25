@@ -89,6 +89,25 @@ Note `include/local-secrets.h` is switched to this rig (`USE_154_Z90` +
 `USE_BMP390L`); switch it back before building for the C6, and remember a
 mismatched panel/sensor config panic-loops rather than erroring cleanly.
 
+## When the archive stops recording
+
+The store degrades rather than panicking a battery device, so nothing else on
+screen changes — the device keeps measuring, charting and refreshing perfectly
+while every hour it should have kept is lost for good. The `! NOARCH` badge is
+the only signal that reaches the panel; `DISABLE_SERIAL` removes the log line
+from release builds.
+
+| Badge | Meaning | What to do |
+|---|---|---|
+| `! NOARCH fmt<N>` | on-flash format N, this firmware speaks another | `history.py backup --full`, then `esptool erase_flash` and reflash |
+| `! NOARCH nopart` | no `history` partition — device is on an old table | reflash; the upload rewrites the partition table |
+| `! NOARCH io` | an erase or write failed | suspect the flash part; back up if it still reads |
+
+Rendered by `tools/sim` as `mock_*_noarch.png`. It is ranked ahead of the crash
+badge deliberately: a crash's payload is already saved to the coredump
+partition and does not decay, whereas this condition is still destroying data
+every hour it goes unnoticed.
+
 ## Known cosmetic issue
 
 `store created` in the header is stamped during `store_format()`, which runs in

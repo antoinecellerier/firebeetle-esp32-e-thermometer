@@ -5,6 +5,7 @@
 #ifndef DISABLE_DISPLAY
 
 #include "DisplayRenderer.h"
+#include "HistoryStore.h"   // HistoryStoreFault, for the "! NOARCH" badge
 #include "app_common.h"
 #include "displays.h"  // DISPLAY_HAS_RED (panel tri-color capability)
 
@@ -1145,7 +1146,7 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
                              && stats.lp_error_count * 10 >= stats.lp_wake_count;
   if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
       && !stats.dummy_sensor && !stats.mock_data && !significant_drift
-      && !resync_failing
+      && !resync_failing && stats.archive_fault == 0
       && !debug_build && !lp_errors_significant && stats.crash_count == 0)
     return;
 
@@ -1176,13 +1177,39 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
   }
 
+  // Nothing is being archived. Ranked ahead of the crash badge because it is
+  // the only condition here that is still destroying data: every hour it goes
+  // unnoticed is permanently lost, whereas a crash's payload is already saved
+  // to the coredump partition and does not degrade. It also cannot be seen any
+  // other way — DISABLE_SERIAL removes the log line from release builds — and
+  // it persists until someone runs `history.py backup` and erases the
+  // partition, so it must survive the "+" overflow marker.
+  if (stats.archive_fault != 0)
+  {
+    switch (stats.archive_fault)
+    {
+      case HS_FAULT_FOREIGN_FORMAT:
+        // Says which format is on flash: the archive is intact and readable by
+        // tools/history.py, this build just does not speak that version.
+        snprintf(tok[ntok++], IND_TOKEN_LEN, "! NOARCH fmt%u",
+                 (unsigned)stats.archive_flash_format);
+        break;
+      case HS_FAULT_NO_PARTITION:
+        snprintf(tok[ntok++], IND_TOKEN_LEN, "! NOARCH nopart");
+        break;
+      default:
+        snprintf(tok[ntok++], IND_TOKEN_LEN, "! NOARCH io");
+        break;
+    }
+  }
+
   if (stats.crash_count > 0)
   {
     // Crash forensics, e.g. "! PANIC x2 @#273/render 3h pc:42008a3c main".
     // The boot counter restarts after every crash (RTC_DATA is wiped), so
     // @#N is relative to the crashed boot's own power-on epoch. Ranked ahead of
-    // every failure badge: those describe a state you can still go and read,
-    // this describes an event that is already over.
+    // the live-fault badges below: those describe a state you can still go and
+    // read, this describes an event that is already over.
     static const char *stage_names[] = {
       "?", "boot", "ulp", "sensor", "ntp", "render", "lpinit", "sleep"};
     uint8_t st = (stats.crash_stage < sizeof(stage_names) / sizeof(stage_names[0]))

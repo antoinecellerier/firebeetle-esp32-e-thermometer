@@ -650,6 +650,7 @@ DisplayStats make_display_stats()
     false,
 #endif
     last_drift_ms, last_drift_window_s, last_sync_time, resync_fail_count,
+    history_store_fault(), history_store_flash_format(),
     drift_ppm_hist, drift_win_min, drift_ppm_count,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     historical_data.temp, historical_data.temp_count,
