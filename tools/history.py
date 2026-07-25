@@ -391,10 +391,19 @@ def cmd_restore(args):
             print(f"WARNING: {k} differs: {arc.header[k]} -> {live.header[k]}")
 
     off, size = history_partition()
-    if len(blob) < size:
+    if len(blob) != size:
+        # Both directions are refused. Short is an incremental backup, which
+        # cannot be restored. Long is the dangerous one: `history` sits directly
+        # below `factory` (CLAUDE.md documents growing it upward as the
+        # supported resize), so an image taken from a device with a larger
+        # partition would be written straight through the app slot and leave the
+        # board unbootable — from the command whose whole job is to be
+        # non-destructive.
+        how = ("re-take the backup with --full" if len(blob) < size else
+               "this image is for a larger `history` partition than "
+               "partitions.csv describes; writing it would overwrite `factory`")
         raise SystemExit(
-            f"file is {len(blob)} bytes but the partition is {size}; restore "
-            "needs a full image — re-take the backup with --full")
+            f"file is {len(blob)} bytes but the partition is {size}; {how}")
     write_device(args.file, args.port, args.baud)
     print("restored; the device rebuilds RTC state from it on next boot")
 
