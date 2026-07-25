@@ -412,6 +412,48 @@ int main(int argc, char **argv)
         "reclaim lost the unabsorbed record: %u hourly restored, want 2",
         (unsigned)got.hourly_count);
 
+  // ---- 9e. counts in the payload are clamped, not trusted ----
+  // The CRC proves the bytes are the ones that were written, not that they were
+  // sane when written. Everything downstream indexes the arrays off these
+  // without a bound of its own, and a bad snapshot is re-restored on every cold
+  // boot — so an unclamped count is a panic loop no reflash can clear.
+  power_on(true);
+  reset_hist();
+  history_store_available();
+  g_hist.temp_count = 5;
+  g_hist.hourly_count = 3;
+  g_hist.hourly_idx = 3;
+  history_store_mark_base_dirty();
+  history_store_flush(&g_hist, &g_drift, T0);
+  {
+    // Corrupt the counts in place and re-CRC, exactly as a bad-but-verified
+    // snapshot or an edited image would look.
+    uint32_t slot = (s_base_off == HS_BASE_A_OFF) ? HS_BASE_A_OFF : HS_BASE_B_OFF;
+    HsBaseHeader bh;
+    memcpy(&bh, g_flash.data() + slot, sizeof(bh));
+    RtcHistory bad;
+    memcpy(&bad, g_flash.data() + slot + sizeof(bh), sizeof(bad));
+    bad.temp_count = 65535;
+    bad.hourly_count = 60000;
+    bad.hourly_idx = 40000;
+    memcpy(g_flash.data() + slot + sizeof(bh), &bad, sizeof(bad));
+    uint32_t c = crc32_up(crc32_begin(), &bh, offsetof(HsBaseHeader, crc32));
+    c = crc32_up(c, &bad, sizeof(bad));
+    c = crc32_up(c, g_flash.data() + slot + sizeof(bh) + sizeof(bad),
+                 sizeof(HistoryDriftState));
+    bh.crc32 = crc32_end(c);
+    memcpy(g_flash.data() + slot, &bh, sizeof(bh));
+  }
+  reboot();
+  memset(&got, 0, sizeof(got));
+  CHECK(history_store_restore(&got, &gotd), "a CRC-valid snapshot still restores");
+  CHECK(got.temp_count <= TEMP_HISTORY_SIZE, "temp_count %u not clamped",
+        (unsigned)got.temp_count);
+  CHECK(got.hourly_count <= HOURLY_HISTORY_SIZE, "hourly_count %u not clamped",
+        (unsigned)got.hourly_count);
+  CHECK(got.hourly_idx < HOURLY_HISTORY_SIZE, "hourly_idx %u not clamped",
+        (unsigned)got.hourly_idx);
+
   // ---- 10. a missing partition degrades instead of crashing ----
   g_have_part = false;
   reboot();

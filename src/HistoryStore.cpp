@@ -699,6 +699,33 @@ bool history_store_restore(RtcHistory *out, HistoryDriftState *drift)
     return false;
   out->version = RTC_HISTORY_VERSION;
 
+  // Clamp the counts. The CRC proves these are the bytes that were written, not
+  // that they were sane when written, and the geometry descriptors say nothing
+  // about the values inside the payload. Everything downstream indexes the
+  // arrays off them without a bound of its own — DisplayRenderer walks
+  // temp_history[0..history_count) and window_mean_ambient_x10() walks back
+  // from hourly_idx — so an out-of-range count reads far past RTC slow memory
+  // and faults on the render path. A bad snapshot is re-restored on every cold
+  // boot, so that would be a panic loop no reflash could clear.
+  if (out->temp_count > TEMP_HISTORY_SIZE)
+  {
+    LOGI("HistoryStore: temp_count %u > %u — clamped",
+         (unsigned)out->temp_count, (unsigned)TEMP_HISTORY_SIZE);
+    out->temp_count = TEMP_HISTORY_SIZE;
+  }
+  if (out->hourly_count > HOURLY_HISTORY_SIZE)
+  {
+    LOGI("HistoryStore: hourly_count %u > %u — clamped",
+         (unsigned)out->hourly_count, (unsigned)HOURLY_HISTORY_SIZE);
+    out->hourly_count = HOURLY_HISTORY_SIZE;
+  }
+  if (out->hourly_idx >= HOURLY_HISTORY_SIZE)
+  {
+    LOGI("HistoryStore: hourly_idx %u out of range — reset",
+         (unsigned)out->hourly_idx);
+    out->hourly_idx = 0;
+  }
+
   s_base_seq = h.seq;
   s_base_hourly = h.hourly_count;
   s_base_cursor = h.journal_cursor < s_jrn_size ? h.journal_cursor : 0;
