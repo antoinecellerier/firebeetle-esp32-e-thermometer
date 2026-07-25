@@ -293,6 +293,59 @@ int main(int argc, char **argv)
   CHECK(history_store_available(), "store should format over foreign content");
   CHECK(!history_store_restore(&got, &gotd), "nothing to restore after format");
 
+  // ---- 9b. a format bump must never erase the archive ----
+  // The whole point of the partition is surviving firmware updates, so a
+  // version skew has to be inert. Build a populated store, then bump the
+  // on-flash format byte the way shipping a new HS_FORMAT would.
+  power_on(true);
+  reset_hist();
+  history_store_available();
+  {
+    HourlyEntry fe = { 111, 222, 175 };
+    history_store_append_hourly(T0, &fe);
+  }
+  g_hist.hourly_count = 1;
+  history_store_mark_base_dirty();
+  history_store_flush(&g_hist, &g_drift, T0);
+  {
+    HsStoreHeader hdr;
+    memcpy(&hdr, g_flash.data() + HS_HDR_OFF, sizeof(hdr));
+    hdr.format = HS_FORMAT + 1;
+    hdr.crc32 = crc32_of(&hdr, offsetof(HsStoreHeader, crc32));
+    memcpy(g_flash.data() + HS_HDR_OFF, &hdr, sizeof(hdr));
+  }
+  g_erase_count = 0;
+  reboot();
+  CHECK(!history_store_available(), "a foreign format must disable the store");
+  CHECK(g_erase_count == 0, "a foreign format erased %u sectors — must be 0",
+        (unsigned)g_erase_count);
+  {
+    HsBaseHeader bh;
+    memcpy(&bh, g_flash.data() + HS_BASE_A_OFF, sizeof(bh));
+    CHECK(bh.magic == HS_MAGIC && bh.hourly_count == 1,
+          "the base snapshot must survive a format bump untouched");
+  }
+
+  // ---- 9c. a damaged header is repaired without erasing the archive ----
+  // The header is written once and never rewritten, so a bad one is a torn
+  // first write or a bit flip — not grounds to erase the records behind it.
+  {
+    HsStoreHeader hdr;
+    memcpy(&hdr, g_flash.data() + HS_HDR_OFF, sizeof(hdr));
+    hdr.format = HS_FORMAT;
+    hdr.crc32 ^= 0x5A5A5A5Au;   // plausible header, broken CRC
+    memcpy(g_flash.data() + HS_HDR_OFF, &hdr, sizeof(hdr));
+  }
+  g_erase_count = 0;
+  reboot();
+  CHECK(history_store_available(), "a damaged header should be repaired");
+  CHECK(g_erase_count == 1, "header repair erased %u sectors — must be 1",
+        (unsigned)g_erase_count);
+  memset(&got, 0, sizeof(got));
+  CHECK(history_store_restore(&got, &gotd), "archive must survive header repair");
+  CHECK(got.hourly_count == 1, "restored %u hourly after header repair, want 1",
+        (unsigned)got.hourly_count);
+
   // ---- 10. a missing partition degrades instead of crashing ----
   g_have_part = false;
   reboot();

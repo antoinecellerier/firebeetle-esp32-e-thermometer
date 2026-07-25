@@ -284,32 +284,17 @@ static bool header_valid(const HsStoreHeader *h)
   return crc32_of(h, n) == h->crc32;
 }
 
-// Erase everything and stamp a fresh header. Only ever reached when no valid
-// header is present — i.e. a virgin partition, or the ~1MB of old app image
-// left behind by the partition-table move. Costs ~480 sector erases (~24s,
-// ~1C) exactly once, on the flashing bench.
-static bool store_format(void)
+// Erase sector 0 and stamp a fresh header. Every field in the header is either
+// a build-time constant or immutable device identity, so it is fully derivable
+// — losing it costs nothing, and the header sector is disjoint from the base
+// slots and the journal. That is what lets a damaged header be repaired
+// in place instead of taken as grounds to erase the archive behind it.
+static bool store_write_header(void)
 {
-  LOGI("HistoryStore: no valid header — formatting %u KB (one-time, ~%us)",
-       (unsigned)(s_part->size / 1024), (unsigned)(s_part->size / HS_SECTOR / 20));
-
-  // Chunked so the log shows progress rather than ~24s of silence that reads
-  // like a hang. Safe against the 5s task WDT either way:
-  // CONFIG_SPI_FLASH_YIELD_DURING_ERASE yields to the idle task every 20ms of
-  // erasing, which is exactly what that option exists for.
-  const uint32_t step = 64 * 1024;
-  for (uint32_t off = 0; off < s_part->size; off += step)
+  if (!part_erase(HS_HDR_OFF, HS_SECTOR))
   {
-    uint32_t n = s_part->size - off;
-    if (n > step) n = step;
-    if (!part_erase(off, n))
-    {
-      LOGI("HistoryStore: erase failed at 0x%06x", (unsigned)off);
-      return false;
-    }
-    if ((off / step) % 8 == 0)
-      LOGI("HistoryStore: formatting %u%%",
-           (unsigned)(100ULL * off / s_part->size));
+    LOGI("HistoryStore: header erase failed");
+    return false;
   }
 
   HsStoreHeader h;
@@ -342,6 +327,37 @@ static bool store_format(void)
   }
   s_jrn_size = h.journal_size;
   return true;
+}
+
+// Erase the WHOLE partition, then stamp a header. Only ever reached when
+// nothing in the region is ours — a virgin partition, or the ~1MB of old app
+// image left behind by the partition-table move. Costs ~480 sector erases
+// (~24s, ~1C) exactly once, on the flashing bench. Every other repair path
+// goes through store_write_header(), which touches one sector.
+static bool store_format(void)
+{
+  LOGI("HistoryStore: nothing recognizable — formatting %u KB (one-time, ~%us)",
+       (unsigned)(s_part->size / 1024), (unsigned)(s_part->size / HS_SECTOR / 20));
+
+  // Chunked so the log shows progress rather than ~24s of silence that reads
+  // like a hang. Safe against the 5s task WDT either way:
+  // CONFIG_SPI_FLASH_YIELD_DURING_ERASE yields to the idle task every 20ms of
+  // erasing, which is exactly what that option exists for.
+  const uint32_t step = 64 * 1024;
+  for (uint32_t off = 0; off < s_part->size; off += step)
+  {
+    uint32_t n = s_part->size - off;
+    if (n > step) n = step;
+    if (!part_erase(off, n))
+    {
+      LOGI("HistoryStore: erase failed at 0x%06x", (unsigned)off);
+      return false;
+    }
+    if ((off / step) % 8 == 0)
+      LOGI("HistoryStore: formatting %u%%",
+           (unsigned)(100ULL * off / s_part->size));
+  }
+  return store_write_header();
 }
 
 // --- base slots -------------------------------------------------------------
@@ -548,13 +564,50 @@ static bool store_init(void)
   }
 
   HsStoreHeader h;
-  if (part_read(HS_HDR_OFF, &h, sizeof(h)) && header_valid(&h))
+  const bool hdr_read = part_read(HS_HDR_OFF, &h, sizeof(h));
+
+  // Canonical geometry, needed before the header is trusted so the content
+  // probe below can address the base slots and the journal at all. A valid
+  // header only ever mirrors this.
+  s_jrn_size = s_part->size - HS_JOURNAL_OFF;
+
+  if (hdr_read && h.magic == HS_MAGIC && h.format != HS_FORMAT)
+  {
+    // A format this firmware does not speak. Erasing here would destroy years
+    // of records on nothing worse than a version skew, so refuse to touch the
+    // partition at all — a stalled archive is recoverable, an erased one is
+    // not. tools/history.py decodes by the header's own format field, so the
+    // content is still readable from the host.
+    LOGI("HistoryStore: on-flash format %u, firmware speaks %u — archive left "
+         "intact and DISABLED. Back it up (tools/history.py backup), then "
+         "erase_flash to start a new one.",
+         (unsigned)h.format, (unsigned)HS_FORMAT);
+    return false;
+  }
+
+  if (hdr_read && header_valid(&h))
   {
     s_jrn_size = h.journal_size;
   }
-  else if (!store_format())
+  else
   {
-    return false;
+    // The header is unusable, but it is not evidence that anything behind it
+    // is: it is written once at format time and never rewritten, so a bad one
+    // is a torn first write or a bit flip, and the base slots and journal carry
+    // their own CRCs. Only erase the archive when nothing behind the header
+    // validates either. A base exists from the first sleep onward, so its
+    // absence really does mean the region was never ours.
+    HsBaseHeader probe;
+    if (base_find(&probe) != UINT32_MAX)
+    {
+      LOGI("HistoryStore: header damaged but base seq %u is intact — "
+           "rewriting the header only", (unsigned)probe.seq);
+      if (!store_write_header()) return false;
+    }
+    else if (!store_format())
+    {
+      return false;
+    }
   }
 
   HsBaseHeader bh;
