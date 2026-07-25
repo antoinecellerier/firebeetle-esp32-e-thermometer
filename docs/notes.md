@@ -694,3 +694,65 @@ costs: restore would have to walk the journal backwards across base generations
 to rebuild the 720-hour ring (the `base_seq` filter that makes replay trivial
 only works forwards), and the base would no longer be able to restore 30 days
 on its own if the journal were damaged. Revisit only if the cadence goes hourly.
+
+## C6 archive + time-sync budget: what is measured vs estimated (2026-07-25)
+
+The FireBeetle numbers are PPK2-measured; the C6 equivalents are currently
+**scaled from them**, so the C6 budget below is a projection, not a measurement.
+Recorded here so a future session with a C6 on the bench can close the gaps
+rather than re-deriving the estimates.
+
+Projected daily budget, `seeed_xiao_esp32c6_release` (BMP58x + GDEH0576T81):
+
+| Term | mC/day | Share | Basis |
+|---|---|---|---|
+| Sleep floor (15.8 µA) | 1365 | 32% | measured |
+| ~48 refreshes @ 45.3 mC | 2174 | 52% | per-event measured; **rate assumed from the E rig** |
+| ~24 non-refresh CPU wakes | ~360 | 8.6% | estimated ~15 mC each |
+| NTP resync, 1/day | ~300 | 7.1% | estimated |
+| Flash archive | ~7 | 0.17% | scaled from the E's measured 7.14 mC |
+| **Total** | **~4.2 C/day** | | ±20%, dominated by the refresh-rate assumption |
+
+### To measure on a C6
+
+Archive (build with `-DPPK2_DEBUG -DHISTORY_BASE_EVERY_WAKE`; the triple 50 ms
+D1 preamble brackets the write — see the ESP32-E section above for the trace):
+- [ ] **Base snapshot charge.** Projected ~5-6 mC. The 170 ms measured on the E
+  is erase-bound (~53 ms/sector × 2) so it should carry across; what changes is
+  the CPU riding along — C6 single-core RISC-V ~20 mA vs the E's ~29 mA, over
+  the flash's ~13 mA either way. Confirms or kills the 0.17% claim.
+- [ ] **Journal append charge.** Assumed ~0.04 mC on BOTH boards and never
+  actually measured on either. 25 appends/day, so even a 10× error is <2% of
+  budget — but it is the number the "appends are free" argument rests on.
+- [ ] **Ring sector erase.** Assumed ~2 mC, fires once per ~10 days.
+- [ ] **One-time format.** 480 sectors, extrapolated to ~26 s / ~1 C from the E's
+  erase rate. Only observable on the first boot after a partition-table change.
+
+Time sync — the term worth the most attention, since it is ~40× the archive:
+- [ ] **Successful resync charge.** Projected 200-400 mC (association 1-3 s +
+  SNTP 0.5-1 s at ~100 mA). Never measured on either board: `docs/clock-drift.md`
+  only has the *failed* attempt at 15 s / 45 s.
+- [ ] **Failed resync charge on C6.** The 1.5 C (association timeout) and 4.5 C
+  (plus SNTP timeout) figures are ESP32-E measurements assumed to transfer. On
+  the C6 a failed attempt is ~36% of a day's budget versus ~21% on the E — same
+  radio cost, half the budget — so the retry cadence matters more here.
+- [ ] **Actual resync interval reached.** The projection assumes the internal RC
+  keeps `resync_interval_s` pinned at its 1-day floor. Confirm from
+  `history.py dump --drift` after a soak. A crystal-equipped board should climb
+  toward the 28-day cap, which drops this term to ~10 mC/day (0.25%) — the
+  quantitative case for the FC-135 on `thermometer_c6`.
+
+Base rates:
+- [ ] **Refresh rate on a C6 rig.** ~48/day is measured on the FireBeetle
+  (1077 over 21d17h, 860 over 18d17h) and assumed to transfer. It is the largest
+  single term, so it sets the error bar on the whole table.
+- [ ] **Non-refresh CPU wake charge.** Projected ~15 mC (the E's is ~21 mC).
+
+Rendering, on the 920x680 panel specifically (`tools/sim` covers the geometry,
+but not the real panel's contrast and ghosting):
+- [ ] **`! NOARCH` badge.** Trigger by flashing a build with `HS_FORMAT` bumped,
+  then reverting. Verifies the archive-disabled warning is legible on the large
+  layout, where the status line uses FreeSans12pt7b rather than Org_01.
+- [ ] **`HOURLY_NO_DATA` gap.** The large layout draws the min/max envelope with
+  `draw_spline_dotted`; confirm a multi-day gap reads as a gap rather than as a
+  dotted line through it.
