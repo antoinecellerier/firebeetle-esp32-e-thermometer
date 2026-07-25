@@ -38,7 +38,8 @@ the end of a run, not during one.
 ## Adding a variable is not free
 
 Each new `RTC_DATA_ATTR` variable shifts `historical_data` and eats
-`ULP_DATA_BASE` headroom — **60 bytes spare on ESP32-E**
+`ULP_DATA_BASE` headroom on ESP32-E, which has run tight — check the margin
+`scripts/post_build_check_rtc.py` prints, don't assume there is room
 (`.claude/rules/ulp.md`). `HistoryStore` deliberately derives its state from
 flash rather than adding any. Prefer that.
 

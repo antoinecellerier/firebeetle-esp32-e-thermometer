@@ -71,6 +71,28 @@ first case below is a violation:
 `.claude/settings.local.json` is exempt from both — it is gitignored and local by
 design.
 
+## 2b. Facts that have a home in code
+
+A fact restated in an instruction file is a fact that will silently go stale.
+Anything that varies per board, per panel, or with an ordinary edit must be a
+**pointer to its source**, not a copy. Flag each of these and propose replacing
+it with "read it from X":
+
+| Restated fact | Its home |
+|---|---|
+| GPIO / pin assignments, PPK2 channel mapping | `include/app_common.h` |
+| ULP word budget and margin | printed by `scripts/check_ulp_size.py` each build |
+| RTC / `ULP_DATA_BASE` headroom | printed by `scripts/post_build_check_rtc.py` |
+| archive capacity, cadence arithmetic | `include/HistoryStore.h` header comment |
+| sdkconfig values (watchdog timeout, clock source) | generated `sdkconfig.<env>` |
+| tool CLI signatures | the tool's `--help` or its argument-parsing block |
+| serial device node | enumerate at runtime; `devserial.py` autodetects |
+| expected log lines used as pass criteria | state the criterion semantically |
+
+Measured figures are the exception that proves the rule: they belong in a
+logbook under `docs/`, and instruction files cite the logbook rather than the
+number (see check 7).
+
 ## 3. Bloat
 
 Report the **loaded** line count vs the budget in the house-rules header

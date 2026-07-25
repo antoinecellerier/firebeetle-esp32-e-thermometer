@@ -34,21 +34,30 @@ cp include/local-secrets.h /tmp/.../local-secrets.h.bak
 grep -E '^#define (USE_|MY_TZ)' include/local-secrets.h   # what is selected now
 ```
 
-Rig on the bench as of 2026-07: FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90
-(`USE_154_Z90` + `USE_BMP390L`), `dfrobot_firebeetle2_esp32e_debug`.
+`include/local-secrets.h` is the ground truth for what is *configured*; the
+header of `docs/history-store-validation.md` records which rig the validation log
+assumes. Reconcile the two against what is physically wired before flashing.
 
 ## 1. Ports differ by board
 
-| Board | Device | Bridge | Notes |
-|---|---|---|---|
-| FireBeetle 2 ESP32-E | `/dev/ttyUSB0` | CP2102/CH340 | real UART, 115200, DTR/RTS drive EN/BOOT |
-| XIAO C6 / custom C6 | `/dev/ttyACM*` | USB-Serial-JTAG | baud ignored; **re-enumerates on reset**, so a held-open port dies |
+Enumerate rather than assume a node — the numbering depends on what else is
+plugged in:
 
 ```bash
 ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null; ls -l /dev/serial/by-id/ 2>/dev/null
 ```
 
-On the C6 the port disappearing mid-capture is normal, not a failure — reopen it.
+What matters is *which bridge* you are talking to, and that is a property of the
+board:
+
+- **A real UART bridge** (CP2102/CH340, enumerates as `ttyUSB`) — baud is real,
+  and DTR/RTS drive EN/BOOT, so the host can reset the chip. This is the
+  FireBeetle.
+- **USB-Serial-JTAG** (native, enumerates as `ttyACM`) — baud is ignored, and the
+  device **re-enumerates on reset**, so a held-open port dies mid-capture. That
+  is normal, not a failure; reopen it. This is the C6 boards.
+
+`devserial.py` picks a port automatically when you don't pass `--port`.
 
 ## 2. Flash
 
@@ -67,10 +76,12 @@ already gone by the time you attach.** To capture it, upload with the reset
 suppressed and drive reset from the reader instead:
 
 ```bash
-~/.platformio/penv/bin/esptool --port /dev/ttyUSB0 --baud 921600 \
-  --before default_reset --after no_reset write_flash ...
+~/.platformio/penv/bin/esptool --before default_reset --after no_reset write_flash ...
 python3 tools/devserial.py boot --grep "Boot count|HistoryStore"
 ```
+
+esptool auto-detects the port when `--port` is omitted; pass it explicitly only
+when more than one board is plugged in.
 
 **Say what you flashed.** Every flash, erase or inject gets reported as env +
 `PLATFORMIO_BUILD_FLAGS` + git hash, and appended to
@@ -93,8 +104,10 @@ a fault.
 
 ## 4. Reading the panel
 
-The Z90 takes **~21 s** to render. Don't reset the board inside that window, and
-don't conclude "no refresh" before it elapses plus the settle time.
+Full-refresh panels take **tens of seconds** — the tri-colour Z90 is the slowest
+of the ones in use. Don't reset the board inside that window, and don't conclude
+"no refresh" before the panel's own busy window has elapsed plus settle time.
+Per-panel measured timings are in `docs/notes.md`.
 
 When asking the user to check the display, give the exact expected string so the
 answer is yes/no — "should show `<hash>` with no badges", not "check it looks
@@ -120,13 +133,13 @@ last frame it managed to render.
 For testing restore and rendering without waiting days:
 
 ```bash
-tools/hstest/hstest --inject <part-size> <mac-hex> <now-epoch> <out.bin> [ramp] [hours]
+tools/hstest/hstest --inject ...        # argument list: the --inject block in tools/hstest/hstest.cpp
 ~/.platformio/penv/bin/python3 tools/history.py restore <out.bin>
 ```
 
 The image is built by the real store code, so it cannot disagree with the
-firmware's format. `restore` is MAC-checked — pass the target device's MAC
-(`esptool read_mac`).
+firmware's format. `restore` is MAC-checked, so the image has to be stamped with
+the target device's MAC (`esptool read_mac`).
 
 **Build without `MOCK_DISPLAY_DATA`.** It fills RTC history in RAM, which takes
 precedence over anything restored from flash, so the panel shows plausible data
@@ -134,12 +147,18 @@ that never came from the archive — a false pass that is hard to spot.
 
 ## 7. PPK2
 
-Source-meter mode, plus digital channels for correlation. With `-DPPK2_DEBUG`:
+Source-meter mode, plus digital channels for correlation, built with
+`-DPPK2_DEBUG`.
 
-- **D0 ← GPIO17** (D10 on the FireBeetle silkscreen): HIGH while the CPU is awake.
-- **D1 ← GPIO16** (D11): HIGH during display refresh.
-- `PPK2_DEBUG_ULP_GPIO` adds D2 ← GPIO12 but keeps RTC peripherals powered in
-  deep sleep, which raises the floor. Enable it only when you need it.
+**Read the `PPK2_DEBUG` block in `include/app_common.h` for the current pin
+assignments before wiring anything.** It defines which GPIO drives which PPK2
+digital channel and what each one signals, and documents where those GPIOs land
+per board — the same numbers sit on different headers on the custom C6, and some
+are mutually exclusive with the UART console or USB. Don't work from a pinout
+quoted anywhere else, including here.
+
+`PPK2_DEBUG_ULP_GPIO` is a separate opt-in: it keeps RTC peripherals powered in
+deep sleep, which raises the floor. Enable it only when you need that trace.
 
 Practicalities:
 
@@ -170,14 +189,17 @@ hypothesis:
 ## 9. Return to a clean state
 
 ```bash
-~/.platformio/penv/bin/esptool --port /dev/ttyUSB0 erase_flash
-~/.platformio/penv/bin/pio run -e dfrobot_firebeetle2_esp32e_debug -t upload
+~/.platformio/penv/bin/esptool erase_flash
+~/.platformio/penv/bin/pio run -e <env> -t upload
 ```
 
 Then confirm, and record it in `docs/history-store-validation.md`:
 
-- boot log shows `Boot count: 1 [<hash>]` with no `-dirty`,
-- `HistoryStore: no valid base snapshot` then `base snapshot seq 1`,
-- `history.py backup` reports `0 hourly, 1 sparkline, 0 drift`,
-- `include/local-secrets.h` restored from the backup,
-- debug `#define`s and `PLATFORMIO_BUILD_FLAGS` reverted (see CLAUDE.md).
+- the boot log reports boot count 1 against a clean (non-`-dirty`) hash,
+- the store finds no base snapshot, then writes a fresh one at the first sleep,
+- a `history.py backup` decodes to an empty archive,
+- `include/local-secrets.h` is restored from the backup,
+- debug `#define`s and `PLATFORMIO_BUILD_FLAGS` are reverted (see CLAUDE.md).
+
+Compare against the previous clean-state entry in the validation log rather than
+against literal strings quoted here — the log lines move with the code.

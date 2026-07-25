@@ -18,7 +18,7 @@ read it first. These are the invariants that hold the archive together.
 **After any `HistoryStore.cpp` or on-flash-format change, run
 `make -C tools/hstest sample`.** It compiles the real store against a simulated
 NOR flash (writes clear bits, like the hardware) and covers the ring wrap, which
-is ~13.7 years out on a device and would otherwise ship untested. The `sample`
+is many years out on a real device and would otherwise ship untested. The `sample`
 target decodes a C-written image with `tools/history.py`, which is what keeps the
 two implementations on one format — so it must *assert*, not merely print.
 
@@ -29,13 +29,14 @@ two implementations on one format — so it must *assert*, not merely print.
 - **A format-version mismatch must never reformat.** Erasing on an unrecognised
   version turns an ordinary firmware update into silent destruction of years of
   data. Migrate, or bail and run journal-only.
-- **Only hourly entries are journaled.** That is what buys ~13.7 years of
-  capacity. Don't add a per-refresh record type — short-lived data crowds out the
-  permanent archive.
+- **Only hourly entries are journaled.** That is what buys the archive its
+  multi-year capacity — the current figure and its derivation are in the
+  `include/HistoryStore.h` header. Don't add a per-refresh record type;
+  short-lived data crowds out the permanent archive.
 - **The RPO is one hour**, delivered by the journal, not by the base snapshot's
-  cadence. The base cadence is emergent (a successful NTP resync, or 256 journal
-  records ≈ 10.7 days), so it varies with how bad the board's clock is. Say "one
-  hour" when documenting the guarantee.
+  cadence. The base cadence is emergent — a successful NTP resync, or a
+  journal-volume backstop — so it varies with how bad the board's clock is. Say
+  "one hour" when documenting the guarantee.
 
 ## Everything read back from flash is untrusted input
 
@@ -66,6 +67,7 @@ still agree.
 
 ## Timing
 
-Anything that walks the whole partition runs on a device under a 5s task
-watchdog. Measure it with `ms_now()` on hardware and yield to IDLE0 — the cost is
-not reliably derivable from record counts and sector arithmetic.
+Anything that walks the whole partition runs on a device under the task watchdog
+(`CONFIG_ESP_TASK_WDT_TIMEOUT_S` in the generated sdkconfig). Measure it with
+`ms_now()` on hardware and yield to IDLE0 — the cost is not reliably derivable
+from record counts and sector arithmetic.

@@ -12,11 +12,13 @@ paths:
 
 Two entirely different coprocessors behind one feature:
 
-- **ESP32-E** — ULP FSM, driven by the HULP library, bit-banged I2C
-  (GPIO0=SDA, GPIO4=SCL). Guard with `SOC_ULP_FSM_SUPPORTED`.
-- **ESP32-C6** — LP RISC-V core with hardware LP I2C (GPIO6=SDA, GPIO7=SCL),
-  built natively via `ulp_embed_binary` in `src/CMakeLists.txt`. Guard with
-  `SOC_LP_CORE_SUPPORTED`.
+- **ESP32-E** — ULP FSM, driven by the HULP library, over **bit-banged** I2C.
+  Guard with `SOC_ULP_FSM_SUPPORTED`.
+- **ESP32-C6** — LP RISC-V core with **hardware** LP I2C, built natively via
+  `ulp_embed_binary` in `src/CMakeLists.txt`. Guard with `SOC_LP_CORE_SUPPORTED`.
+
+Pin assignments are per-board and live in `include/app_common.h` — read them
+there rather than from any doc, this one included.
 
 `HAS_ULP_SUPPORT` is the unified macro for "there is a coprocessor at all".
 Sensor drivers have three compile paths — ULP FSM, LP core, no-ULP — see
@@ -35,18 +37,22 @@ main build's include paths.
 ## The FSM word budget is checked at build time
 
 `scripts/check_ulp_size.py` preprocesses the program arrays with the real
-toolchain and fails the build past `CONFIG_ULP_COPROC_RESERVE_MEM/4` = 128 words.
-**Currently 127/128** — one spare word. The runtime loader also logs the count and
-degrades to safety-net wakes rather than aborting if it ever misfits.
+toolchain and fails the build past `CONFIG_ULP_COPROC_RESERVE_MEM/4`. It prints
+`ULP size check: <file> = N/BUDGET words` on every build — **read the actual
+margin there before adding an instruction**, it has run close to full. The
+runtime loader also logs the count and degrades to safety-net wakes rather than
+aborting if it ever misfits.
 
 ## ULP data and `RTC_DATA_ATTR` share the same 8KB
 
-Both live at `0x50000000`. `ULP_DATA_BASE` must be past all `.rtc.data` /
-`.rtc.force_slow` sections — **60 bytes spare on ESP32-E**. Adding an
-`RTC_DATA_ATTR` variable eats that headroom; see `.claude/rules/rtc-state.md`.
+Both live at `0x50000000`. `ULP_DATA_BASE` (`include/UlpProgram.h`) must sit past
+all `.rtc.data` / `.rtc.force_slow` sections, and the gap between them has been
+small. Adding an `RTC_DATA_ATTR` variable eats that headroom; see
+`.claude/rules/rtc-state.md`.
 
-`scripts/post_build_check_rtc.py` verifies this at build time and
-`ulp_check_data_overlap()` aborts at runtime on overlap. On ESP32-E,
+`scripts/post_build_check_rtc.py` reports both ends of the area at build time —
+take the margin from its output, not from a figure quoted elsewhere.
+`ulp_check_data_overlap()` also aborts at runtime on overlap. On ESP32-E,
 `CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout `ULP_DATA_BASE` assumes.
 
 ## Counters
