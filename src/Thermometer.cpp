@@ -433,6 +433,27 @@ static void update_temp_extremes(float temp)
     max_temp_since_boot = temp;
 }
 
+// Do any deferred flash work now. Every path into deep sleep goes through here
+// — the normal one and the permanent shutdown — so the two can't diverge.
+// Appends already happened inline (a page program is ~0.04mC); this is the
+// ~4.5mC base snapshot, and it only fires when marked dirty.
+//
+// Deliberately a single point so it is trivial to isolate on a PPK2 trace: it
+// is the last thing in the active phase, right before PPK2_CPU_ACTIVE_LOW().
+// Build with -DHISTORY_BASE_EVERY_WAKE to force one per wake and measure the
+// delta against a normal wake.
+static void history_store_persist_now()
+{
+  HistoryDriftState drift;
+  drift_state_save(&drift);
+  time_t now;
+  time(&now);
+#ifdef HISTORY_BASE_EVERY_WAKE
+  history_store_mark_base_dirty();
+#endif
+  history_store_flush(&historical_data, &drift, now);
+}
+
 // Mean of the hourly averages over the last `window_s`, for the drift record's
 // temperature correlate — docs/clock-drift.md wants to know whether the RC
 // oscillator's rate tracks ambient. Reports how many hours actually contributed
@@ -583,16 +604,7 @@ void setup_serial()
 
 void start_deep_sleep()
 {
-  // Single point for all deferred flash work, so it is trivial to isolate on a
-  // PPK2 trace. Appends already happened inline (a page program is ~0.04mC);
-  // this is the ~4.5mC base snapshot, and it only fires when marked dirty.
-  {
-    HistoryDriftState drift;
-    drift_state_save(&drift);
-    time_t now;
-    time(&now);
-    history_store_flush(&historical_data, &drift, now);
-  }
+  history_store_persist_now();
 
   if (sensor.SupportsUlp())
   {
@@ -1263,6 +1275,13 @@ void handle_permanent_shutdown(uint32_t battery_mv)
       display_show_empty_battery(battery_mv, now, make_display_stats());
     }
 
+    // This path bypasses start_deep_sleep(), so flush explicitly — it is the
+    // one moment the archive most needs to be current, since the device is
+    // about to be off indefinitely. Hourly entries were journaled as they were
+    // finalized and are already safe; what would otherwise be lost is the base
+    // snapshot, and with it the sparkline and the drift block.
+    history_store_persist_now();
+
     for (int domain = 0; domain < ESP_PD_DOMAIN_MAX; domain++)
       esp_sleep_pd_config((esp_sleep_pd_domain_t)domain, ESP_PD_OPTION_OFF);
     LOGI("Shutting down until reset. All sleep pd domains have been shutdown.");
@@ -1408,12 +1427,10 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 
     // Same plausibility gate as update_hourly_history(): a 1970 timestamp here
     // would sit ~54 years before every stored point and never leave the window.
+    // Not journaled — the sparkline rides along in the base snapshot instead.
     if (time_is_plausible(now))
-    {
       temp_history_record(historical_data.temp, &historical_data.temp_count,
                           now, (int16_t)(temp * 10));
-      history_store_append_sample(now, (int16_t)(temp * 10));
-    }
 
     PPK2_DISPLAY_HIGH();
     display_show_temperature(temp, battery_mv, battery_mv < low_battery_mv,

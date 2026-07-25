@@ -16,13 +16,24 @@
 //
 // The journal is both the crash-recovery log and the long-term archive: it is
 // never erased wholesale, only one sector at a time as the cursor reaches it.
-// At ~72 records/day a 1904KB journal holds ~4.6 years; hourly records alone
-// would last ~13.7 years.
+//
+// **Only hourly entries are journaled.** They are the archive: the base
+// snapshot holds just the last HOURLY_HISTORY_SIZE hours, so once an hour falls
+// out of that ring the journal record is the only copy. At 24 records/day that
+// is 140KB/year, so a 1904KB journal holds ~13.7 years.
+//
+// The 24h sparkline is deliberately NOT journaled. It is restored from the base
+// snapshot, which already contains it (it lives inside RtcHistory), so it costs
+// nothing extra and comes back up to one base-interval stale — which is fine
+// for a window that rolls over daily anyway. Journaling it instead would have
+// let short-lived data crowd out the permanent archive: at the observed refresh
+// rate it was two thirds of the volume, and it made the archive's lifetime
+// depend on how twitchy the display was.
 //
 // Energy: appending to erased NOR needs no erase, which is what makes this
 // affordable. A 16-byte program costs ~0.04mC against a 45-112mC display
-// refresh. The daily base snapshot (~4.5mC) dominates the ~7.5mC/day total,
-// ~0.1-0.2% of the daily budget. See docs/notes.md.
+// refresh. The daily base snapshot (~4.5mC) dominates the ~5.5mC/day total,
+// well under 0.1% of the daily budget. See docs/notes.md.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -80,9 +91,10 @@ bool history_store_available(void);
 bool history_store_restore(RtcHistory *out, HistoryDriftState *drift);
 
 // Append one record. Cheap (single page program, no erase); safe to call on
-// every wake that produces data.
+// every wake that produces data. min/max ride along with avg at no cost — the
+// record is 16 bytes either way — and the display needs them for the min/max
+// envelope and the derived daily extremes.
 void history_store_append_hourly(time_t hour_start, const HourlyEntry *entry);
-void history_store_append_sample(time_t ts, int16_t temp_x10);
 void history_store_append_drift(const HistoryDriftSample *s);
 
 // Request a base snapshot at the next flush. Called after a successful NTP

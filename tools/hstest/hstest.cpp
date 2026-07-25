@@ -140,8 +140,6 @@ int main(int argc, char **argv)
   // ---- 2. append, snapshot, restore round-trip ----
   for (int i = 0; i < 50; i++)
     ring_push(T0 + i * 3600, (int16_t)(200 + i), (int16_t)(210 + i), (int16_t)(205 + i));
-  for (int i = 0; i < 20; i++)
-    history_store_append_sample(T0 + i * 600, (int16_t)(200 + i));
   g_hist.temp_count = 0;
   for (int i = 0; i < 20; i++)
     temp_history_record(g_hist.temp, &g_hist.temp_count, T0 + i * 600, (int16_t)(200 + i));
@@ -221,7 +219,8 @@ int main(int argc, char **argv)
   size_t erases_before = g_erase_count;
   for (size_t i = 0; i < slots * 3; i++)
   {
-    history_store_append_sample(T0 + (time_t)i, (int16_t)(i & 0x7F));
+    HourlyEntry we = { (int16_t)(i & 0x7F), 210, 205 };
+    history_store_append_hourly(T0 + (time_t)i * 3600, &we);
     if ((i % 500) == 0)
     {
       // Rediscover the cursor from scratch, as a cold boot would.
@@ -254,7 +253,9 @@ int main(int argc, char **argv)
   power_on(true);
   reset_hist();
   history_store_available();
-  CHECK(!s_base_dirty, "nothing appended yet, base should not be dirty");
+  // store_init() asks for a base as soon as it finds none, so the sparkline
+  // is persisted from the first sleep rather than the first hour boundary.
+  CHECK(s_base_dirty, "a store with no base should request one at init");
   {
     HourlyEntry e = { 200, 210, 205 };
     history_store_append_hourly(T0, &e);
@@ -266,7 +267,10 @@ int main(int argc, char **argv)
   // And again once a sector of records has gone by, so replay stays bounded.
   s_base_dirty = false;
   for (size_t i = 0; i < HS_SECTOR / HS_REC; i++)
-    history_store_append_sample(T0 + (time_t)i, 200);
+  {
+    HourlyEntry se = { 200, 210, 205 };
+    history_store_append_hourly(T0 + (time_t)i * 3600, &se);
+  }
   CHECK(s_base_dirty, "a sector of records must request a fresh base");
 
   // ---- 9. foreign content (old app image) is detected and formatted ----
@@ -281,7 +285,10 @@ int main(int argc, char **argv)
   g_have_part = false;
   reboot();
   CHECK(!history_store_available(), "should report unavailable with no partition");
-  history_store_append_sample(T0, 200);   // must not crash
+  {
+    HourlyEntry ne = { 200, 210, 205 };
+    history_store_append_hourly(T0, &ne);   // must not crash
+  }
   history_store_mark_base_dirty();
   history_store_flush(&g_hist, &g_drift, T0);
   g_have_part = true;
@@ -298,7 +305,6 @@ int main(int argc, char **argv)
     {
       temp_history_record(g_hist.temp, &g_hist.temp_count, T0 + i * 900,
                           (int16_t)(195 + i));
-      history_store_append_sample(T0 + i * 900, (int16_t)(195 + i));
     }
     g_drift.last_sync_time = T0;
     g_drift.drift_ppm_count = 1;

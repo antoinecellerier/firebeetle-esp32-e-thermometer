@@ -32,7 +32,6 @@
 bool history_store_available(void) { return false; }
 bool history_store_restore(RtcHistory *, HistoryDriftState *) { return false; }
 void history_store_append_hourly(time_t, const HourlyEntry *) {}
-void history_store_append_sample(time_t, int16_t) {}
 void history_store_append_drift(const HistoryDriftSample *) {}
 void history_store_mark_base_dirty(void) {}
 void history_store_flush(const RtcHistory *, const HistoryDriftState *, time_t) {}
@@ -46,7 +45,7 @@ void history_store_flush(const RtcHistory *, const HistoryDriftState *, time_t) 
 // --- geometry ---------------------------------------------------------------
 
 #define HS_MAGIC        0x54534948u  // "HIST"
-#define HS_FORMAT       1
+#define HS_FORMAT       2  // 2: sparkline samples no longer journaled
 #define HS_SECTOR       4096u
 #define HS_HDR_OFF      0u
 #define HS_BASE_A_OFF   0x1000u
@@ -57,7 +56,8 @@ void history_store_flush(const RtcHistory *, const HistoryDriftState *, time_t) 
 
 #define REC_FREE    0xFF
 #define REC_HOURLY  1
-#define REC_SAMPLE  2
+// 2 was REC_SAMPLE: the 24h sparkline is restored from the base snapshot
+// instead, so short-lived data can't crowd out the permanent archive.
 #define REC_DRIFT   3   // occupies two consecutive slots
 
 // Written once at init. Identity lives here rather than in each base snapshot:
@@ -112,8 +112,8 @@ struct __attribute__((packed)) HsRec {
   uint8_t  type;
   uint8_t  rsvd;
   uint16_t base_seq;   // low 16 bits of the base this record was written under
-  uint32_t time;       // hour start (HOURLY) or sample timestamp (SAMPLE)
-  int16_t  a, b, c;    // HOURLY: min,max,avg | SAMPLE: temp_x10,-,-
+  uint32_t time;       // start-of-hour this entry covers
+  int16_t  a, b, c;    // min, max, avg
   uint16_t crc16;      // MUST stay last
 };
 
@@ -511,7 +511,8 @@ static void journal_append(const void *rec, uint8_t slots)
   // replay. The NTP-resync trigger alone is not enough: restore needs a base to
   // anchor to, so a device that never syncs would journal records it could
   // never restore, and a long resync outage would stretch the replay without
-  // limit. One sector of records is ~3.5 days at the observed rate.
+  // limit. One sector is 256 hourly records, i.e. ~10.7 days, so in practice
+  // the daily resync fires first and this is the backstop.
   uint32_t since = (s_cursor >= s_base_cursor)
                        ? s_cursor - s_base_cursor
                        : s_jrn_size - s_base_cursor + s_cursor;
@@ -553,6 +554,14 @@ static bool store_init(void)
     s_base_hourly = bh.hourly_count;
     s_base_cursor = bh.journal_cursor < s_jrn_size ? bh.journal_cursor : 0;
     s_base_off = off;
+  }
+  else
+  {
+    // No base yet. Ask for one at the next sleep rather than waiting for the
+    // first journal append: now that only hourly entries are journaled, that
+    // would be up to an hour away, and the sparkline is only persisted by the
+    // base.
+    s_base_dirty = true;
   }
   s_ready = true;
   return true;
@@ -598,7 +607,7 @@ bool history_store_restore(RtcHistory *out, HistoryDriftState *drift)
 
   // Replay everything written after the base. base_seq is redundant with the
   // cursor range but cheap, and it catches a stale hint.
-  int hourly = 0, samples = 0;
+  int hourly = 0;
   uint8_t raw[2 * HS_REC];
   uint32_t pos = s_base_cursor;
   const uint16_t want = (uint16_t)(h.seq & 0xFFFF);
@@ -627,20 +636,17 @@ bool history_store_restore(RtcHistory *out, HistoryDriftState *drift)
           out->hourly_latest_time = (time_t)r->time;
           hourly++;
         }
-        else if (type == REC_SAMPLE)
-        {
-          // Through the real recorder, so smart eviction reproduces exactly.
-          temp_history_record(out->temp, &out->temp_count, (time_t)r->time, r->a);
-          samples++;
-        }
+        // REC_DRIFT carries no RtcHistory state; the host tool decodes it.
       }
     }
     pos = jrn_next(pos, (uint32_t)n * HS_REC);
   }
 
-  LOGI("History restored: %u hourly, %u sparkline (base seq %u, +%d/%d replayed)",
-       (unsigned)out->hourly_count, (unsigned)out->temp_count,
-       (unsigned)h.seq, hourly, samples);
+  // The sparkline count comes wholly from the base snapshot, so it is as fresh
+  // as the last base write (see the header comment) — no journal replay.
+  LOGI("History restored: %u hourly (+%d replayed), %u sparkline, base seq %u",
+       (unsigned)out->hourly_count, hourly, (unsigned)out->temp_count,
+       (unsigned)h.seq);
   return true;
 }
 
@@ -655,19 +661,6 @@ void history_store_append_hourly(time_t hour_start, const HourlyEntry *entry)
   r.a = entry->min_x10;
   r.b = entry->max_x10;
   r.c = entry->avg_x10;
-  r.crc16 = crc16_of(&r, offsetof(HsRec, crc16));
-  journal_append(&r, 1);
-}
-
-void history_store_append_sample(time_t ts, int16_t temp_x10)
-{
-  if (!store_init()) return;
-  HsRec r;
-  memset(&r, 0, sizeof(r));
-  r.type = REC_SAMPLE;
-  r.base_seq = (uint16_t)(s_base_seq & 0xFFFF);
-  r.time = (uint32_t)ts;
-  r.a = temp_x10;
   r.crc16 = crc16_of(&r, offsetof(HsRec, crc16));
   journal_append(&r, 1);
 }

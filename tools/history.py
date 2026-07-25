@@ -30,7 +30,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # --- on-flash format (mirrors src/HistoryStore.cpp) --------------------------
 
 HS_MAGIC = 0x54534948  # "HIST"
-HS_FORMAT = 1
+HS_FORMAT = 2
 HS_SECTOR = 4096
 HS_BASE_A_OFF = 0x1000
 HS_BASE_B_OFF = 0x3000
@@ -38,7 +38,9 @@ HS_BASE_SIZE = 0x2000
 HS_JOURNAL_OFF = 0x5000
 HS_REC = 16
 
-REC_FREE, REC_HOURLY, REC_SAMPLE, REC_DRIFT = 0xFF, 1, 2, 3
+# Only hourly entries are journaled. The 24h sparkline comes from the base
+# snapshot, which already contains it.
+REC_FREE, REC_HOURLY, REC_DRIFT = 0xFF, 1, 3
 
 HOURLY_NO_DATA = -32768
 
@@ -214,13 +216,10 @@ class Archive:
                         sync_time=f[3], drift_ms=f[4], window_s=f[5], ppm=f[6],
                         ambient_mean_x10=f[7], boot_count=f[8],
                         refresh_count=f[9], ambient_hours=f[10]))
-            elif t in (REC_HOURLY, REC_SAMPLE):
+            elif t == REC_HOURLY:
                 f = REC.unpack_from(raw)
                 if crc16(raw[:REC.size - 2]) == f[7]:
-                    if t == REC_HOURLY:
-                        self.hourly.append((f[3], f[4], f[5], f[6]))
-                    else:
-                        self.samples.append((f[3], f[4]))
+                    self.hourly.append((f[3], f[4], f[5], f[6]))
             pos += n * HS_REC
 
     def _decode(self):
