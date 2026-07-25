@@ -485,8 +485,14 @@ static void history_store_persist_now()
   //
   // 50ms, not 2ms: at the 3s window needed to see a whole wake, 2ms pulses are
   // ~1px each and invisible. 300ms of preamble is ~10% of that width, so it can
-  // be found zoomed out and then zoomed into. Only ever built with
-  // HISTORY_BASE_EVERY_WAKE for measurement, so the added awake time is free.
+  // be found zoomed out and then zoomed into.
+  //
+  // The #ifdef is load-bearing, not decoration: PPK2_DISPLAY_HIGH/LOW compile to
+  // nothing without PPK2_DEBUG but sleep_ms() does not, so leaving the loop
+  // unguarded put 300ms of awake time on EVERY wake of a normal build — ~0.6C/day
+  // against a ~7.1C/day budget, and silently, since the markers it existed to
+  // emit were no-ops.
+#ifdef PPK2_DEBUG
   for (int i = 0; i < 3; i++)
   {
     PPK2_DISPLAY_HIGH();
@@ -494,6 +500,7 @@ static void history_store_persist_now()
     PPK2_DISPLAY_LOW();
     sleep_ms(50);
   }
+#endif
   PPK2_DISPLAY_HIGH();
   history_store_flush(&historical_data, &drift, now);
   PPK2_DISPLAY_LOW();
