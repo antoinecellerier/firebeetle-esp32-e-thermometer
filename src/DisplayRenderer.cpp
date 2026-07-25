@@ -1365,12 +1365,18 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       const char *s = rest ? rest : tok[t];
       int sl = (int)strlen(s);
       int sep = len ? 1 : 0;
-      // Reserve room for the "+" only on the last line, and only while
-      // something is still queued behind the badge being placed.
-      int16_t budget = max_w;
+      const int16_t room = max_w - line_w - (sep ? space_w : 0);
+
+      // The "+" costs width only on the last line, and only when something will
+      // actually be left over. Placing a badge WHOLE leaves something over only
+      // if another badge follows; SPLITTING one always does — including when it
+      // is the last badge. Deciding the reservation before the split was known
+      // let that case draw plus_w past the temp zone, and the white band behind
+      // it erased pixels outside the zone too.
+      int16_t avail = room;
       if (last_line && (rest || t + 1 < ntok))
-        budget -= plus_w;
-      int16_t avail = budget - line_w - (sep ? space_w : 0);
+        avail -= plus_w;
+      const int16_t avail_split = last_line ? (int16_t)(room - plus_w) : room;
 
       if (text_width(gfx, s) <= avail && len + sep + sl < IND_LINE_LEN)
       {
@@ -1387,9 +1393,9 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       {
         // Badge can never fit a line of its own, so splitting it here beats
         // flushing a half-empty line and splitting it on the next one anyway.
-        if (avail < min_char_w)
+        if (avail_split < min_char_w)
           break;  // not even one character fits — flush the line as it stands
-        int n = fit_prefix(gfx, s, avail);
+        int n = fit_prefix(gfx, s, avail_split);
         if (len + sep + n >= IND_LINE_LEN)
           break;
         if (sep) line[len++] = ' ';
