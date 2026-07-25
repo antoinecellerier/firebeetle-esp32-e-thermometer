@@ -1401,19 +1401,26 @@ void on_first_boot()
   // Retries inside one session, and handles its own WiFi teardown. Getting the
   // clock on the first boot matters more than it used to: without one the
   // device records no history at all, and a failure here used to be permanent.
-  if (!ntp_bootstrap_sync(NTP_BOOTSTRAP_ASSOC_TRIES))
-  {
-    // wifi_ok reflects whether the association itself worked; ntp_synced stays
-    // false, and maybe_ntp_resync() now retries on later wakes.
-    resync_fail_count++;
-    LOGI("NTP sync failed — time is unreliable, will retry on later wakes");
-    return;
-  }
-  set_status_led(rgb(0, 255, 0));
+  const bool synced = ntp_bootstrap_sync(NTP_BOOTSTRAP_ASSOC_TRIES);
+  if (!synced)
+    resync_fail_count++;   // wifi_ok separately reflects the association
+  set_status_led(synced ? rgb(0, 255, 0) : rgb(255, 0, 0));
+
+  // Judge the clock on its own merits either way. A failed sync does not mean
+  // there is no time: a panic or WDT reset reloads .rtc.data — so boot_count is
+  // back to 1 and this runs again — while the RTC timer keeps counting
+  // correctly across it. Returning early instead left first_boot_time at 0,
+  // which renders as a ~20601d uptime, hides the boot date, shows a permanent
+  // NO-NTP badge against a correct clock, and keeps maybe_ntp_resync() on the
+  // WiFi-burning bootstrap path indefinitely.
   time(&first_boot_time);
-  ntp_synced = (first_boot_time > 86400 * 365);
-  if (ntp_synced)
-    last_sync_time = first_boot_time;
+  ntp_synced = time_is_plausible(first_boot_time);
+  if (ntp_synced && last_sync_time == 0)
+    last_sync_time = first_boot_time;   // a value restored from flash wins
+  if (!synced)
+    LOGI("NTP sync failed — %s", ntp_synced
+             ? "RTC clock is still plausible, keeping it"
+             : "time is unreliable, will retry on later wakes");
 #endif
 }
 
