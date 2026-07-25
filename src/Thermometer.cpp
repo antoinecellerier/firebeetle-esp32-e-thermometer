@@ -266,9 +266,17 @@ RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 RTC_DATA_ATTR float min_temp_since_boot = TEMP_INIT_MIN;
 RTC_DATA_ATTR float max_temp_since_boot = TEMP_INIT_MAX;
 
+// Minimum resync interval (1 day) — floor to avoid hammering WiFi
+#define RESYNC_INTERVAL_MIN  (86400)
+// Maximum resync interval (4 weeks)
+#define RESYNC_INTERVAL_MAX  (28 * 86400)
+
 // Periodic NTP resync state
 RTC_DATA_ATTR time_t next_resync_time = 0;           // when to next attempt NTP resync
-RTC_DATA_ATTR int32_t resync_interval_s = 7 * 86400; // current interval (starts at 1 week)
+// Starts at the floor: the first resync is the only measurement the device has
+// for a fortnight otherwise, and a healthy clock climbs back out fast (each
+// negligible-drift resync doubles the interval, so 1d → 28d in five wakes).
+RTC_DATA_ATTR int32_t resync_interval_s = RESYNC_INTERVAL_MIN;
 RTC_DATA_ATTR int32_t last_drift_ms = 0;             // drift measured at last resync (positive = clock ahead)
 RTC_DATA_ATTR int32_t last_drift_window_s = 0;       // measured span the drift accumulated over (NOT the interval setting: failed attempts stretch it)
 RTC_DATA_ATTR time_t last_sync_time = 0;             // wall-clock of last successful NTP sync (0 = never)
@@ -652,11 +660,6 @@ static bool sntp_sync_once(uint32_t timeout_ms)
   esp_netif_sntp_deinit();
   return ok;
 }
-
-// Minimum resync interval (1 day) — floor to avoid hammering WiFi
-#define RESYNC_INTERVAL_MIN  (86400)
-// Maximum resync interval (4 weeks)
-#define RESYNC_INTERVAL_MAX  (28 * 86400)
 
 // Attempt NTP resync if due. Measures clock drift and adjusts next interval.
 static void maybe_ntp_resync(time_t now)
@@ -1264,7 +1267,7 @@ static void reset_rtc_state()
   min_temp_since_boot = TEMP_INIT_MIN;
   max_temp_since_boot = TEMP_INIT_MAX;
   next_resync_time = 0;
-  resync_interval_s = 7 * 86400;
+  resync_interval_s = RESYNC_INTERVAL_MIN;
   last_drift_ms = 0;
   last_drift_window_s = 0;
   last_sync_time = 0;

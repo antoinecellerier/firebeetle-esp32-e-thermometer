@@ -52,8 +52,9 @@ each other, so a tight `+-N%` over a few days of stable room temperature is
 evidence the rate is *locally* constant, not that it holds across seasons.
 
 The interval is adaptive: `< 60s` drift doubles it (cap 28d), `≥ 60s` targets
-`60s` of drift at the next resync, clamped to `[1d, 28d]`, starting from 7d
-after a cold boot.
+`60s` of drift at the next resync, clamped to `[1d, 28d]`. It starts at the 1d
+floor after a cold boot so the first datapoint arrives the next day; a clock
+good enough to need no correction climbs back to the 28d cap in five resyncs.
 
 ## Clock source per board
 
