@@ -493,8 +493,14 @@ static bool journal_locate(void)
   if (c == UINT32_MAX)
   {
     // Every slot written and no gap: an invariant was violated (torn erase,
-    // or foreign content). Reclaim one sector rather than the whole archive.
-    uint32_t s = (s_base_cursor / HS_SECTOR) * HS_SECTOR;
+    // or foreign content). Reclaim one sector rather than the whole archive —
+    // the one AFTER the base cursor's, never the base cursor's own. In ring
+    // order that is where the blank sector should have been, and failing that
+    // it holds the oldest records, which the ring was about to overwrite
+    // anyway. The base cursor's own sector holds everything written since the
+    // last snapshot: the only copy of up to a day of history, and the last
+    // thing that should be spent recovering from a flash fault.
+    uint32_t s = (s_base_cursor / HS_SECTOR + 1) * HS_SECTOR;
     if (s >= s_jrn_size) s = 0;
     LOGI("HistoryStore: no free slot found — reclaiming sector 0x%06x", (unsigned)s);
     if (!part_erase(jrn_abs(s), HS_SECTOR)) return false;

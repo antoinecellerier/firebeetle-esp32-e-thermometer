@@ -346,6 +346,36 @@ int main(int argc, char **argv)
   CHECK(got.hourly_count == 1, "restored %u hourly after header repair, want 1",
         (unsigned)got.hourly_count);
 
+  // ---- 9d. no-free-slot recovery must not eat the unabsorbed records ----
+  // A torn erase leaves the ring with no 0xFF gap. The sector reclaimed to
+  // recover must not be the one holding records written since the last
+  // snapshot — those are the only copy.
+  power_on(true);
+  reset_hist();
+  history_store_available();
+  {
+    HourlyEntry re = { 300, 310, 305 };
+    history_store_append_hourly(T0, &re);
+  }
+  g_hist.hourly_count = 1;
+  history_store_mark_base_dirty();
+  history_store_flush(&g_hist, &g_drift, T0);
+  {
+    HourlyEntry re = { 400, 410, 405 };   // after the snapshot: journal-only
+    history_store_append_hourly(T0 + 3600, &re);
+  }
+  // Break the erase-ahead invariant without touching written records: mark
+  // every free slot as occupied by something journal_scan() won't skip.
+  for (uint32_t off = 0; off < s_jrn_size; off += HS_REC)
+    if (g_flash[HS_JOURNAL_OFF + off] == REC_FREE)
+      g_flash[HS_JOURNAL_OFF + off] = 0x7E;
+  reboot();
+  memset(&got, 0, sizeof(got));
+  CHECK(history_store_restore(&got, &gotd), "restore should survive the reclaim");
+  CHECK(got.hourly_count == 2,
+        "reclaim lost the unabsorbed record: %u hourly restored, want 2",
+        (unsigned)got.hourly_count);
+
   // ---- 10. a missing partition degrades instead of crashing ----
   g_have_part = false;
   reboot();
