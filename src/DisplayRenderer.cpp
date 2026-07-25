@@ -1149,18 +1149,40 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       && !debug_build && !lp_errors_significant && stats.crash_count == 0)
     return;
 
-  // Badges, most severe first — the tail is what gets dropped when the panel
-  // runs out of room.
+  // Badges, most severe first — the tail is what gets replaced by a "+" when
+  // the panel runs out of room.
   char tok[IND_MAX_TOKENS][IND_TOKEN_LEN];
   int ntok = 0;
+
+  // Lab-build flags lead, in a single token. They are not a failure, but they
+  // are the only badge that changes how the BIG NUMBER should be read — a
+  // DummySensor build shows a constant 12.3C as if it were a measurement — and
+  // that warning cannot come from anywhere but the screen. Ranked last it was
+  // droppable: on a 200x200 a crash badge plus a drift badge already fill the
+  // three available lines, so a lab build that had also crashed hid the fact
+  // its reading was synthetic. Everything below it is also on serial and in the
+  // coredump. One token, not three, so it costs at most one line — and in a
+  // field build it is absent entirely, so leading with it costs nothing there.
+  {
+    char lab[IND_TOKEN_LEN];
+    int pos = 0;
+    if (debug_build)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "! DEBUG %ds", SLEEP_INTERVAL_S);
+    if (stats.dummy_sensor)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/DUMMY" : "! DUMMY");
+    if (stats.mock_data)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/MOCK" : "! MOCK");
+    if (pos)
+      snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
+  }
 
   if (stats.crash_count > 0)
   {
     // Crash forensics, e.g. "! PANIC x2 @#273/render 3h pc:42008a3c main".
     // The boot counter restarts after every crash (RTC_DATA is wiped), so
-    // @#N is relative to the crashed boot's own power-on epoch. Ranked right
-    // behind the hash: it is the one payload that can't be reconstructed from
-    // anywhere else once the screen is gone.
+    // @#N is relative to the crashed boot's own power-on epoch. Ranked ahead of
+    // every failure badge: those describe a state you can still go and read,
+    // this describes an event that is already over.
     static const char *stage_names[] = {
       "?", "boot", "ulp", "sensor", "ntp", "render", "lpinit", "sleep"};
     uint8_t st = (stats.crash_stage < sizeof(stage_names) / sizeof(stage_names[0]))
@@ -1269,23 +1291,6 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
                        : "?";
     snprintf(tok[ntok++], IND_TOKEN_LEN, "! LP %s 0x%x",
              op_str, (unsigned)stats.last_lp_error);
-  }
-
-  // Lab-build flags go last, in a single token: they say the screen may be
-  // lying (synthetic reading, debug sleep interval), but they never explain a
-  // field failure — and as three separate badges they would push the crash
-  // payload off a narrow panel.
-  {
-    char lab[IND_TOKEN_LEN];
-    int pos = 0;
-    if (debug_build)
-      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "! DEBUG %ds", SLEEP_INTERVAL_S);
-    if (stats.dummy_sensor)
-      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/DUMMY" : "! DUMMY");
-    if (stats.mock_data)
-      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/MOCK" : "! MOCK");
-    if (pos)
-      snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
   }
 
   // The build hash goes last, and only when the footer's own copy can't be
