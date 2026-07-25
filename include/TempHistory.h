@@ -86,11 +86,20 @@ inline void temp_history_push(TempReading *buf, uint16_t *count, time_t now,
 // anchor the prior flat region so the spline doesn't ramp-interpolate across
 // it. Skip when the delta is ≤0.1°C — that's our sampling resolution, not a
 // real step, and anchoring it produces a staircase on slow monotonic drift.
+//
+// `now` is clamped to the newest stored timestamp: this buffer is documented
+// as ordered oldest→newest and both the eviction above and the renderer rely on
+// it, but an NTP resync correcting a fast clock moves `now` backwards (the
+// boards drift −5265ppm ≈ −7.6min/day, see docs/clock-drift.md). Clamping
+// collapses such a correction onto the newest point instead of breaking the
+// ordering invariant.
 inline void temp_history_record(TempReading *buf, uint16_t *count,
                                 time_t now, int16_t new_x10)
 {
   if (*count > 0)
   {
+    if (now < (time_t)buf[*count - 1].timestamp)
+      now = (time_t)buf[*count - 1].timestamp;
     const TempReading &prev = buf[*count - 1];
     if (now - (time_t)prev.timestamp > 3600 && abs(new_x10 - prev.temp_x10) >= 2)
       temp_history_push(buf, count, now, (uint32_t)(now - 1), prev.temp_x10);

@@ -27,6 +27,8 @@
 
 #include "Display.h"
 #include "TempHistory.h"
+#include "RtcHistory.h"
+#include "HistoryStore.h"
 
 // Used for JTAG. Avoid for other purposes if possible
 // Firebeetle Pin | JTAG PIN
@@ -78,15 +80,13 @@ void ulp_check_data_overlap();
 // relies on; it dies only with the RTC power domain (battery swap, or the
 // FireBeetle's reset button, whose circuit power-cycles RTC).
 //
-// History is grouped in a struct with a version tag and self_addr field.
-// The self_addr detects if the linker moved the struct (e.g. due to
-// adding/removing other RTC variables). On power-on reset, .rtc.data is
-// zeroed, version won't match, and history is reinitialized cleanly.
+// The history itself outlives all of that: HistoryStore mirrors it to the
+// `history` flash partition, which an upload does not touch. What lands here on
+// a cold boot is a restore from flash, not an empty buffer.
 //
-// Bump RTC_HISTORY_VERSION when changing anything inside RtcHistory
-// (struct fields, buffer sizes, semantics).
+// RtcHistory, RTC_HISTORY_VERSION and the self_addr scheme live in
+// include/RtcHistory.h so HistoryStore.cpp can serialize the same layout.
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_HISTORY_VERSION 0xDA050003
 #define RTC_STATE_VERSION   0xDA050003
 
 // Initial min/max temperature sentinels (float).
@@ -97,30 +97,6 @@ void ulp_check_data_overlap();
 // Minimum temperature change (C) to trigger a display refresh
 #define DISPLAY_TEMP_DELTA 0.1f
 
-// History data — new fields must be added at the END (and bump
-// RTC_HISTORY_VERSION). The self_addr field detects if the linker moved
-// the struct between firmware versions.
-struct RtcHistory {
-  uint32_t version;
-  uint32_t self_addr;  // &historical_data at init time; detects address shifts
-
-  // 24h sparkline (linear, oldest first — see TempHistory.h)
-  TempReading temp[TEMP_HISTORY_SIZE];
-  uint16_t temp_count;
-
-  // 30-day hourly chart (circular buffer, one entry per clock hour)
-  HourlyEntry hourly[HOURLY_HISTORY_SIZE];
-  uint16_t hourly_count;
-  uint16_t hourly_idx;
-  time_t hourly_latest_time;
-
-  // In-progress hour accumulator (finalized on hour boundary)
-  time_t current_hour_start;
-  int32_t  current_hour_sum_x10;
-  uint16_t current_hour_sample_count;
-  int16_t  current_hour_min_x10;
-  int16_t  current_hour_max_x10;
-};
 RTC_DATA_ATTR RtcHistory historical_data;
 
 // Operational state — changes here are caught by self_addr if the linker
@@ -293,6 +269,58 @@ RTC_DATA_ATTR bool wifi_ok = false;
 RTC_DATA_ATTR bool ntp_synced = false;
 RTC_DATA_ATTR bool last_sensor_ok = true;
 
+// Gather/scatter the drift block for the flash archive. Keeping it in one place
+// means the on-flash layout (HistoryDriftState) and these RTC variables can
+// only drift apart in one file.
+static void drift_state_save(HistoryDriftState *d)
+{
+  d->resync_interval_s = resync_interval_s;
+  d->last_drift_ms = last_drift_ms;
+  d->last_drift_window_s = last_drift_window_s;
+  d->last_sync_time = (int64_t)last_sync_time;
+  d->resync_fail_count = resync_fail_count;
+  d->drift_ppm_count = drift_ppm_count;
+  d->rsvd = 0;
+  memcpy(d->drift_ppm_hist, drift_ppm_hist, sizeof(drift_ppm_hist));
+  memcpy(d->drift_win_min, drift_win_min, sizeof(drift_win_min));
+}
+
+// `trust_clock` gates only last_sync_time: it is the reference maybe_ntp_resync()
+// measures the next drift window against, so restoring it under a clock that
+// has not been set yet would produce a nonsense window on the first resync
+// after a power-cycle. The rates themselves are timeless and always restored.
+static void drift_state_load(const HistoryDriftState *d, bool trust_clock)
+{
+  resync_interval_s = d->resync_interval_s;
+  last_drift_ms = d->last_drift_ms;
+  last_drift_window_s = d->last_drift_window_s;
+  resync_fail_count = d->resync_fail_count;
+  drift_ppm_count = d->drift_ppm_count;
+  if (drift_ppm_count > DRIFT_PPM_HIST_SIZE)
+    drift_ppm_count = DRIFT_PPM_HIST_SIZE;
+  memcpy(drift_ppm_hist, d->drift_ppm_hist, sizeof(drift_ppm_hist));
+  memcpy(drift_win_min, d->drift_win_min, sizeof(drift_win_min));
+  if (trust_clock)
+    last_sync_time = (time_t)d->last_sync_time;
+}
+
+// Longest gap still attributed to a missed safety-net wake rather than to the
+// device being off. The safety net fires hourly, so this allows exactly one
+// miss; beyond it, skipped hours are marked HOURLY_NO_DATA instead of repeating
+// the last reading.
+#define HOURLY_REPEAT_FILL_MAX 2
+
+// Write one finalized entry into the ring and mirror it to the flash archive.
+// Every ring write goes through here so the two can never diverge.
+static void hourly_append(time_t hour_start, const HourlyEntry &entry)
+{
+  historical_data.hourly[historical_data.hourly_idx] = entry;
+  historical_data.hourly_idx = (historical_data.hourly_idx + 1) % HOURLY_HISTORY_SIZE;
+  if (historical_data.hourly_count < HOURLY_HISTORY_SIZE)
+    historical_data.hourly_count++;
+  history_store_append_hourly(hour_start, &entry);
+}
+
 // Update the hourly history buffer with a new temperature reading.
 // Called on every main CPU wake (both delta-triggered and safety-net timer).
 // When the clock hour changes, the accumulated entry is finalized and appended
@@ -300,6 +328,15 @@ RTC_DATA_ATTR bool last_sensor_ok = true;
 // the safety net wakes every hour) are filled with sentinel entries.
 static void update_hourly_history(time_t now, const struct tm *nowtm, float temp)
 {
+  // Nothing here is meaningful without a wall clock: entries are filed by clock
+  // hour, and a 1970 timestamp would file them ~54 years before everything
+  // already stored. Recording nothing (and letting the `! NOSYNC` badge explain
+  // the stall) beats recording lies — before this guard an unsynced device
+  // wrote 1970-stamped entries, and the eventual forward step filled the whole
+  // ring with one repeated value.
+  if (!time_is_plausible(now))
+    return;
+
   int16_t temp_x10 = (int16_t)(temp * 10);
 
   // Compute wall-clock start-of-hour for current local time
@@ -330,27 +367,28 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
       ? (int16_t)(historical_data.current_hour_sum_x10 / historical_data.current_hour_sample_count)
       : historical_data.current_hour_min_x10;
 
-    historical_data.hourly[historical_data.hourly_idx] = entry;
-    historical_data.hourly_idx = (historical_data.hourly_idx + 1) % HOURLY_HISTORY_SIZE;
-    if (historical_data.hourly_count < HOURLY_HISTORY_SIZE)
-      historical_data.hourly_count++;
+    hourly_append(historical_data.current_hour_start, entry);
 
-    // Fill any skipped hours with the finalized entry's values.
-    // Skipped hours mean the ULP safety-net woke but no delta was detected,
-    // so temperature was stable — the last known value is the best estimate.
+    // Fill any skipped hours.
     // Uses time_t difference (UTC-based) so DST transitions are handled
     // correctly — a "spring forward" skip produces one fill, a "fall back"
     // repeat produces hours_elapsed=0 (no fill needed).
     int hours_elapsed = (int)((hour_start - historical_data.current_hour_start) / 3600);
     if (hours_elapsed > HOURLY_HISTORY_SIZE)
       hours_elapsed = HOURLY_HISTORY_SIZE;
+
+    // A short gap means the ULP safety-net woke but no delta was detected, so
+    // temperature was stable and the last known value is the best estimate. A
+    // long one means the device was not running at all — a battery swap, a
+    // reflash, or a restore from flash — and repeating the last value there
+    // would draw a flat line across days the device never measured. The safety
+    // net fires hourly, so anything past one missed wake is the second case.
+    HourlyEntry gap = entry;
+    if (hours_elapsed > HOURLY_REPEAT_FILL_MAX)
+      gap.min_x10 = gap.max_x10 = gap.avg_x10 = HOURLY_NO_DATA;
+
     for (int i = 1; i < hours_elapsed; i++)
-    {
-      historical_data.hourly[historical_data.hourly_idx] = entry;  // repeat last known value
-      historical_data.hourly_idx = (historical_data.hourly_idx + 1) % HOURLY_HISTORY_SIZE;
-      if (historical_data.hourly_count < HOURLY_HISTORY_SIZE)
-        historical_data.hourly_count++;
-    }
+      hourly_append(historical_data.current_hour_start + (time_t)i * 3600, gap);
 
     // Update reference time: the last written entry's start-of-hour
     historical_data.hourly_latest_time = hour_start - 3600;
@@ -386,6 +424,33 @@ static void update_temp_extremes(float temp)
     min_temp_since_boot = temp;
   if (temp > max_temp_since_boot)
     max_temp_since_boot = temp;
+}
+
+// Mean of the hourly averages over the last `window_s`, for the drift record's
+// temperature correlate — docs/clock-drift.md wants to know whether the RC
+// oscillator's rate tracks ambient. Reports how many hours actually contributed
+// so a window longer than the ring's 30-day reach shows up as clipped rather
+// than as a quietly shorter average.
+static int16_t window_mean_ambient_x10(int32_t window_s, uint16_t *hours_out)
+{
+  int32_t want = window_s / 3600;
+  if (want < 1) want = 1;
+  if (want > (int32_t)historical_data.hourly_count)
+    want = historical_data.hourly_count;
+
+  int32_t sum = 0;
+  uint16_t n = 0;
+  for (int32_t i = 0; i < want; i++)
+  {
+    int idx = (int)historical_data.hourly_idx - 1 - (int)i;
+    while (idx < 0) idx += HOURLY_HISTORY_SIZE;
+    const HourlyEntry &e = historical_data.hourly[idx];
+    if (e.min_x10 == HOURLY_NO_DATA) continue;  // device was off for that hour
+    sum += e.avg_x10;
+    n++;
+  }
+  *hours_out = n;
+  return n ? (int16_t)(sum / n) : (int16_t)HOURLY_NO_DATA;
 }
 
 #ifdef MOCK_DISPLAY_DATA
@@ -511,6 +576,17 @@ void setup_serial()
 
 void start_deep_sleep()
 {
+  // Single point for all deferred flash work, so it is trivial to isolate on a
+  // PPK2 trace. Appends already happened inline (a page program is ~0.04mC);
+  // this is the ~4.5mC base snapshot, and it only fires when marked dirty.
+  {
+    HistoryDriftState drift;
+    drift_state_save(&drift);
+    time_t now;
+    time(&now);
+    history_store_flush(&historical_data, &drift, now);
+  }
+
   if (sensor.SupportsUlp())
   {
     // ULP is polling the sensor — it will wake us when temperature changes
@@ -757,6 +833,28 @@ static void maybe_ntp_resync(time_t now)
 
   LOGI("NTP resync: drift was %d ms over %d s (%u attempts failed since last sync)",
        (int)last_drift_ms, (int)last_drift_window_s, (unsigned)resync_fail_count);
+
+  // Journal the observation before clearing resync_fail_count, and snapshot the
+  // drift block at the next sleep. Between them this is what docs/clock-drift.md
+  // asks to be transcribed off the screen daily: the retained ppm ring holds
+  // only DRIFT_PPM_HIST_SIZE (6) samples and dies on any reflash, whereas the
+  // archive keeps every one of them with its correlates.
+  {
+    HistoryDriftSample s = {};
+    s.sync_time = last_sync_time;
+    s.drift_ms = last_drift_ms;
+    s.window_s = last_drift_window_s;
+    s.ppm = (last_drift_window_s >= DRIFT_MIN_WINDOW_S && drift_ppm_count > 0)
+                ? drift_ppm_hist[drift_ppm_count - 1] : 0;
+    // Absolute, not deltas: the host differences consecutive records, so no RTC
+    // variable has to remember the previous values.
+    s.boot_count = (uint32_t)boot_count;
+    s.refresh_count = (uint32_t)display_refresh_count;
+    s.ambient_mean_x10 = window_mean_ambient_x10(last_drift_window_s, &s.ambient_hours);
+    history_store_append_drift(&s);
+  }
+  history_store_mark_base_dirty();
+
   resync_fail_count = 0;
 
   // Only shorten the interval if drift is significant (>= 1 minute).
@@ -1226,8 +1324,14 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
     if (max_battery_mv < battery_mv)
       max_battery_mv = battery_mv;
 
-    temp_history_record(historical_data.temp, &historical_data.temp_count,
-                        now, (int16_t)(temp * 10));
+    // Same plausibility gate as update_hourly_history(): a 1970 timestamp here
+    // would sit ~54 years before every stored point and never leave the window.
+    if (time_is_plausible(now))
+    {
+      temp_history_record(historical_data.temp, &historical_data.temp_count,
+                          now, (int16_t)(temp * 10));
+      history_store_append_sample(now, (int16_t)(temp * 10));
+    }
 
     PPK2_DISPLAY_HIGH();
     display_show_temperature(temp, battery_mv, battery_mv < low_battery_mv,
@@ -1296,6 +1400,55 @@ static void reset_rtc_state()
   rtc_state_version = RTC_STATE_VERSION;
 }
 
+// Pull the history and drift block back out of the flash archive.
+//
+// Deliberately NOT gated on a plausible clock. A first-boot NTP failure is
+// permanent today (on_first_boot() runs only at boot_count==1, and
+// maybe_ntp_resync() returns early while !ntp_synced), and it is common on the
+// XIAO boards — so waiting for a good clock would often mean never restoring at
+// all, leaving 30 days of readable history invisible. The snapshot is
+// internally consistent on its own; the clock is only needed to place *new*
+// readings against it, which update_hourly_history() already refuses to do
+// without one.
+//
+// current_hour_start is left at 0 (reset_rtc_history() zeroed it), which is the
+// existing "first reading after boot" sentinel: no finalize can fire until a
+// reading with a real clock arrives, and the gap between the snapshot and now
+// is then filled with HOURLY_NO_DATA by the normal path.
+static void restore_history_from_flash()
+{
+  HistoryDriftState drift;
+  if (!history_store_restore(&historical_data, &drift))
+  {
+    reset_rtc_history();  // partial reads may have touched it
+    return;
+  }
+  historical_data.self_addr = (uint32_t)&historical_data;
+  historical_data.current_hour_start = 0;
+  historical_data.current_hour_sum_x10 = 0;
+  historical_data.current_hour_sample_count = 0;
+  historical_data.current_hour_min_x10 = TEMP_INIT_MIN_X10;
+  historical_data.current_hour_max_x10 = TEMP_INIT_MAX_X10;
+
+  time_t now;
+  time(&now);
+  drift_state_load(&drift, time_is_plausible(now) &&
+                               now >= (time_t)drift.last_sync_time);
+}
+
+// Same, for the branch where RTC history survived but the state block was
+// reset. The archive's copy is at least as fresh as the one just cleared.
+static void restore_drift_from_flash()
+{
+  HistoryDriftState drift;
+  if (!history_store_restore(nullptr, &drift))
+    return;
+  time_t now;
+  time(&now);
+  drift_state_load(&drift, time_is_plausible(now) &&
+                               now >= (time_t)drift.last_sync_time);
+}
+
 void setup()
 {
   // Must run before anything that can light-sleep (see s_wake_cause).
@@ -1329,11 +1482,14 @@ void setup()
            (unsigned)historical_data.self_addr, (unsigned)(uint32_t)&historical_data);
     reset_rtc_history();
     reset_rtc_state();
+    restore_history_from_flash();  // must run last: reset_rtc_state() would
+                                   // otherwise clobber the restored drift block
   }
   else if (rtc_state_version != RTC_STATE_VERSION)
   {
     LOGI("RTC state version mismatch — resetting state (history preserved)");
     reset_rtc_state();
+    restore_drift_from_flash();  // history survived; the drift block did not
   }
 
   boot_count++;
