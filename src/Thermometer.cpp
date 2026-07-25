@@ -428,12 +428,40 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
     historical_data.current_hour_max_x10 = TEMP_INIT_MAX_X10;
   }
 
-  // First reading after boot — initialize reference time. It names the newest
-  // *finalized* entry and there are none yet, so it sits one hour before the
-  // in-progress hour; the first finalize then lands on the boot hour and
-  // extends_history above is satisfied.
+  // First reading after boot.
   if (historical_data.current_hour_start == 0)
-    historical_data.hourly_latest_time = hour_start - 3600;
+  {
+    if (historical_data.hourly_count == 0)
+    {
+      // Nothing stored. The anchor names the newest *finalized* entry and there
+      // are none yet, so it sits one hour before the in-progress hour; the first
+      // finalize then lands on the boot hour and extends_history is satisfied.
+      historical_data.hourly_latest_time = hour_start - 3600;
+    }
+    else if (hour_start > historical_data.hourly_latest_time + 3600)
+    {
+      // History came back from flash. hourly_latest_time dates the ENTIRE ring —
+      // Display.h derives every entry's hour by counting back from it — so
+      // overwriting it with this boot's hour would silently re-date 30 days of
+      // archived readings and land the derived daily columns on the wrong days.
+      // Keep it, and mark the hours the device was off. The finalize path above
+      // cannot do this: by the time it next runs, current_hour_start is only one
+      // hour back, so hours_elapsed is 1 and no fill happens.
+      int gap = (int)((hour_start - historical_data.hourly_latest_time) / 3600) - 1;
+      if (gap > HOURLY_HISTORY_SIZE)
+        gap = HOURLY_HISTORY_SIZE;
+      // Counting back from hour_start rather than forward from the anchor keeps
+      // the newest fill adjacent to the in-progress hour even when the outage
+      // outran the ring, which is what the anchor must name.
+      HourlyEntry nodata = { HOURLY_NO_DATA, HOURLY_NO_DATA, HOURLY_NO_DATA };
+      for (int i = gap; i >= 1; i--)
+        hourly_append(hour_start - (time_t)i * 3600, nodata);
+      historical_data.hourly_latest_time = hour_start - 3600;
+    }
+    // Otherwise the clock has not passed the newest stored hour (a restored
+    // future-dated archive, or drift): leave the anchor alone and let the
+    // extends_history guard absorb the re-lived hours.
+  }
 
   historical_data.current_hour_start = hour_start;
 
