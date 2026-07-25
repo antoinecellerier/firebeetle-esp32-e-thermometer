@@ -242,6 +242,13 @@ RTC_DATA_ATTR uint32_t bad_pin27_count = 0;
 RTC_DATA_ATTR float min_temp_since_boot = TEMP_INIT_MIN;
 RTC_DATA_ATTR float max_temp_since_boot = TEMP_INIT_MAX;
 
+// Bootstrap budget for the very first sync (see ntp_bootstrap_sync).
+#define NTP_BOOTSTRAP_ASSOC_TRIES     3
+#define NTP_BOOTSTRAP_SNTP_TRIES      3
+#define NTP_BOOTSTRAP_SNTP_TIMEOUT_MS 10000U
+// Wakes between bootstrap retries, doubling to 8x this on repeated failure.
+#define NTP_BOOTSTRAP_FIRST_WAKES     8
+
 // Minimum resync interval (1 day) — floor to avoid hammering WiFi
 #define RESYNC_INTERVAL_MIN  (86400)
 // Maximum resync interval (4 weeks)
@@ -752,11 +759,92 @@ static bool sntp_sync_once(uint32_t timeout_ms)
   return ok;
 }
 
+// Bring the clock up when it has never been set, retrying inside a single WiFi
+// session.
+//
+// The two failure modes cost very differently, so they get different budgets.
+// A failed association is ~15s of radio (~1.5C); a failed SNTP with the
+// association already up is just more waiting on a radio that is already
+// powered, and it is the mode most likely to clear on a second ask. So retry
+// SNTP hard and association gently.
+//
+// Worth real energy because the alternative is worse than a slow clock: with no
+// wall clock the device records nothing at all (see update_hourly_history), so
+// a permanently unsynced device collects nothing.
+static bool ntp_bootstrap_sync(void)
+{
+  for (int assoc = 0; assoc < NTP_BOOTSTRAP_ASSOC_TRIES; assoc++)
+  {
+    if (!wifi_connect())
+    {
+      LOGI("NTP bootstrap: WiFi attempt %d/%d failed", assoc + 1,
+           NTP_BOOTSTRAP_ASSOC_TRIES);
+      continue;
+    }
+    LOGI("Connected to WiFi");
+    wifi_ok = true;
+    for (int s = 0; s < NTP_BOOTSTRAP_SNTP_TRIES; s++)
+    {
+      if (sntp_sync_once(NTP_BOOTSTRAP_SNTP_TIMEOUT_MS))
+      {
+        wifi_disconnect();
+        LOGI("WiFi disconnected");
+        return true;
+      }
+      LOGI("NTP bootstrap: SNTP attempt %d/%d timed out (association held)",
+           s + 1, NTP_BOOTSTRAP_SNTP_TRIES);
+    }
+    wifi_disconnect();
+    LOGI("WiFi disconnected");
+    return false;  // network is up but NTP isn't; re-associating won't help
+  }
+  return false;
+}
+
+// Is a bootstrap retry due on this wake?
+//
+// Counted in wakes, not wall time: next_resync_time arithmetic is useless when
+// the clock is the broken thing (with now ~ 0, now + resync_interval_s lands a
+// simulated day away). Escalates from one attempt per 8 wakes to one per 64,
+// which at the observed rate (~48 refresh wakes + 24 safety-net wakes/day)
+// settles near one attempt per day — the same order the device already accepts
+// for a failing resync, and far off the ~36-108C/day that retrying on every
+// safety-net wake would cost.
+static bool ntp_bootstrap_due(void)
+{
+  uint32_t shift = resync_fail_count < 3 ? resync_fail_count : 3;
+  uint32_t period = (uint32_t)NTP_BOOTSTRAP_FIRST_WAKES << shift;
+  return boot_count > 0 && ((uint32_t)boot_count % period) == 0;
+}
+
 // Attempt NTP resync if due. Measures clock drift and adjusts next interval.
 static void maybe_ntp_resync(time_t now)
 {
   if (!ntp_synced)
-    return;  // never synced — nothing to resync against
+  {
+    // The clock was never set — on_first_boot() ran once and failed. Without
+    // this the device stayed on a 1970 clock until someone reset it, because
+    // on_first_boot() only runs at boot_count == 1.
+    if (!ntp_bootstrap_due())
+      return;
+    LOGI("NTP bootstrap: retrying first sync (%u failures so far)",
+         (unsigned)resync_fail_count);
+    if (!ntp_bootstrap_sync())
+    {
+      resync_fail_count++;
+      return;
+    }
+    time(&last_sync_time);
+    ntp_synced = true;
+    resync_fail_count = 0;
+    if (first_boot_time == 0)
+      first_boot_time = last_sync_time;
+    next_resync_time = last_sync_time + resync_interval_s;
+    LOGI("NTP bootstrap: clock set, resuming normal resyncs");
+    // No drift to measure: the clock was wrong by an unknown amount, not
+    // drifting from a known reference.
+    return;
+  }
   if (next_resync_time == 0)
   {
     // First call after boot — schedule initial resync
@@ -1201,31 +1289,25 @@ void on_first_boot()
   }
 
   // Connect to WiFi with timeout (avoids hanging forever if network is down)
-  LOGI("Connecting to WiFi");
+  LOGI("Connecting to WiFi and synchronizing time");
   set_status_led(rgb(0, 0, 255));
 
-  if (!wifi_connect())
+  // Retries inside one session, and handles its own WiFi teardown. Getting the
+  // clock on the first boot matters more than it used to: without one the
+  // device records no history at all, and a failure here used to be permanent.
+  if (!ntp_bootstrap_sync())
   {
-    // wifi_ok stays false, ntp_synced stays false
+    // wifi_ok reflects whether the association itself worked; ntp_synced stays
+    // false, and maybe_ntp_resync() now retries on later wakes.
+    resync_fail_count++;
+    LOGI("NTP sync failed — time is unreliable, will retry on later wakes");
     return;
   }
-  LOGI("Connected to WiFi");
-  wifi_ok = true;
-
-  // Synchronize time via NTP
-  LOGI("Synchronizing time");
   set_status_led(rgb(0, 255, 0));
-  if (!sntp_sync_once(30000U /* max wait time in ms */))
-    LOGI("NTP sync failed — time is unreliable");
   time(&first_boot_time);
-
-  // Verify sync succeeded (time should be well past epoch)
   ntp_synced = (first_boot_time > 86400 * 365);
   if (ntp_synced)
     last_sync_time = first_boot_time;
-
-  wifi_disconnect();
-  LOGI("WiFi disconnected");
 #endif
 }
 
