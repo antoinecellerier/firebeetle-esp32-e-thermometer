@@ -26,6 +26,19 @@ struct HourlyEntry {
 #define TEMP_HISTORY_SIZE 320
 #define HOURLY_HISTORY_SIZE 720  // 30 days × 24 hours/day
 
+// Retained clock-drift rates (ppm, one per successful NTP resync) with the
+// window each was measured over. Enough to tell a stable oscillator error from
+// a wandering one without waiting for a month of resyncs; at the 1-day floor
+// this is a week of history.
+#define DRIFT_PPM_HIST_SIZE 6
+
+// Shortest window worth keeping a rate from. The drift is derived from a
+// whole-second clock, so a sample's noise floor is ~1s/window: 12ppm over a
+// day, 280ppm over an hour — the latter is the same size as the spread we're
+// trying to measure. In practice the resync interval floor (1 day) keeps
+// windows well above this.
+#define DRIFT_MIN_WINDOW_S (6 * 3600)
+
 // Breadcrumb checkpoints for crash forensics. Thermometer.cpp stamps the
 // current stage into RTC_NOINIT as the wake progresses; after an abnormal
 // reset the surviving value says what the firmware was doing when it died.
@@ -73,8 +86,12 @@ struct DisplayStats {
   bool mock_data;      // true if MOCK_DISPLAY_DATA is defined
   bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
   int32_t clock_drift_ms;    // drift at last NTP resync (positive = clock ahead), 0 = no resync yet
-  int32_t drift_interval_s;  // resync interval when drift was measured (observation window)
+  int32_t drift_window_s;    // measured span the drift accumulated over (since the clock was last set)
   time_t  last_sync_time;    // wall-clock of last successful NTP sync (0 = never)
+  uint16_t resync_fail_count; // resync attempts failed since the last success (0 = healthy)
+  const int16_t *drift_ppm_hist;  // rate of each retained resync, newest last
+  const uint16_t *drift_win_min;  // window each rate was measured over, minutes
+  uint8_t drift_ppm_count;        // valid entries (0..DRIFT_PPM_HIST_SIZE)
 
   // Temperature context
   float previous_temp;

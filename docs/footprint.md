@@ -60,6 +60,7 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | H crash forensics | c6_release | 998400 | 24.6%*** | — | — | — | +15KB bin: espcoredump-to-flash + task-WDT-panic + RTC_NOINIT CrashLog (48B) + on-screen diag |
 | I custom board | thermometer_c6_debug | 1193632 | 29.2%*** | — | — | — | THERMOMETER_C6_BOARD variant: real battery ADC + VBUS sense + EPD float + ext-32k sdkconfig |
 | I | thermometer_c6_release | 1057552 | 25.9%*** | — | — | — | +11KB vs same-tree c6_release (1046480): ADC curve-fitting cali + variant code |
+| J drift telemetry | c6_release | 1041152 | 25.6%*** | 40524 | — | — | measured drift window + ppm history (12B RTC) + wrapped/white-banded status line |
 
 *** Stage F correction: through stages C-D the ACTUAL flashed partition table was
 PlatformIO's default 1MB single-app (PIO ignores the sdkconfig partition choice) —

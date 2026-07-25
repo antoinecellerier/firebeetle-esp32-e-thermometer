@@ -32,6 +32,9 @@
 #ifndef EPD_BLACK
 #define EPD_BLACK 0x0000
 #endif
+#ifndef EPD_WHITE
+#define EPD_WHITE 0xFFFF
+#endif
 // RGB565 red — the exact value GxEPD2_3C routes to its red plane (== GxEPD_RED).
 // Gated by DISPLAY_HAS_RED (see displays.h): on bi-color panels it collapses to
 // EPD_BLACK, so every red draw below is a no-op there without a runtime flag.
@@ -963,16 +966,26 @@ void render_info(Adafruit_GFX &gfx, int16_t x, int16_t y, int16_t w,
   gfx.print(time_str);
 }
 
-void render_footer(Adafruit_GFX &gfx, const Rect &zone,
-                    time_t now, const DisplayStats &stats)
+// Compact span: "45m" under an hour, "7h" under a day, "21d" beyond.
+static void fmt_span(char *buf, size_t n, time_t secs)
 {
-  draw_hline(gfx, zone.x, zone.y, zone.w, EPD_BLACK);
+  if (secs < 0) secs = 0;
+  if (secs < 3600)
+    snprintf(buf, n, "%dm", (int)(secs / 60));
+  else if (secs < 86400)
+    snprintf(buf, n, "%dh", (int)(secs / 3600));
+  else
+    snprintf(buf, n, "%dd", (int)(secs / 86400));
+}
 
-  bool large = (zone.w >= 600);
-  gfx.setFont(large ? &FreeSans12pt7b : &Org_01);
-  gfx.setTextSize(1);
-  gfx.setTextColor(EPD_BLACK);
+#define FOOTER_TEXT_LEN 128
 
+// The footer as one string. Built separately from the drawing so the status
+// indicators can measure it and only repeat the build hash when this line is
+// too long for the panel to show it.
+static void build_footer_text(char *out, size_t n, time_t now,
+                               const DisplayStats &stats)
+{
   time_t uptime = now - stats.first_boot_time;
   int up_days = (int)(uptime / 86400);
   int up_hours = (int)((uptime % 86400) / 3600);
@@ -1002,20 +1015,10 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
   char sync_str[12] = "";
   if (stats.ntp_synced && stats.last_sync_time > 0)
   {
-    time_t age = now - stats.last_sync_time;
-    if (age < 0) age = 0;
-    if (age < 3600)
-      snprintf(sync_str, sizeof(sync_str), " s%dm", (int)(age / 60));
-    else if (age < 86400)
-      snprintf(sync_str, sizeof(sync_str), " s%dh", (int)(age / 3600));
-    else
-      snprintf(sync_str, sizeof(sync_str), " s%dd", (int)(age / 86400));
+    char age[10];
+    fmt_span(age, sizeof(age), now - stats.last_sync_time);
+    snprintf(sync_str, sizeof(sync_str), " s%s", age);
   }
-
-  // Center text vertically in the footer zone
-  int16_t fx, fy; uint16_t fw, fh;
-  gfx.getTextBounds("M", 0, 0, &fx, &fy, &fw, &fh);
-  int16_t footer_text_y = zone.y + zone.h / 2 + (-fy) / 2;
 
   // Compact uptime: skip "0h", show hours only when non-zero
   char uptime_str[12];
@@ -1024,28 +1027,88 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
   else
     snprintf(uptime_str, sizeof(uptime_str), "%dd", up_days);
 
-  gfx.setCursor(zone.x + (large ? 4 : 2), footer_text_y);
-
-  gfx.printf("#%d r%d lp%u",
-              stats.boot_count, stats.display_refresh_count,
-              (unsigned)stats.lp_wake_count);
+  int pos = snprintf(out, n, "#%d r%d lp%u",
+                     stats.boot_count, stats.display_refresh_count,
+                     (unsigned)stats.lp_wake_count);
   if (stats.lp_error_count > 0)
-    gfx.printf(" e%u", (unsigned)stats.lp_error_count);
+    pos += snprintf(out + pos, n - pos, " e%u", (unsigned)stats.lp_error_count);
   if (stats.ulp_reinit_count > 1)
-    gfx.printf(" u%u", (unsigned)stats.ulp_reinit_count);
-  gfx.printf(" %s w:%s mx%.1fV",
-              uptime_str, wake_str,
-              stats.max_battery_mv / 1000.0f);
+    pos += snprintf(out + pos, n - pos, " u%u", (unsigned)stats.ulp_reinit_count);
+  pos += snprintf(out + pos, n - pos, " %s w:%s mx%.1fV",
+                  uptime_str, wake_str, stats.max_battery_mv / 1000.0f);
   if (stats.bad_pin27_count > 0)
-    gfx.printf(" b27:%d", (int)stats.bad_pin27_count);
-  gfx.printf(" %s", GIT_HASH);
+    pos += snprintf(out + pos, n - pos, " b27:%d", (int)stats.bad_pin27_count);
+  pos += snprintf(out + pos, n - pos, " %s", GIT_HASH);
   if (boot_date[0])
-    gfx.printf(" %s", boot_date);
+    pos += snprintf(out + pos, n - pos, " %s", boot_date);
   if (sync_str[0])
-    gfx.printf("%s", sync_str);
+    snprintf(out + pos, n - pos, "%s", sync_str);
+}
+
+void render_footer(Adafruit_GFX &gfx, const Rect &zone,
+                    time_t now, const DisplayStats &stats)
+{
+  draw_hline(gfx, zone.x, zone.y, zone.w, EPD_BLACK);
+
+  bool large = (zone.w >= 600);
+  gfx.setFont(large ? &FreeSans12pt7b : &Org_01);
+  gfx.setTextSize(1);
+  gfx.setTextColor(EPD_BLACK);
+
+  // Center text vertically in the footer zone
+  int16_t fx, fy; uint16_t fw, fh;
+  gfx.getTextBounds("M", 0, 0, &fx, &fy, &fw, &fh);
+  int16_t footer_text_y = zone.y + zone.h / 2 + (-fy) / 2;
+
+  char text[FOOTER_TEXT_LEN];
+  build_footer_text(text, sizeof(text), now, stats);
+  gfx.setCursor(zone.x + (large ? 4 : 2), footer_text_y);
+  gfx.print(text);
 }
 
 // --- Status indicators (top-left corner of temp zone) ---
+
+#define IND_MAX_TOKENS 10
+#define IND_TOKEN_LEN  80
+#define IND_LINE_LEN   128
+
+// Rendered width of a string in the current font, left bearing included.
+static int16_t text_width(Adafruit_GFX &gfx, const char *s)
+{
+  int16_t bx, by; uint16_t bw, bh;
+  gfx.getTextBounds(s, 0, 0, &bx, &by, &bw, &bh);
+  return (int16_t)bw + bx;
+}
+
+// Longest prefix of s that fits in max_w, never less than one character
+// (otherwise a too-narrow zone would loop forever).
+static int fit_prefix(Adafruit_GFX &gfx, const char *s, int16_t max_w)
+{
+  char buf[IND_TOKEN_LEN + 1];
+  int len = (int)strlen(s);
+  if (len > IND_TOKEN_LEN) len = IND_TOKEN_LEN;
+  int best = 1;
+  for (int n = 1; n <= len; n++)
+  {
+    memcpy(buf, s, (size_t)n);
+    buf[n] = '\0';
+    if (text_width(gfx, buf) > max_w)
+      break;
+    best = n;
+  }
+  return best;
+}
+
+// Height one indicator line occupies in the font the zone will use.
+static int16_t indicator_line_h(Adafruit_GFX &gfx, const Layout &L)
+{
+  bool large = (L.dh >= 400 || L.dw >= 600);
+  gfx.setFont(large ? &FreeSans12pt7b : &Org_01);
+  gfx.setTextSize(1);
+  int16_t bx, by; uint16_t bw, bh;
+  gfx.getTextBounds("Mg", 0, 0, &bx, &by, &bw, &bh);
+  return (int16_t)bh + (large ? 6 : 3);
+}
 
 static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
                                        const DisplayStats &stats, time_t now)
@@ -1053,6 +1116,7 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   // Only render when there's an issue — no clutter when things are normal
   bool significant_drift = abs(stats.clock_drift_ms) >= 60000;  // >= 1 minute
   bool debug_build = !stats.power_efficient;
+  bool resync_failing = stats.resync_fail_count > 0;
   // LP errors are only alarm-worthy when they form a meaningful fraction of
   // wake attempts (>=10%). Ignore rare transients and early-boot noise.
   bool lp_errors_significant = stats.lp_wake_count > 0
@@ -1060,44 +1124,119 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
                              && stats.lp_error_count * 10 >= stats.lp_wake_count;
   if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
       && !stats.dummy_sensor && !stats.mock_data && !significant_drift
+      && !resync_failing
       && !debug_build && !lp_errors_significant && stats.crash_count == 0)
     return;
 
-  bool large = (L.dh >= 400 || L.dw >= 600);
-  gfx.setFont(large ? &FreeSans12pt7b : &Org_01);
-  gfx.setTextSize(1);
-  gfx.setTextColor(EPD_BLACK);
+  // Badges, most severe first — the tail is what gets dropped when the panel
+  // runs out of room.
+  char tok[IND_MAX_TOKENS][IND_TOKEN_LEN];
+  int ntok = 0;
 
-  int16_t x = L.temp.x + 4;
-  int16_t y = L.temp.y + (large ? 20 : 6);
-
-  // Render in a line so it's readable. Stacking on multiple lines would
-  // lead to indicators rendered behind other UI elements.
-  gfx.setCursor(x, y);
-  if (debug_build)
+  if (stats.crash_count > 0)
   {
-    char dbg_str[24];
-    snprintf(dbg_str, sizeof(dbg_str), "! DEBUG %ds ", SLEEP_INTERVAL_S);
-    gfx.print(dbg_str);
+    // Crash forensics, e.g. "! PANIC x2 @#273/render 3h pc:42008a3c main".
+    // The boot counter restarts after every crash (RTC_DATA is wiped), so
+    // @#N is relative to the crashed boot's own power-on epoch. Ranked right
+    // behind the hash: it is the one payload that can't be reconstructed from
+    // anywhere else once the screen is gone.
+    static const char *stage_names[] = {
+      "?", "boot", "ulp", "sensor", "ntp", "render", "lpinit", "sleep"};
+    uint8_t st = (stats.crash_stage < sizeof(stage_names) / sizeof(stage_names[0]))
+                 ? stats.crash_stage : 0;
+    char *rst_str = tok[ntok++];
+    int pos = snprintf(rst_str, IND_TOKEN_LEN, "! %s", stats.crash_reason);
+    if (stats.crash_count > 1)
+      pos += snprintf(rst_str + pos, IND_TOKEN_LEN - pos, " x%u",
+                      (unsigned)stats.crash_count);
+    pos += snprintf(rst_str + pos, IND_TOKEN_LEN - pos, " @#%d/%s",
+                    (int)stats.crash_boot_count, stage_names[st]);
+    if (stats.crash_time > 0 && now > (time_t)stats.crash_time)
+    {
+      char age[10];
+      fmt_span(age, sizeof(age), now - (time_t)stats.crash_time);
+      pos += snprintf(rst_str + pos, IND_TOKEN_LEN - pos, " %s", age);
+    }
+    if (stats.crash_pc != 0)
+      snprintf(rst_str + pos, IND_TOKEN_LEN - pos, " pc:%x@%s %s",
+               (unsigned)stats.crash_pc, stats.crash_elf_sha,
+               stats.crash_task);
   }
-  if (stats.dummy_sensor) gfx.print("! DUMMY ");
-  if (stats.mock_data) gfx.print("! MOCK ");
 
-  if (!stats.wifi_ok) gfx.print("! NO WIFI ");
-  else if (!stats.ntp_synced) gfx.print("! NO NTP "); // WiFi connected but NTP failed — different root cause
+  if (!stats.wifi_ok)
+    snprintf(tok[ntok++], IND_TOKEN_LEN, "! NO WIFI");
+  else if (!stats.ntp_synced)  // WiFi connected but NTP failed — different root cause
+    snprintf(tok[ntok++], IND_TOKEN_LEN, "! NO NTP");
 
-  if (!stats.sensor_ok) gfx.print("! SENSOR ");
+  // Resync attempts failing: both the WiFi and the SNTP path just defer, so
+  // without this the only symptom is a clock quietly free-running for another
+  // interval. "! NOSYNC x2 14d" = 2 failures in a row, clock last set 14d ago.
+  if (resync_failing)
+  {
+    char age[10] = "?";
+    if (stats.last_sync_time > 0)
+      fmt_span(age, sizeof(age), now - stats.last_sync_time);
+    snprintf(tok[ntok++], IND_TOKEN_LEN, "! NOSYNC x%u %s",
+             (unsigned)stats.resync_fail_count, age);
+  }
+
+  if (!stats.sensor_ok)
+    snprintf(tok[ntok++], IND_TOKEN_LEN, "! SENSOR");
 
   if (significant_drift)
   {
-    char drift_str[32];
-    int drift_s = (int)(stats.clock_drift_ms / 1000);
-    int interval_d = stats.drift_interval_s / 86400;
-    if (interval_d > 0)
-      snprintf(drift_str, sizeof(drift_str), "! DRIFT %+ds/%dd ", drift_s, interval_d);
-    else
-      snprintf(drift_str, sizeof(drift_str), "! DRIFT %+ds ", drift_s);
-    gfx.print(drift_str);
+    // "! DRIFT -9559s/21d". The window is the measured span since the clock
+    // was last set, not the resync interval — each failed attempt stretches it
+    // by a full interval, and the rate only means something against the span
+    // the drift actually accrued over.
+    char *d = tok[ntok++];
+    int pos = snprintf(d, IND_TOKEN_LEN, "! DRIFT %+ds",
+                       (int)(stats.clock_drift_ms / 1000));
+    if (stats.drift_window_s > 0)
+    {
+      char span[10];
+      fmt_span(span, sizeof(span), stats.drift_window_s);
+      snprintf(d + pos, IND_TOKEN_LEN - pos, "/%s", span);
+    }
+
+    // "-5250ppm n4 ±2%" — the summary that survives missing a resync: the
+    // rate the retained samples agree on, how many there are, and how far the
+    // worst one sits from that rate. Tight over several samples means the RC
+    // error is a constant worth compensating for; wide means it moves, and no
+    // single correction factor would hold.
+    //
+    // Its own token so it wraps onto its own line rather than splitting
+    // mid-number on a narrow panel.
+    if (stats.drift_ppm_count > 0)
+    {
+      // Window-weighted, i.e. total drift over total observed time. Windows
+      // vary (adaptive interval, failed attempts stretching it), and a short
+      // one is the noisier estimate — the ±1s quantisation of an NTP-set
+      // clock is 12ppm over a day but 280ppm over an hour. An unweighted mean
+      // would let the weakest sample pull hardest.
+      int64_t wsum = 0, wtot = 0;
+      for (uint8_t i = 0; i < stats.drift_ppm_count; i++)
+      {
+        wsum += (int64_t)stats.drift_ppm_hist[i] * stats.drift_win_min[i];
+        wtot += stats.drift_win_min[i];
+      }
+      int32_t mean = wtot ? (int32_t)(wsum / wtot) : 0;
+      char *r = tok[ntok++];
+      pos = snprintf(r, IND_TOKEN_LEN, "%+dppm n%u",
+                     (int)mean, (unsigned)stats.drift_ppm_count);
+      if (stats.drift_ppm_count > 1 && mean != 0)
+      {
+        // Widest single deviation from that mean, as a share of it — so
+        // "+-2%" reads the way it looks: every sample landed within 2% of the
+        // rate. ASCII because Org_01 and FreeSans12pt7b stop at 0x7E.
+        int32_t worst = 0;
+        for (uint8_t i = 0; i < stats.drift_ppm_count; i++)
+          worst = max(worst, (int32_t)abs(stats.drift_ppm_hist[i] - mean));
+        int32_t pct = worst * 100 / abs(mean);
+        snprintf(r + pos, IND_TOKEN_LEN - pos, " +-%d%%",
+                 (int)min(pct, (int32_t)999));
+      }
+    }
   }
 
   if (lp_errors_significant)
@@ -1107,45 +1246,145 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
     const char *op_str = (stats.last_lp_op == 1) ? "W"
                        : (stats.last_lp_op == 2) ? "R"
                        : "?";
-    char lp_str[32];
-    snprintf(lp_str, sizeof(lp_str), "! LP %s 0x%x ",
+    snprintf(tok[ntok++], IND_TOKEN_LEN, "! LP %s 0x%x",
              op_str, (unsigned)stats.last_lp_error);
-    gfx.print(lp_str);
   }
 
-  if (stats.crash_count > 0)
+  // Lab-build flags go last, in a single token: they say the screen may be
+  // lying (synthetic reading, debug sleep interval), but they never explain a
+  // field failure — and as three separate badges they would push the crash
+  // payload off a narrow panel.
   {
-    // Crash forensics, e.g. "! PANIC x2 @#273/render 3h pc:42008a3c main".
-    // The boot counter restarts after every crash (RTC_DATA is wiped), so
-    // @#N is relative to the crashed boot's own power-on epoch.
-    static const char *stage_names[] = {
-      "?", "boot", "ulp", "sensor", "ntp", "render", "lpinit", "sleep"};
-    uint8_t st = (stats.crash_stage < sizeof(stage_names) / sizeof(stage_names[0]))
-                 ? stats.crash_stage : 0;
-    char rst_str[80];
-    int pos = snprintf(rst_str, sizeof(rst_str), "! %s", stats.crash_reason);
-    if (stats.crash_count > 1)
-      pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " x%u",
-                      (unsigned)stats.crash_count);
-    pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " @#%d/%s",
-                    (int)stats.crash_boot_count, stage_names[st]);
-    if (stats.crash_time > 0 && now > (time_t)stats.crash_time)
-    {
-      time_t age = now - (time_t)stats.crash_time;
-      if (age < 3600)
-        pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " %dm", (int)(age / 60));
-      else if (age < 86400)
-        pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " %dh", (int)(age / 3600));
-      else
-        pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " %dd", (int)(age / 86400));
-    }
-    if (stats.crash_pc != 0)
-      pos += snprintf(rst_str + pos, sizeof(rst_str) - pos, " pc:%x@%s %s",
-                      (unsigned)stats.crash_pc, stats.crash_elf_sha,
-                      stats.crash_task);
-    gfx.print(rst_str);
-    gfx.print(' ');
+    char lab[IND_TOKEN_LEN];
+    int pos = 0;
+    if (debug_build)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "! DEBUG %ds", SLEEP_INTERVAL_S);
+    if (stats.dummy_sensor)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/DUMMY" : "! DUMMY");
+    if (stats.mock_data)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/MOCK" : "! MOCK");
+    if (pos)
+      snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
   }
+
+  // The build hash goes last, and only when the footer's own copy can't be
+  // read: on a 200px panel that line overflows and the hash is the first field
+  // to fall off the right edge. Nothing above is actionable without knowing
+  // which build produced it, but leading with it would spend the widest line
+  // on a field the panel may already be showing.
+  {
+    bool footer_large = (L.foot.w >= 600);
+    gfx.setFont(footer_large ? &FreeSans12pt7b : &Org_01);
+    gfx.setTextSize(1);
+    char footer_text[FOOTER_TEXT_LEN];
+    build_footer_text(footer_text, sizeof(footer_text), now, stats);
+    if (text_width(gfx, footer_text) > L.foot.w - (footer_large ? 8 : 4))
+      snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", GIT_HASH);
+  }
+
+  bool large = (L.dh >= 400 || L.dw >= 600);
+  gfx.setFont(large ? &FreeSans12pt7b : &Org_01);
+  gfx.setTextSize(1);
+  gfx.setTextColor(EPD_BLACK);
+  // Wrapping is done here, not by Adafruit_GFX: its wrap breaks mid-glyph-run
+  // at the canvas edge and keeps going down the screen, over the temperature.
+  gfx.setTextWrap(false);
+
+  int16_t line_h = indicator_line_h(gfx, L);
+  int16_t x = L.temp.x + 4;
+  int16_t y = L.temp.y + (large ? 20 : 6);
+  int16_t max_w = L.temp.w - 8;
+  int16_t plus_w = text_width(gfx, " +");
+  int16_t min_char_w = text_width(gfx, "M");
+  // Advance of a space: measured as a difference because a space has no ink of
+  // its own for getTextBounds to report.
+  int16_t space_w = text_width(gfx, "M M") - 2 * min_char_w;
+
+  // This runs after the temperature, and each line paints its own white band
+  // first, so overflowing onto a second or third line stays readable — it
+  // covers part of the digits instead of interleaving with them. Bounded by
+  // the temp zone so it can never reach the sparkline below.
+  int16_t max_lines = (int16_t)((L.temp.h - (y - L.temp.y)) / line_h);
+  max_lines = constrain(max_lines, (int16_t)1, (int16_t)3);
+
+  // Greedy pack: badges stay whole where they fit, one too wide for a whole
+  // line is split rather than dropped, and a trailing "+" marks what didn't
+  // fit at all (readable on serial, so the screen only has to say it exists).
+  // Widths are accumulated rather than re-measured on a candidate string —
+  // glyph advances are additive, and it keeps one line buffer on the stack.
+  char line[IND_LINE_LEN];
+  int t = 0;                 // next badge to place
+  const char *rest = NULL;   // unplaced tail of a split badge
+  int16_t lines_drawn = 0;
+
+  while (t < ntok && lines_drawn < max_lines)
+  {
+    bool last_line = (lines_drawn == max_lines - 1);
+    int len = 0;
+    int16_t line_w = 0;
+    line[0] = '\0';
+
+    while (t < ntok)
+    {
+      const char *s = rest ? rest : tok[t];
+      int sl = (int)strlen(s);
+      int sep = len ? 1 : 0;
+      // Reserve room for the "+" only on the last line, and only while
+      // something is still queued behind the badge being placed.
+      int16_t budget = max_w;
+      if (last_line && (rest || t + 1 < ntok))
+        budget -= plus_w;
+      int16_t avail = budget - line_w - (sep ? space_w : 0);
+
+      if (text_width(gfx, s) <= avail && len + sep + sl < IND_LINE_LEN)
+      {
+        if (sep) line[len++] = ' ';
+        memcpy(line + len, s, (size_t)sl);
+        len += sl;
+        line[len] = '\0';
+        line_w = text_width(gfx, line);
+        t++;
+        rest = NULL;
+        continue;
+      }
+      if (len == 0 || text_width(gfx, s) > max_w)
+      {
+        // Badge can never fit a line of its own, so splitting it here beats
+        // flushing a half-empty line and splitting it on the next one anyway.
+        if (avail < min_char_w)
+          break;  // not even one character fits — flush the line as it stands
+        int n = fit_prefix(gfx, s, avail);
+        if (len + sep + n >= IND_LINE_LEN)
+          break;
+        if (sep) line[len++] = ' ';
+        memcpy(line + len, s, (size_t)n);
+        len += n;
+        line[len] = '\0';
+        rest = s + n;
+      }
+      break;  // line is full; the rest goes on the next one
+    }
+
+    if (len == 0)
+      break;  // zone too narrow for even one character — nothing left to draw
+
+    if (last_line && (t < ntok || rest) && len + 3 < IND_LINE_LEN)
+    {
+      line[len++] = ' ';
+      line[len++] = '+';
+      line[len] = '\0';
+    }
+
+    int16_t ly = y + lines_drawn * line_h;
+    int16_t bx, by; uint16_t bw, bh;
+    gfx.getTextBounds(line, x, ly, &bx, &by, &bw, &bh);
+    gfx.fillRect(bx - 1, by - 1, (int16_t)bw + 2, (int16_t)bh + 2, EPD_WHITE);
+    gfx.setCursor(x, ly);
+    gfx.print(line);
+    lines_drawn++;
+  }
+
+  gfx.setTextWrap(true);
 }
 
 // --- Full dashboard render ---

@@ -176,6 +176,40 @@ int main(int argc, char **argv)
                       22.3f, 3842, false,
                       now, &nowtm, crash_stats);
     save_and_convert(cfg.name, "_crash", canvas);
+
+    // Scenario 7: clock drift badge, as seen on the ESP32-E 2026-07-25 —
+    // -9559s accrued over 21d because the day-7 and day-14 resyncs failed.
+    canvas.fillScreen(0xFFFF);
+    // One long post-boot window, then three at the 1-day interval floor.
+    static const int16_t drift_ppm[] = {-5268, -5102, -5390, -5241};
+    static const uint16_t drift_win[] = {21 * 1440, 1440, 1440, 1440};
+    DisplayStats drift_stats = stats;
+    drift_stats.dummy_sensor = false;
+    drift_stats.mock_data = false;
+    drift_stats.power_efficient = true;
+    drift_stats.clock_drift_ms = -9559000;
+    drift_stats.drift_window_s = 21 * 86400;
+    drift_stats.last_sync_time = now - 60;
+    drift_stats.drift_ppm_hist = drift_ppm;
+    drift_stats.drift_win_min = drift_win;
+    drift_stats.drift_ppm_count = 4;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, drift_stats);
+    save_and_convert(cfg.name, "_drift", canvas);
+
+    // Scenario 8: resync failing right now — two attempts lost in a row, so
+    // the clock has been free-running since it was last set 14d ago.
+    canvas.fillScreen(0xFFFF);
+    DisplayStats nosync_stats = drift_stats;
+    nosync_stats.clock_drift_ms = 0;
+    nosync_stats.drift_window_s = 0;
+    nosync_stats.resync_fail_count = 2;
+    nosync_stats.last_sync_time = now - 14 * 86400;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, nosync_stats);
+    save_and_convert(cfg.name, "_nosync", canvas);
   }
 
   return 0;

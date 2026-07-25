@@ -87,7 +87,7 @@ void ulp_check_data_overlap();
 // (struct fields, buffer sizes, semantics).
 // Bump RTC_STATE_VERSION when changing operational state variables below.
 #define RTC_HISTORY_VERSION 0xDA050003
-#define RTC_STATE_VERSION   0xDA050002
+#define RTC_STATE_VERSION   0xDA050003
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -270,8 +270,15 @@ RTC_DATA_ATTR float max_temp_since_boot = TEMP_INIT_MAX;
 RTC_DATA_ATTR time_t next_resync_time = 0;           // when to next attempt NTP resync
 RTC_DATA_ATTR int32_t resync_interval_s = 7 * 86400; // current interval (starts at 1 week)
 RTC_DATA_ATTR int32_t last_drift_ms = 0;             // drift measured at last resync (positive = clock ahead)
-RTC_DATA_ATTR int32_t last_resync_interval_s = 0;    // interval at time of last drift measurement
+RTC_DATA_ATTR int32_t last_drift_window_s = 0;       // measured span the drift accumulated over (NOT the interval setting: failed attempts stretch it)
 RTC_DATA_ATTR time_t last_sync_time = 0;             // wall-clock of last successful NTP sync (0 = never)
+RTC_DATA_ATTR uint16_t resync_fail_count = 0;        // failed resync attempts since the last success
+// Rate history, newest last. One measurement says how far the clock ran off;
+// several say whether the RC oscillator's error is a stable constant (which is
+// what drift compensation would need) or wanders with temperature.
+RTC_DATA_ATTR int16_t drift_ppm_hist[DRIFT_PPM_HIST_SIZE] = {};
+RTC_DATA_ATTR uint16_t drift_win_min[DRIFT_PPM_HIST_SIZE] = {};  // window per rate, for weighting
+RTC_DATA_ATTR uint8_t drift_ppm_count = 0;
 
 // Status flags for display error indicators
 RTC_DATA_ATTR bool wifi_ok = false;
@@ -446,7 +453,8 @@ DisplayStats make_display_stats()
 #else
     false,
 #endif
-    last_drift_ms, last_resync_interval_s, last_sync_time,
+    last_drift_ms, last_drift_window_s, last_sync_time, resync_fail_count,
+    drift_ppm_hist, drift_win_min, drift_ppm_count,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     historical_data.temp, historical_data.temp_count,
     historical_data.hourly, historical_data.hourly_count, hourly_start,
@@ -667,7 +675,9 @@ static void maybe_ntp_resync(time_t now)
   LOGI("NTP resync: connecting to WiFi");
   if (!wifi_connect())
   {
-    LOGI("NTP resync: WiFi failed, deferring to next scheduled resync");
+    resync_fail_count++;
+    LOGI("NTP resync: WiFi failed (%u in a row), deferring to next scheduled resync",
+         (unsigned)resync_fail_count);
     next_resync_time = now + resync_interval_s;
     return;
   }
@@ -681,7 +691,9 @@ static void maybe_ntp_resync(time_t now)
   // looking clock would measure ~0 drift and never actually correct it.
   if (!sntp_sync_once(30000U))
   {
-    LOGI("NTP resync: sync failed, deferring to next scheduled resync");
+    resync_fail_count++;
+    LOGI("NTP resync: sync failed (%u in a row), deferring to next scheduled resync",
+         (unsigned)resync_fail_count);
     wifi_disconnect();
     next_resync_time = now + resync_interval_s;
     return;
@@ -689,24 +701,55 @@ static void maybe_ntp_resync(time_t now)
 
   time_t after_sync;
   time(&after_sync);
+
+  // Window the drift accumulated over: since the clock was last *set* (boot
+  // sync or a previous successful resync), not since the last attempt. Failed
+  // attempts re-arm at +resync_interval_s, so the interval setting understates
+  // the span by a whole multiple after every failure.
+  time_t last_set = (last_sync_time > 0) ? last_sync_time : first_boot_time;
+  last_drift_window_s = (int32_t)(before_sync - last_set);
   last_sync_time = after_sync;
 
   // Drift = what the clock said before sync minus what NTP says now.
   // Positive = clock was ahead, negative = clock was behind.
   // after_sync is the corrected time; before_sync was the drifted time.
   last_drift_ms = (int32_t)(before_sync - after_sync) * 1000;
-  last_resync_interval_s = resync_interval_s;
-  LOGI("NTP resync: drift was %d ms (interval was %d s)",
-       (int)last_drift_ms, (int)resync_interval_s);
+  // Rate in ppm, kept with its window as a short history so the screen can
+  // show whether the oscillator error is a stable constant. Short windows are
+  // dropped rather than averaged in — see DRIFT_MIN_WINDOW_S.
+  if (last_drift_window_s >= DRIFT_MIN_WINDOW_S)
+  {
+    int32_t ppm = (int32_t)((last_drift_ms * 1000LL) / last_drift_window_s);
+    ppm = (ppm > 32767) ? 32767 : (ppm < -32768 ? -32768 : ppm);
+    int32_t win_min = last_drift_window_s / 60;
+    if (win_min > 65535) win_min = 65535;  // saturates at 45 days
+    if (drift_ppm_count == DRIFT_PPM_HIST_SIZE)
+    {
+      memmove(drift_ppm_hist, drift_ppm_hist + 1,
+              sizeof(drift_ppm_hist) - sizeof(drift_ppm_hist[0]));
+      memmove(drift_win_min, drift_win_min + 1,
+              sizeof(drift_win_min) - sizeof(drift_win_min[0]));
+      drift_ppm_count--;
+    }
+    drift_win_min[drift_ppm_count] = (uint16_t)win_min;
+    drift_ppm_hist[drift_ppm_count++] = (int16_t)ppm;
+    LOGI("NTP resync: rate %d ppm over %d min (%u samples retained)",
+         (int)ppm, (int)win_min, (unsigned)drift_ppm_count);
+  }
+
+  LOGI("NTP resync: drift was %d ms over %d s (%u attempts failed since last sync)",
+       (int)last_drift_ms, (int)last_drift_window_s, (unsigned)resync_fail_count);
+  resync_fail_count = 0;
 
   // Only shorten the interval if drift is significant (>= 1 minute).
   // For a low-fidelity EPD thermometer display, sub-minute drift is invisible.
   int32_t abs_drift = abs(last_drift_ms);
   if (abs_drift >= 60000)
   {
-    // Aim for <60s drift at next resync.
-    // target = 60 * interval_s * 1000 / abs_drift_ms
-    int32_t target = (int32_t)((60LL * resync_interval_s * 1000) / abs_drift);
+    // Aim for <60s drift at next resync. The rate is drift over the measured
+    // window, not over the interval setting — using the setting after a run of
+    // failed attempts overstates the rate and shortens the interval too far.
+    int32_t target = (int32_t)((60LL * last_drift_window_s * 1000) / abs_drift);
     if (target < RESYNC_INTERVAL_MIN)
       target = RESYNC_INTERVAL_MIN;
     if (target > RESYNC_INTERVAL_MAX)
@@ -1223,8 +1266,12 @@ static void reset_rtc_state()
   next_resync_time = 0;
   resync_interval_s = 7 * 86400;
   last_drift_ms = 0;
-  last_resync_interval_s = 0;
+  last_drift_window_s = 0;
   last_sync_time = 0;
+  resync_fail_count = 0;
+  memset(drift_ppm_hist, 0, sizeof(drift_ppm_hist));
+  memset(drift_win_min, 0, sizeof(drift_win_min));
+  drift_ppm_count = 0;
   wifi_ok = false;
   ntp_synced = false;
   last_sensor_ok = true;
