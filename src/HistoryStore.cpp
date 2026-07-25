@@ -69,6 +69,10 @@ void history_store_flush(const RtcHistory *, const HistoryDriftState *, time_t) 
 // 2 was REC_SAMPLE: the 24h sparkline is restored from the base snapshot
 // instead, so short-lived data can't crowd out the permanent archive.
 #define REC_DRIFT   3   // occupies two consecutive slots
+// Filler for the final slot when a two-slot record cannot fit before the ring
+// end. Carries a valid CRC and a type nothing dispatches on, so scan and replay
+// step over it; older firmware reads it as a one-slot record it ignores.
+#define REC_PAD     4
 
 // Written once at init. Identity lives here rather than in each base snapshot:
 // it never changes for a given chip, and the host tool reads it from a fixed
@@ -510,12 +514,39 @@ static bool journal_locate(void)
   return true;
 }
 
+// Occupy one slot so it cannot be mistaken for the ring's free gap. A no-op if
+// the slot already holds something.
+static void journal_write_pad(uint32_t off)
+{
+  uint8_t probe[HS_REC];
+  if (!part_read(jrn_abs(off), probe, sizeof(probe))) return;
+  for (size_t i = 0; i < sizeof(probe); i++)
+    if (probe[i] != 0xFF) return;
+
+  HsRec pad;
+  memset(&pad, 0, sizeof(pad));
+  pad.type = REC_PAD;
+  pad.base_seq = (uint16_t)(s_base_seq & 0xFFFF);
+  pad.crc16 = crc16_of(&pad, offsetof(HsRec, crc16));
+  part_write(jrn_abs(off), &pad, sizeof(pad));
+}
+
 static void journal_append(const void *rec, uint8_t slots)
 {
   if (!s_ready || !journal_locate()) return;
 
   uint32_t len = (uint32_t)slots * HS_REC;
-  if (s_cursor + len > s_jrn_size) s_cursor = 0;  // never straddle the ring end
+  if (s_cursor + len > s_jrn_size)
+  {
+    // A two-slot record must not straddle the ring end. Simply wrapping left
+    // the final slot erased forever, and journal_scan() tests for a free slot
+    // BEFORE it tests for a straddle — so that hole was reported as the cursor,
+    // restore skipped every record written after the wrap, and the next append
+    // then erased sector 0 and destroyed them. Pad the slot instead. Only ever
+    // one slot: s_cursor is slot-aligned and records are at most two slots.
+    journal_write_pad(s_cursor);
+    s_cursor = 0;
+  }
 
   // Belt and braces: NOR can only clear bits, so writing over a torn record
   // would silently corrupt it. If the target is not blank, reclaim its sector.

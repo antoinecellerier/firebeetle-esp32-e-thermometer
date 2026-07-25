@@ -250,6 +250,42 @@ int main(int argc, char **argv)
   CHECK(got.hourly_count == saved2.hourly_count, "post-wrap hourly %u != %u",
         got.hourly_count, saved2.hourly_count);
 
+  // ---- 7b. a two-slot record landing on the last slot must not leave a hole ----
+  // REC_DRIFT needs two slots, so at the ring end it has to wrap. Leaving the
+  // final slot erased made it a permanent 0xFF gap that journal_scan() reports
+  // as the cursor ahead of everything written after the wrap.
+  power_on(true);
+  reset_hist();
+  history_store_available();
+  g_hist.hourly_count = 1;
+  history_store_mark_base_dirty();
+  history_store_flush(&g_hist, &g_drift, T0);
+  journal_locate();
+  s_cursor = s_jrn_size - HS_REC;          // park on the very last slot
+  {
+    HistoryDriftSample ds;
+    memset(&ds, 0, sizeof(ds));
+    ds.sync_time = T0;
+    ds.ppm = -5265;
+    history_store_append_drift(&ds);       // must pad the tail, then wrap
+  }
+  CHECK(s_cursor == HS_REC * 2, "drift record did not wrap to slot 0 (cursor 0x%x)",
+        (unsigned)s_cursor);
+  {
+    uint8_t tail[HS_REC];
+    memcpy(tail, g_flash.data() + HS_JOURNAL_OFF + s_jrn_size - HS_REC, HS_REC);
+    CHECK(tail[0] != REC_FREE, "the ring's last slot was left erased");
+  }
+  // A hole would make the scan stop short of the post-wrap records.
+  {
+    HourlyEntry pe = { 500, 510, 505 };
+    history_store_append_hourly(T0 + 7200, &pe);
+  }
+  s_cursor = UINT32_MAX;
+  CHECK(journal_locate(), "cursor lost after the padded wrap");
+  CHECK(s_cursor == HS_REC * 3, "scan stopped at the padded slot (cursor 0x%x)",
+        (unsigned)s_cursor);
+
   // ---- 8. a base gets written without any NTP resync ever succeeding ----
   // Restore needs a base to anchor to, so appending alone must eventually
   // demand one; otherwise a device whose clock never syncs journals records it

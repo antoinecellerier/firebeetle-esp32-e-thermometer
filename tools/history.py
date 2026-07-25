@@ -40,7 +40,9 @@ HS_REC = 16
 
 # Only hourly entries are journaled. The 24h sparkline comes from the base
 # snapshot, which already contains it.
-REC_FREE, REC_HOURLY, REC_DRIFT = 0xFF, 1, 3
+# REC_PAD fills the ring's last slot when a two-slot REC_DRIFT cannot fit before
+# the end; the walk below steps over it like any other type it does not decode.
+REC_FREE, REC_HOURLY, REC_DRIFT, REC_PAD = 0xFF, 1, 3, 4
 
 HOURLY_NO_DATA = -32768
 
