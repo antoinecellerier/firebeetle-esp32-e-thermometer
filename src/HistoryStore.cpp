@@ -697,6 +697,18 @@ static bool store_init(void)
   return true;
 }
 
+// Read granularity for the journal-wide scans below. Sized so a full sweep is
+// ~3.7k flash calls rather than ~119k: the per-call overhead, not the bytes, is
+// what put the rebuild over the task watchdog.
+#define JRN_CHUNK 512u
+
+static bool chunk_is_erased(const uint8_t *p, uint32_t n)
+{
+  for (uint32_t i = 0; i < n; i++)
+    if (p[i] != 0xFF) return false;
+  return true;
+}
+
 // Physical slot of logical entry `i` (0 = oldest, count-1 = newest), matching
 // the mapping Display.h documents and DisplayRenderer walks.
 static inline uint16_t ring_slot(const RtcHistory *h, uint16_t i)
@@ -753,22 +765,50 @@ static void sparkline_backfill(RtcHistory *out)
 // non-record slots it can land on are the second halves of REC_DRIFT entries
 // (~1/day), so false positives are far below one per archive lifetime.
 //
-// ~3.8MB of reads (~1.6s, ~50mC). Only ever on a cold boot that found no base,
-// so it never runs in normal operation.
+// MEASURED on an ESP32-E, 1904KB journal holding 720 records: **2444ms**
+// (~73mC at ~30mA). Dominated by per-call read overhead, ~320us per 512-byte
+// esp_partition_read, not by the CRC work — a full journal adds the CRC for
+// ~122k slots per pass on top. Two earlier estimates of this were wrong by 10x
+// and 3x, which is why the figure is logged at runtime rather than reasoned
+// about; the sleep_ms() yield below is what makes the watchdog margin
+// independent of getting it right.
+//
+// Only ever on a cold boot that found no base, so it never runs in normal
+// operation.
 static bool journal_rebuild_hourly(RtcHistory *out)
 {
   if (!journal_locate()) return false;
+  const uint32_t t_start = ms_now();   // logged below: measure, do not estimate
 
-  uint8_t raw[HS_REC];
+  // Chunked, and erased regions are skipped wholesale. One esp_partition_read
+  // per 16-byte slot meant ~119k calls per pass: that overran the 5s task
+  // watchdog, panicked, and boot-looped the device — and it cost exactly as
+  // much on a freshly erased partition, where there is nothing to find, as on a
+  // full one. A chunk of 0xFF cannot contain a record, so the common case
+  // (nothing to rebuild) now costs one read per chunk and no CRC work at all.
+  uint8_t chunk[JRN_CHUNK];
   time_t newest = 0, oldest = 0;
-  for (uint32_t off = 0; off + HS_REC <= s_jrn_size; off += HS_REC)
+  for (uint32_t base = 0; base < s_jrn_size; base += JRN_CHUNK)
   {
-    if (!part_read(jrn_abs(off), raw, HS_REC)) continue;
-    if (raw[0] != REC_HOURLY || !rec_crc_ok(raw, REC_HOURLY)) continue;
-    const time_t t = (time_t)((const HsRec *)raw)->time;
-    if (!time_is_plausible(t)) continue;
-    if (t > newest) newest = t;
-    if (oldest == 0 || t < oldest) oldest = t;
+    const uint32_t n = (s_jrn_size - base < JRN_CHUNK) ? (s_jrn_size - base)
+                                                       : JRN_CHUNK;
+    // Let IDLE0 run. Chunking alone does not make a FULL journal safe: every
+    // slot still gets a CRC, ~122k of them per pass, and the task watchdog
+    // watches the idle task (that is what it reported when this boot-looped).
+    // ~15 yields across the partition, so the cost is milliseconds and the
+    // margin no longer depends on an estimate being right.
+    if ((base / JRN_CHUNK) % 256 == 0) sleep_ms(1);
+    if (!part_read(jrn_abs(base), chunk, n) || chunk_is_erased(chunk, n))
+      continue;
+    for (uint32_t i = 0; i + HS_REC <= n; i += HS_REC)
+    {
+      const uint8_t *raw = chunk + i;
+      if (raw[0] != REC_HOURLY || !rec_crc_ok(raw, REC_HOURLY)) continue;
+      const time_t t = (time_t)((const HsRec *)raw)->time;
+      if (!time_is_plausible(t)) continue;
+      if (t > newest) newest = t;
+      if (oldest == 0 || t < oldest) oldest = t;
+    }
   }
   if (newest == 0) return false;
 
@@ -782,24 +822,37 @@ static bool journal_rebuild_hourly(RtcHistory *out)
     out->hourly[i] = { HOURLY_NO_DATA, HOURLY_NO_DATA, HOURLY_NO_DATA };
 
   int found = 0;
-  for (uint32_t off = 0; off + HS_REC <= s_jrn_size; off += HS_REC)
+  for (uint32_t base = 0; base < s_jrn_size; base += JRN_CHUNK)
   {
-    if (!part_read(jrn_abs(off), raw, HS_REC)) continue;
-    if (raw[0] != REC_HOURLY || !rec_crc_ok(raw, REC_HOURLY)) continue;
-    const HsRec *r = (const HsRec *)raw;
-    const time_t t = (time_t)r->time;
-    if (t < oldest || t > newest) continue;
-    // Filled linearly from index 0, so hourly_idx below is the write head and
-    // ring_slot() resolves entry 0 to the oldest hour.
-    out->hourly[(uint16_t)((t - oldest) / 3600)] = { r->a, r->b, r->c };
-    found++;
+    const uint32_t n = (s_jrn_size - base < JRN_CHUNK) ? (s_jrn_size - base)
+                                                       : JRN_CHUNK;
+    // Let IDLE0 run. Chunking alone does not make a FULL journal safe: every
+    // slot still gets a CRC, ~122k of them per pass, and the task watchdog
+    // watches the idle task (that is what it reported when this boot-looped).
+    // ~15 yields across the partition, so the cost is milliseconds and the
+    // margin no longer depends on an estimate being right.
+    if ((base / JRN_CHUNK) % 256 == 0) sleep_ms(1);
+    if (!part_read(jrn_abs(base), chunk, n) || chunk_is_erased(chunk, n))
+      continue;
+    for (uint32_t i = 0; i + HS_REC <= n; i += HS_REC)
+    {
+      const uint8_t *raw = chunk + i;
+      if (raw[0] != REC_HOURLY || !rec_crc_ok(raw, REC_HOURLY)) continue;
+      const HsRec *r = (const HsRec *)raw;
+      const time_t t = (time_t)r->time;
+      if (t < oldest || t > newest) continue;
+      // Filled linearly from index 0, so hourly_idx below is the write head and
+      // ring_slot() resolves entry 0 to the oldest hour.
+      out->hourly[(uint16_t)((t - oldest) / 3600)] = { r->a, r->b, r->c };
+      found++;
+    }
   }
 
   out->hourly_count = n;
   out->hourly_idx = (uint16_t)(n % HOURLY_HISTORY_SIZE);
   out->hourly_latest_time = newest;
-  LOGI("HistoryStore: no base — rebuilt %u hours from %d journal records",
-       (unsigned)n, found);
+  LOGI("HistoryStore: no base — rebuilt %u hours from %d journal records in %ums",
+       (unsigned)n, found, (unsigned)(ms_now() - t_start));
   return true;
 }
 

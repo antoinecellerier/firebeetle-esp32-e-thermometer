@@ -7,3 +7,5 @@
 
 // HistoryStore times its flash writes; the host harness has no real clock cost.
 static inline uint32_t ms_now(void) { return 0; }
+// vTaskDelay on device; nothing to yield to here.
+static inline void sleep_ms(uint32_t) {}

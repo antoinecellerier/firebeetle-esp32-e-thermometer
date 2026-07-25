@@ -39,9 +39,15 @@ const esp_partition_t *esp_partition_find_first(esp_partition_type_t,
   return g_have_part ? &g_part : nullptr;
 }
 
+// Counted, because on real hardware it is the per-CALL overhead that matters,
+// not the bytes: a scan doing one read per 16-byte slot overran the 5s task
+// watchdog and boot-looped the device. Bytes are free here, calls are not.
+static size_t g_read_count;
+
 esp_err_t esp_partition_read(const esp_partition_t *, size_t off, void *dst, size_t n)
 {
   if (off + n > g_flash.size()) return -1;
+  g_read_count++;
   memcpy(dst, g_flash.data() + off, n);
   return ESP_OK;
 }
@@ -374,6 +380,28 @@ int main(int argc, char **argv)
     CHECK(got.temp_count > 0 &&
               (time_t)got.temp[got.temp_count - 1].timestamp == T0 + 39 * 3600,
           "backfilled sparkline does not end at the newest hour");
+  }
+
+  // ---- 9a2. the rebuild must stay cheap on an empty/erased journal ----
+  // This is the case a cold boot right after erase_flash hits, and it has to be
+  // fast: the first version scanned slot by slot, took >5s on real flash, and
+  // tripped the task watchdog into a boot loop. Bytes are free in this harness,
+  // so bound the CALL count — that is what costs on hardware.
+  power_on(true);
+  reset_hist();
+  history_store_available();
+  {
+    // A wiped partition with a store header and nothing else.
+    g_read_count = 0;
+    RtcHistory empty;
+    memset(&empty, 0, sizeof(empty));
+    HistoryDriftState emptyd;
+    CHECK(!history_store_restore(&empty, &emptyd),
+          "nothing to restore from an empty journal");
+    const size_t slots = s_jrn_size / HS_REC;
+    CHECK(g_read_count < slots / 8,
+          "empty-journal rebuild did %zu flash reads over %zu slots — "
+          "not skipping erased regions", g_read_count, slots);
   }
 
   // ---- 9b. a format bump must never erase the archive ----
