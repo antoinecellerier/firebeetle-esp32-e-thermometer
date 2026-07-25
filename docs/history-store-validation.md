@@ -29,6 +29,30 @@ pass in `make -C tools/hstest`.
 | 8 | `erase_flash` | clean start, no boot loop |
 | 9 | PPK2 | append/base/erase costs vs the ~0.04/4.5/2 mC estimates |
 
+## Measured flash cost (2026-07-25, ESP32-E, `-DHISTORY_BASE_EVERY_WAKE`)
+
+Timed on-device around the flash calls, n=4 per variant, tight spread. Only the
+**durations** are measured here; the current is assumed and is what a PPK2 pass
+would pin down.
+
+| Phase | Time | Note |
+|---|---|---|
+| erase 2 sectors (8KB) | **107 ms** | ~53 ms/sector — set by the flash part, not by CPU speed |
+| program 6.4KB payload | **25 ms** | one page-aligned write |
+| read back + CRC32 | **7 ms** | |
+| **total per base snapshot** | **140 ms** | ~5.6 mC at an assumed 40 mA |
+
+Writing the payload as three calls (header, RtcHistory, drift block) instead of
+one cost **66 ms** rather than 25: the middle write started mid-page, so nearly
+every 256-byte page took an extra program cycle. Batching into one page-aligned
+write took 21% off the whole snapshot and is simpler code. Estimate before
+measuring was 13 ms for this phase — off by 5x.
+
+Extrapolations from the erase rate: the one-time format is 480 sectors ≈ 26 s
+(the log's "~24s" guess holds). At the current ~daily base cadence the store
+costs ~6 mC/day; one base per hour instead would be ~134 mC/day, ~1.9% of the
+~7.1 C/day budget.
+
 ## Known cosmetic issue
 
 `store created` in the header is stamped during `store_format()`, which runs in

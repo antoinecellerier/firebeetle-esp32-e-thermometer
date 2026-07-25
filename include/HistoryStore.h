@@ -31,9 +31,16 @@
 // depend on how twitchy the display was.
 //
 // Energy: appending to erased NOR needs no erase, which is what makes this
-// affordable. A 16-byte program costs ~0.04mC against a 45-112mC display
-// refresh. The daily base snapshot (~4.5mC) dominates the ~5.5mC/day total,
-// well under 0.1% of the daily budget. See docs/notes.md.
+// affordable — a 16-byte program costs a fraction of a mC against a 45-112mC
+// display refresh.
+//
+// The base snapshot dominates, and it is MEASURED on an ESP32-E rather than
+// estimated (docs/history-store-validation.md): 140ms total — 107ms to erase
+// two sectors (~53ms each, set by the flash part, not by anything firmware
+// controls), 25ms to program 6.4KB, 7ms to read back and verify. At an assumed
+// ~40mA active current that is ~5.6mC, so at the current ~daily cadence the
+// whole store costs ~6mC/day, under 0.1% of the budget. Writing a base every
+// hour instead would be ~134mC/day, ~1.9%.
 
 #include <stdbool.h>
 #include <stdint.h>

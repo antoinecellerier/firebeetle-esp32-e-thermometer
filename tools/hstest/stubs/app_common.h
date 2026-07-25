@@ -4,3 +4,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #define LOGI(str, ...) printf(str "\n", ##__VA_ARGS__)
+
+// HistoryStore times its flash writes; the host harness has no real clock cost.
+static inline uint32_t ms_now(void) { return 0; }
