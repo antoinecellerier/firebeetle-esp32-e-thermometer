@@ -1,11 +1,14 @@
-# Host-side deps for history.py. Only needed for the `backup` and `restore`
+# Host-side deps. esptool is only needed for history.py's `backup` and `restore`
 # subcommands; `dump` and `merge` are stdlib-only and work on a saved image.
+# pyserial is only needed for devserial.py.
 #
-# PlatformIO already ships a usable esptool, so the zero-install path is
+# PlatformIO already ships both, so the zero-install path is
 #   ~/.platformio/penv/bin/python3 tools/history.py ...
+#   ~/.platformio/penv/bin/python3 tools/devserial.py boot
 # (that penv currently resolves to esptool 4.11.0 despite its dist metadata
 # claiming 5.1.2 — history.py uses the ESPLoader methods common to both).
 #
 # For a standalone venv:
 #   python3 -m venv .venv && .venv/bin/pip install -r tools/requirements.txt
 esptool>=4.6
+pyserial>=3.5
