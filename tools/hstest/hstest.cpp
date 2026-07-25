@@ -318,7 +318,22 @@ int main(int argc, char **argv)
 
     mock_fill_hourly(now, g_hist.hourly, &g_hist.hourly_count,
                      &g_hist.hourly_idx, &g_hist.hourly_latest_time);
-    mock_fill_sparkline(now, g_hist.temp, &g_hist.temp_count);
+    // argv[6] == "ramp" replaces the sparkline with a clean 10->30C diagonal at
+    // a fixed 30min spacing. Nothing the room or MockData produces looks like
+    // that, so seeing it on the 24h chart proves the flash path unambiguously.
+    if (argc > 6 && strcmp(argv[6], "ramp") == 0)
+    {
+      g_hist.temp_count = 0;
+      for (int i = 0; i < 48; i++)
+        temp_history_record(g_hist.temp, &g_hist.temp_count,
+                            now - (time_t)(47 - i) * 1800,
+                            (int16_t)(100 + i * (300 - 100) / 47));
+      printf("sparkline: 10.0-30.0C ramp, 48 points at 30min\n");
+    }
+    else
+    {
+      mock_fill_sparkline(now, g_hist.temp, &g_hist.temp_count);
+    }
     // Journal the ring as well, so the archive (not just the base) is populated
     // and a restore exercises replay rather than only the snapshot.
     for (uint16_t k = 0; k < g_hist.hourly_count; k++)
@@ -329,11 +344,18 @@ int main(int argc, char **argv)
                   (time_t)(g_hist.hourly_count - 1 - k) * 3600;
       history_store_append_hourly(hr, &g_hist.hourly[idx]);
     }
+    // A self-consistent drift block: an interval the scheduler will accept,
+    // and a ppm sample paired with the window it was measured over. Leaving
+    // either unset is not harmless — a zero interval schedules a WiFi resync
+    // on every wake, and a zero window makes the on-screen weighted mean
+    // collapse to +0ppm.
+    g_drift.resync_interval_s = 86400;
     g_drift.last_sync_time = now;
-    g_drift.drift_ppm_count = 1;
-    g_drift.drift_ppm_hist[0] = -5265;
     g_drift.last_drift_ms = -9559000;
     g_drift.last_drift_window_s = 1814400;
+    g_drift.drift_ppm_count = 1;
+    g_drift.drift_ppm_hist[0] = -5265;
+    g_drift.drift_win_min[0] = 1814400 / 60;
     history_store_mark_base_dirty();
     history_store_flush(&g_hist, &g_drift, now);
 

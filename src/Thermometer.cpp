@@ -298,15 +298,36 @@ static void drift_state_save(HistoryDriftState *d)
 // after a power-cycle. The rates themselves are timeless and always restored.
 static void drift_state_load(const HistoryDriftState *d, bool trust_clock)
 {
+  // Everything here is sanitized, not trusted. Flash content can be stale,
+  // truncated, or injected by tools/history.py, and this block feeds the WiFi
+  // scheduler — an out-of-range interval is a battery problem, not a cosmetic
+  // one. A restored resync_interval_s of 0 would make next_resync_time land on
+  // `now`, so every subsequent wake would bring up WiFi (1.5-4.5C per failed
+  // attempt, docs/clock-drift.md).
   resync_interval_s = d->resync_interval_s;
+  if (resync_interval_s < RESYNC_INTERVAL_MIN) resync_interval_s = RESYNC_INTERVAL_MIN;
+  if (resync_interval_s > RESYNC_INTERVAL_MAX) resync_interval_s = RESYNC_INTERVAL_MAX;
+
   last_drift_ms = d->last_drift_ms;
   last_drift_window_s = d->last_drift_window_s;
   resync_fail_count = d->resync_fail_count;
-  drift_ppm_count = d->drift_ppm_count;
-  if (drift_ppm_count > DRIFT_PPM_HIST_SIZE)
-    drift_ppm_count = DRIFT_PPM_HIST_SIZE;
-  memcpy(drift_ppm_hist, d->drift_ppm_hist, sizeof(drift_ppm_hist));
-  memcpy(drift_win_min, d->drift_win_min, sizeof(drift_win_min));
+
+  // Keep only samples with a real measurement window. maybe_ntp_resync() never
+  // records one below DRIFT_MIN_WINDOW_S, so a zero window means corrupt or
+  // synthetic data; it contributes nothing to the window-weighted mean but
+  // would still inflate the "nN" sample count on screen.
+  drift_ppm_count = 0;
+  memset(drift_ppm_hist, 0, sizeof(drift_ppm_hist));
+  memset(drift_win_min, 0, sizeof(drift_win_min));
+  uint8_t n = d->drift_ppm_count;
+  if (n > DRIFT_PPM_HIST_SIZE) n = DRIFT_PPM_HIST_SIZE;
+  for (uint8_t i = 0; i < n; i++)
+  {
+    if (d->drift_win_min[i] == 0) continue;
+    drift_win_min[drift_ppm_count] = d->drift_win_min[i];
+    drift_ppm_hist[drift_ppm_count++] = d->drift_ppm_hist[i];
+  }
+
   if (trust_clock)
     last_sync_time = (time_t)d->last_sync_time;
 }
