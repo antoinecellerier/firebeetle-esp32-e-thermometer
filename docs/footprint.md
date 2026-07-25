@@ -61,6 +61,8 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | I custom board | thermometer_c6_debug | 1193632 | 29.2%*** | — | — | — | THERMOMETER_C6_BOARD variant: real battery ADC + VBUS sense + EPD float + ext-32k sdkconfig |
 | I | thermometer_c6_release | 1057552 | 25.9%*** | — | — | — | +11KB vs same-tree c6_release (1046480): ADC curve-fitting cali + variant code |
 | J drift telemetry | c6_release | 1041152 | 25.6%*** | 40524 | — | — | measured drift window + ppm history (12B RTC) + wrapped/white-banded status line |
+| K flash history | esp32e_release | 1000768 | 47.7%**** | 39576 | — | 6544 | HistoryStore + NTP bootstrap retry |
+| K | c6_release | 1053536 | 50.2%**** | 40564 | — | 6456 | +12KB bin vs J; **0 bytes RTC** — the store derives its state from flash so `historical_data` doesn't move (60B of ULP_DATA_BASE headroom left on ESP32-E) |
 
 *** Stage F correction: through stages C-D the ACTUAL flashed partition table was
 PlatformIO's default 1MB single-app (PIO ignores the sdkconfig partition choice) —
@@ -69,6 +71,12 @@ official platform's stricter size check exposed it. Fixed with a repo-owned
 partitions.csv (3968KB factory app + 64KB coredump) referenced by both PIO
 (board_build.partitions) and idf.py (CONFIG_PARTITION_TABLE_CUSTOM). Flash%
 figures above marked ** were computed against board flash, not the app slot.
+
+**** Stage K shrank the app slot to 2048KB to make room for the 1920KB `history`
+partition, so the Flash% denominator halves here and the jump from ~26% to ~50%
+is the denominator moving, not the binary growing. As always, `.bin bytes` is
+the only apples-to-apples column. 2048KB still leaves ~2x headroom over a
+~1.05MB binary.
 
 Behavioral baseline (2026-07-03): sim screenshots saved (28 PNGs, all scenarios render);
 C6 deep-sleep ~15µA (PPK2, prior measurement). Tag: `pre-idf-migration`.

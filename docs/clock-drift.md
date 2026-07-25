@@ -23,10 +23,20 @@ Surfaced four ways:
   age since the clock was last set)
 - footer `s<N><m|h|d>` token = age of the last successful sync
 
-All of it lives in `RTC_DATA_ATTR`, so it is lost on power-cycle, flash, or
-panic reset — hence this file. The device retains the last
-`DRIFT_PPM_HIST_SIZE` (6) rates, enough to see stability at a glance without
-catching each resync, but not enough to survive the battery coming out.
+The on-screen copy lives in `RTC_DATA_ATTR` and is still lost on power-cycle,
+flash, or panic reset, and the device only retains the last
+`DRIFT_PPM_HIST_SIZE` (6) rates. **Every observation is also journaled to the
+`history` flash partition**, which survives all three and is not capped at 6:
+
+```
+~/.platformio/penv/bin/python3 tools/history.py backup
+python3 tools/history.py dump hist-*.bin --drift
+```
+
+That emits this table's columns directly — drift, window, ppm, the mean ambient
+over the window, and the boot/refresh deltas — so transcribing off the screen is
+now a cross-check rather than the only record. Keep appending rows here anyway:
+this file is where the interpretation lives.
 
 ### What the rate summary means
 
@@ -139,12 +149,21 @@ compensate.
 The payoff is not really display accuracy (7.6min on an e-paper thermometer
 whose reading is already minutes stale). It is:
 
-1. **Energy.** Floor is 19.4µA = 1.68 C/day; refreshes add ~2.7 C/day at one
-   per hour. A successful WiFi+NTP wake is **unmeasured anywhere in this repo**
+1. **Energy.** Floor is 19.4µA = 1.68 C/day; refreshes add ~5.4 C/day at the
+   **measured** rate of ~2/hour (1077 refreshes over 21d17h = 49.6/day; 860 over
+   18d17h = 46.0/day — this section originally assumed one per hour, i.e. half).
+   A successful WiFi+NTP wake is **unmeasured anywhere in this repo**
    — the only defensible construction is 20.6mC (measured active phase) plus
    radio-on time. A *failed* attempt burns 15s (association timeout) or 45s
-   (SNTP timeout too), i.e. 1.5–4.5 C, up to a full day's budget. With 2 of 3
-   attempts failing here, going from 365 attempts/year to 13 is the real prize.
+   (SNTP timeout too), i.e. 1.5–4.5 C — a fifth to two thirds of a day's ~7.1
+   C budget. With 2 of 3 attempts failing here, going from 365 attempts/year to
+   13 is the real prize.
+
+   This number is also what sets the first-sync retry policy in
+   `maybe_ntp_resync()`: retrying a never-set clock on every hourly safety-net
+   wake would cost 36–108 C/day and flatten the battery in a day or two, so the
+   bootstrap retries hard *within* one session (where the radio is already up
+   and the marginal cost is small) and then backs off to ~1 attempt/day.
 2. **The RTC-rendezvous design** in [multi-device-research.md](multi-device-research.md)
    (master wakes 200ms early, listens 500ms) is impossible at 455s/day. At ±1%
    residual the error after an hour is 0.16s, which fits.
@@ -193,11 +212,18 @@ reading, all from the screen — no firmware support needed:
 | footer | `s<age>`, uptime `NdNh` | confirms the sample is fresh and the window is real |
 | 30-day chart | that day's min/max | the temperature correlate |
 
-`DRIFT_PPM_HIST_SIZE` is 6, so at the floor the ring holds exactly six days and
-the seventh sample evicts the first — transcribe daily rather than reading the
-ring at the end. Stay on battery: tethering for serial changes charger and
-regulator dissipation, hence die temperature, perturbing the thing being
-measured.
+Every one of those correlates is now also journaled per resync, so the run no
+longer depends on catching each day: `tools/history.py dump <backup> --drift`
+emits the same columns with the boot/refresh deltas already differenced, and it
+is not capped at `DRIFT_PPM_HIST_SIZE` (6) the way the on-screen ring is. The
+archive also survives a reflash or a panic, so the run is no longer destroyed by
+one.
+
+Reading it back does cost the device its in-progress hour — entering download
+mode resets the chip — so harvest at the end of the run, or on days you were
+going to read the screen anyway. Stay on battery meanwhile: tethering for serial
+changes charger and regulator dissipation, hence die temperature, perturbing the
+thing being measured.
 
 ### Decision rules once ~6 samples exist
 

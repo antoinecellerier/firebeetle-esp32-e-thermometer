@@ -7,9 +7,18 @@ pio run -e dfrobot_firebeetle2_esp32e_debug    # ESP32-E (default env)
 pio run -e seeed_xiao_esp32c6_debug            # C6
 pio run -e thermometer_c6_debug                # custom rev A board (THERMOMETER_C6_BOARD)
 make -C tools/sim screenshots                  # render all display sizes → tools/mock_*.png
+make -C tools/hstest                           # HistoryStore checks (host, no hardware)
+make -C tools/hstest sample                    # + cross-check the Python decoder
 ```
 
 IMPORTANT: After any display/rendering change, run the simulator and check the PNGs before considering the work done. The simulator compiles `DisplayRenderer.cpp` natively with `g++` and shares all include/ headers with the firmware — it's the fastest feedback loop.
+
+IMPORTANT: After any `HistoryStore.cpp` or on-flash-format change, run
+`make -C tools/hstest sample`. It compiles the real store against a simulated
+NOR flash (writes clear bits, like the hardware) and covers the ring wrap, which
+is ~4.6 years out on a device and would otherwise ship untested. The `sample`
+target decodes a C-written image with `tools/history.py`, which is what keeps
+the two implementations on one format.
 
 ## Build system (pure ESP-IDF)
 
@@ -35,11 +44,16 @@ configure; GIT_HASH shows the fallback outside PlatformIO).
 - **sdkconfig**: authored `sdkconfig.defaults` + `sdkconfig.defaults.<target>`
   are tracked; generated `sdkconfig.<env>` files are gitignored. CPU is fixed
   at 80MHz at build time.
-- **Partition table lives in `partitions.csv`** (3968KB single app, no OTA) and
-  is referenced from BOTH `board_build.partitions` (PlatformIO — which IGNORES
-  the sdkconfig partition selection and always generates from this option) and
+- **Partition table lives in `partitions.csv`** (2048KB single app, no OTA;
+  1920KB `history` data partition) and is referenced from BOTH
+  `board_build.partitions` (PlatformIO — which IGNORES the sdkconfig partition
+  selection and always generates from this option) and
   `CONFIG_PARTITION_TABLE_CUSTOM_FILENAME` (idf.py). Keep them pointing at the
   same file.
+- **`history` is at a fixed offset (0x10000) and must stay there.** It comes
+  before `factory` so a future resize grows it upward and leaves written archive
+  content in place; moving its start orphans years of data. Changing the table
+  relocates the app, so that one upload must not be interrupted.
 - **Never name a project header like an IDF-internal one** — IDF's mbedtls
   exposes a private `common.h` that shadowed ours (hence `app_common.h`).
 - **PlatformIO's espidf builder feeds every file in `ulp/` to the active ULP
@@ -59,8 +73,10 @@ configure; GIT_HASH shows the fallback outside PlatformIO).
 - **ULP and RTC_DATA_ATTR share the same 8KB** at `0x50000000`. `ULP_DATA_BASE` must be past all `.rtc.data`/`.rtc.force_slow` sections. The post-build script `post_build_check_rtc.py` verifies this; a runtime check in `ulp_check_data_overlap()` also aborts on overlap. `time_t` is 8 bytes on both ESP32 and C6 with ESP-IDF 5.x. On ESP32-E, `CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout ULP_DATA_BASE assumes.
 - **Footprint & build-time ledger**: `docs/footprint.md` — append a row after significant changes.
 - **Clock drift logbook**: `docs/clock-drift.md` — append a row whenever a
-  `! DRIFT` badge or `NTP resync: drift was ...` line is observed; the on-device
-  measurement is RTC-only and dies on power-cycle.
+  `! DRIFT` badge or `NTP resync: drift was ...` line is observed. Every
+  observation is also journaled to flash with its correlates, so
+  `tools/history.py dump <backup> --drift` is the easier source and it survives
+  reflashing.
 
 ## Custom PCB (hardware/thermometer-c6)
 
@@ -74,7 +90,20 @@ KiCad schematic (`make check` gates everything), never hand-edit the
 - ULP variant: `SOC_ULP_FSM_SUPPORTED` (ESP32-E) vs `SOC_LP_CORE_SUPPORTED` (C6); unified `HAS_ULP_SUPPORT` macro
 - Temperature storage: `int16_t` × 10 (223 = 22.3°C)
 - Chart styling: thick solid for primary curve (avg), arc-length dotted via `draw_spline_dotted` (~2px spacing) for envelope (min/max)
-- All persistent state uses `RTC_DATA_ATTR`; survives deep sleep but NOT power-on reset (flash/battery swap). Bump `RTC_HISTORY_VERSION` when changing the `RtcHistory` struct, bump `RTC_STATE_VERSION` for other RTC variable changes. The `self_addr` field in `historical_data` auto-detects linker address shifts.
+- All persistent state uses `RTC_DATA_ATTR`; survives deep sleep but NOT power-on reset (flash/battery swap). Bump `RTC_HISTORY_VERSION` when changing the `RtcHistory` struct (now in `include/RtcHistory.h`), bump `RTC_STATE_VERSION` for other RTC variable changes. The `self_addr` field in `historical_data` auto-detects linker address shifts.
+- **History outlives RTC**: `src/HistoryStore.cpp` mirrors the sparkline, the
+  hourly ring and the drift block to the `history` flash partition, so they
+  survive reflash, panic and battery swap. A cold boot restores from flash.
+  Only `esptool erase_flash` destroys it. An `RTC_HISTORY_VERSION` bump does
+  not: the snapshot stores the buffer geometry and zero-fills a shorter stored
+  payload, so appending a field stays non-destructive.
+- **Nothing is recorded without a plausible clock** (`time_is_plausible()`).
+  Entries are filed by clock hour, so a 1970 timestamp files them ~54 years
+  before everything stored; the device shows restored history and the existing
+  `! NOSYNC` badge instead.
+- Adding an `RTC_DATA_ATTR` variable shifts `historical_data` and eats
+  `ULP_DATA_BASE` headroom (60 bytes spare on ESP32-E). `HistoryStore` therefore
+  derives its state from flash rather than adding any.
 
 ## Commit style
 
