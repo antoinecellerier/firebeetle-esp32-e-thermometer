@@ -53,6 +53,21 @@ Extrapolations from the erase rate: the one-time format is 480 sectors ≈ 26 s
 costs ~6 mC/day; one base per hour instead would be ~134 mC/day, ~1.9% of the
 ~7.1 C/day budget.
 
+## Before starting the real drift collection
+
+**The board currently holds synthetic data** (720 injected hourly entries, a
+ramp sparkline, and a fabricated drift sample). Wipe it first, or the fake
+sample joins the retained ring and the first real measurement is computed
+against an invented `last_sync_time`:
+
+```bash
+~/.platformio/penv/bin/esptool --port /dev/ttyUSB0 erase_flash   # or erase_region 0x10000 0x1E0000
+pio run -e dfrobot_firebeetle2_esp32e_debug -t upload
+```
+
+Also note `include/local-secrets.h` was switched to this rig (`USE_154_Z90` +
+`USE_BMP390L`) from the C6 config; switch it back before building for the C6.
+
 ## Known cosmetic issue
 
 `store created` in the header is stamped during `store_format()`, which runs in
@@ -74,3 +89,7 @@ than a 1970 date; not worth a format change.
 | 2 | 2026-07-25 | **PASS** | Hourly path confirmed once the clock crossed 15:00Z: `1 hourly` covering `2026-07-25 14:00:00Z` at 29.0/29.2/29.1 °C — min, max and avg all distinct, so the accumulator works, not just the append. |
 | — | 2026-07-25 | **PASS** | Format 2 (hourly-only journaling) re-formats on first boot as intended, and restores with the sparkline sourced wholly from the base: `History restored: 0 hourly (+0 replayed), 9 sparkline, base seq 13`. |
 | — | 2026-07-25 | **PASS** | **Synthetic archive injection.** `hstest --inject <size> <mac> <now> <file>` builds a full 1920KB image with the *real* store code — so it cannot disagree with what the firmware writes — filled from `MockData.h` and stamped with this board's MAC. `history.py restore` accepted it (MAC matched), and the device came up with `History restored: 720 hourly (+0 replayed), 62 sparkline, base seq 1` and refreshed. Reading it back gives 720 rows spanning 2026-06-25 15:00Z .. 2026-07-25 14:00Z with sane values. This is how to get a populated 30-day chart without waiting 30 days. |
+| — | 2026-07-25 | **PASS** | **30-day chart confirmed against the injected series.** On-screen dip reported at "around July 8"; the coldest day in the injected data is 2026-07-08 at 19.3°C daily avg. Daily aggregates (what the 200x200 panel plots) run 16.8-26.1°C, consistent with the observed 24°C gridline. |
+| — | 2026-07-25 | **PASS** | **24h sparkline confirmed via a ramp.** `--inject ... ramp` replaces the sparkline with a 10.0→30.0°C diagonal at fixed 30min spacing — a shape neither the room nor `MockData.h` produces. Restored as 48 points (100→300 x10, 1800s apart) and observed as a clean diagonal on the panel. Settles that the 24h chart is fed from flash, not from anything compiled in. |
+| — | 2026-07-25 | note | Two earlier observations on the mock sparkline were **not** faults: the flat stretch "up to 0h" is `MockData.h`'s deliberate 6h flat carry-in (a spline regression case; 21:41Z = 23:41 CEST, hence 0h on screen), and >1 point/hour is correct — the 24h chart records per display refresh, only the 30-day chart is hourly. |
+| — | 2026-07-25 | **BUG FOUND** | Injection exposed that `drift_state_load()` trusted flash: an injected `resync_interval_s = 0` puts `next_resync_time` on `now`, so **every wake would bring up WiFi** (1.5-4.5C per failed attempt). Now clamped, and drift samples with a zero measurement window are dropped rather than inflating the on-screen `nN`. Badge went `+0ppm n1` → `-5265ppm n1`. |
