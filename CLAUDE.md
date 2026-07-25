@@ -58,6 +58,9 @@ configure; GIT_HASH shows the fallback outside PlatformIO).
 - **Sensor/display selection lives in `include/local-secrets.h`** (gitignored), not in platformio.ini. Sensors: `USE_BMP390L`, `USE_BMP58x`, `USE_DS18B20_PAR` (currently disabled — needs a OneWire port), `USE_DUMMY_SENSOR`. See `local-secrets-example.h` for options.
 - **ULP and RTC_DATA_ATTR share the same 8KB** at `0x50000000`. `ULP_DATA_BASE` must be past all `.rtc.data`/`.rtc.force_slow` sections. The post-build script `post_build_check_rtc.py` verifies this; a runtime check in `ulp_check_data_overlap()` also aborts on overlap. `time_t` is 8 bytes on both ESP32 and C6 with ESP-IDF 5.x. On ESP32-E, `CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout ULP_DATA_BASE assumes.
 - **Footprint & build-time ledger**: `docs/footprint.md` — append a row after significant changes.
+- **Clock drift logbook**: `docs/clock-drift.md` — append a row whenever a
+  `! DRIFT` badge or `NTP resync: drift was ...` line is observed; the on-device
+  measurement is RTC-only and dies on power-cycle.
 
 ## Custom PCB (hardware/thermometer-c6)
 
