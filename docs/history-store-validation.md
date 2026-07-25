@@ -59,20 +59,25 @@ everything the marker brackets.
 Extrapolation from the erase rate: the one-time format is 480 sectors ≈ 26 s
 (the log's "~24s" guess holds).
 
-## Before starting the real drift collection
+## Clean state (2026-07-25 16:55Z) — ready for the drift collection
 
-**The board currently holds synthetic data** (720 injected hourly entries, a
-ramp sparkline, and a fabricated drift sample). Wipe it first, or the fake
-sample joins the retained ring and the first real measurement is computed
-against an invented `last_sync_time`:
+Synthetic test data wiped and a plain build installed. Verified:
 
-```bash
-~/.platformio/penv/bin/esptool --port /dev/ttyUSB0 erase_flash   # or erase_region 0x10000 0x1E0000
-pio run -e dfrobot_firebeetle2_esp32e_debug -t upload
-```
+- `esptool erase_flash`, then `pio run -e dfrobot_firebeetle2_esp32e_debug -t upload`
+- running `99390e1`, **no `-dirty`** (tree fully committed), **no PPK2_DEBUG**
+  (no selftest line in the boot log), no `HISTORY_BASE_EVERY_WAKE`
+- archive: `0 hourly, 1 sparkline, 0 drift`, base seq 1 at cursor 0x000000
+- drift block at defaults: `resync_interval_s 86400`, `ppm_hist` all zero,
+  `drift_ppm_count 0`, `last_sync_time` from a real NTP sync on this boot
 
-Also note `include/local-secrets.h` was switched to this rig (`USE_154_Z90` +
-`USE_BMP390L`) from the C6 config; switch it back before building for the C6.
+Repeat that recipe if the board ever needs resetting again — anything injected
+by `hstest --inject` must be erased before a real measurement run, or the
+fabricated drift sample joins the retained ring and the first genuine
+measurement is computed against an invented `last_sync_time`.
+
+Note `include/local-secrets.h` is switched to this rig (`USE_154_Z90` +
+`USE_BMP390L`); switch it back before building for the C6, and remember a
+mismatched panel/sensor config panic-loops rather than erroring cleanly.
 
 ## Known cosmetic issue
 
