@@ -1,5 +1,14 @@
 # ESP32-C6 LP Core: ULP Support Research
 
+> **Research notes from the Arduino era. Superseded in part.** The LP core
+> architecture, the PMP gotcha and the capability macros below are still
+> accurate and still worth reading. Everything about *how the build reaches the
+> LP core* is not: the platform fork this doc calls "current" was retired by the
+> ESP-IDF migration, and the LP core is now built natively by `ulp_embed_binary`
+> in `src/CMakeLists.txt` on the stock platform. For how it works today, read
+> `docs/build-system.md` and `.claude/rules/ulp.md`. Sections marked *at the
+> time* are kept as a record of what was tried.
+
 ## Architecture Difference
 
 The ESP32 (original) has a **ULP FSM** — a simple finite state machine programmed in assembly. The current codebase uses the HULP library to generate assembly instructions for bit-bang I2C.
@@ -81,7 +90,7 @@ The C6 target uses the pioarduino platform fork (Arduino Core 3.x on ESP-IDF 5.x
 
 ### Solution: Custom Platform Fork
 
-A fork of `platform-espressif32` at `/home/antoine/stuff/platform-espressif32` (branch `feature/lp-core-ulp-arduino`) adds LP core ULP support for Arduino-only PlatformIO projects:
+A local fork of `platform-espressif32` (branch `feature/lp-core-ulp-arduino`), checked out beside this repo, added LP core ULP support for Arduino-only PlatformIO projects:
 
 - Auto-detects `ulp/` directory in the project
 - Compiles LP core sources with `riscv32-esp-elf-gcc`
@@ -90,7 +99,7 @@ A fork of `platform-espressif32` at `/home/antoine/stuff/platform-espressif32` (
 - Generates symbol header (`ulp_main.h`) via `esp32ulp_mapgen.py`
 - Adds the mapgen `.ld` to main firmware linker flags so `ulp_*` symbols resolve
 
-C6 envs in `platformio.ini` reference the fork via `platform = /home/antoine/stuff/platform-espressif32`.
+C6 envs in `platformio.ini` pointed `platform =` at that local checkout.
 
 ### Build Evolution (historical context)
 
@@ -98,13 +107,13 @@ The LP core build went through three iterations:
 
 1. **Custom Python build script** (`scripts/build_lp_core.py`) — auto-downloaded ~30 ESP-IDF source files from GitHub, compiled with the RISC-V toolchain, generated binary + symbol headers. Worked but was complex and fragile.
 2. **pioarduino `custom_sdkconfig` hybrid build** — setting `CONFIG_ULP_COPROC_ENABLED=y` triggers a hybrid compile mode that recompiles ESP-IDF libs. This pulled in managed components (esp_insights, esp_rainmaker) that need certificate files even when unused, and created other complications.
-3. **Platform fork** (current) — cleanest solution. The fork handles everything transparently. No extra scripts, no managed_components issues.
+3. **Platform fork** — cleanest of the three at the time. The fork handled everything transparently: no extra scripts, no managed_components issues. Itself retired by the move to `framework = espidf`, which builds the LP core natively and needs no fork at all.
 
 ### PMP and LP SRAM Access (critical gotcha)
 
 Without `CONFIG_ULP_COPROC_ENABLED`, the ESP32-C6's PMP (Physical Memory Protection) marks LP SRAM at 0x50000000 as RX-only (no write). Any attempt to load an LP core binary at runtime causes a **Store access fault** (Guru Meditation Error, MCAUSE=0x07, MTVAL=0x50000000). The platform fork injects the required sdkconfig to fix PMP permissions.
 
-## Current Implementation
+## Implementation at the time
 
 ### File Structure
 
@@ -114,6 +123,11 @@ ulp/
 src/
   sensors/BMP390LSensor.cpp   # Three compile paths: ULP FSM, LP core, no-ULP
 ```
+
+`ulp/` has since grown a dispatcher plus one header per sensor
+(`lp_core_bmp390l.h`, `lp_core_bmp58x.h`, `lp_core_idle.h`), selected by the
+`USE_*` macros. The three-compile-path shape below is unchanged and applies to
+`BMP58xSensor.cpp` too.
 
 ### Conditional Compilation
 
@@ -133,12 +147,13 @@ ESP-IDF provides SoC capability macros:
 
 These can replace or complement the manual `NO_ULP` build flag.
 
-## Status
+## Status at the time
 
 **LP core idle mode tested on hardware.** Both ESP32-E (ULP FSM) and ESP32-C6 (LP core) targets compile and link. LP_CORE_IDLE mode (no I2C, simulated sensor timing) has been verified on a bare XIAO ESP32C6 with PPK2 power measurements (see `docs/notes.md`).
 
-Remaining work:
-- Solder BMP390L to C6 board, then switch `ulp/lp_core_main.c` from `#define LP_CORE_IDLE` to BMP390L I2C mode
-- Verify LP I2C communication with BMP390L (GPIO6=SDA, GPIO7=SCL)
-- Tune TEMP_DELTA_THRESHOLD (currently 20 ≈ 0.1°C) and SLEEP_INTERVAL_S (60s for production)
-- Measure LP core power with real I2C transactions vs idle delay
+The "remaining work" this section listed is done, on a prototype rig rather than
+a built board: a Bosch sensor is wired to the C6, validated over LP I2C, and its
+power measured. It landed as BMP58x rather than the BMP390L planned here —
+`LP_CORE_IDLE` survives as a manual override for power measurement.
+`docs/notes.md` is the authoritative log for the resulting figures. The one item
+still open is tuning `TEMP_DELTA_THRESHOLD` and `SLEEP_INTERVAL_S`.
