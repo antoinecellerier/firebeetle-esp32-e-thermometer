@@ -34,7 +34,14 @@
 // Using a fixed address avoids label resolution issues with large bit-bang I2C subroutines.
 // Must be past BOTH the ULP program (~110 words) AND the .rtc.data section
 // (RTC_DATA_ATTR variables), which share the same 8KB physical memory.
-// Current .rtc.data ends at word ~1628 (check firmware.map after layout changes).
+// Headroom is tighter than it looks: as of 2026-07-25 .rtc.data + .rtc.force_slow
+// end at word 1785 (_rtc_force_slow_end = 0x50001be4 in firmware.map, minus the
+// 0x50000000 base, / 4), leaving only 60 BYTES below this base. Adding
+// RTC_DATA_ATTR state on the ESP32-E will overflow into ULP variable space —
+// re-derive the word before doing so:
+//   grep _rtc_force_slow_end .pio/build/dfrobot_firebeetle2_esp32e_debug/firmware.map
+// The upper bound is _rtc_slow_reserved_start (0x50001fe8 = word 2042), so the
+// base can be raised if needed; post_build_check_rtc.py checks both bounds.
 #define ULP_DATA_BASE 1800
 
 // RTC slow memory offsets for shared variables (in 32-bit words from ULP_DATA_BASE)
