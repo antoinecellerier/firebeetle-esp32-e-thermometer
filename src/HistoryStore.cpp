@@ -506,6 +506,17 @@ static void journal_append(const void *rec, uint8_t slots)
   s_cursor = jrn_next(s_cursor, len);
   if (s_cursor / HS_SECTOR != before || s_cursor == 0)
     journal_erase_ahead();
+
+  // Make sure a base eventually exists, and bound how far a restore has to
+  // replay. The NTP-resync trigger alone is not enough: restore needs a base to
+  // anchor to, so a device that never syncs would journal records it could
+  // never restore, and a long resync outage would stretch the replay without
+  // limit. One sector of records is ~3.5 days at the observed rate.
+  uint32_t since = (s_cursor >= s_base_cursor)
+                       ? s_cursor - s_base_cursor
+                       : s_jrn_size - s_base_cursor + s_cursor;
+  if (s_base_seq == 0 || since >= HS_SECTOR)
+    s_base_dirty = true;
 }
 
 // --- public API -------------------------------------------------------------

@@ -247,7 +247,29 @@ int main(int argc, char **argv)
   CHECK(got.hourly_count == saved2.hourly_count, "post-wrap hourly %u != %u",
         got.hourly_count, saved2.hourly_count);
 
-  // ---- 8. foreign content (old app image) is detected and formatted ----
+  // ---- 8. a base gets written without any NTP resync ever succeeding ----
+  // Restore needs a base to anchor to, so appending alone must eventually
+  // demand one; otherwise a device whose clock never syncs journals records it
+  // could never restore.
+  power_on(true);
+  reset_hist();
+  history_store_available();
+  CHECK(!s_base_dirty, "nothing appended yet, base should not be dirty");
+  {
+    HourlyEntry e = { 200, 210, 205 };
+    history_store_append_hourly(T0, &e);
+  }
+  CHECK(s_base_dirty, "first append with no base must request one");
+  g_hist.hourly_count = 1;
+  history_store_flush(&g_hist, &g_drift, T0);
+  CHECK(s_base_seq == 1, "base should exist after the first flush");
+  // And again once a sector of records has gone by, so replay stays bounded.
+  s_base_dirty = false;
+  for (size_t i = 0; i < HS_SECTOR / HS_REC; i++)
+    history_store_append_sample(T0 + (time_t)i, 200);
+  CHECK(s_base_dirty, "a sector of records must request a fresh base");
+
+  // ---- 9. foreign content (old app image) is detected and formatted ----
   power_on(true);
   srand(1);
   for (auto &b : g_flash) b = (uint8_t)rand();
@@ -255,7 +277,7 @@ int main(int argc, char **argv)
   CHECK(history_store_available(), "store should format over foreign content");
   CHECK(!history_store_restore(&got, &gotd), "nothing to restore after format");
 
-  // ---- 9. a missing partition degrades instead of crashing ----
+  // ---- 10. a missing partition degrades instead of crashing ----
   g_have_part = false;
   reboot();
   CHECK(!history_store_available(), "should report unavailable with no partition");
