@@ -804,8 +804,40 @@ static bool journal_rebuild_hourly(RtcHistory *out)
 }
 
 bool history_store_available(void) { return store_init(); }
-uint8_t history_store_fault(void) { return s_fault; }
 uint16_t history_store_flash_format(void) { return s_flash_format; }
+
+uint8_t history_store_fault(void)
+{
+  if (s_probed) return s_fault;   // full init already ran this wake; trust it
+
+  // Otherwise probe cheaply. store_init() is lazy — on a plain deep-sleep wake
+  // nothing calls it before the frame is rendered (the restore path runs only
+  // on a cold boot, and history_store_flush() returns before it when no
+  // snapshot is due), and every static here is .bss that starts over each wake.
+  // Reading the fault straight out of s_fault therefore showed the badge on the
+  // boot after a flash and on hour-boundary wakes, and dropped it on the other
+  // ~2 in 3 — a warning that blinks reads as noise, which is exactly the
+  // silence this badge exists to prevent.
+  //
+  // Forcing store_init() here instead would cost a CRC over both 6.3KB base
+  // slots on every wake (~5ms, ~14mC/day at the observed rate) — twice the
+  // snapshot it guards. One 52-byte header read settles both structural faults;
+  // HS_FAULT_IO is transient by nature and only arises on a wake that did real
+  // work, which is a wake where s_probed is already set.
+  const esp_partition_t *p = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "history");
+  if (!p) return HS_FAULT_NO_PARTITION;
+
+  HsStoreHeader h;
+  if (esp_partition_read(p, HS_HDR_OFF, &h, sizeof(h)) != ESP_OK)
+    return HS_FAULT_NONE;
+  if (h.magic == HS_MAGIC && h.format != HS_FORMAT)
+  {
+    s_flash_format = h.format;   // read back by history_store_flash_format()
+    return HS_FAULT_FOREIGN_FORMAT;
+  }
+  return HS_FAULT_NONE;
+}
 
 bool history_store_restore(RtcHistory *out, HistoryDriftState *drift)
 {

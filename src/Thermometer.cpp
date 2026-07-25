@@ -627,6 +627,11 @@ DisplayStats make_display_stats()
   }
 #endif
 
+  // Sequenced before the aggregate below: history_store_fault() is what sets
+  // the format the next field reads back. List-initialization does evaluate
+  // left to right, but nothing about the two calls says they are ordered.
+  const uint8_t archive_fault = history_store_fault();
+
   DisplayStats s = {
     boot_count, previous_boot_count, display_refresh_count,
     lp_wakes, lp_errors, lp_last_err, lp_last_op,
@@ -650,7 +655,7 @@ DisplayStats make_display_stats()
     false,
 #endif
     last_drift_ms, last_drift_window_s, last_sync_time, resync_fail_count,
-    history_store_fault(), history_store_flash_format(),
+    archive_fault, history_store_flash_format(),
     drift_ppm_hist, drift_win_min, drift_ppm_count,
     previous_temp, min_temp_since_boot, max_temp_since_boot,
     historical_data.temp, historical_data.temp_count,
