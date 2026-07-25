@@ -33,17 +33,40 @@ pass in `make -C tools/hstest`.
 
 Full numbers and setup in `docs/notes.md`. Headline: **170.2 ms at 41.94 mA =
 7.14 mC** per base snapshot (3300 mV), which is **0.1%** of this rig's
-~7.1 C/day at the one-per-day cadence. Hourly would be 2.4%.
+~7.1 C/day at the one-per-day snapshot cadence. Hourly would be 2.4%.
 
-That cadence is now a stated recovery-point objective — **at most one day of
-data at risk** — enforced by the store itself at 24 journaled hourly records
-(`HS_BASE_MAX_RECORDS`). It used to be an accident: the only non-NTP trigger was
-a full journal sector (256 records, 10.7 days), so the effective cadence was
-whatever the adaptive resync interval happened to be. That is 1 day on this rig
-only because its −5265 ppm drift pins the interval at its floor; the custom C6's
-crystal would let it stretch to the 28-day cap, so the board with the *better*
-clock would have had the worse RPO. Cost on such a board goes from ~0.7 to
-7.1 mC/day — still 0.1%.
+### What the RPO actually is
+
+**One hour, for the hourly archive, and the journal alone delivers it.** An
+hourly entry is programmed to flash as its hour finalizes — `journal_append()`
+writes immediately, it is not deferred to the flush — so a reflash, panic or
+battery pull costs at most the hour in progress. The snapshot cadence does not
+enter into it.
+
+The base snapshot covers what the journal does not, and that is a shorter list
+than it first appears:
+
+| Data | RPO | Journal-backed? |
+|---|---|---|
+| Hourly archive | **~1 h** | yes, directly |
+| Drift samples | ~1 day (one per resync) | yes, `REC_DRIFT` |
+| `resync_interval_s`, `resync_fail_count` | 24 h | no — but both re-derive after one sync |
+| 24 h sparkline | 24 h | **no — base only** |
+| Restore anchor | 24 h | **no — `history_store_restore()` bails without a valid base** |
+
+So the snapshot is worth keeping for the anchor and the sparkline, not for the
+archive. `HS_BASE_MAX_RECORDS = 24` keeps it at about a day. Note the sparkline
+gains little from 24 specifically: it is a 24 h window, so a day-old snapshot
+restores a chart whose every point has just aged out. Going finer would fix
+that and cost proportionally more — not taken, since the sparkline refills
+within a day of running.
+
+The cadence used to be an accident: the only non-NTP trigger was a full journal
+sector (256 records, 10.7 days), so it was whatever the adaptive resync interval
+happened to be — 1 day on this rig only because its −5265 ppm drift pins the
+interval at its floor, and up to the 28-day cap on a crystal-equipped board.
+That made the board with the *better* clock the one that could not restore.
+Cost of owning it there goes from ~0.7 to 7.1 mC/day — still 0.1%.
 
 On-device timing of the flash calls alone, which is what the cadence work was
 based on before the PPK2 pass:

@@ -59,13 +59,31 @@ void history_store_flush(const RtcHistory *, const HistoryDriftState *, time_t) 
 #define HS_JOURNAL_OFF  0x5000u
 #define HS_REC          16u          // journal slot size
 
-// Recovery-point objective: at most one day of data may be lost to a reflash,
-// a panic or a battery swap. Expressed in records rather than wall-clock
-// seconds because hourly entries are journaled exactly one per clock hour —
-// gap fills included — so 24 records IS 24 hours, and enforcing it needs
-// neither a flash read on quiet wakes nor an RTC variable. A drift record
-// occupies two slots and so counts double, which can only make a snapshot
-// early. Cost is one 7.14mC snapshot per day (docs/notes.md), 0.1% of budget.
+// How many journal records may pass before a fresh base snapshot is taken.
+//
+// This is NOT what bounds the archive's exposure. The archive's recovery-point
+// objective is **one hour**, and the journal alone delivers it: an hourly entry
+// is programmed to flash the moment its hour finalizes, so a reflash, panic or
+// battery pull costs at most the hour in progress. Nothing about the snapshot
+// cadence changes that.
+//
+// What a snapshot adds is secondary, and worth its 7.14mC (0.1% of budget)
+// only because it is that cheap:
+//   - it is the ONLY copy of the 24h sparkline, which is never journaled;
+//   - it is the anchor restore needs — without a valid base, history_store_
+//     restore() bails even with a journal full of timestamped records;
+//   - it bounds replay to this many records instead of a full sector.
+//
+// 24 keeps that at about a day. Note the sparkline gets little from that
+// number specifically: it is a 24h window, so a snapshot a day old restores a
+// chart whose every point has just aged out. Going finer would fix that and
+// cost proportionally more; it has not been worth it, since the sparkline
+// refills within a day of running.
+//
+// Counted in records rather than seconds because hourly entries are journaled
+// exactly one per clock hour, gap fills included — so 24 records is 24 hours
+// without a flash read on quiet wakes or an RTC variable. A drift record takes
+// two slots and so counts double, which can only make a snapshot early.
 #define HS_BASE_MAX_RECORDS 24
 
 #define REC_FREE    0xFF
@@ -576,13 +594,13 @@ static void journal_append(const void *rec, uint8_t slots)
   if (s_cursor / HS_SECTOR != before || s_cursor == 0)
     journal_erase_ahead();
 
-  // Enforce the recovery-point objective, and bound how far a restore has to
-  // replay. The NTP-resync trigger alone cannot do either: restore needs a base
-  // to anchor to, so a device that never syncs would journal records it could
+  // Keep a snapshot within reach, and bound how far a restore has to replay.
+  // The NTP-resync trigger alone cannot do either: restore needs a base to
+  // anchor to, so a device that never syncs would journal records it could
   // never restore, and the resync interval is adaptive over [1d, 28d] — a board
   // with an accurate clock would go 28 days between snapshots, so the better the
-  // oscillator the worse the data loss. Owning the cadence here makes it a
-  // property of the store instead of a side effect of clock quality.
+  // oscillator the longer it could not restore. Owning the cadence here makes it
+  // a property of the store instead of a side effect of clock quality.
   uint32_t since = (s_cursor >= s_base_cursor)
                        ? s_cursor - s_base_cursor
                        : s_jrn_size - s_base_cursor + s_cursor;

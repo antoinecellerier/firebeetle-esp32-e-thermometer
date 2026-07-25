@@ -40,10 +40,16 @@
 // is the awake time the write forces (4.9mC) — unavoidable, since programming
 // runs with the CPU up and the cache disabled.
 //
-// The cadence is a recovery-point objective: one snapshot per 24 hourly
-// records, i.e. **at most a day of data at risk**, plus one on every successful
-// NTP resync. That is 7mC/day, **0.1%** of this rig's ~7.1C/day. Hourly would
-// be 171mC/day (2.4%), every wake 514mC/day (7.2%).
+// **The archive's recovery-point objective is one hour**, and the journal alone
+// provides it: an hourly entry reaches flash as its hour finalizes, so the most
+// any failure costs is the hour in progress. The base snapshot does not improve
+// that and is not what the RPO rests on.
+//
+// The snapshot earns its keep elsewhere — it holds the only copy of the 24h
+// sparkline, it is the anchor restore cannot proceed without, and it bounds
+// journal replay. One per 24 records plus one per successful NTP resync is
+// 7mC/day, **0.1%** of this rig's ~7.1C/day. Hourly would be 171mC/day (2.4%),
+// every wake 514mC/day (7.2%).
 
 #include <stdbool.h>
 #include <stdint.h>
