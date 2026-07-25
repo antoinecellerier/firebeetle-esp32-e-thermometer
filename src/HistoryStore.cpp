@@ -75,7 +75,7 @@ struct __attribute__((packed)) HsStoreHeader {
   uint8_t  base_mac[6];
   uint8_t  chip_model;
   uint8_t  chip_revision;
-  char     board[16];
+  char     board[24];   // "firebeetle2_esp32e" needs 19 with its NUL
   char     panel[16];
   char     sensor[16];
   char     git_hash[16];

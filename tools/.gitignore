@@ -1,2 +1,6 @@
 *.png
 render_display
+
+# tools/hstest build artifacts
+hstest
+sample.bin
