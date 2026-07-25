@@ -310,12 +310,33 @@ def _connect(port, baud):
     return esp
 
 
+def _journal_wrapped(esp, off, jsize, cursor):
+    """Has the ring wrapped? A prefix read is only correct while it has not.
+
+    Once it has, the cursor is low while the bulk of the archive sits above it,
+    so reading to the cursor would quietly return a few KB and drop years of
+    records — with a plausible-looking record count on top.
+
+    The firmware keeps exactly one sector erased ahead of the cursor, so above
+    the cursor a wrapped ring has at most two blank sectors and every other one
+    holds data. Probing cursor_sector + 2 separates the two cases with a single
+    sector read. It can only err toward a full read, and only in the sector
+    before the very first wrap — years into a device's life.
+    """
+    nsec = jsize // HS_SECTOR
+    if nsec < 4:
+        return True                    # too small to probe; just read it all
+    probe_sec = (cursor // HS_SECTOR + 2) % nsec
+    data = esp.read_flash(off + HS_JOURNAL_OFF + probe_sec * HS_SECTOR, HS_SECTOR)
+    return data.count(0xFF) != HS_SECTOR
+
+
 def read_device(port=None, baud=921600, full=False):
     """One session: identity, base slots, then only the used part of the journal.
 
     Reading to the cursor rather than the whole partition is what keeps a
     backup quick on the UART-bridged board — a young device is a few KB, not
-    1920KB.
+    1920KB. Only valid before the ring wraps, hence the probe below.
     """
     off, size = history_partition()
     esp = _connect(_resolve_port(port), baud)
@@ -324,12 +345,16 @@ def read_device(port=None, baud=921600, full=False):
         if full:
             return head + esp.read_flash(off + HS_JOURNAL_OFF, size - HS_JOURNAL_OFF)
 
+        jsize = size - HS_JOURNAL_OFF
         probe = Archive(head + b"\xff" * HS_REC)
-        cursor = probe.base["journal_cursor"] if probe.base else 0
+        if not probe.base or _journal_wrapped(esp, off, jsize,
+                                              probe.base["journal_cursor"]):
+            return head + esp.read_flash(off + HS_JOURNAL_OFF, jsize)
+
+        cursor = probe.base["journal_cursor"]
         # Round up past the cursor so the trailing free slot is included, and
         # always take at least one sector so a fresh store still decodes.
-        want = min(size - HS_JOURNAL_OFF,
-                   max(HS_SECTOR, (cursor + HS_SECTOR) & ~(HS_SECTOR - 1)))
+        want = min(jsize, max(HS_SECTOR, (cursor + HS_SECTOR) & ~(HS_SECTOR - 1)))
         return head + esp.read_flash(off + HS_JOURNAL_OFF, want)
     finally:
         # Must release the port, not just reset the chip: `restore` reconnects
@@ -367,8 +392,14 @@ def cmd_backup(args):
         f"{dt.date.today().isoformat()}.bin")
     with open(name, "wb") as f:
         f.write(blob)
+    _, size = history_partition()
     print(arc.describe())
-    print(f"wrote    {name} ({len(blob)} bytes)")
+    # Say which it is. A prefix image holds every record the device had, but it
+    # is not a partition image, so `restore` will refuse it — better to learn
+    # that here than when the device it came from is gone.
+    kind = ("full partition image" if len(blob) == size
+            else f"prefix of a {size}-byte partition; re-run with --full to restore")
+    print(f"wrote    {name} ({len(blob)} bytes, {kind})")
 
 
 def cmd_restore(args):
