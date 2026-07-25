@@ -97,6 +97,13 @@ class Archive:
         self.hourly = []    # (epoch, min, max, avg)
         self.samples = []   # (epoch, temp_x10)
         self.drifts = []    # dict
+        # How many hourly records the JOURNAL yielded, before the base and the
+        # journal are deduped against each other. Both sources normally carry
+        # the same recent hours, so the deduped total stays right even if the
+        # journal walk decodes nothing at all — which is exactly how a record
+        # layout could diverge from the firmware unnoticed. tools/hstest checks
+        # this separately for that reason.
+        self.journal_hourly = 0
         self._decode()
 
     def _store_header(self):
@@ -222,6 +229,7 @@ class Archive:
                 f = REC.unpack_from(raw)
                 if crc16(raw[:REC.size - 2]) == f[7]:
                     self.hourly.append((f[3], f[4], f[5], f[6]))
+                    self.journal_hourly += 1
             pos += n * HS_REC
 
     def _decode(self):

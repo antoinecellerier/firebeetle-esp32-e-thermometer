@@ -5,3 +5,7 @@ render_display
 # tools/hstest/ directory and silently excludes the test sources.
 /hstest/hstest
 /hstest/sample.bin
+/hstest/sample.bin.expect
+
+# check_sample.py imports history.py, so running the gate byte-compiles it.
+__pycache__/

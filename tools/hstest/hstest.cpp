@@ -550,12 +550,16 @@ int main(int argc, char **argv)
   // ---- optional: emit an image for the Python decoder to cross-check ----
   if (argc > 1)
   {
+    // Recorded alongside the image so check_sample.py can assert the Python
+    // decoder sees exactly this. Printing a decode proves nothing on its own.
+    const int kHourly = 40, kSparkline = 12, kDrift = 1;
+
     power_on(true);
     reset_hist();
     history_store_available();
-    for (int i = 0; i < 40; i++)
+    for (int i = 0; i < kHourly; i++)
       ring_push(T0 + i * 3600, (int16_t)(180 + i), (int16_t)(220 + i), (int16_t)(200 + i));
-    for (int i = 0; i < 12; i++)
+    for (int i = 0; i < kSparkline; i++)
     {
       temp_history_record(g_hist.temp, &g_hist.temp_count, T0 + i * 900,
                           (int16_t)(195 + i));
@@ -579,6 +583,17 @@ int main(int argc, char **argv)
     fwrite(g_flash.data(), 1, g_flash.size(), f);
     fclose(f);
     printf("wrote sample image %s (%zu bytes)\n", argv[1], g_flash.size());
+
+    char expect_path[512];
+    snprintf(expect_path, sizeof(expect_path), "%s.expect", argv[1]);
+    FILE *e = fopen(expect_path, "w");
+    if (e)
+    {
+      // Last column is journal-decoded hourly records: every ring_push() also
+      // journals, and the check needs the journal walk verified on its own.
+      fprintf(e, "%d %d %d %d\n", kHourly, kSparkline, kDrift, kHourly);
+      fclose(e);
+    }
   }
 
   printf(g_fail ? "\n%d CHECK(s) FAILED\n" : "\nall checks passed (%d failures)\n",
