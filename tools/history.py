@@ -237,8 +237,12 @@ class Archive:
 
     def describe(self):
         h = self.header
+        # The store is formatted in setup(), before the first NTP sync, so
+        # created_at is usually an epoch-zero stamp rather than a real date.
+        created = (_iso(h["created_at"]) if h["created_at"] > 1704067200
+                   else "(before first NTP sync)")
         out = [f"device   {h['board']} {h['mac']} ({h['panel']}/{h['sensor']})",
-               f"built    {h['git_hash']}  store created {_iso(h['created_at'])}"]
+               f"built    {h['git_hash']}  store created {created}"]
         if self.base:
             b = self.base
             out.append(f"base     seq {b['seq']} written {_iso(b['written_at'])} "
