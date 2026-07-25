@@ -23,7 +23,7 @@ make -C tools/sim screenshots      # render all display sizes -> tools/mock_*.pn
 make -C tools/hstest [sample]      # HistoryStore checks, host-only; `sample` also gates the Python decoder
 ```
 
-`pio` is not on `PATH`. Env list and build-system rationale: `docs/build-system.md`.
+`pio` is not on `PATH`.
 
 ## Working on hardware
 
@@ -40,7 +40,7 @@ facts that do damage when unknown:
   `base (none — journal only)` after a settle window means boot loop, not
   "hasn't slept yet".
 - **`EPD_POWER_GATE` fails silently.** On any on-device anomaly, enumerate
-  physical causes (jumpers, probe orientation, panel rail) before firmware ones.
+  physical causes (jumpers, probe orientation, panel rail) first.
 
 ## Numbers are measured, not guessed
 
@@ -97,9 +97,9 @@ Next phase there: `hardware/thermometer-c6/LAYOUT-PLAN.md`.
   ring and drift block to the `history` partition, surviving reflash, panic and
   battery swap. Only `esptool erase_flash` destroys it. `tools/history.py` backs
   it up, restores it and decodes it on the host.
-- **Nothing is recorded without a plausible clock** (`time_is_plausible()`).
-  Entries are filed by clock hour, so a 1970 timestamp would file them ~54 years
-  before everything stored; the device shows restored history and `! NOSYNC`.
+- **Degradation is visible, never silent.** A subsystem that stops working keeps
+  the device running and surfaces a badge saying so (`! NOSYNC`, `! NOARCH`).
+  Losing a capability is acceptable; losing it quietly is not.
 
 ## Commit style
 

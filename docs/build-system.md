@@ -20,10 +20,9 @@ building exclusively with `idf.py`.
 
 ## Board macros
 
-`ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E` and `ARDUINO_XIAO_ESP32C6` (legacy names,
-kept to avoid churning every `#if` in the tree) derive from `IDF_TARGET` in
-`src/CMakeLists.txt` — **not** from `platformio.ini`. A third board,
-`THERMOMETER_C6_BOARD`, selects the custom rev A PCB.
+The macro names are Arduino-era leftovers, kept only to avoid churning every
+`#if` in the tree; nothing Arduino remains. Where they come from is a rule, in
+`.claude/rules/build.md`.
 
 ## Vendored components
 
@@ -43,11 +42,10 @@ Authored `sdkconfig.defaults` and `sdkconfig.defaults.<target>` are tracked;
 generated `sdkconfig.<env>` files are gitignored. CPU is fixed at 80 MHz at build
 time.
 
-Reading a *generated* `sdkconfig.<env>` tells you what the build actually used;
-reading the authored defaults tells you what was chosen on purpose. Those differ
-often enough to matter — e.g. `CONFIG_RTC_CLK_CAL_CYCLES=3000` on
-`thermometer_c6` is an IDF default that follows from selecting `EXT_CRYS`, not
-something this project picked.
+Worked example of why the authored/generated distinction matters (the rule is in
+`.claude/rules/build.md`): `CONFIG_RTC_CLK_CAL_CYCLES=3000` on `thermometer_c6`
+looks like a tuning decision, but it is the IDF default that follows from
+selecting `EXT_CRYS`. Nobody here chose 3000.
 
 ## Partition table
 
@@ -90,10 +88,11 @@ On ESP32-E, `CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout
 
 ## platformio.ini structure
 
-**Base sections must be plain sections, not `[env:...]`.** An `[env:...]` mixin
-is itself a buildable (half-configured) target, and `extends` only inherits
-reliably from plain sections. `build_flags` in particular is not inherited the way
-you'd expect — see the comments in `platformio.ini`.
+Why base sections are plain sections rather than `[env:...]` is a rule, in
+`.claude/rules/build.md`. The consequence worth knowing separately: `build_flags`
+is not inherited through `extends` the way you would expect, so each env
+re-states its own. The comments in `platformio.ini` track which flags that
+affects.
 
 ## Environments
 

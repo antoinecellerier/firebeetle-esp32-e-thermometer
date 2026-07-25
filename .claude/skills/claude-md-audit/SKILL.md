@@ -27,20 +27,32 @@ Scope is `CLAUDE.md`, `.claude/rules/*.md`, `.claude/skills/*/SKILL.md` and
 Every file path, make target, script, env name, `docs/` link, commit hash,
 function name, macro and CLI flag named in these files must still resolve:
 
+**Resolve paths relative to the naming file's own directory first, then the repo
+root.** A directory-scoped CLAUDE.md names its own scripts (the PCB one names its
+generator/ and verify/ trees), which exist only under that directory — checking
+them against the repo root reports a dozen phantom misses.
+
 ```bash
-# paths and docs links
-grep -ohE '`[a-zA-Z0-9_./-]+\.(md|py|c|h|cpp|csv|ini|json)`' CLAUDE.md .claude/rules/*.md \
-  | tr -d '`' | sort -u | while read -r p; do test -e "$p" || echo "MISSING $p"; done
+set -- CLAUDE.md .claude/rules/*.md .claude/skills/*/SKILL.md hardware/*/CLAUDE.md
+for f in "$@"; do d=$(dirname "$f")
+  grep -ohE '`[a-zA-Z0-9_./-]+\.(md|py|c|h|cpp|csv|ini|json)`' "$f" | tr -d '`' | sort -u \
+    | while read -r p; do case "$p" in */*)
+        test -e "$d/$p" || test -e "$p" || echo "MISSING $p  (in $f)";; esac; done
+done
 # commit hashes
-grep -ohE '`[0-9a-f]{7,40}`' CLAUDE.md .claude/rules/*.md | tr -d '`' | sort -u \
+grep -ohE '`[0-9a-f]{7,40}`' "$@" | tr -d '`' | sort -u \
   | while read -r h; do [ "$(git cat-file -t "$h" 2>&1)" = commit ] || echo "BAD HASH $h"; done
-# pio envs
-grep -oE '\-e [a-z0-9_]+' CLAUDE.md | awk '{print $2}' | sort -u \
+# pio envs (anchored to `pio run`, so grep's own -e flag isn't mistaken for one)
+grep -ohE 'pio run [^|]*-e [a-z0-9_]+' "$@" | grep -oE '\-e [a-z0-9_]+$' | awk '{print $2}' | sort -u \
   | while read -r e; do grep -q "^\[env:$e\]" platformio.ini || echo "NO ENV $e"; done
+# make targets
+grep -ohE 'make -C [a-zA-Z0-9/_-]+ [a-z]+' "$@" | sort -u | while read -r _ _ d t; do
+  grep -qE "^$t:" "$d/Makefile" 2>/dev/null || echo "NO TARGET make -C $d $t"; done
 ```
 
-Also check make targets exist (`grep -E '^[a-z_-]+:' tools/*/Makefile`) and that
-macro/function names still appear in the sources.
+A bare filename in prose (`common.h`, `idf.py`, `ulp.py`) is usually an external
+tool or IDF-internal file, not a repo path — confirm rather than flag. Also check
+that macro and function names still appear in the sources.
 
 Flag each stale reference with what it should point to now.
 
@@ -57,19 +69,24 @@ where PlatformIO installs for everyone.
 grep -rnE '/home/[a-z]+|/Users/[a-z]+' CLAUDE.md .claude/rules .claude/skills docs/*.md
 ```
 
-**References to specific gitignored files** — they rot on clone. Check
-`.gitignore`, then grep for paths under each ignored tree (`include/generated/`,
-`/scratchpad/`, `sdkconfig.<env>`, `.pio`, `include/local-secrets.h`). Only the
-first case below is a violation:
+**References to specific gitignored files** — they rot on clone.
 
-- **Violation:** a path to a specific gitignored file, e.g.
-  `include/generated/fonts.h`. Propose stating the lesson directly.
-- **Allowed:** stating the convention itself, e.g. "sensor/display selection
-  lives in `include/local-secrets.h`" or "bench scratch goes in `/scratchpad/`".
-  Those are the rule text and must stay.
+```bash
+grep -ohE '`[a-zA-Z0-9_./-]+`' "$@" | tr -d '`' | grep '/' | sort -u \
+  | grep -vxF -e include/generated/ -e include/local-secrets.h -e .claude/settings.local.json \
+  | while read -r p; do git check-ignore -q "$p" && echo "IGNORED-PATH REF $p"; done
+```
 
-`.claude/settings.local.json` is exempt from both — it is gitignored and local by
-design.
+The three names in that `grep -vxF` allowlist are **conventions, not violations**
+— naming the tree or the config file *is* the rule text ("sensor/display
+selection lives in `include/local-secrets.h`", "don't modify `include/generated/`")
+and must stay. Extend the allowlist rather than removing such a line. Anything
+else the check reports is a real violation: a path to a *specific* gitignored
+file, e.g. a named header under `include/generated/`. Propose stating the lesson
+directly instead.
+
+`.claude/settings.local.json` is exempt from this check and the previous one — it
+is gitignored and machine-local by design.
 
 ## 2b. Facts that have a home in code
 

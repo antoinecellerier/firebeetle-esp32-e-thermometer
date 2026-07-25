@@ -52,8 +52,9 @@ small. Adding an `RTC_DATA_ATTR` variable eats that headroom; see
 
 `scripts/post_build_check_rtc.py` reports both ends of the area at build time —
 take the margin from its output, not from a figure quoted elsewhere.
-`ulp_check_data_overlap()` also aborts at runtime on overlap. On ESP32-E,
-`CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout `ULP_DATA_BASE` assumes.
+`ulp_check_data_overlap()` also aborts at runtime on overlap. The reserve size is
+authored per target in `sdkconfig.defaults.<target>`; on ESP32-E that value is
+what `ULP_DATA_BASE` assumes, so changing one means revisiting the other.
 
 ## Counters
 
