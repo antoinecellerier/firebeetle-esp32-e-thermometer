@@ -863,14 +863,20 @@ static bool sntp_sync_once(uint32_t timeout_ms)
 // Worth real energy because the alternative is worse than a slow clock: with no
 // wall clock the device records nothing at all (see update_hourly_history), so
 // a permanently unsynced device collects nothing.
-static bool ntp_bootstrap_sync(void)
+// `assoc_tries` is the caller's budget, not a constant: the burst on the very
+// first boot and the retries on later wakes are different problems. The burst
+// pays for itself once, while the device is usually on USB being flashed. A
+// device that can never reach the AP would otherwise repeat that burst forever
+// — 3 x 15s of association timeouts is ~4.5C, and at the ~1/day the backoff
+// settles to that is most of a ~7.1C/day budget. Retries therefore get one
+// association, which is what a failing resync already costs.
+static bool ntp_bootstrap_sync(int assoc_tries)
 {
-  for (int assoc = 0; assoc < NTP_BOOTSTRAP_ASSOC_TRIES; assoc++)
+  for (int assoc = 0; assoc < assoc_tries; assoc++)
   {
     if (!wifi_connect())
     {
-      LOGI("NTP bootstrap: WiFi attempt %d/%d failed", assoc + 1,
-           NTP_BOOTSTRAP_ASSOC_TRIES);
+      LOGI("NTP bootstrap: WiFi attempt %d/%d failed", assoc + 1, assoc_tries);
       continue;
     }
     LOGI("Connected to WiFi");
@@ -899,9 +905,10 @@ static bool ntp_bootstrap_sync(void)
 // the clock is the broken thing (with now ~ 0, now + resync_interval_s lands a
 // simulated day away). Escalates from one attempt per 8 wakes to one per 64,
 // which at the observed rate (~48 refresh wakes + 24 safety-net wakes/day)
-// settles near one attempt per day — the same order the device already accepts
-// for a failing resync, and far off the ~36-108C/day that retrying on every
-// safety-net wake would cost.
+// settles near one attempt per day. Each retry is one association (~15s, ~1.5C)
+// — the same cost a failing resync already carries — so a device that never
+// reaches its AP settles at ~1.5C/day, not the ~36-108C/day that retrying on
+// every safety-net wake would cost.
 static bool ntp_bootstrap_due(void)
 {
   uint32_t shift = resync_fail_count < 3 ? resync_fail_count : 3;
@@ -921,7 +928,7 @@ static void maybe_ntp_resync(time_t now)
       return;
     LOGI("NTP bootstrap: retrying first sync (%u failures so far)",
          (unsigned)resync_fail_count);
-    if (!ntp_bootstrap_sync())
+    if (!ntp_bootstrap_sync(1))
     {
       resync_fail_count++;
       return;
@@ -1394,7 +1401,7 @@ void on_first_boot()
   // Retries inside one session, and handles its own WiFi teardown. Getting the
   // clock on the first boot matters more than it used to: without one the
   // device records no history at all, and a failure here used to be permanent.
-  if (!ntp_bootstrap_sync())
+  if (!ntp_bootstrap_sync(NTP_BOOTSTRAP_ASSOC_TRIES))
   {
     // wifi_ok reflects whether the association itself worked; ntp_synced stays
     // false, and maybe_ntp_resync() now retries on later wakes.
