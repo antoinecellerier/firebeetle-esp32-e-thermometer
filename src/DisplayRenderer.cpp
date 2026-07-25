@@ -1268,16 +1268,31 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   }
 
   // The build hash goes last, and only when the footer's own copy can't be
-  // read: on a 200px panel that line overflows and the hash is the first field
-  // to fall off the right edge. Nothing above is actionable without knowing
-  // which build produced it, but leading with it would spend the widest line
-  // on a field the panel may already be showing.
+  // read. Nothing above is actionable without knowing which build produced it,
+  // but leading with it would spend the widest line on a field the panel may
+  // already be showing.
+  //
+  // Measure only up to the END OF THE HASH, not the whole footer: the hash is
+  // not the last field — the boot date and sync age follow it — so a footer
+  // that overflows on those still shows the hash, and testing the full width
+  // put a redundant copy in the status line on exactly the panels that did not
+  // need one.
   {
     bool footer_large = (L.foot.w >= 600);
     gfx.setFont(footer_large ? &FreeSans12pt7b : &Org_01);
     gfx.setTextSize(1);
+    // Wrap MUST be off to measure: with it on, getTextBounds wraps at the
+    // canvas edge and the width saturates there, which on a 200px panel is
+    // always wider than foot.w and so reported "clipped" for any footer long
+    // enough to wrap at all. That repeated the hash even when it was plainly
+    // readable in the footer.
+    gfx.setTextWrap(false);
     char footer_text[FOOTER_TEXT_LEN];
     build_footer_text(footer_text, sizeof(footer_text), now, stats);
+
+    const char *h = strstr(footer_text, GIT_HASH);
+    if (h)
+      footer_text[(h - footer_text) + strlen(GIT_HASH)] = '\0';
     if (text_width(gfx, footer_text) > L.foot.w - (footer_large ? 8 : 4))
       snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", GIT_HASH);
   }

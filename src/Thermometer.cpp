@@ -476,6 +476,19 @@ static void history_store_persist_now()
   // the time this runs, so the two can never overlap in a trace, and the flash
   // write gets a crisp bracket instead of being an unlabelled plateau at the
   // tail of the active phase.
+  //
+  // Three 2ms pulses first, as a signature. The pin is not held across deep
+  // sleep (no gpio_hold_en), so it floats while asleep and its idle level on a
+  // PPK2 input is whatever the input does — which makes a lone edge ambiguous
+  // to read. A triple blip immediately before the write is unmistakable at any
+  // polarity, and the flash write is the wide excursion right after it.
+  for (int i = 0; i < 3; i++)
+  {
+    PPK2_DISPLAY_HIGH();
+    sleep_ms(2);
+    PPK2_DISPLAY_LOW();
+    sleep_ms(2);
+  }
   PPK2_DISPLAY_HIGH();
   history_store_flush(&historical_data, &drift, now);
   PPK2_DISPLAY_LOW();
@@ -1575,6 +1588,47 @@ static void restore_drift_from_flash()
                                now >= (time_t)drift.last_sync_time);
 }
 
+#ifdef PPK2_DEBUG
+// Boot-time marker self-test, so PPK2 wiring can be confirmed before any
+// measurement is trusted. Emits countable, distinct patterns — 5 pulses on the
+// CPU-active channel, then 10 on the display/flash channel — and reads the pads
+// back, which separates "the firmware isn't driving the pin" from "the lead is
+// on the wrong pin". A flat channel with a passing read-back is a wiring fault.
+static void ppk2_selftest()
+{
+  // INPUT_OUTPUT, not OUTPUT: gpio_config() with GPIO_MODE_OUTPUT disables the
+  // input buffer on ESP32, so gpio_get_level() would always read 0.
+  gpio_config_t cfg = {};
+  cfg.pin_bit_mask = (1ULL << PPK2_PIN_CPU_ACTIVE) | (1ULL << PPK2_PIN_DISPLAY);
+  cfg.mode = GPIO_MODE_INPUT_OUTPUT;
+  gpio_config(&cfg);
+
+  gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 1);
+  gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 1);
+  int d0_hi = gpio_get_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE);
+  int d1_hi = gpio_get_level((gpio_num_t)PPK2_PIN_DISPLAY);
+  gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 0);
+  gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 0);
+  int d0_lo = gpio_get_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE);
+  int d1_lo = gpio_get_level((gpio_num_t)PPK2_PIN_DISPLAY);
+  LOGI("PPK2 selftest: D0=GPIO%d %d->%d, D1=GPIO%d %d->%d — pads %s",
+       PPK2_PIN_CPU_ACTIVE, d0_hi, d0_lo, PPK2_PIN_DISPLAY, d1_hi, d1_lo,
+       (d0_hi && !d0_lo && d1_hi && !d1_lo) ? "follow (firmware OK)"
+                                            : "DO NOT follow (firmware fault)");
+
+  for (int i = 0; i < 5; i++)   // D0: 5 x 20ms
+  {
+    gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 1); sleep_ms(20);
+    gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 0); sleep_ms(20);
+  }
+  for (int i = 0; i < 10; i++)  // D1: 10 x 10ms
+  {
+    gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 1); sleep_ms(10);
+    gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 0); sleep_ms(10);
+  }
+}
+#endif
+
 void setup()
 {
   // Must run before anything that can light-sleep (see s_wake_cause).
@@ -1591,6 +1645,7 @@ void setup()
 #ifdef PPK2_DEBUG
   gpio_out_init(PPK2_PIN_CPU_ACTIVE);
   gpio_out_init(PPK2_PIN_DISPLAY);
+  ppk2_selftest();
 #endif
   PPK2_CPU_ACTIVE_HIGH();
 

@@ -334,16 +334,27 @@ int main(int argc, char **argv)
     {
       mock_fill_sparkline(now, g_hist.temp, &g_hist.temp_count);
     }
-    // Journal the ring as well, so the archive (not just the base) is populated
-    // and a restore exercises replay rather than only the snapshot.
-    for (uint16_t k = 0; k < g_hist.hourly_count; k++)
+    // Journal `hours` of history (argv[7], default = one ring's worth). Going
+    // past HOURLY_HISTORY_SIZE is the interesting case: the journal is the
+    // long-term archive and keeps everything, while the base snapshot only
+    // carries what RTC can hold. Beyond the ring the two legitimately diverge,
+    // and only the journal has the older hours.
+    long hours = (argc > 7) ? strtol(argv[7], nullptr, 0) : g_hist.hourly_count;
+    if (hours < 1) hours = 1;
+    for (long k = hours - 1; k >= 0; k--)
     {
-      uint16_t idx = (uint16_t)((g_hist.hourly_idx + HOURLY_HISTORY_SIZE - g_hist.hourly_count + k)
-                                % HOURLY_HISTORY_SIZE);
-      time_t hr = g_hist.hourly_latest_time -
-                  (time_t)(g_hist.hourly_count - 1 - k) * 3600;
-      history_store_append_hourly(hr, &g_hist.hourly[idx]);
+      time_t hr = g_hist.hourly_latest_time - (time_t)k * 3600;
+      // Same daily profile MockData draws, so an 83-day series still looks like
+      // weather rather than noise.
+      struct tm t;
+      localtime_r(&hr, &t);
+      float c = mock_temp_at_hour((float)t.tm_hour) + 0.02f * (float)((hours - k) / 24);
+      HourlyEntry e = { (int16_t)((c - 0.4f) * 10), (int16_t)((c + 0.4f) * 10),
+                        (int16_t)(c * 10) };
+      history_store_append_hourly(hr, &e);
     }
+    printf("journal: %ld hourly records (%.1f days); RTC ring holds %u\n",
+           hours, hours / 24.0, g_hist.hourly_count);
     // A self-consistent drift block: an interval the scheduler will accept,
     // and a ppm sample paired with the window it was measured over. Leaving
     // either unset is not harmless — a zero interval schedules a WiFi resync
