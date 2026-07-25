@@ -86,6 +86,31 @@ on them; the custom rev A board adds one deliberately.
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
 device clock behind real time.
 
+### Collection run started 2026-07-25
+
+FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `49202b8`,
+`dfrobot_firebeetle2_esp32e_release` (`DISABLE_SERIAL`, 60s interval), **on
+battery**, flash erased immediately before flashing so nothing synthetic from
+the bench tests remains. Planned duration ~1 week; at the 1-day interval floor
+that is ~7 samples.
+
+Two things changed since the datapoint above, and both matter for how this run
+is read:
+
+- **Samples now survive.** Each successful resync journals a `REC_DRIFT` to the
+  `history` partition, so `tools/history.py dump --drift` retrieves the whole
+  run — no daily transcription off the screen, and a reflash or panic no longer
+  destroys it. `DRIFT_PPM_HIST_SIZE` is still 6, so the *badge* shows only the
+  last six; flash holds all of them.
+- **Battery, not USB**, deliberately. The rate above is a temperature-weighted
+  average and self-heating is a suspected covariate, so the run should reflect
+  deployed conditions. `ambient_mean_x10` and `ambient_hours` ride along in each
+  record for exactly that correlation.
+
+Retrieve with `history.py backup --full` then `dump --drift`; the CSV already
+computes the day-over-day `d_boot` / `d_refresh` duty-cycle deltas the decision
+rules below ask for.
+
 ### Reading a datapoint
 
 - Drift accumulates since the clock was last *set* — boot or the last
