@@ -1,128 +1,141 @@
+<!-- House rules for THIS file. Block-level HTML comments are stripped before
+  CLAUDE.md is injected into context, so this note costs no session tokens and
+  is visible only when the file is opened.
+  - Keep it lean. Target <= ~130 lines of *loaded* content (Claude Code docs
+    cap CLAUDE.md at < 200). Shorter files get better adherence (bloat ->
+    ignored rules). Prune one stale line before adding one.
+  - Each bullet is a rule NOT derivable from the code and worth re-stating
+    every session. Long rationale -> docs/; multi-step procedure -> a skill;
+    guidance that only matters for some files -> .claude/rules/<topic>.md
+    with a `paths:` frontmatter glob (those cost nothing until a matching file
+    is touched).
+  - Run /claude-md-audit before committing any change to this file. -->
+
 # CLAUDE.md
 
 ## Build & test
 
 ```bash
-pio run -e dfrobot_firebeetle2_esp32e_debug    # ESP32-E (default env)
-pio run -e seeed_xiao_esp32c6_debug            # C6
-pio run -e thermometer_c6_debug                # custom rev A board (THERMOMETER_C6_BOARD)
-make -C tools/sim screenshots                  # render all display sizes → tools/mock_*.png
-make -C tools/hstest                           # HistoryStore checks (host, no hardware)
-make -C tools/hstest sample                    # + cross-check the Python decoder
+~/.platformio/penv/bin/pio run -e dfrobot_firebeetle2_esp32e_debug   # ESP32-E (default env)
+~/.platformio/penv/bin/pio run -e seeed_xiao_esp32c6_debug           # C6
+~/.platformio/penv/bin/pio run -e thermometer_c6_debug               # custom rev A board
+make -C tools/sim screenshots      # render all display sizes -> tools/mock_*.png
+make -C tools/hstest [sample]      # HistoryStore checks, host-only; `sample` also gates the Python decoder
 ```
 
-IMPORTANT: After any display/rendering change, run the simulator and check the PNGs before considering the work done. The simulator compiles `DisplayRenderer.cpp` natively with `g++` and shares all include/ headers with the firmware — it's the fastest feedback loop.
+`pio` is not on `PATH`. Env list and build-system rationale: `docs/build-system.md`.
 
-IMPORTANT: After any `HistoryStore.cpp` or on-flash-format change, run
-`make -C tools/hstest sample`. It compiles the real store against a simulated
-NOR flash (writes clear bits, like the hardware) and covers the ring wrap, which
-is ~4.6 years out on a device and would otherwise ship untested. The `sample`
-target decodes a C-written image with `tools/history.py`, which is what keeps
-the two implementations on one format.
+## Working on hardware
+
+Use the `/device-session` skill for anything involving a connected board. Four
+facts that do damage when unknown:
+
+- **`include/local-secrets.h` must match the wired panel/sensor before any
+  upload.** A mismatch panic-loops at ~600ms and looks like a huge sleep floor on
+  the PPK2; a stale frame (old GIT_HASH/time) is the tell.
+- **esptool and `history.py` enter download mode, which resets the chip and wipes
+  RTC** (`rst:0x1 POWERON_RESET`) — destroying the boot counters, in-progress
+  hour and drift window you may be measuring.
+- **A base snapshot's existence proves a full boot->render->sleep cycle.**
+  `base (none — journal only)` after a settle window means boot loop, not
+  "hasn't slept yet".
+- **`EPD_POWER_GATE` fails silently.** On any on-device anomaly, enumerate
+  physical causes (jumpers, probe orientation, panel rail) before firmware ones.
+
+## Numbers are measured, not guessed
+
+- Timing and energy estimates here have a poor track record — off by 3-10x in
+  both directions, once shipping a watchdog boot-loop. **Label any figure you did
+  not measure as an estimate**, in comments and docs alike.
+- **With hardware attached this is a gate**: instrument new deadline-bound paths
+  (task watchdog, EPD busy wait, battery budget) with `ms_now()` and measure
+  before committing. Without that board/panel, say so and mark it unmeasured — as
+  `docs/notes.md` already does.
+- Never derive a charge figure from a PPK2 screenshot. Ask for the selection
+  window's average current and duration, and say which region to select.
+- **Device-intrinsic costs get precise figures; environment-dependent ones get an
+  order of magnitude and their driver named.** A base snapshot is fixed work
+  (170ms @ 41.94mA = 7.14mC). Refresh cadence is not — being delta-triggered it
+  tracks how volatile the room is, from a handful of refreshes on a stable day to
+  tens per day in a heatwave with the windows open. Reason with what survives
+  that spread: refreshes beat the sleep floor by ~an order of magnitude, so the
+  budget is single-digit coulombs/day, not the microamp floor.
+- Logbooks, in order of authority: `docs/notes.md` (power), `docs/clock-drift.md`
+  (drift), `docs/footprint.md` (size/build time — append a row after significant
+  changes), `docs/history-store-validation.md` (proven on hardware). Read the log
+  before quoting a number; carry its date and conditions with the figure.
 
 ## Build system (pure ESP-IDF)
 
-Both boards build `framework = espidf` on the official registry platform
-(`espressif32 @ ^7.0.1`, ESP-IDF 6.0.1) — no Arduino framework, no platform
-fork, no pinned zip URL. libc is pinned to newlib (CONFIG_LIBC_NEWLIB):
-PlatformIO's ulp.py doesn't forward ADD_PICOLIBC_SPECS to the LP-core
-sub-build, so IDF 6's picolibc default breaks it; revisit picolibc
-(~20% smaller binaries) when that's fixed or when building with idf.py. The tree is a standard IDF CMake project
-(`CMakeLists.txt` + `src/CMakeLists.txt` + `components/`), so
-`idf.py -DIDF_TARGET=esp32c6 build` also works (fonts auto-generate at cmake
-configure; GIT_HASH shows the fallback outside PlatformIO).
+`framework = espidf` on the stock platform, no Arduino and no fork; `idf.py`
+works too. Rationale, traps and the env list: `docs/build-system.md`. Two rules
+worth carrying everywhere: **`history` is pinned at flash offset 0x10000** (moving
+its start orphans years of archive), and **sensor/display selection lives in
+`include/local-secrets.h`** (gitignored — see `local-secrets-example.h`), not in
+platformio.ini.
 
-- **Board macros** (`ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E` / `ARDUINO_XIAO_ESP32C6`,
-  legacy names kept) derive from `IDF_TARGET` in `src/CMakeLists.txt`, not
-  platformio.ini.
-- **Vendored components**: `components/gxepd2` + `components/adafruit_gfx`
-  compile against `components/arduino_shim` (minimal Arduino API over IDF —
-  GPIO, timing, Print/Serial, SPIClass on spi_master). Only the panels
-  selectable in local-secrets.h are compiled — add the panel `.cpp` to
-  `components/gxepd2/CMakeLists.txt` when enabling a new `USE_*` panel.
-  `components/hulp` (ESP32-E ULP FSM) registers empty on other targets.
-- **sdkconfig**: authored `sdkconfig.defaults` + `sdkconfig.defaults.<target>`
-  are tracked; generated `sdkconfig.<env>` files are gitignored. CPU is fixed
-  at 80MHz at build time.
-- **Partition table lives in `partitions.csv`** (2048KB single app, no OTA;
-  1920KB `history` data partition) and is referenced from BOTH
-  `board_build.partitions` (PlatformIO — which IGNORES the sdkconfig partition
-  selection and always generates from this option) and
-  `CONFIG_PARTITION_TABLE_CUSTOM_FILENAME` (idf.py). Keep them pointing at the
-  same file.
-- **`history` is at a fixed offset (0x10000) and must stay there.** It comes
-  before `factory` so a future resize grows it upward and leaves written archive
-  content in place; moving its start orphans years of data. Changing the table
-  relocates the app, so that one upload must not be interrupted.
-- **Never name a project header like an IDF-internal one** — IDF's mbedtls
-  exposes a private `common.h` that shadowed ours (hence `app_common.h`).
-- **PlatformIO's espidf builder feeds every file in `ulp/` to the active ULP
-  toolchain** — that's why `ulp/lp_core_main.c` is wrapped in `#ifdef __riscv`
-  (on ESP32-E the FSM pass preprocesses it to nothing; HULP builds the FSM
-  program at runtime instead).
-- **ULP FSM word budget is checked at build time** (`scripts/check_ulp_size.py`
-  preprocesses the program arrays with the real toolchain and fails the build
-  past CONFIG_ULP_COPROC_RESERVE_MEM/4 = 128 words; currently 127/128). The
-  runtime loader also logs the count and degrades to safety-net wakes instead
-  of aborting if it ever misfits.
-- **PlatformIO base sections must be plain sections, not `[env:...]`** — an
-  `[env:...]` mixin is itself a buildable (half-configured) target and
-  `extends` only inherits reliably from plain sections (see platformio.ini).
-- **Don't modify `include/generated/`** — auto-generated by font scripts, gitignored.
-- **Sensor/display selection lives in `include/local-secrets.h`** (gitignored), not in platformio.ini. Sensors: `USE_BMP390L`, `USE_BMP58x`, `USE_DS18B20_PAR` (currently disabled — needs a OneWire port), `USE_DUMMY_SENSOR`. See `local-secrets-example.h` for options.
-- **ULP and RTC_DATA_ATTR share the same 8KB** at `0x50000000`. `ULP_DATA_BASE` must be past all `.rtc.data`/`.rtc.force_slow` sections. The post-build script `post_build_check_rtc.py` verifies this; a runtime check in `ulp_check_data_overlap()` also aborts on overlap. `time_t` is 8 bytes on both ESP32 and C6 with ESP-IDF 5.x. On ESP32-E, `CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout ULP_DATA_BASE assumes.
-- **Footprint & build-time ledger**: `docs/footprint.md` — append a row after significant changes.
-- **Clock drift logbook**: `docs/clock-drift.md` — append a row whenever a
-  `! DRIFT` badge or `NTP resync: drift was ...` line is observed. Every
-  observation is also journaled to flash with its correlates, so
-  `tools/history.py dump <backup> --drift` is the easier source and it survives
-  reflashing.
+## Subsystem rules
 
-## Custom PCB (hardware/thermometer-c6)
-
-Scoped rules live in `hardware/thermometer-c6/CLAUDE.md` — generated
-KiCad schematic (`make check` gates everything), never hand-edit the
-`.kicad_sch`. Next phase: `hardware/thermometer-c6/LAYOUT-PLAN.md`.
+Path-scoped, loaded when their files are touched — read before editing:
+`.claude/rules/build.md` (platformio.ini, CMake, partitions, sdkconfig),
+`.claude/rules/history-store.md` (flash archive + host tooling),
+`.claude/rules/display.md` (renderer, badges, simulator),
+`.claude/rules/ulp.md` (ULP FSM / LP core),
+`.claude/rules/rtc-state.md` (RTC memory, version bumps).
+The custom PCB has its own `hardware/thermometer-c6/CLAUDE.md`: generated KiCad
+schematic (`make check` gates everything), never hand-edit the `.kicad_sch`.
+Next phase there: `hardware/thermometer-c6/LAYOUT-PLAN.md`.
 
 ## Code conventions
 
-- Board-specific code: `#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)` / `#elif defined(ARDUINO_XIAO_ESP32C6)` / `#else #error`
-- ULP variant: `SOC_ULP_FSM_SUPPORTED` (ESP32-E) vs `SOC_LP_CORE_SUPPORTED` (C6); unified `HAS_ULP_SUPPORT` macro
-- Temperature storage: `int16_t` × 10 (223 = 22.3°C)
-- Chart styling: thick solid for primary curve (avg), arc-length dotted via `draw_spline_dotted` (~2px spacing) for envelope (min/max)
-- All persistent state uses `RTC_DATA_ATTR`; survives deep sleep but NOT power-on reset (flash/battery swap). Bump `RTC_HISTORY_VERSION` when changing the `RtcHistory` struct (now in `include/RtcHistory.h`), bump `RTC_STATE_VERSION` for other RTC variable changes. The `self_addr` field in `historical_data` auto-detects linker address shifts.
-- **History outlives RTC**: `src/HistoryStore.cpp` mirrors the sparkline, the
-  hourly ring and the drift block to the `history` flash partition, so they
-  survive reflash, panic and battery swap. A cold boot restores from flash.
-  Only `esptool erase_flash` destroys it. An `RTC_HISTORY_VERSION` bump does
-  not: the snapshot stores the buffer geometry and zero-fills a shorter stored
-  payload, so appending a field stays non-destructive.
+- Board-specific code: `#if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)` /
+  `#elif defined(ARDUINO_XIAO_ESP32C6)` / `#else #error`
+- ULP variant: `SOC_ULP_FSM_SUPPORTED` (ESP32-E) vs `SOC_LP_CORE_SUPPORTED` (C6);
+  unified `HAS_ULP_SUPPORT` macro
+- Temperature storage: `int16_t` x 10 (223 = 22.3°C)
+- **History outlives RTC**: `src/HistoryStore.cpp` mirrors the sparkline, hourly
+  ring and drift block to the `history` partition, surviving reflash, panic and
+  battery swap. Only `esptool erase_flash` destroys it. `tools/history.py` backs
+  it up, restores it and decodes it on the host.
 - **Nothing is recorded without a plausible clock** (`time_is_plausible()`).
-  Entries are filed by clock hour, so a 1970 timestamp files them ~54 years
-  before everything stored; the device shows restored history and the existing
-  `! NOSYNC` badge instead.
-- Adding an `RTC_DATA_ATTR` variable shifts `historical_data` and eats
-  `ULP_DATA_BASE` headroom (60 bytes spare on ESP32-E). `HistoryStore` therefore
-  derives its state from flash rather than adding any.
+  Entries are filed by clock hour, so a 1970 timestamp would file them ~54 years
+  before everything stored; the device shows restored history and `! NOSYNC`.
 
 ## Commit style
 
 Imperative present tense, no conventional-commit prefixes:
 ```
 Restore ULP safety-net timer for periodic housekeeping wakeups
-Extract draw_y_grid() to deduplicate grid/label rendering
 Migrate C6 to pure framework=espidf on stock platform, drop fork
 ```
 
 ## IMPORTANT: Revert debug changes before committing
 
-Always check for and revert temporary debug state before cleanup or feature commits: test `#define`s (like `LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`), temporary build_flags, hardcoded test values. Past sessions have had regressions from debug changes leaking into commits.
+Check for and revert temporary debug state before any cleanup or feature commit:
+test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
+`HISTORY_BASE_EVERY_WAKE`), temporary build_flags, hardcoded test values. Past
+sessions have had regressions from debug changes leaking into commits.
 
 ## Workflow preferences
 
-- **Research before implementing**: when exploring a new approach, explain options first and wait for a go-ahead before writing code. Once direction is agreed, execute without asking for confirmation on each step.
-- **Incremental commits**: commit at natural checkpoints (before moving to next task, end of session, after a working milestone). Don't batch large changes.
-- **Simplify aggressively**: always look for ways to reduce complexity and maintenance burden. If there's a simpler approach, propose it. Past examples: custom Python build script → platform fork → pure ESP-IDF on the stock platform, manual IDF download → auto-detection.
-- **Parse crash logs and serial output**: the user will paste raw Guru Meditation dumps, build warnings, and PPK2 observations. Interpret them directly without asking for clarification.
-- **Keep responses short**: match the user's terse style. Lead with the fix or answer, not the reasoning. Skip recaps of what was just done — the diff speaks for itself.
-- **Don't over-explain**: the user is an experienced embedded developer. Skip basics about ESP32, I2C, deep sleep, PlatformIO, etc. Focus on what's non-obvious or project-specific.
+- **Research before implementing**: explain options first and wait for a
+  go-ahead. Once direction is agreed, execute without confirming each step.
+- **Batch questions to the end of a work item; don't block mid-run.** Prefer a
+  short prose question carrying a recommendation over AskUserQuestion cards,
+  unless the choice really is 2-4 discrete alternatives.
+- **Sequence hardware requests**: finish all USB-only work before asking for a
+  rewire, and group physical asks into one message. When asking the user to read
+  the panel, give the exact expected string so the reply is yes/no.
+- **Say what is on the device.** After any flash, erase or inject, state env +
+  `PLATFORMIO_BUILD_FLAGS` + git hash and append it to
+  `docs/history-store-validation.md` — debug flags change what the panel shows,
+  so an unrecorded build makes every later observation ambiguous.
+- **Incremental commits** at natural checkpoints; don't batch large changes, and
+  don't propose rewriting local git history — the user asks when they want it.
+- **Simplify aggressively**: if there's a simpler approach, propose it.
+- **Parse crash logs and serial output** directly — the user pastes raw Guru
+  Meditation dumps, build warnings and PPK2 observations without commentary.
+- **Keep responses short**: lead with the fix, skip recaps and skip basics about
+  ESP32, I2C, deep sleep or PlatformIO. The user is an experienced embedded dev.
+- **Delegate the grind**: long build/flash/serial loops and bulk analysis go to a
+  subagent with a tight report-back contract, or the session hits compaction.
