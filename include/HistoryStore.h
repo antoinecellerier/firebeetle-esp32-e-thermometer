@@ -34,13 +34,14 @@
 // affordable — a 16-byte program costs a fraction of a mC against a 45-112mC
 // display refresh.
 //
-// The base snapshot dominates, and it is MEASURED on an ESP32-E rather than
-// estimated (docs/history-store-validation.md): 140ms total — 107ms to erase
-// two sectors (~53ms each, set by the flash part, not by anything firmware
-// controls), 25ms to program 6.4KB, 7ms to read back and verify. At an assumed
-// ~40mA active current that is ~5.6mC, so at the current ~daily cadence the
-// whole store costs ~6mC/day, under 0.1% of the budget. Writing a base every
-// hour instead would be ~134mC/day, ~1.9%.
+// The base snapshot dominates, and it is PPK2-MEASURED on an ESP32-E rather
+// than estimated (docs/notes.md): **170ms at 41.94mA = 7.14mC** (23.6mJ at
+// 3.3V). Of that, ~13mA over baseline is the flash itself (2.2mC) and the rest
+// is the awake time the write forces (4.9mC) — unavoidable, since programming
+// runs with the CPU up and the cache disabled.
+//
+// At the current ~daily cadence that is 7mC/day, **0.1%** of this rig's
+// ~7.1C/day. Hourly would be 171mC/day (2.4%), every wake 514mC/day (7.2%).
 
 #include <stdbool.h>
 #include <stdint.h>

@@ -27,20 +27,23 @@ pass in `make -C tools/hstest`.
 | 6 | Cold-clock test | unsynced device records nothing, NOSYNC badge, bounded retries |
 | 7 | Transport test | baud actually decisive on this board |
 | 8 | `erase_flash` | clean start, no boot loop |
-| 9 | PPK2 | append/base/erase costs vs the ~0.04/4.5/2 mC estimates |
+| 9 | PPK2 | append/base/erase costs vs the estimates — **DONE**, see below |
 
-## Measured flash cost (2026-07-25, ESP32-E, `-DHISTORY_BASE_EVERY_WAKE`)
+## Measured flash cost — PPK2 confirmed (2026-07-25, ESP32-E)
 
-Timed on-device around the flash calls, n=4 per variant, tight spread. Only the
-**durations** are measured here; the current is assumed and is what a PPK2 pass
-would pin down.
+Full numbers and setup in `docs/notes.md`. Headline: **170.2 ms at 41.94 mA =
+7.14 mC** per base snapshot (3300 mV), which is **0.1%** of this rig's
+~7.1 C/day at the current ~daily cadence. Hourly would be 2.4%.
+
+On-device timing of the flash calls alone, which is what the cadence work was
+based on before the PPK2 pass:
 
 | Phase | Time | Note |
 |---|---|---|
-| erase 2 sectors (8KB) | **107 ms** | ~53 ms/sector — set by the flash part, not by CPU speed |
+| erase 2 sectors (8KB) | **104-125 ms** | ~53 ms/sector — set by the flash part, not by CPU speed |
 | program 6.4KB payload | **25 ms** | one page-aligned write |
-| read back + CRC32 | **7 ms** | |
-| **total per base snapshot** | **140 ms** | ~5.6 mC at an assumed 40 mA |
+| read back + CRC32 | **7-8 ms** | |
+| (marker also brackets) | ~13 ms | CRC32 over the payload + malloc/memcpy |
 
 Writing the payload as three calls (header, RtcHistory, drift block) instead of
 one cost **66 ms** rather than 25: the middle write started mid-page, so nearly
@@ -48,10 +51,13 @@ every 256-byte page took an extra program cycle. Batching into one page-aligned
 write took 21% off the whole snapshot and is simpler code. Estimate before
 measuring was 13 ms for this phase — off by 5x.
 
-Extrapolations from the erase rate: the one-time format is 480 sectors ≈ 26 s
-(the log's "~24s" guess holds). At the current ~daily base cadence the store
-costs ~6 mC/day; one base per hour instead would be ~134 mC/day, ~1.9% of the
-~7.1 C/day budget.
+The estimate that preceded the PPK2 pass was 5.6 mC; actual is 7.14 mC, 27%
+low. The assumed **current** was nearly right (40 vs 41.94 mA) — the error was
+duration, because the on-device timing covered only the flash calls and not
+everything the marker brackets.
+
+Extrapolation from the erase rate: the one-time format is 480 sectors ≈ 26 s
+(the log's "~24s" guess holds).
 
 ## Before starting the real drift collection
 

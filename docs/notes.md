@@ -615,3 +615,52 @@ band — 3700 mV shutdown stands.
   with the shield attached matches the rail baseline within buck efficiency.
 - Evidence: xiao-c6-bat-pads-4V2-floor(-zoom).png, -3V8-floor.png,
   -3V5-sag-and-burst-storm.png, -3V3-dropout-sawtooth(-zoom).png.
+
+## Flash history archive: base snapshot cost (2026-07-25, ESP32-E)
+
+FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, PPK2 source-meter **3300 mV**,
+`dfrobot_firebeetle2_esp32e_debug` built with
+`-DPPK2_DEBUG -DHISTORY_BASE_EVERY_WAKE` (forces one snapshot per wake, which
+is the only way to catch one — normal cadence is ~1/day). Measured on a
+non-refresh wake, so no EPD current is involved; `epd_power_off()` has already
+gated the panel rail by the time this runs anyway.
+
+The write is bracketed on D1 by a 3x50ms preamble, so it can be found zoomed
+out and selected exactly.
+
+| | measured |
+|---|---|
+| duration | **170.2 ms** |
+| average current | **41.94 mA** (46.83 mA peak) |
+| **charge** | **7.14 mC** (23.6 mJ at 3.3 V) |
+| baseline during preamble | ~29 mA |
+
+So the flash operation itself adds **~13 mA** over simply being awake: 2.2 mC
+is flash, 4.9 mC is the 170 ms of awake time it forces. There is no way to
+avoid the latter — the write requires the CPU up with the cache disabled.
+
+On-device timing of the flash calls alone (`ms_now()` either side) reads
+erase 104-125 ms, program 25 ms, verify 7-8 ms. The ~13 ms the marker sees on
+top is the CRC32 pass over the 6.4 KB payload plus the malloc/memcpy, which sit
+inside the bracket but outside the timed calls.
+
+Erase time drifted 104 -> 117 -> 125 ms over ~75 snapshots on the same two
+ping-ponged sectors. Probably temperature or noise rather than wear at ~37
+cycles per sector, but it is a 20% spread on the dominant term and worth
+re-checking if it keeps climbing.
+
+**Cadence implications**, against the ~7.1 C/day budget for this rig
+(1.68 C floor + ~48 refreshes at 112 mC):
+
+| base snapshot cadence | cost | share of budget |
+|---|---|---|
+| ~1/day (current) | 7.1 mC/day | **0.1%** |
+| hourly | 171 mC/day | 2.4% |
+| every wake (~72/day) | 514 mC/day | 7.2% |
+
+The current cadence is free. Going hourly to keep the 24h sparkline no more
+than an hour stale after a reflash would cost 2.4% — affordable but not
+obviously worth it, since the sparkline rolls over daily anyway.
+
+Journal appends (one 16-byte page program per hour) are not separately
+resolvable and were not chased: ~1 ms against a 170 ms snapshot.
