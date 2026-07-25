@@ -88,7 +88,7 @@ device clock behind real time.
 
 ### Collection run started 2026-07-25
 
-FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `49202b8`,
+FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `44ba5ba`,
 `dfrobot_firebeetle2_esp32e_release` (`DISABLE_SERIAL`, 60s interval), **on
 battery**, flash erased immediately before flashing so nothing synthetic from
 the bench tests remains. Planned duration ~1 week; at the 1-day interval floor
