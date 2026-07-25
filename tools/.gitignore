@@ -1,6 +1,7 @@
 *.png
 render_display
 
-# tools/hstest build artifacts
-hstest
-sample.bin
+# hstest build artifacts. Path-anchored: a bare `hstest` also matches the
+# tools/hstest/ directory and silently excludes the test sources.
+/hstest/hstest
+/hstest/sample.bin
