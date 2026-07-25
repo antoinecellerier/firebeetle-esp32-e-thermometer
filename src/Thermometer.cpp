@@ -451,7 +451,13 @@ static void history_store_persist_now()
 #ifdef HISTORY_BASE_EVERY_WAKE
   history_store_mark_base_dirty();
 #endif
+  // Reuses the display marker (D11/GPIO16 → PPK2 D1): rendering is finished by
+  // the time this runs, so the two can never overlap in a trace, and the flash
+  // write gets a crisp bracket instead of being an unlabelled plateau at the
+  // tail of the active phase.
+  PPK2_DISPLAY_HIGH();
   history_store_flush(&historical_data, &drift, now);
+  PPK2_DISPLAY_LOW();
 }
 
 // Mean of the hourly averages over the last `window_s`, for the drift record's

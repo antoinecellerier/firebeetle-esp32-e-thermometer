@@ -66,16 +66,20 @@ esp_err_t esp_partition_erase_range(const esp_partition_t *, size_t off, size_t 
   return ESP_OK;
 }
 
+// Overridable so --inject can stamp a real device's MAC and have it accept the
+// image as its own.
+static uint8_t g_mac[6] = { 0x24, 0x6f, 0x28, 0xab, 0xcd, 0xef };
+
 int esp_efuse_mac_get_default(uint8_t *mac)
 {
-  static const uint8_t m[6] = { 0x24, 0x6f, 0x28, 0xab, 0xcd, 0xef };
-  memcpy(mac, m, 6);
+  memcpy(mac, g_mac, 6);
   return ESP_OK;
 }
 
 void esp_chip_info(esp_chip_info_t *out) { out->model = 1; out->revision = 3; }
 
 #include "../../src/HistoryStore.cpp"
+#include "MockData.h"
 
 // --- harness ----------------------------------------------------------------
 
@@ -292,6 +296,54 @@ int main(int argc, char **argv)
   history_store_mark_base_dirty();
   history_store_flush(&g_hist, &g_drift, T0);
   g_have_part = true;
+
+  // ---- optional: emit a full-size image to inject onto a real device ----
+  // `--inject <file> <part-size> <mac-hex> <now-epoch>` writes an image that a
+  // device will accept as its own, filled with MockData's 30-day profile — the
+  // same data the simulator renders, so the on-screen result can be compared
+  // against tools/mock_200x200.png. Beats waiting 30 days for a real chart.
+  //
+  // Built by the REAL store code, so the injected image cannot disagree with
+  // what the firmware writes.
+  if (argc > 5 && strcmp(argv[1], "--inject") == 0)
+  {
+    g_flash.assign((size_t)strtoul(argv[2], nullptr, 0), 0xFF);
+    g_part.size = (uint32_t)g_flash.size();
+    sscanf(argv[3], "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx", &g_mac[0], &g_mac[1],
+           &g_mac[2], &g_mac[3], &g_mac[4], &g_mac[5]);
+    time_t now = (time_t)strtoll(argv[4], nullptr, 0);
+    reboot();
+    reset_hist();
+    history_store_available();
+
+    mock_fill_hourly(now, g_hist.hourly, &g_hist.hourly_count,
+                     &g_hist.hourly_idx, &g_hist.hourly_latest_time);
+    mock_fill_sparkline(now, g_hist.temp, &g_hist.temp_count);
+    // Journal the ring as well, so the archive (not just the base) is populated
+    // and a restore exercises replay rather than only the snapshot.
+    for (uint16_t k = 0; k < g_hist.hourly_count; k++)
+    {
+      uint16_t idx = (uint16_t)((g_hist.hourly_idx + HOURLY_HISTORY_SIZE - g_hist.hourly_count + k)
+                                % HOURLY_HISTORY_SIZE);
+      time_t hr = g_hist.hourly_latest_time -
+                  (time_t)(g_hist.hourly_count - 1 - k) * 3600;
+      history_store_append_hourly(hr, &g_hist.hourly[idx]);
+    }
+    g_drift.last_sync_time = now;
+    g_drift.drift_ppm_count = 1;
+    g_drift.drift_ppm_hist[0] = -5265;
+    g_drift.last_drift_ms = -9559000;
+    g_drift.last_drift_window_s = 1814400;
+    history_store_mark_base_dirty();
+    history_store_flush(&g_hist, &g_drift, now);
+
+    FILE *f = fopen(argv[5], "wb");
+    fwrite(g_flash.data(), 1, g_flash.size(), f);
+    fclose(f);
+    printf("injected image: %u hourly, %u sparkline, %zu bytes\n",
+           g_hist.hourly_count, g_hist.temp_count, g_flash.size());
+    return g_fail ? 1 : 0;
+  }
 
   // ---- optional: emit an image for the Python decoder to cross-check ----
   if (argc > 1)

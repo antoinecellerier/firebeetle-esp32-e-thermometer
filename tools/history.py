@@ -330,21 +330,28 @@ def read_device(port=None, baud=921600, full=False):
                    max(HS_SECTOR, (cursor + HS_SECTOR) & ~(HS_SECTOR - 1)))
         return head + esp.read_flash(off + HS_JOURNAL_OFF, want)
     finally:
+        # Must release the port, not just reset the chip: `restore` reconnects
+        # for the write step, and pyserial holds an exclusive lock, so leaving
+        # it open fails the write with "port is busy" after a successful read.
         try:
             esp.hard_reset()
+        except Exception:
+            pass
+        try:
+            esp._port.close()
         except Exception:
             pass
 
 
 def write_device(blob, port=None, baud=921600):
+    """Whole-partition write. Unlike backup this can't be incremental, so it is
+    the slow direction — a couple of minutes on the FireBeetle's UART bridge."""
     import esptool
     off, _ = history_partition()
-    tmp = os.path.join(os.path.dirname(os.path.abspath(blob)) or ".",
-                       ".history-restore.bin")
+    # Re-resolve the port: the read that preceded this reset the chip, and the
+    # C6 re-enumerates its USB-Serial-JTAG endpoint when it does.
     esptool.main(["--port", _resolve_port(port), "--baud", str(baud),
                   "write_flash", hex(off), blob])
-    if os.path.exists(tmp):
-        os.unlink(tmp)
 
 
 # --- commands ----------------------------------------------------------------
