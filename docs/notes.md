@@ -664,3 +664,33 @@ obviously worth it, since the sparkline rolls over daily anyway.
 
 Journal appends (one 16-byte page program per hour) are not separately
 resolvable and were not chased: ~1 ms against a 170 ms snapshot.
+
+### Can the base snapshot overlap other work? No (considered 2026-07-25)
+
+4.9 mC of the 7.14 mC is just awake time, so overlapping it with something the
+CPU is doing anyway looks attractive. It doesn't work:
+
+- **No parallelism exists.** `esp_flash_erase/write` disable the cache and
+  busy-poll the status register, so the CPU cannot execute cached code while
+  they run. IDF has no async/DMA flash API. The write blocks by construction.
+- **The EPD busy-wait is the worst candidate, not the best.**
+  `epd_busy_light_sleep()` calls `esp_light_sleep_start()` — the chip is halted
+  at ~1-2 mA, which is why a ~20 s Z90 refresh averages only ~5.6 mA. Writing
+  flash there means staying awake instead: ~27 mA x 170 ms = ~4.7 mC added
+  against ~4.9 mC saved. Net zero, and `epd_pin_sleep_hold()` exists because the
+  panel aborts its waveform if the control lines glitch mid-refresh — a
+  cache-disabled 125 ms erase in the middle of that is a corrupted frame
+  waiting to happen.
+- The SNTP wait is the only genuinely idle-awake window, but the ordering is
+  wrong: the snapshot has to capture the drift block the resync produces.
+
+The lever that does exist is **duration**, dominated by erasing two sectors
+(104-125 ms of 170). The payload is 6388 B, just over one 4 KB sector. Dropping
+the hourly ring (4320 B) from the base leaves ~2 KB, so one sector:
+erase ~53 ms, total ~76 ms, **~3.2 mC — a 55% cut**.
+
+Not done, because at ~1 snapshot/day this saves 4 mC/day out of ~7.1 C/day and
+costs: restore would have to walk the journal backwards across base generations
+to rebuild the 720-hour ring (the `base_seq` filter that makes replay trivial
+only works forwards), and the base would no longer be able to restore 30 days
+on its own if the journal were damaged. Revisit only if the cadence goes hourly.
