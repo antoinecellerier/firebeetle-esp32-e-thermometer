@@ -13,6 +13,7 @@
 #endif
 
 #include <math.h>
+#include <stdarg.h>
 #include "Adafruit_GFX.h"
 // Temperature font: generated at build time based on display resolution.
 // The TEMP_FONT macro is defined in generated/font_config.h.
@@ -980,6 +981,25 @@ static void fmt_span(char *buf, size_t n, time_t secs)
 
 #define FOOTER_TEXT_LEN 128
 
+// Append to a fixed buffer, saturating instead of running off the end.
+// snprintf() returns the length it WOULD have written, so accumulating that
+// return value directly walks `out + pos` past the buffer and makes the next
+// call's `n - pos` underflow to a huge size_t — a stack smash on the render
+// path, reachable whenever the RTC counters hold garbage (which is exactly the
+// ULP-scribbles-on-RTC_DATA case the RTC headroom check exists for). Losing the
+// tail of the footer is fine: the caller measures this string and drops what
+// does not fit anyway.
+static void footer_append(char *out, size_t n, size_t *pos, const char *fmt, ...)
+{
+  if (n == 0 || *pos >= n - 1) return;
+  va_list ap;
+  va_start(ap, fmt);
+  int w = vsnprintf(out + *pos, n - *pos, fmt, ap);
+  va_end(ap);
+  if (w < 0) return;
+  *pos = ((size_t)w >= n - *pos) ? n - 1 : *pos + (size_t)w;
+}
+
 // The footer as one string. Built separately from the drawing so the status
 // indicators can measure it and only repeat the build hash when this line is
 // too long for the panel to show it.
@@ -1027,22 +1047,23 @@ static void build_footer_text(char *out, size_t n, time_t now,
   else
     snprintf(uptime_str, sizeof(uptime_str), "%dd", up_days);
 
-  int pos = snprintf(out, n, "#%d r%d lp%u",
-                     stats.boot_count, stats.display_refresh_count,
-                     (unsigned)stats.lp_wake_count);
+  size_t pos = 0;
+  footer_append(out, n, &pos, "#%d r%d lp%u",
+                stats.boot_count, stats.display_refresh_count,
+                (unsigned)stats.lp_wake_count);
   if (stats.lp_error_count > 0)
-    pos += snprintf(out + pos, n - pos, " e%u", (unsigned)stats.lp_error_count);
+    footer_append(out, n, &pos, " e%u", (unsigned)stats.lp_error_count);
   if (stats.ulp_reinit_count > 1)
-    pos += snprintf(out + pos, n - pos, " u%u", (unsigned)stats.ulp_reinit_count);
-  pos += snprintf(out + pos, n - pos, " %s w:%s mx%.1fV",
-                  uptime_str, wake_str, stats.max_battery_mv / 1000.0f);
+    footer_append(out, n, &pos, " u%u", (unsigned)stats.ulp_reinit_count);
+  footer_append(out, n, &pos, " %s w:%s mx%.1fV",
+                uptime_str, wake_str, stats.max_battery_mv / 1000.0f);
   if (stats.bad_pin27_count > 0)
-    pos += snprintf(out + pos, n - pos, " b27:%d", (int)stats.bad_pin27_count);
-  pos += snprintf(out + pos, n - pos, " %s", GIT_HASH);
+    footer_append(out, n, &pos, " b27:%d", (int)stats.bad_pin27_count);
+  footer_append(out, n, &pos, " %s", GIT_HASH);
   if (boot_date[0])
-    pos += snprintf(out + pos, n - pos, " %s", boot_date);
+    footer_append(out, n, &pos, " %s", boot_date);
   if (sync_str[0])
-    snprintf(out + pos, n - pos, "%s", sync_str);
+    footer_append(out, n, &pos, "%s", sync_str);
 }
 
 void render_footer(Adafruit_GFX &gfx, const Rect &zone,
