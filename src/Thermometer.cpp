@@ -477,17 +477,22 @@ static void history_store_persist_now()
   // write gets a crisp bracket instead of being an unlabelled plateau at the
   // tail of the active phase.
   //
-  // Three 2ms pulses first, as a signature. The pin is not held across deep
+  // Three 50ms pulses first, as a signature. The pin is not held across deep
   // sleep (no gpio_hold_en), so it floats while asleep and its idle level on a
   // PPK2 input is whatever the input does — which makes a lone edge ambiguous
   // to read. A triple blip immediately before the write is unmistakable at any
-  // polarity, and the flash write is the wide excursion right after it.
+  // polarity, and the flash write is the excursion right after it.
+  //
+  // 50ms, not 2ms: at the 3s window needed to see a whole wake, 2ms pulses are
+  // ~1px each and invisible. 300ms of preamble is ~10% of that width, so it can
+  // be found zoomed out and then zoomed into. Only ever built with
+  // HISTORY_BASE_EVERY_WAKE for measurement, so the added awake time is free.
   for (int i = 0; i < 3; i++)
   {
     PPK2_DISPLAY_HIGH();
-    sleep_ms(2);
+    sleep_ms(50);
     PPK2_DISPLAY_LOW();
-    sleep_ms(2);
+    sleep_ms(50);
   }
   PPK2_DISPLAY_HIGH();
   history_store_flush(&historical_data, &drift, now);
