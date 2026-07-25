@@ -17,3 +17,6 @@ include/generated/
 .claude/settings.local.json
 .claude/projects/
 .claude/worktrees/
+
+# Bench scratch: partition images, backups, saved configs. Multi-MB binaries.
+/scratchpad/

@@ -467,7 +467,7 @@ int main(int argc, char **argv)
   g_have_part = true;
 
   // ---- optional: emit a full-size image to inject onto a real device ----
-  // `--inject <file> <part-size> <mac-hex> <now-epoch>` writes an image that a
+  // `--inject <part-size> <mac-hex> <now-epoch> <file>` writes an image that a
   // device will accept as its own, filled with MockData's 30-day profile — the
   // same data the simulator renders, so the on-screen result can be compared
   // against tools/mock_200x200.png. Beats waiting 30 days for a real chart.
