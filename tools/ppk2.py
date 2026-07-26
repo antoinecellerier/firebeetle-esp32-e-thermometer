@@ -790,7 +790,15 @@ def capture_live(args):
         # Default. The PPK2 does not supply the DUT, so no rail can be
         # over-volted regardless of how the leads are attached.
         ppk.use_ampere_meter()
-        print(f"ampere meter on {port} (PPK2 is not sourcing)")
+        # Required even here: ppk2_api's start_measuring() raises "Input voltage
+        # not set!" unless current_vdd is set, and use_ampere_meter() does not set
+        # it — so this mode, the documented default, could not run at all. The
+        # value is not a supply here (the DUT is externally powered); it feeds the
+        # offset term of the raw->current conversion, so it has to be the DUT's
+        # actual rail voltage to decode correctly.
+        ppk.current_vdd = args.vdd
+        print(f"ampere meter on {port} (PPK2 is not sourcing), "
+              f"DUT rail declared as {args.vdd} mV for the conversion")
     else:
         spec = RAILS[args.rail]
         mv = args.voltage if args.voltage is not None else spec["max_mv"]
@@ -800,7 +808,13 @@ def capture_live(args):
         confirm_connection(args.rail, mv)
         ppk.use_source_meter()
         ppk.set_source_voltage(mv)
-        print(f"source meter on {port} at {mv} mV, rail {args.rail}")
+        # Enabling the output is a separate command from setting the regulator.
+        # This used to live inside the --power-cycle branch, so a run without that
+        # flag never energised the board and reported a plausible sub-microamp
+        # "floor" from a DUT that was switched off — guaranteed rather than
+        # intermittent, because the previous run's finally turns the output off.
+        ppk.toggle_DUT_power("ON")
+        print(f"source meter on {port} at {mv} mV, rail {args.rail}, output ON")
 
     # Acquisition and decode are separated deliberately. The PPK2 streams
     # 4 bytes per sample at a fixed 100 kSps = ~400 kB/s, and get_samples() is
@@ -826,7 +840,10 @@ def capture_live(args):
         with open(args.raw_out + ".json", "w") as fh:
             json.dump({"modifiers": ppk.modifiers,
                        "mode": "SOURCE_MODE" if sourcing else "AMPERE_MODE",
-                       "vdd_mv": mv if sourcing else 0}, fh)
+                       # The real voltage in both modes: get_adc_result() folds
+                       # current_vdd into its offset term with no mode guard, so
+                       # writing 0 for ampere captures biased every offline decode.
+                       "vdd_mv": mv if sourcing else args.vdd}, fh)
         print(f"wrote {args.raw_out}.json (calibration sidecar)")
 
     abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
@@ -881,6 +898,8 @@ def capture_live(args):
     t_power = None
     try:
         if sourcing and args.power_cycle:
+            # Output is already on; this is the OFF/wait/ON sequence that puts a
+            # cold boot inside the capture.
             ppk.toggle_DUT_power("OFF")
             drain(args.off_seconds)
             ppk.toggle_DUT_power("ON")
@@ -988,6 +1007,10 @@ def main():
                    help="cut DUT power, then restore it with sampling already "
                         "running, so a cold boot cannot be missed")
     l.add_argument("--off-seconds", type=float, default=2.0)
+    l.add_argument("--vdd", type=int, default=4200, metavar="MV",
+                   help="in ampere-meter mode, the DUT's actual rail voltage — it "
+                        "feeds the conversion's offset term, so a wrong value "
+                        "biases every sample. Ignored when --rail sources.")
     l.add_argument("--port")
     l.add_argument("--out", metavar="CSV", help="also save the capture as CSV")
     l.add_argument("--raw-out", metavar="BIN",
