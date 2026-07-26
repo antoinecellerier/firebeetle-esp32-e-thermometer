@@ -263,14 +263,19 @@ def classify_display(tr):
     return labels
 
 
-def window(tr, from_ms, to_ms):
-    """Integrate an explicit time window. For the phases that carry no marker —
-    the archive format and the WiFi exchange — locate them with --profile, then
-    bracket them here."""
-    i0, i1 = tr.index_at(from_ms / 1000.0), tr.index_at(to_ms / 1000.0)
+def window(tr, from_s, to_s):
+    """Integrate an explicit time window, in SECONDS.
+
+    Seconds, not milliseconds, because --profile prints seconds and the docstring
+    tells you to chain them: `--from 12.345` after spotting a phase at t=12.345s
+    used to select a 0.65 ms window twelve seconds earlier and print it as if it
+    had worked. Units that disagree across two features meant to be used together
+    are a trap, not a convention.
+    """
+    i0, i1 = tr.index_at(from_s), tr.index_at(to_s)
     dur, mean, mc = tr.integrate(i0, i1)
     st = tr.stats(i0, i1)
-    print(f"\n-- Window {from_ms:.1f}-{to_ms:.1f} ms --")
+    print(f"\n-- Window {from_s:.3f}-{to_s:.3f} s --")
     print(f"  {dur*1000:.1f} ms   {mean/1000:.4f} mA   {mc:.4f} mC")
     if st:
         print(f"  raw current {st[0]:.1f} .. {st[1]:.1f} uA")
@@ -445,13 +450,25 @@ def load_csv(path, verbose=True):
 
         t_idx = cur_idx = None
         t_scale, cur_scale = 1e-3, 1.0
+        unitless_time = False
         dig = {}
         for i, h in enumerate(cols):
             unit = (re.search(r"\(([^)]*)\)", h) or [None, ""])[1].lower()
             name = re.sub(r"\(.*?\)", "", h).strip().lower()
             if t_idx is None and re.search(r"time", name):
                 t_idx = i
-                t_scale = {"s": 1.0, "ms": 1e-3, "us": 1e-6}.get(unit, 1e-3)
+                # No default. A unit-less time column guessed as milliseconds turns
+                # a seconds-based CSV into durations and charge 1000x too small,
+                # and mean current is unaffected (integrate() divides by the same
+                # corrupted duration) so nothing looks wrong. Reconstructing from
+                # the known sample rate is the safe read, exactly as a missing
+                # column already does.
+                t_scale = {"s": 1.0, "ms": 1e-3, "us": 1e-6}.get(unit)
+                if t_scale is None:
+                    print(f"note: time column {h!r} states no unit — ignoring it "
+                          f"and reconstructing from {PPK2_SAMPLE_HZ} Hz",
+                          file=sys.stderr)
+                    t_idx, unitless_time = None, True
             elif cur_idx is None and re.search(r"current|amp", name):
                 cur_idx = i
                 cur_scale = {"a": 1e6, "ma": 1e3, "ua": 1.0,
@@ -499,7 +516,7 @@ def load_csv(path, verbose=True):
 
     if not len(t):
         sys.exit(f"No samples parsed from {path!r}")
-    if t_idx is None and verbose:
+    if t_idx is None and verbose and not unitless_time:
         print(f"note: no timestamp column; assuming {PPK2_SAMPLE_HZ} Hz",
               file=sys.stderr)
     digital = {ch: v for ch, v in digital.items() if any(v)}
@@ -1029,10 +1046,11 @@ def main():
                              "hour). Ignored by the csv reader.")
         sp.add_argument("--profile", type=float, metavar="MS",
                         help="print mean current in bins of MS milliseconds")
-        sp.add_argument("--from", dest="from_ms", type=float, metavar="MS",
-                        help="integrate an explicit window (with --to); use for "
-                             "the unmarked archive-format and WiFi phases")
-        sp.add_argument("--to", dest="to_ms", type=float, metavar="MS")
+        sp.add_argument("--from", dest="from_s", type=float, metavar="SECONDS",
+                        help="integrate an explicit window (with --to), in the same "
+                             "seconds --profile prints; use for the unmarked "
+                             "archive-format and WiFi phases")
+        sp.add_argument("--to", dest="to_s", type=float, metavar="SECONDS")
 
     args = p.parse_args()
     if args.cmd == "csv":
@@ -1043,8 +1061,8 @@ def main():
         tr = capture_live(args)
     tr.cpu_ch, tr.disp_ch = args.cpu_ch, args.display_ch
     report(tr, args.profile)
-    if args.from_ms is not None and args.to_ms is not None:
-        window(tr, args.from_ms, args.to_ms)
+    if args.from_s is not None and args.to_s is not None:
+        window(tr, args.from_s, args.to_s)
 
 
 if __name__ == "__main__":
