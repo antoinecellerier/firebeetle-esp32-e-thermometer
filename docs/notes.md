@@ -695,384 +695,89 @@ to rebuild the 720-hour ring (the `base_seq` filter that makes replay trivial
 only works forwards), and the base would no longer be able to restore 30 days
 on its own if the journal were damaged. Revisit only if the cadence goes hourly.
 
-## C6 archive + time-sync budget: what is measured vs estimated (2026-07-25)
+## C6 ePaper rig: measured budget (2026-07-26)
 
-The FireBeetle numbers are PPK2-measured; the C6 equivalents are currently
-**scaled from them**, so the C6 budget below is a projection, not a measurement.
-Recorded here so a future session with a C6 on the bench can close the gaps
-rather than re-deriving the estimates.
+Rig: XIAO ESP32-C6 + BMP581 + Seeed ePaper driver board (GDEW029I6FD), PPK2 source
+meter at **4.2 V on the XIAO's soldered BAT pads**, `91f08eb` production build
+(`seeed_xiao_esp32c6_epaper_release`, no `PPK2_DEBUG`). Analysed with
+`tools/ppk2.py`. Supersedes the earlier projection that scaled the FireBeetle
+numbers across; every term below except one is now measured on this rig.
 
-Projected daily budget, `seeed_xiao_esp32c6_release` (BMP58x + GDEH0576T81):
-
-| Term | mC/day | Share | Basis |
+| Term | C/day | Share | Basis |
 |---|---|---|---|
-| Sleep floor (15.8 µA) | 1365 | 32% | measured |
-| ~48 refreshes @ 45.3 mC | 2174 | 52% | per-event measured; **rate assumed from the E rig** |
-| ~24 non-refresh CPU wakes | ~360 | 8.6% | estimated ~15 mC each |
-| NTP resync, 1/day | ~300 | 7.1% | estimated |
-| Flash archive | ~7 | 0.17% | scaled from the E's measured 7.14 mC |
-| **Total** | **~4.2 C/day** | | ±20%, dominated by the refresh-rate assumption |
+| Sleep floor, 21.7 µA | 1.875 | **86%** | measured, flat over 21 min |
+| Refresh wakes, 10.7/day × 10.05 mC | 0.107 | 4.9% | both measured |
+| NTP resync, 117 mC / 1.54 d | 0.076 | 3.5% | both measured |
+| Non-refresh wakes, 20/day × ~2.5 mC | 0.051 | 2.3% | rate measured, **charge estimated** |
+| Post-wake transient, 0.26 mC × 31/day | 0.008 | 0.4% | measured |
+| **Total** | **2.12** | | **~680 days** on a 400 mAh pack |
 
-### To measure on a C6
+### The figures
 
-Archive (build with `-DPPK2_DEBUG -DHISTORY_BASE_EVERY_WAKE`; the triple 50 ms
-D1 preamble brackets the write — see the ESP32-E section above for the trace):
-- [ ] **Base snapshot charge.** Projected ~5-6 mC. The 170 ms measured on the E
-  is erase-bound (~53 ms/sector × 2) so it should carry across; what changes is
-  the CPU riding along — C6 single-core RISC-V ~20 mA vs the E's ~29 mA, over
-  the flash's ~13 mA either way. Confirms or kills the 0.17% claim.
-- [ ] **Journal append charge.** Assumed ~0.04 mC on BOTH boards and never
-  actually measured on either. 25 appends/day, so even a 10× error is <2% of
-  budget — but it is the number the "appends are free" argument rests on.
-- [ ] **Ring sector erase.** Assumed ~2 mC, fires once per ~10 days.
-- [ ] **One-time format.** 480 sectors, extrapolated to ~26 s / ~1 C from the E's
-  erase rate. Only observable on the first boot after a partition-table change.
+- **Sleep floor: 21.7 µA.** Verified two ways on a 30-minute capture — an explicit
+  1200 s `--from/--to` window integrates to 21.72 µA, and 60 s profile bins hold
+  21.5-22.1 µA across 21 consecutive minutes. Half a deployment sleep interval
+  (field rate: one wake per ~46 min), dead flat, no creep.
+- **Wake + refresh: 10.05 mC** over 3.25 s. Four production observations (9.62,
+  9.53, 10.43, 10.62), ±6%.
+- **Panel refresh alone: ~8.3 mC** over ~3.03-3.06 s, five observations spanning
+  7.56-9.23 mC (±10%). Separable only on a `PPK2_DEBUG` build, where the D1 marker
+  brackets it; the balance of the wake is ~5 mC of overhead. The older 12.21 and
+  12.31 mC "refresh" figures for this panel were wake+refresh, not the panel.
+- **Successful NTP resync: ~117 mC** over 1.8 s. Two independent acquisition paths
+  6% apart (113.4 mC live via `ppk2-api`, 120.7 mC from an nRF app CSV export).
+  2-3× cheaper than the 200-400 mC that was projected. Shape: radio on with a
+  198 mA spike (PA/calibration inrush), 70-80 mA sustained for 1.3 s, two short TX
+  bursts for SNTP and teardown.
+- **Post-wake transient: ~0.26 mC per wake.** Wake-triggered, peaks ~20 s in, decays
+  over 35-60 s, then flat. Negligible in deployment (0.4%) but ~40% duty on a bench
+  where wakes come every 60 s — which is why bench cycle means read 28-35 µA.
+- **Refresh rate: 10.8/day**, from 216 refreshes over 19d23h in a basement holding
+  21.5-24.5 °C. The cadence is delta-triggered so it measures the room, not the
+  device: **treat 10-50/day as the operating range**, the E rig's 48/day being the
+  volatile end. Same run gives ~20 non-refresh CPU wakes/day and 31 wakes total.
+- **Resync interval: ~1.5 days**, not the 1-day floor. The C6's RC drifts +452 ppm
+  (`docs/clock-drift.md`), and the adaptive rule converges where drift over the
+  interval hits the 60 s threshold. Where there is no WiFi it is worse than
+  projected, not better: failed attempts re-arm with no backoff, so it stays pinned
+  at 1 day forever. This weakens the quantitative case for the FC-135 crystal on
+  `thermometer_c6` — the stock RC already buys ~1.5 days.
+- **One-time archive format: ~2.2 s / ~76 mC.** Derived by differencing two boots
+  that differ only in whether the archive had to format — not measured directly, and
+  the firmware also differed. Single-digit seconds as the 1.7 s full-chip erase
+  implied, against the ~26 s a sector-rate extrapolation projected.
+- **Base snapshot: 0.54-0.73 mC / 24 ms.** The **no-erase** case only: a freshly
+  formatted archive still has erased sectors. The E's 170 ms / 7.14 mC is
+  erase-bound, so this is not a steady-state figure.
 
-Time sync — the term worth the most attention, since it is ~40× the archive:
-- [x] **Successful resync charge. MEASURED 2026-07-26: 120.7 mC over 1.80 s**
-  (67.05 mA mean), ~84 mC of that incremental over the ~20.5 mA CPU baseline it
-  runs on top of. **2-3× cheaper than the 200-400 mC projection.** C6 ePaper rig
-  at 4.2 V battery-direct, `4c0bbef`, first-boot NTP bootstrap — which is the
-  same `wifi_connect()` + `sntp_sync_once()` work a resync does. Shape: baseline
-  to t+0, radio on with a 198 mA spike (PA/calibration inrush), sustained
-  70-80 mA for 1.3 s, two short TX bursts for SNTP and teardown, done at 1.8 s.
-  Combined with the ~1.5 d interval the C6's +452 ppm implies, the term is
-  **~78 mC/day**, not the ~195 projected.
-- [ ] **Failed resync charge on C6.** The 1.5 C (association timeout) and 4.5 C
-  (plus SNTP timeout) figures are ESP32-E measurements assumed to transfer. On
-  the C6 a failed attempt is ~36% of a day's budget versus ~21% on the E — same
-  radio cost, half the budget — so the retry cadence matters more here.
-- [x] **Actual resync interval reached.** Answered by inference, not by a soak:
-  the C6's RC measured **+452ppm** over ~20d (`docs/clock-drift.md` 2026-07-26),
-  which puts the adaptive rule at **~1.5 days**, not the 1-day floor — the
-  interval converges where drift over it reaches the 60s threshold, 60s/452ppm
-  ≈ 1.5d. That cuts this term to ~195 mC/day (4.6%) *where there is WiFi*. Where there
-  isn't, it is worse than the projection, not better: failed attempts re-arm at
-  `+resync_interval_s` with no backoff, so the interval stays pinned at 1 day
-  forever. A crystal-equipped board should climb toward the 28-day cap, which
-  drops this term to ~10 mC/day (0.25%) — the quantitative case for the FC-135 on
-  `thermometer_c6`, now weaker than it looked, since the stock RC already buys
-  ~2 days by itself.
+### Still unmeasured
 
-Base rates:
-- [x] **Refresh rate on a C6 rig.** **~10.8/day measured** — 216 refreshes over
-  19d23h, XIAO C6 + BMP581 + Seeed ePaper hat on a 400mAh pack, `1ed89a3`, in a
-  basement holding 21.5–24.5°C (2026-07-26). That is ~4.5× *below* the ~48/day
-  borrowed from the FireBeetle (1077 over 21d17h, 860 over 18d17h). Both are
-  real: refresh cadence is delta-triggered, so it measures how volatile the room
-  is, and a basement is the stable end of the spread while the E rig sat in a
-  flat with the windows open in a heatwave. Treat 10–50/day as the operating
-  range — the term stays the table's largest error bar, but its floor is now
-  measured rather than assumed. Same run gives **~20 non-refresh CPU wakes/day**
-  (621 boots − 216 refreshes over 19d23h), close to the assumed 24.
-- [ ] **Non-refresh CPU wake charge.** Projected ~15 mC (the E's is ~21 mC).
+- **Non-refresh CPU wake charge** — the only estimate left in the budget (2.3%).
+  Every wake captured so far happened to refresh.
+- **Failed resync charge on the C6.** The 1.5 C (association timeout) and 4.5 C
+  (plus SNTP timeout) figures are ESP32-E measurements assumed to transfer. Matters
+  more here than on the E: a failed attempt is a larger share of a smaller budget,
+  so the retry cadence dominates a no-WiFi deployment.
+- **Journal append** (assumed ~0.04 mC, never measured on either board) and **ring
+  sector erase** (assumed ~2 mC, fires once per ~10 days).
+- Two rendering checks on the 920x680 panel that `tools/sim` cannot cover: that the
+  `! NOARCH` badge is legible in FreeSans12pt7b, and that a `HOURLY_NO_DATA` gap
+  reads as a gap rather than a dotted line through it.
 
-Rendering, on the 920x680 panel specifically (`tools/sim` covers the geometry,
-but not the real panel's contrast and ghosting):
-- [ ] **`! NOARCH` badge.** Trigger by flashing a build with `HS_FORMAT` bumped,
-  then reverting. Verifies the archive-disabled warning is legible on the large
-  layout, where the status line uses FreeSans12pt7b rather than Org_01.
-- [ ] **`HOURLY_NO_DATA` gap.** The large layout draws the min/max envelope with
-  `draw_spline_dotted`; confirm a multi-day gap reads as a gap rather than as a
-  dotted line through it.
+### Traps that cost real time here
 
-### C6 ePaper rig, marker-driven measurement (2026-07-26)
-
-XIAO ESP32-C6 + BMP581 + Seeed ePaper driver board (GDEW029I6FD), `4c0bbef`,
-`seeed_xiao_esp32c6_epaper_release` + `-DPPK2_DEBUG`, PPK2 source meter at
-**4.2 V on the XIAO's soldered BAT pads** (shield switch off), USB detached.
-144 s capture, 14.4 M samples, analysed with `tools/ppk2.py` — regions bounded by
-the firmware's own D0/D1 edges rather than a dragged selection. Note the harness
-crossed the lanes relative to the header's convention (PPK2 D0 on XIAO D6/GPIO16
-= DISPLAY, D1 on D7/GPIO17 = CPU_ACTIVE), hence `--cpu-ch 1 --display-ch 0`.
-
-| Term | Measured | Against |
-|---|---|---|
-| Sleep floor | **26.4 / 26.9 / 29.7 µA** (three windows) | 22.0 µA, same config, 2026-07-05 |
-| Successful NTP resync | **120.7 mC / 1.80 s** | projected 200-400 mC |
-| Panel refresh alone | **7.56 / 7.80 / 8.39 mC**, ~3.03-3.06 s | no prior decomposition |
-| Delta wake + refresh | **12.97 / 13.21 mC**, 3.33 s | 12.31 mC / 3.34 s via JST at 4.2 V |
-| Archive base snapshot | **0.54 mC / 24.4 ms**; 0.73 mC / 24.2 ms ×2 | 7.14 mC / 170 ms on the E |
-| First boot, total | **356.7 mC / 12.29 s** | — |
-
-What this settles and what it does not:
-
-- **The 12.21/12.31 mC "refresh" figures were wake+refresh, not the panel.**
-  Marker separation splits them: the panel itself is ~7.7 mC and the wake
-  overhead around it ~5.4 mC. The totals agree with the earlier lump to within
-  5%, which is the cross-check that makes the decomposition trustworthy.
-- **The base snapshot here is ~10× cheaper than the E's, and that is probably not
-  the steady state.** A freshly formatted archive still has erased sectors, so a
-  24 ms flush is the no-erase case. The E's 170 ms is erase-bound (104-125 ms of
-  it). Needs a snapshot that has to erase before this number means anything.
-- **`PPK2_CPU_ACTIVE_HIGH()` runs after `ppk2_selftest()`, so the marker misses
-  the boot preamble** — ROM bootloader, IDF startup and the selftest itself,
-  ~450 ms at 10-20 mA (~5-9 mC) before D0 asserts. Every marker-bounded wake
-  figure above therefore *understates* the true wake cost by roughly that much.
-  Moving the marker ahead of the selftest would close it.
-- **The one-time archive format was not isolated.** It sits inside the first
-  boot's 12.29 s but does not present as a distinct erase plateau at 250 ms
-  resolution — CPU-active current and flash current are the same order here, so
-  it is not separable the way the E's was. Unresolved.
-- The floor's spikiness is normal PFM: 11.6 µA between spikes plus ~0.16% duty
-  of ~9 mA, 50-60 µs wide. Not a wiring fault, and not the ETA9740 — that path's
-  signature is millisecond-scale 20-83 mA bursts every ~2 s, which is absent.
-
-### Live capture cross-check, and the format by difference (2026-07-26)
-
-Second capture of the same rig on `f07d2c9`, this time via `tools/ppk2.py live`
-(`ppk2-api`, source meter 4.2 V, `--power-cycle` so sampling is already running
-when the DUT powers up). Sustained **100.0 kSps with no dropped samples**
-(4,499,456 in 45.00 s), which is what makes the reconstructed time axis valid —
-live mode has no per-sample timestamps, so any drop would silently compress time
-and under-report every charge figure.
-
-**The two acquisition paths agree.** The NTP bootstrap over the same 1.8 s window
-integrates to **113.4 mC** live against **120.7 mC** from the nRF app's CSV — 6%
-apart, on different firmware and different acquisition code. Take the successful
-resync as **~117 mC ±5%**, still 2-3x under the 200-400 mC projection.
-
-| Term | `f07d2c9` (no format) | `4c0bbef` (with format) |
-|---|---|---|
-| Awake phase | 10.10 s, 280.2 mC | 12.29 s, 356.7 mC |
-| Panel refresh | 3.058 s, 9.23 mC | 3.03-3.06 s, 7.56-8.39 mC |
-| First floor window | 48.5 µA / 28.8 s | 26.4-29.7 µA |
-
-**One-time archive format, derived by difference: ~2.19 s and ~76.5 mC.** The two
-boots differ substantively only in whether the archive had to be formatted, and
-that lands in the single-digit seconds the 1.7 s full-chip erase implied rather
-than the ~26 s the sector-rate extrapolation projected. Derived, not measured —
-the firmware also changed between the two boots — so it wants a direct capture
-before it goes in the budget table.
-
-Two things this run did **not** settle:
-
-- **The CPU_ACTIVE marker fix is unconfirmed.** On a first boot the selftest still
-  runs and pulses the lane, so the long span still begins after it; the fix only
-  shows on wakes that skip the selftest. At 45 s against a 60 s sleep interval
-  this capture never reached a second wake. Needs ~150 s.
-- **The 48.5 µA floor is unexplained** against 26-30 µA on the previous capture.
-  Single 29 s window straight after a cold boot; not investigated.
-
-### Marker fix confirmed, and an unexplained floor (2026-07-26, 150 s live capture)
-
-`f07d2c9`, 150 s at 100.0 kSps with no drops, boot plus two safety-net wakes.
-
-**The CPU_ACTIVE marker now covers the wake.** Unmarked preamble on wake 2 went
-from **445 ms to 45 ms** (`4c0bbef` first activity 74.047 → span 74.492;
-`f07d2c9` 74.958 → 75.003). The span did not lengthen, because the 400 ms it
-would have absorbed *was* the selftest, which no longer runs after the first
-boot — so a PPK2_DEBUG wake also got ~7 mC cheaper. Retroactively: the old
-marker-bounded figures were accidentally production-representative, since the
-selftest sat outside the marker, but the old *sleep* windows were contaminated
-by it.
-
-| Wake | Span | Charge |
-|---|---|---|
-| Boot (with NTP, no format) | 12.36 s | 346.5 mC |
-| Safety-net wake + refresh | 3.333 s | **14.05 mC** (45 ms unmarked) |
-
-**Panel refresh across five observations:** 7.56, 7.80, 8.39, 9.23, 8.69 mC over
-3.03-3.06 s. Mean ~8.3 mC, spread ±10%. That spread is the figure's real
-precision — a single observation would have implied more.
-
-**Open: the sleep floor is not reproducible.** 26.4-29.7 µA (nRF app capture,
-`4c0bbef`), then 48.5 µA, then **141.2 µA falling to 75.7 µA within one capture**
-(duty above 2x mean 4.3% → 2.4%). The settling trend inside a single run is the
-strongest clue and points at something relaxing over 1-2 minutes rather than at a
-constant leak. Not the ETA9740 — the shield switch is off and that path's
-signature is ms-scale 20-83 mA bursts every ~2 s, absent here. Deliberately not
-explained; it wants a dedicated long capture with no refreshes to find where it
-asymptotes. At 76 µA the floor would be ~3x the recorded 22.0 µA and would matter
-for battery life; at 26 µA it does not.
-
-**Tool gap:** `--raw-out` writes a stream that cannot be re-analysed later,
-because decoding needs the calibration modifiers read from the device at connect
-time. Either save them in a sidecar or keep `--out`.
-
-### Sleep floor resolved: 22 µA settled, 28 µA per cycle (2026-07-26)
-
-`91f08eb`, production build (no `PPK2_DEBUG`, no markers, GPIO16/17 untouched),
-PPK2 at 4.2 V on the XIAO BAT pads, board propped in air.
-
-| Window | Mean |
-|---|---|
-| Settled tail, t=105-139 s | **22.75 µA** |
-| Full wake-to-wake cycle, t=85-139 s | **28.06 µA → 2.42 C/day** |
-
-**The elevated floors chased all afternoon were a post-wake transient**, not a
-leak and not a measurement fault. After each wake the floor is elevated for
-~20-25 s and then decays to 22 µA and stays flat until the next wake. The
-logbook's 22.0 µA stands as the settled figure; **28 µA is the number the battery
-sees**, since a real deployment pays the transient once per wake.
-
-Budget: 2.42 C/day floor + ~0.45 C/day of measured events ≈ **2.9 C/day, ~500
-days** on the 400 mAh pack. The floor is ~84% of it.
-
-Why the earlier readings scattered so badly (26, 48, 52, 76, 141 µA): every one
-was a mean over a window that included a different amount of transient, and the
-short windows sat right after boot, whose 12-28 s awake phase produces the
-largest transient of all. **A floor figure is only meaningful averaged over whole
-wake-to-wake cycles.**
-
-Not established: the 52.25 µA measured on fabric versus 28.06 µA in air is **not**
-a matched comparison — the fabric window is post-boot and the air window is a
-steady cycle, and the 92 s fabric capture never reached a second wake. The
-transient does scale with the preceding awake phase, which is consistent with
-self-heating raising leakage, but the fabric-vs-air gap is mostly window
-selection. A 5-minute capture on fabric would settle it.
-
-**Separate anomaly worth chasing:** one propped-in-air capture
-(`ppk-20260726T121809.csv`) floors at **4.3-4.8 µA** with ~350 µA excursions
-every ~50 s. That is below the 14 µA bare-board baseline, which suggests the LP
-core was not running — no sensor polling, so no delta wakes and a panel that only
-refreshes on the hourly safety net. Intermittent, and more concerning than
-anything about the floor.
-
-The post-wake transient is **not** caused by the `PPK2_DEBUG` marker/selftest
-code: `91f08eb` is a production build with all of it compiled out (binary 300 B
-smaller) and shows the same transient. The one flat capture (`4c0bbef`, 22-33 µA
-across 57 s) is an outlier — a single well-cooled instance of a thermally
-sensitive effect — not evidence that the marker change regressed anything.
-
-On the 4.3 µA capture: it also contains **8 samples reading 17-20 A**, at two
-moments, as bit-identical quartets. The PPK2 tops out near 1 A, so those are
-range/decode artifacts, and four such samples inside a 500k-sample bin add
-~160 µA to its mean — which manufactures two of that capture's apparent
-excursions. The excursion ~55 s into sleep has no glitch near it and is real,
-consistent with the LP core running. So the genuine anomaly is only the 4.3 µA
-baseline, still below the 14 µA bare-board figure.
-
-### Production floor and wake cost, three full cycles (2026-07-26)
-
-`91f08eb`, no `PPK2_DEBUG`, 4.2 V on the BAT pads, **on fabric**, 300 s decoded
-from a raw capture. Regions bounded by current, since a production build has no
-markers.
-
-| Region | Duration | Value |
-|---|---|---|
-| boot (incl. NTP) | 11.5 s | 337.7 mC |
-| sleep | 59.75 s | 33.71 µA |
-| wake + refresh | 3.25 s | **9.62 mC** |
-| sleep | 56.5 s | 35.13 µA |
-| wake + refresh | 3.25 s | **9.53 mC** |
-| sleep | 163.3 s | 28.58 µA |
-
-**Surface does not matter.** Matched ~55-60 s windows give 33.7/35.1 µA on fabric
-against 28.1 µA propped in air — a ~20% edge to air, consistent with self-heating
-raising leakage, but it only scales the post-wake transient.
-
-**The transient is a bench artifact at deployment wake rates.** Each wake buys
-~20-25 s of elevated current, ~0.7-0.95 mC. On the bench, wakes every ~60 s put
-that at ~40% duty, which is why per-cycle means read 28-35 µA. The field run did
-**31 wakes/day** — one per ~46 min — so the real duty is ~1% and the deployed
-floor is the settled figure, **~23 µA (1.98 C/day)**. Quote 23 µA for the budget,
-not the bench cycle averages.
-
-**A wake costs 9.6 mC, not the 14.05 mC measured earlier under `PPK2_DEBUG`.**
-`history_store_persist_now()` emits a triple 50 ms D1 preamble under that flag —
-300 ms of extra awake time on every wake that persists, which the code comment
-already warns about. Every `PPK2_DEBUG` wake figure in this file is inflated by
-~4-6 mC for that reason; the marker-bounded numbers measure the marker.
-
-Budget: 1.98 C/day floor + ~104 mC/day refreshes (10.8/day x 9.6 mC) +
-~78 mC/day resync ≈ **2.3 C/day, ~630 days** on the 400 mAh pack.
-
-**The transient is wake-triggered and does not recur.** 5 s bins across the 163 s
-sleep window: 25.7 µA at t+3, rising to a **peak of 88 µA about 20 s after the
-wake**, decaying with wobble to t+65, then **21.6-24.4 µA dead flat for the last
-85 s with no excursions at all**. Two more instances in the propped-in-air capture
-behave the same way. So the elevated readings are bought once per wake, not
-generated spontaneously during sleep: at 31 wakes/day that is ~0.7-1.2 mC per
-wake, ~0.03 C/day, **~1.5% of the 1.98 C/day baseline**.
-
-Caveat that remains: 85 s of flat is not a 46 min deployment interval, so the
-deployed floor is still an extrapolation — a well-supported one now, but the
-confirming measurement is a wake-free capture of a full interval. Getting one
-needs delta wakes suppressed (raise `TEMP_DELTA_THRESHOLD`, or build with
-`USE_DUMMY_SENSOR`) so only the hourly safety net fires.
-
-Also unexplained: the `4c0bbef` capture had **no** transient after its boot (flat
-57 s at 26 µA). Read alongside the above, that means the transient's magnitude
-varies between runs — sometimes to zero — rather than that it can appear
-spontaneously. Mechanism unidentified; self-heating fits the shape and the ~20%
-fabric-vs-air difference, but nothing here proves it.
-
-## C6 ePaper rig budget, measured (2026-07-26, `91f08eb` production)
-
-Definitive 30-minute capture, production build, PPK2 source meter at 4.2 V on the
-XIAO's soldered BAT pads, 100.0 kSps with no dropped samples (180M samples,
-decimated 100x for analysis — exact for means). Windows closed to hold the room
-inside the 0.1 °C delta threshold, which bought a **22.9-minute uninterrupted
-sleep window**.
-
-| Region | Duration | Value |
-|---|---|---|
-| boot (incl. NTP bootstrap) | 10.25 s | 278.0 mC |
-| sleep, post-boot | 59.7 s | 36.14 µA |
-| **sleep, settled** | **1376.5 s (22.9 min)** | **22.63 µA** |
-| wake + refresh | 3.25 s | 10.43 mC |
-| sleep, post-wake | 116.5 s | 24.81 µA |
-| wake + refresh | 3.25 s | 10.62 mC |
-| **sleep, settled** | 228.1 s | **22.61 µA** |
-
-**The floor is 22.6 µA and it is now measured, not extrapolated.** Two independent
-long windows agree to 0.1%, the 22.9-minute one is half a deployment interval
-(field rate: one wake per ~46 min), and it is dead flat across it with no creep.
-Supersedes every earlier floor figure in this file — the 26/48/52/76/141 µA
-readings were all short windows containing different fractions of the post-wake
-transient.
-
-**Wake + refresh: 10.05 mC** (four production observations: 9.62, 9.53, 10.43,
-10.62; ±6%).
-
-**The post-wake transient is negligible in deployment.** The 116.5 s window after
-a wake reads 24.81 µA against 22.61 settled — ~0.26 mC per wake. At 31 wakes/day
-that is 8 mC/day, 0.4% of the budget. It only looked alarming on the bench, where
-wakes every 60 s gave it ~40% duty.
-
-| Term | C/day | Share |
-|---|---|---|
-| Sleep floor (22.6 µA) | 1.954 | **89.0%** |
-| Refresh wakes (10.7/day x 10.05 mC) | 0.107 | 4.9% |
-| NTP resync (117 mC / 1.54 d) | 0.076 | 3.5% |
-| Non-refresh wakes (20/day, ~2.5 mC est.) | 0.051 | 2.3% |
-| Post-wake transient | 0.008 | 0.4% |
-| **Total** | **2.20** | **~656 days** on 400 mAh |
-
-The only estimate left is the non-refresh wake charge (2.3% of budget) — every
-wake captured so far happened to refresh. Everything else is measured on this rig.
-
-**Note on the region split** in the output above: the first sleep appears as two
-regions (59.7 s then 1376.5 s) because `_current_regions()` closes a region on any
-0.25 s bin whose mean crosses 1 mA, and a single PFM spike does that. Both
-integrals are correct for their windows; the boundary is an artifact, not a state
-change.
-
-### Floor re-verified against a code-review finding (2026-07-26)
-
-A code review found a confirmed bug in `_current_regions()` — a wake shorter than
-`min_s` is absorbed into the following sleep region, reproduced at a 4.9x
-over-report — and that is the function the 22.63 µA figure above came from. So the
-floor was re-derived through `--from/--to`, which integrates an explicit window
-and never touches that code path:
-
-| Method | Window | Result |
-|---|---|---|
-| `_current_regions()` region mean | 1376.5 s | 22.63 µA |
-| `--from/--to` explicit window | 1200 s | **21.72 µA** |
-| 60 s profile bins, t=120..1380 | 21 min | **21.5-22.1 µA, flat** |
-
-**The settled floor is 21.7 µA.** The region mean was ~4% high because that
-region began inside the tail of the post-boot transient, not because of the bug —
-a 1376 s window dilutes an absorbed sub-second wake to ~1 µA. The conclusion
-stands, and 21 consecutive minutes of 60 s bins inside a 0.6 µA band is stronger
-evidence than any single region mean.
-
-Revised budget: floor **1.875 C/day** (86.4% of total 2.12 C/day) → **~680 days**
-on the 400 mAh pack. Supersedes the 22.6 µA / 2.20 C/day / 656 day figures above.
-
-Method note worth keeping: `--from/--to` and `--profile` are the trustworthy paths
-because they integrate windows the operator chose. The automatic region
-segmentation is a convenience with known defects — cross-check any figure it
-produces before recording it.
+- **A floor is only meaningful averaged over whole wake-to-wake cycles.** Short
+  windows containing different fractions of the post-wake transient produced
+  26/48/52/76/141 µA on this rig, each of which briefly acquired its own hardware
+  explanation. Check a figure's time evolution before attributing it to anything.
+- **`PPK2_DEBUG` inflates every wake by ~4-6 mC**, because
+  `history_store_persist_now()` emits a triple 50 ms preamble — 300 ms of extra
+  awake time per wake. Compare debug figures only with debug figures.
+- **The `CPU_ACTIVE` marker does not cover the boot preamble.** ROM bootloader and
+  IDF startup precede anything the app can assert, so a marker-bounded wake is a
+  lower bound (~45 ms unmarked as of `f07d2c9`, 445 ms before it).
+- **Surface makes no meaningful difference.** Fabric versus propped in air differed
+  only through the transient, and only over matched windows.
+- **Trust `--from/--to` and `--profile`** — they integrate windows the operator
+  chose. `tools/ppk2.py`'s automatic region segmentation has known defects and its
+  output wants cross-checking before it is recorded.
