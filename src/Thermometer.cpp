@@ -249,8 +249,13 @@ RTC_DATA_ATTR float max_temp_since_boot = TEMP_INIT_MAX;
 // Wakes between bootstrap retries, doubling to 8x this on repeated failure.
 #define NTP_BOOTSTRAP_FIRST_WAKES     8
 
-// Minimum resync interval (1 day) — floor to avoid hammering WiFi
+// Minimum resync interval (1 day) — floor to avoid hammering WiFi.
+// Overridable so a bench build can force attempts on a short cadence: measuring
+// the charge of a resync (successful or timed out) otherwise means waiting a day
+// for each sample. Never ship an override — see the revert list in CLAUDE.md.
+#ifndef RESYNC_INTERVAL_MIN
 #define RESYNC_INTERVAL_MIN  (86400)
+#endif
 // Maximum resync interval (4 weeks)
 #define RESYNC_INTERVAL_MAX  (28 * 86400)
 
