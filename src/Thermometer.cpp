@@ -1760,9 +1760,23 @@ void setup()
 #ifdef PPK2_DEBUG
   gpio_out_init(PPK2_PIN_CPU_ACTIVE);
   gpio_out_init(PPK2_PIN_DISPLAY);
-  ppk2_selftest();
 #endif
+  // Before the selftest, not after: the selftest spends 400ms pulsing these
+  // pads, and a marker raised afterwards excludes that plus everything earlier
+  // in startup. Measured on the C6 ePaper rig, that hid ~450ms at 10-20mA
+  // (~5-9 mC) from every wake figure the marker bounded.
   PPK2_CPU_ACTIVE_HIGH();
+#ifdef PPK2_DEBUG
+  // First boot only. The selftest identifies which PPK2 lane is which, which is
+  // worth one interrupted span on the boot that is an outlier anyway; on every
+  // later wake an uninterrupted span matters more, since those are what the
+  // energy budget is built from.
+  if (boot_count == 0)
+  {
+    ppk2_selftest();
+    PPK2_CPU_ACTIVE_HIGH();   // selftest leaves the pad low
+  }
+#endif
 
   // Detect stale RTC memory from a different firmware version.
   // Three checks: version tag mismatch (format changed), address shift
