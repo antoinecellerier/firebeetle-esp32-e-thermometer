@@ -997,3 +997,54 @@ Also unexplained: the `4c0bbef` capture had **no** transient after its boot (fla
 varies between runs — sometimes to zero — rather than that it can appear
 spontaneously. Mechanism unidentified; self-heating fits the shape and the ~20%
 fabric-vs-air difference, but nothing here proves it.
+
+## C6 ePaper rig budget, measured (2026-07-26, `91f08eb` production)
+
+Definitive 30-minute capture, production build, PPK2 source meter at 4.2 V on the
+XIAO's soldered BAT pads, 100.0 kSps with no dropped samples (180M samples,
+decimated 100x for analysis — exact for means). Windows closed to hold the room
+inside the 0.1 °C delta threshold, which bought a **22.9-minute uninterrupted
+sleep window**.
+
+| Region | Duration | Value |
+|---|---|---|
+| boot (incl. NTP bootstrap) | 10.25 s | 278.0 mC |
+| sleep, post-boot | 59.7 s | 36.14 µA |
+| **sleep, settled** | **1376.5 s (22.9 min)** | **22.63 µA** |
+| wake + refresh | 3.25 s | 10.43 mC |
+| sleep, post-wake | 116.5 s | 24.81 µA |
+| wake + refresh | 3.25 s | 10.62 mC |
+| **sleep, settled** | 228.1 s | **22.61 µA** |
+
+**The floor is 22.6 µA and it is now measured, not extrapolated.** Two independent
+long windows agree to 0.1%, the 22.9-minute one is half a deployment interval
+(field rate: one wake per ~46 min), and it is dead flat across it with no creep.
+Supersedes every earlier floor figure in this file — the 26/48/52/76/141 µA
+readings were all short windows containing different fractions of the post-wake
+transient.
+
+**Wake + refresh: 10.05 mC** (four production observations: 9.62, 9.53, 10.43,
+10.62; ±6%).
+
+**The post-wake transient is negligible in deployment.** The 116.5 s window after
+a wake reads 24.81 µA against 22.61 settled — ~0.26 mC per wake. At 31 wakes/day
+that is 8 mC/day, 0.4% of the budget. It only looked alarming on the bench, where
+wakes every 60 s gave it ~40% duty.
+
+| Term | C/day | Share |
+|---|---|---|
+| Sleep floor (22.6 µA) | 1.954 | **89.0%** |
+| Refresh wakes (10.7/day x 10.05 mC) | 0.107 | 4.9% |
+| NTP resync (117 mC / 1.54 d) | 0.076 | 3.5% |
+| Non-refresh wakes (20/day, ~2.5 mC est.) | 0.051 | 2.3% |
+| Post-wake transient | 0.008 | 0.4% |
+| **Total** | **2.20** | **~656 days** on 400 mAh |
+
+The only estimate left is the non-refresh wake charge (2.3% of budget) — every
+wake captured so far happened to refresh. Everything else is measured on this rig.
+
+**Note on the region split** in the output above: the first sleep appears as two
+regions (59.7 s then 1376.5 s) because `_current_regions()` closes a region on any
+0.25 s bin whose mean crosses 1 mA, and a single PFM spike does that. Both
+integrals are correct for their windows; the boundary is an artifact, not a state
+change.
