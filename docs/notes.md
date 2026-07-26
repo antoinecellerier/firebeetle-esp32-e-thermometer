@@ -736,16 +736,29 @@ Time sync — the term worth the most attention, since it is ~40× the archive:
   (plus SNTP timeout) figures are ESP32-E measurements assumed to transfer. On
   the C6 a failed attempt is ~36% of a day's budget versus ~21% on the E — same
   radio cost, half the budget — so the retry cadence matters more here.
-- [ ] **Actual resync interval reached.** The projection assumes the internal RC
-  keeps `resync_interval_s` pinned at its 1-day floor. Confirm from
-  `history.py dump --drift` after a soak. A crystal-equipped board should climb
-  toward the 28-day cap, which drops this term to ~10 mC/day (0.25%) — the
-  quantitative case for the FC-135 on `thermometer_c6`.
+- [x] **Actual resync interval reached.** Answered by inference, not by a soak:
+  the C6's RC measured **+452ppm** over ~20d (`docs/clock-drift.md` 2026-07-26),
+  which puts the adaptive rule at **~1.5 days**, not the 1-day floor — the
+  interval converges where drift over it reaches the 60s threshold, 60s/452ppm
+  ≈ 1.5d. That cuts this term to ~195 mC/day (4.6%) *where there is WiFi*. Where there
+  isn't, it is worse than the projection, not better: failed attempts re-arm at
+  `+resync_interval_s` with no backoff, so the interval stays pinned at 1 day
+  forever. A crystal-equipped board should climb toward the 28-day cap, which
+  drops this term to ~10 mC/day (0.25%) — the quantitative case for the FC-135 on
+  `thermometer_c6`, now weaker than it looked, since the stock RC already buys
+  ~2 days by itself.
 
 Base rates:
-- [ ] **Refresh rate on a C6 rig.** ~48/day is measured on the FireBeetle
-  (1077 over 21d17h, 860 over 18d17h) and assumed to transfer. It is the largest
-  single term, so it sets the error bar on the whole table.
+- [x] **Refresh rate on a C6 rig.** **~10.8/day measured** — 216 refreshes over
+  19d23h, XIAO C6 + BMP581 + Seeed ePaper hat on a 400mAh pack, `1ed89a3`, in a
+  basement holding 21.5–24.5°C (2026-07-26). That is ~4.5× *below* the ~48/day
+  borrowed from the FireBeetle (1077 over 21d17h, 860 over 18d17h). Both are
+  real: refresh cadence is delta-triggered, so it measures how volatile the room
+  is, and a basement is the stable end of the spread while the E rig sat in a
+  flat with the windows open in a heatwave. Treat 10–50/day as the operating
+  range — the term stays the table's largest error bar, but its floor is now
+  measured rather than assumed. Same run gives **~20 non-refresh CPU wakes/day**
+  (621 boots − 216 refreshes over 19d23h), close to the assumed 24.
 - [ ] **Non-refresh CPU wake charge.** Projected ~15 mC (the E's is ~21 mC).
 
 Rendering, on the 920x680 panel specifically (`tools/sim` covers the geometry,
