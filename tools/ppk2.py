@@ -942,18 +942,19 @@ def capture_live(args):
     t_arr, cur, cum = array("d"), array("f"), array("d")
     digital_raw = []
     pending = bytearray()
+    meta_for_peek = {"modifiers": ppk.modifiers,
+                     "mode": "SOURCE_MODE" if sourcing else "AMPERE_MODE",
+                     "vdd_mv": mv if sourcing else args.vdd}
     raw_fh = open(args.raw_out, "wb") if args.raw_out else None
     if args.raw_out:
         # Save what decoding needs so the capture stays analysable later without
         # the PPK2 attached — the modifiers are device calibration, not in the
         # stream, and the conversion is mode-dependent.
+        # The real voltage in both modes: get_adc_result() folds current_vdd into
+        # its offset term with no mode guard, so writing 0 for ampere captures
+        # biased every offline decode.
         with open(args.raw_out + ".json", "w") as fh:
-            json.dump({"modifiers": ppk.modifiers,
-                       "mode": "SOURCE_MODE" if sourcing else "AMPERE_MODE",
-                       # The real voltage in both modes: get_adc_result() folds
-                       # current_vdd into its offset term with no mode guard, so
-                       # writing 0 for ampere captures biased every offline decode.
-                       "vdd_mv": mv if sourcing else args.vdd}, fh)
+            json.dump(meta_for_peek, fh)
         print(f"wrote {args.raw_out}.json (calibration sidecar)")
 
     abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
@@ -974,6 +975,65 @@ def capture_live(args):
         else:
             pending.extend(buf)
 
+    # Progress is sampled often enough never to miss a 3 s HP wake, but printed
+    # only on a state change or once a minute — a 24-minute quiet stretch should
+    # cost 24 lines, not 700. LP wakes (~3 ms at ~1 mA) cannot show up here: a
+    # sampled peek essentially never lands on one, and catching them would need
+    # the continuous decoding that cannot keep up with the stream. Read the lp
+    # counter off the panel footer instead.
+    # PEEK_BYTES is a ceiling: a single read at 400 kB/s with millisecond polling
+    # returns a few hundred bytes, so a peek is typically 1-4 ms of signal.
+    PEEK_EVERY_S, PRINT_EVERY_S, PEEK_BYTES = 1.0, 60.0, 4000
+    AWAKE_UA = 1000.0
+    peeker = None
+    if meta_for_peek is not None:
+        try:
+            peeker = _offline_decoder(meta_for_peek)
+        except Exception as exc:
+            print(f"  (no live progress: {exc})")
+    state = {"awake": None, "wakes": 0, "next_peek": 0.0, "next_print": 0.0}
+
+    def progress(now, buf):
+        """Estimate current from a small aligned slice of the newest bytes.
+
+        Peeks go through a throwaway decoder: get_samples() carries remainder
+        state forward, so peeking through the real one would corrupt the full
+        decode afterwards.
+        """
+        if peeker is None or len(buf) < 8:
+            return
+        off = len(buf) % 4                      # align to a 4-byte sample boundary
+        slice_ = bytes(buf[off:off + PEEK_BYTES])
+        if len(slice_) < 8:
+            return
+        try:
+            peeker.remainder = {"sequence": b"", "len": 0}
+            sm, _ = peeker.get_samples(slice_)
+        except Exception:
+            return
+        if not sm:
+            return
+        ua = sum(sm) / len(sm)
+        awake = ua > AWAKE_UA
+        changed = state["awake"] is not None and awake != state["awake"]
+        if awake and not state["awake"]:
+            state["wakes"] += 1
+        state["awake"] = awake
+        if changed or now >= state["next_print"]:
+            el = now - t_start
+            rate = nbytes / 4 / max(el, 1e-6) / 1000
+            label = ("sleep -> AWAKE" if changed and awake else
+                     "AWAKE -> sleep" if changed else "....")
+            # Tilde because this is a few milliseconds of signal, not a figure: a
+            # short slice of a PFM floor reads anywhere from 12 to 100 uA
+            # depending on whether a spike lands in it. It is here to show
+            # liveness and sleep-vs-awake, both of which survive that noise
+            # against a 1000 uA threshold. Never quote it.
+            shown = f"~{ua/1000:7.2f} mA" if awake else f"~{ua:7.1f} uA"
+            print(f"t={el:8.1f}s  {label:14s} {shown}  {rate:5.1f} kSps  "
+                  f"{state['wakes']} wake(s)", flush=True)
+            state["next_print"] = now + PRINT_EVERY_S
+
     def drain(seconds):
         """Read for `seconds`, never leaving the port unread.
 
@@ -991,6 +1051,10 @@ def capture_live(args):
                 continue
             nbytes += len(buf)
             stash(buf)
+            now = time.time()
+            if now >= state["next_peek"]:
+                state["next_peek"] = now + PEEK_EVERY_S
+                progress(now, buf)
 
     ppk.start_measuring()
     t_start = time.time()
