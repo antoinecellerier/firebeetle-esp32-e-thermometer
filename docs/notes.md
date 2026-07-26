@@ -977,3 +977,23 @@ already warns about. Every `PPK2_DEBUG` wake figure in this file is inflated by
 
 Budget: 1.98 C/day floor + ~104 mC/day refreshes (10.8/day x 9.6 mC) +
 ~78 mC/day resync ≈ **2.3 C/day, ~630 days** on the 400 mAh pack.
+
+**The transient is wake-triggered and does not recur.** 5 s bins across the 163 s
+sleep window: 25.7 µA at t+3, rising to a **peak of 88 µA about 20 s after the
+wake**, decaying with wobble to t+65, then **21.6-24.4 µA dead flat for the last
+85 s with no excursions at all**. Two more instances in the propped-in-air capture
+behave the same way. So the elevated readings are bought once per wake, not
+generated spontaneously during sleep: at 31 wakes/day that is ~0.7-1.2 mC per
+wake, ~0.03 C/day, **~1.5% of the 1.98 C/day baseline**.
+
+Caveat that remains: 85 s of flat is not a 46 min deployment interval, so the
+deployed floor is still an extrapolation — a well-supported one now, but the
+confirming measurement is a wake-free capture of a full interval. Getting one
+needs delta wakes suppressed (raise `TEMP_DELTA_THRESHOLD`, or build with
+`USE_DUMMY_SENSOR`) so only the hourly safety net fires.
+
+Also unexplained: the `4c0bbef` capture had **no** transient after its boot (flat
+57 s at 26 µA). Read alongside the above, that means the transient's magnitude
+varies between runs — sometimes to zero — rather than that it can appear
+spontaneously. Mechanism unidentified; self-heating fits the shape and the ~20%
+fabric-vs-air difference, but nothing here proves it.
