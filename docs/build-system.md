@@ -94,6 +94,25 @@ is not inherited through `extends` the way you would expect, so each env
 re-states its own. The comments in `platformio.ini` track which flags that
 affects.
 
+## PLATFORMIO_BUILD_FLAGS is part of the project checksum
+
+`.pio/build/project.checksum` covers the environment variable too, not just
+`platformio.ini`. Changing `PLATFORMIO_BUILD_FLAGS` between invocations
+therefore invalidates the whole tree and PlatformIO **deletes every env's
+`.pio/build/<env>` directory**, not only the one being built.
+
+So a finished image does not survive building another env with different flags:
+
+```bash
+PLATFORMIO_BUILD_FLAGS="-DPPK2_DEBUG" pio run -e seeed_xiao_esp32c6_epaper_release
+pio run -e dfrobot_firebeetle2_esp32e_debug   # <- wipes the C6 image just built
+```
+
+This bites hardest between building a measurement image and flashing it, since
+the artifacts vanish with no error — the flash just fails on missing files. Pass
+the same flags to every env in a batch, or finish the flash before building
+anything else.
+
 ## Environments
 
 ```
