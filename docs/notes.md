@@ -928,3 +928,17 @@ every ~50 s. That is below the 14 µA bare-board baseline, which suggests the LP
 core was not running — no sensor polling, so no delta wakes and a panel that only
 refreshes on the hourly safety net. Intermittent, and more concerning than
 anything about the floor.
+
+The post-wake transient is **not** caused by the `PPK2_DEBUG` marker/selftest
+code: `91f08eb` is a production build with all of it compiled out (binary 300 B
+smaller) and shows the same transient. The one flat capture (`4c0bbef`, 22-33 µA
+across 57 s) is an outlier — a single well-cooled instance of a thermally
+sensitive effect — not evidence that the marker change regressed anything.
+
+On the 4.3 µA capture: it also contains **8 samples reading 17-20 A**, at two
+moments, as bit-identical quartets. The PPK2 tops out near 1 A, so those are
+range/decode artifacts, and four such samples inside a 500k-sample bin add
+~160 µA to its mean — which manufactures two of that capture's apparent
+excursions. The excursion ~55 s into sleep has no glitch near it and is real,
+consistent with the LP core running. So the genuine anomaly is only the 4.3 µA
+baseline, still below the 14 µA bare-board figure.
