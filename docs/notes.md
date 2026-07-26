@@ -853,3 +853,39 @@ Two things this run did **not** settle:
   this capture never reached a second wake. Needs ~150 s.
 - **The 48.5 µA floor is unexplained** against 26-30 µA on the previous capture.
   Single 29 s window straight after a cold boot; not investigated.
+
+### Marker fix confirmed, and an unexplained floor (2026-07-26, 150 s live capture)
+
+`f07d2c9`, 150 s at 100.0 kSps with no drops, boot plus two safety-net wakes.
+
+**The CPU_ACTIVE marker now covers the wake.** Unmarked preamble on wake 2 went
+from **445 ms to 45 ms** (`4c0bbef` first activity 74.047 → span 74.492;
+`f07d2c9` 74.958 → 75.003). The span did not lengthen, because the 400 ms it
+would have absorbed *was* the selftest, which no longer runs after the first
+boot — so a PPK2_DEBUG wake also got ~7 mC cheaper. Retroactively: the old
+marker-bounded figures were accidentally production-representative, since the
+selftest sat outside the marker, but the old *sleep* windows were contaminated
+by it.
+
+| Wake | Span | Charge |
+|---|---|---|
+| Boot (with NTP, no format) | 12.36 s | 346.5 mC |
+| Safety-net wake + refresh | 3.333 s | **14.05 mC** (45 ms unmarked) |
+
+**Panel refresh across five observations:** 7.56, 7.80, 8.39, 9.23, 8.69 mC over
+3.03-3.06 s. Mean ~8.3 mC, spread ±10%. That spread is the figure's real
+precision — a single observation would have implied more.
+
+**Open: the sleep floor is not reproducible.** 26.4-29.7 µA (nRF app capture,
+`4c0bbef`), then 48.5 µA, then **141.2 µA falling to 75.7 µA within one capture**
+(duty above 2x mean 4.3% → 2.4%). The settling trend inside a single run is the
+strongest clue and points at something relaxing over 1-2 minutes rather than at a
+constant leak. Not the ETA9740 — the shield switch is off and that path's
+signature is ms-scale 20-83 mA bursts every ~2 s, absent here. Deliberately not
+explained; it wants a dedicated long capture with no refreshes to find where it
+asymptotes. At 76 µA the floor would be ~3x the recorded 22.0 µA and would matter
+for battery life; at 26 µA it does not.
+
+**Tool gap:** `--raw-out` writes a stream that cannot be re-analysed later,
+because decoding needs the calibration modifiers read from the device at connect
+time. Either save them in a sidecar or keep `--out`.
