@@ -1048,3 +1048,31 @@ regions (59.7 s then 1376.5 s) because `_current_regions()` closes a region on a
 0.25 s bin whose mean crosses 1 mA, and a single PFM spike does that. Both
 integrals are correct for their windows; the boundary is an artifact, not a state
 change.
+
+### Floor re-verified against a code-review finding (2026-07-26)
+
+A code review found a confirmed bug in `_current_regions()` — a wake shorter than
+`min_s` is absorbed into the following sleep region, reproduced at a 4.9x
+over-report — and that is the function the 22.63 µA figure above came from. So the
+floor was re-derived through `--from/--to`, which integrates an explicit window
+and never touches that code path:
+
+| Method | Window | Result |
+|---|---|---|
+| `_current_regions()` region mean | 1376.5 s | 22.63 µA |
+| `--from/--to` explicit window | 1200 s | **21.72 µA** |
+| 60 s profile bins, t=120..1380 | 21 min | **21.5-22.1 µA, flat** |
+
+**The settled floor is 21.7 µA.** The region mean was ~4% high because that
+region began inside the tail of the post-boot transient, not because of the bug —
+a 1376 s window dilutes an absorbed sub-second wake to ~1 µA. The conclusion
+stands, and 21 consecutive minutes of 60 s bins inside a 0.6 µA band is stronger
+evidence than any single region mean.
+
+Revised budget: floor **1.875 C/day** (86.4% of total 2.12 C/day) → **~680 days**
+on the 400 mAh pack. Supersedes the 22.6 µA / 2.20 C/day / 656 day figures above.
+
+Method note worth keeping: `--from/--to` and `--profile` are the trustworthy paths
+because they integrate windows the operator chose. The automatic region
+segmentation is a convenience with known defects — cross-check any figure it
+produces before recording it.
