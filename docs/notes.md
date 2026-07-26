@@ -729,9 +729,15 @@ D1 preamble brackets the write — see the ESP32-E section above for the trace):
   erase rate. Only observable on the first boot after a partition-table change.
 
 Time sync — the term worth the most attention, since it is ~40× the archive:
-- [ ] **Successful resync charge.** Projected 200-400 mC (association 1-3 s +
-  SNTP 0.5-1 s at ~100 mA). Never measured on either board: `docs/clock-drift.md`
-  only has the *failed* attempt at 15 s / 45 s.
+- [x] **Successful resync charge. MEASURED 2026-07-26: 120.7 mC over 1.80 s**
+  (67.05 mA mean), ~84 mC of that incremental over the ~20.5 mA CPU baseline it
+  runs on top of. **2-3× cheaper than the 200-400 mC projection.** C6 ePaper rig
+  at 4.2 V battery-direct, `4c0bbef`, first-boot NTP bootstrap — which is the
+  same `wifi_connect()` + `sntp_sync_once()` work a resync does. Shape: baseline
+  to t+0, radio on with a 198 mA spike (PA/calibration inrush), sustained
+  70-80 mA for 1.3 s, two short TX bursts for SNTP and teardown, done at 1.8 s.
+  Combined with the ~1.5 d interval the C6's +452 ppm implies, the term is
+  **~78 mC/day**, not the ~195 projected.
 - [ ] **Failed resync charge on C6.** The 1.5 C (association timeout) and 4.5 C
   (plus SNTP timeout) figures are ESP32-E measurements assumed to transfer. On
   the C6 a failed attempt is ~36% of a day's budget versus ~21% on the E — same
@@ -769,3 +775,45 @@ but not the real panel's contrast and ghosting):
 - [ ] **`HOURLY_NO_DATA` gap.** The large layout draws the min/max envelope with
   `draw_spline_dotted`; confirm a multi-day gap reads as a gap rather than as a
   dotted line through it.
+
+### C6 ePaper rig, marker-driven measurement (2026-07-26)
+
+XIAO ESP32-C6 + BMP581 + Seeed ePaper driver board (GDEW029I6FD), `4c0bbef`,
+`seeed_xiao_esp32c6_epaper_release` + `-DPPK2_DEBUG`, PPK2 source meter at
+**4.2 V on the XIAO's soldered BAT pads** (shield switch off), USB detached.
+144 s capture, 14.4 M samples, analysed with `tools/ppk2.py` — regions bounded by
+the firmware's own D0/D1 edges rather than a dragged selection. Note the harness
+crossed the lanes relative to the header's convention (PPK2 D0 on XIAO D6/GPIO16
+= DISPLAY, D1 on D7/GPIO17 = CPU_ACTIVE), hence `--cpu-ch 1 --display-ch 0`.
+
+| Term | Measured | Against |
+|---|---|---|
+| Sleep floor | **26.4 / 26.9 / 29.7 µA** (three windows) | 22.0 µA, same config, 2026-07-05 |
+| Successful NTP resync | **120.7 mC / 1.80 s** | projected 200-400 mC |
+| Panel refresh alone | **7.56 / 7.80 / 8.39 mC**, ~3.03-3.06 s | no prior decomposition |
+| Delta wake + refresh | **12.97 / 13.21 mC**, 3.33 s | 12.31 mC / 3.34 s via JST at 4.2 V |
+| Archive base snapshot | **0.54 mC / 24.4 ms**; 0.73 mC / 24.2 ms ×2 | 7.14 mC / 170 ms on the E |
+| First boot, total | **356.7 mC / 12.29 s** | — |
+
+What this settles and what it does not:
+
+- **The 12.21/12.31 mC "refresh" figures were wake+refresh, not the panel.**
+  Marker separation splits them: the panel itself is ~7.7 mC and the wake
+  overhead around it ~5.4 mC. The totals agree with the earlier lump to within
+  5%, which is the cross-check that makes the decomposition trustworthy.
+- **The base snapshot here is ~10× cheaper than the E's, and that is probably not
+  the steady state.** A freshly formatted archive still has erased sectors, so a
+  24 ms flush is the no-erase case. The E's 170 ms is erase-bound (104-125 ms of
+  it). Needs a snapshot that has to erase before this number means anything.
+- **`PPK2_CPU_ACTIVE_HIGH()` runs after `ppk2_selftest()`, so the marker misses
+  the boot preamble** — ROM bootloader, IDF startup and the selftest itself,
+  ~450 ms at 10-20 mA (~5-9 mC) before D0 asserts. Every marker-bounded wake
+  figure above therefore *understates* the true wake cost by roughly that much.
+  Moving the marker ahead of the selftest would close it.
+- **The one-time archive format was not isolated.** It sits inside the first
+  boot's 12.29 s but does not present as a distinct erase plateau at 250 ms
+  resolution — CPU-active current and flash current are the same order here, so
+  it is not separable the way the E's was. Unresolved.
+- The floor's spikiness is normal PFM: 11.6 µA between spikes plus ~0.16% duty
+  of ~9 mA, 50-60 µs wide. Not a wiring fault, and not the ETA9740 — that path's
+  signature is millisecond-scale 20-83 mA bursts every ~2 s, which is absent.
