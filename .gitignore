@@ -21,3 +21,6 @@ include/generated/
 # Bench scratch: partition images, backups, saved configs. Multi-MB binaries.
 /scratchpad/
 .venv
+
+# Archive images pulled off a device by tools/history.py backup
+hist-*.bin

@@ -1937,17 +1937,21 @@ void setup()
     // read, which rescues the wake on the ESP32-E, where release_i2c_pins_to_hp()
     // hands the bit-banged pins back.
     //
-    // It cannot rescue it on the C6. lp_core_i2c_master_init() routes the shared
-    // pins to the LP I2C peripheral and the IDF offers no deinit, so the HP bus
-    // cannot drive them again for the rest of the power cycle — measured, with the
-    // LP core reading the sensor on 28 of 30 cycles while every CPU-side read
-    // failed. Halting the core does not help; the routing is the peripheral's, not
-    // the core's. Recovery there therefore runs through the coprocessor, whose
-    // reading is accepted above: it detects an absent sensor as a NACK, which is
-    // the failure that matters. The gap left is a bus that ACKs without being the
-    // sensor, and closing it means giving the LP core the chip-ID check — cheap if
-    // done only when it is about to wake the CPU, ~10-30 reads a day rather than
-    // one per sample.
+    // It does not rescue it on the C6 today. lp_core_i2c_master_init() calls
+    // rtc_gpio_init() on the shared pins, which sets their LP_AON_GPIO_MUX_SEL bit
+    // and routes the pads out of the digital GPIO domain, where the HP I2C driver
+    // cannot reach them — measured, with the LP core reading the sensor on 28 of 30
+    // cycles while every CPU-side read failed. ulp_lp_core_stop() is no help: it
+    // halts the core and touches no GPIO or I2C register.
+    //
+    // rtc_gpio_deinit() on both pins clears that bit and hands the pads back, which
+    // is the same call the FSM path above already makes. Not done here yet: it is
+    // unverified on this board, and on the C6 rtc_gpio_deinit() also force-disables
+    // the shared LP IO clock gate under an open IDF TODO (IDF-14951), which may
+    // disturb other LP peripherals. Until that is tested, recovery runs through the
+    // coprocessor, whose reading is accepted above — it reports an absent sensor as
+    // a NACK, which is the failure that matters. The gap left is a bus that ACKs
+    // without being the sensor.
     last_sensor_ok = false;
     sensor.StopUlp();
     s_ulp_read_failed = true;
