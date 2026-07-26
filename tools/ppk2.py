@@ -178,33 +178,50 @@ def _near(value, target, tol=0.45):
     return abs(value - target) <= target * tol
 
 
+# Mirrors the fingerprint emitted by ppk2_selftest() in src/Thermometer.cpp.
+# Both count and width differ per lane, so a lane stays identifiable when a pulse
+# is clipped at a capture boundary. Keep in sync with PPK2_FP_* there.
+FP_CPU_PULSES, FP_CPU_MS = 2, 10
+FP_DISP_PULSES, FP_DISP_MS = 5, 4
+
+
 def check_selftest(tr):
-    """Verify the 5x20ms / 10x10ms fingerprint and that D0/D1 are not swapped."""
+    """Identify each lane from the firmware's fingerprint, or say it is unverified.
+
+    Never claim a mapping is fine when it was not checked. The lanes really were
+    crossed on this rig, and the previous version of this function reported that as
+    "expected, the CPU lane is continuously high" — a reassuring sentence covering
+    an unverified declaration, which then put a floor figure tens of times too high
+    into the logbook.
+    """
     cpu, disp = tr.spans(tr.cpu_ch), tr.spans(tr.disp_ch)
-    if not cpu or not disp:
-        return "inconclusive: one or both digital channels never went high"
 
     def burst(spans, n, ms):
         head = spans[:n]
         return (len(head) == n
                 and all(_near(tr.dur(s), ms / 1000.0) for s in head))
 
-    if burst(cpu, 5, 20):
-        # GPIO16 is U0TXD, so the ROM bootloader parks the DISPLAY lane at UART
-        # idle-high and its 10x10ms burst can be buried. The CPU burst is the
-        # reliable half of the fingerprint.
-        tail = " (display burst also clean)" if burst(disp, 10, 10) else \
-               " (display burst not resolved — GPIO16 is U0TXD, expected)"
-        return f"OK: 5x20ms on the CPU lane D{tr.cpu_ch}{tail}"
-    if burst(disp, 5, 20):
-        return (f"*** LANES CROSSED *** the 5x20ms CPU burst is on D{tr.disp_ch}, "
-                f"which you declared as display. Re-run with "
-                f"--cpu-ch {tr.disp_ch} --display-ch {tr.cpu_ch}")
-    if cpu and tr.dur(cpu[0]) > 1.0:
-        return ("no selftest in this capture — expected, only the first boot "
-                "after an RTC wipe emits it; the CPU lane is continuously high")
-    return ("inconclusive: no clean selftest fingerprint. Either the capture "
-            "started mid-wake, or PPK2_DEBUG is not in the build")
+    cpu_here = burst(cpu, FP_CPU_PULSES, FP_CPU_MS)
+    cpu_there = burst(disp, FP_CPU_PULSES, FP_CPU_MS)
+    disp_here = burst(disp, FP_DISP_PULSES, FP_DISP_MS)
+    disp_there = burst(cpu, FP_DISP_PULSES, FP_DISP_MS)
+
+    if cpu_there or disp_there:
+        return (f"*** LANES CROSSED *** the {FP_CPU_PULSES}x{FP_CPU_MS}ms CPU "
+                f"fingerprint is on D{tr.disp_ch}, which you declared as display. "
+                f"Re-run with --cpu-ch {tr.disp_ch} --display-ch {tr.cpu_ch}. "
+                f"Every figure below is mislabelled until you do.")
+    if cpu_here:
+        tail = (" (display fingerprint also clean)" if disp_here else
+                " (display fingerprint not resolved — GPIO16 is U0TXD and the ROM "
+                "bootloader parks it high, so this is expected)")
+        return f"OK: {FP_CPU_PULSES}x{FP_CPU_MS}ms on the CPU lane D{tr.cpu_ch}{tail}"
+
+    return (f"*** LANE MAPPING UNVERIFIED *** no fingerprint found, so "
+            f"--cpu-ch {tr.cpu_ch} / --display-ch {tr.disp_ch} is taken on trust. "
+            f"The firmware emits one every wake, so expect this only when the build "
+            f"lacks -DPPK2_DEBUG, the capture starts mid-wake, or decimation "
+            f"exceeded the pulse width (analyse marker captures with --decimate 1).")
 
 
 def classify_display(tr):

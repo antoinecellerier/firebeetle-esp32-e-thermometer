@@ -1654,11 +1654,30 @@ static void restore_drift_from_flash()
 }
 
 #ifdef PPK2_DEBUG
-// Boot-time marker self-test, so PPK2 wiring can be confirmed before any
-// measurement is trusted. Emits countable, distinct patterns — 5 pulses on the
-// CPU-active channel, then 10 on the display/flash channel — and reads the pads
-// back, which separates "the firmware isn't driving the pin" from "the lead is
-// on the wrong pin". A flat channel with a passing read-back is a wiring fault.
+// Marker fingerprint, emitted on every wake so PPK2 wiring can be confirmed
+// against the capture it actually produced rather than against a boot that may
+// not be in frame. The pattern differs in BOTH count and width per lane — 2x10ms
+// on CPU-active, 5x4ms on display/flash — so a lane is still identifiable when a
+// pulse is clipped at a capture boundary. It also reads the pads back, which
+// separates "the firmware isn't driving the pin" from "the lead is on the wrong
+// pin"; a flat channel with a passing read-back is a wiring fault.
+//
+// 80ms total, down from the 400ms this used to cost. That earlier version was
+// gated to the first boot to keep it off the energy budget, which silently
+// removed crossed-lead detection from every capture that did not start with an
+// RTC-wiped boot — the leads were in fact crossed on this rig and the fingerprint
+// is what caught it. 80ms per wake (~1.4 mC) buys the check back on every wake.
+//
+// Pulses this short do not survive decimation — analyse marker captures with
+// --decimate 1. Marker captures are short and want that anyway, and long
+// production captures carry no markers at all.
+// Kept in sync with check_selftest() in tools/ppk2.py, which pattern-matches
+// these exact counts and widths to tell the lanes apart.
+#define PPK2_FP_CPU_PULSES   2
+#define PPK2_FP_CPU_MS      10
+#define PPK2_FP_DISP_PULSES  5
+#define PPK2_FP_DISP_MS      4
+
 static void ppk2_selftest()
 {
   // INPUT_OUTPUT, not OUTPUT: gpio_config() with GPIO_MODE_OUTPUT disables the
@@ -1681,15 +1700,15 @@ static void ppk2_selftest()
        (d0_hi && !d0_lo && d1_hi && !d1_lo) ? "follow (firmware OK)"
                                             : "DO NOT follow (firmware fault)");
 
-  for (int i = 0; i < 5; i++)   // D0: 5 x 20ms
+  for (int i = 0; i < PPK2_FP_CPU_PULSES; i++)
   {
-    gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 1); sleep_ms(20);
-    gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 0); sleep_ms(20);
+    gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 1); sleep_ms(PPK2_FP_CPU_MS);
+    gpio_set_level((gpio_num_t)PPK2_PIN_CPU_ACTIVE, 0); sleep_ms(PPK2_FP_CPU_MS);
   }
-  for (int i = 0; i < 10; i++)  // D1: 10 x 10ms
+  for (int i = 0; i < PPK2_FP_DISP_PULSES; i++)
   {
-    gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 1); sleep_ms(10);
-    gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 0); sleep_ms(10);
+    gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 1); sleep_ms(PPK2_FP_DISP_MS);
+    gpio_set_level((gpio_num_t)PPK2_PIN_DISPLAY, 0); sleep_ms(PPK2_FP_DISP_MS);
   }
 }
 #endif
@@ -1711,21 +1730,14 @@ void setup()
   gpio_out_init(PPK2_PIN_CPU_ACTIVE);
   gpio_out_init(PPK2_PIN_DISPLAY);
 #endif
-  // Before the selftest, not after: the selftest spends 400ms pulsing these
-  // pads, and a marker raised afterwards excludes that plus everything earlier
-  // in startup. Measured on the C6 ePaper rig, that hid ~450ms at 10-20mA
-  // (~5-9 mC) from every wake figure the marker bounded.
+  // Before the fingerprint, not after: a marker raised afterwards excludes the
+  // fingerprint plus everything earlier in startup. Measured on the C6 ePaper rig,
+  // raising it late hid ~450ms at 10-20mA (~5-9 mC) from every wake figure the
+  // marker bounded.
   PPK2_CPU_ACTIVE_HIGH();
 #ifdef PPK2_DEBUG
-  // First boot only. The selftest identifies which PPK2 lane is which, which is
-  // worth one interrupted span on the boot that is an outlier anyway; on every
-  // later wake an uninterrupted span matters more, since those are what the
-  // energy budget is built from.
-  if (boot_count == 0)
-  {
-    ppk2_selftest();
-    PPK2_CPU_ACTIVE_HIGH();   // selftest leaves the pad low
-  }
+  ppk2_selftest();
+  PPK2_CPU_ACTIVE_HIGH();     // the fingerprint leaves the pad low
 #endif
 
   // Detect stale RTC memory from a different firmware version.
