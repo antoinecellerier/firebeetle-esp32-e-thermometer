@@ -817,3 +817,39 @@ What this settles and what it does not:
 - The floor's spikiness is normal PFM: 11.6 µA between spikes plus ~0.16% duty
   of ~9 mA, 50-60 µs wide. Not a wiring fault, and not the ETA9740 — that path's
   signature is millisecond-scale 20-83 mA bursts every ~2 s, which is absent.
+
+### Live capture cross-check, and the format by difference (2026-07-26)
+
+Second capture of the same rig on `f07d2c9`, this time via `tools/ppk2.py live`
+(`ppk2-api`, source meter 4.2 V, `--power-cycle` so sampling is already running
+when the DUT powers up). Sustained **100.0 kSps with no dropped samples**
+(4,499,456 in 45.00 s), which is what makes the reconstructed time axis valid —
+live mode has no per-sample timestamps, so any drop would silently compress time
+and under-report every charge figure.
+
+**The two acquisition paths agree.** The NTP bootstrap over the same 1.8 s window
+integrates to **113.4 mC** live against **120.7 mC** from the nRF app's CSV — 6%
+apart, on different firmware and different acquisition code. Take the successful
+resync as **~117 mC ±5%**, still 2-3x under the 200-400 mC projection.
+
+| Term | `f07d2c9` (no format) | `4c0bbef` (with format) |
+|---|---|---|
+| Awake phase | 10.10 s, 280.2 mC | 12.29 s, 356.7 mC |
+| Panel refresh | 3.058 s, 9.23 mC | 3.03-3.06 s, 7.56-8.39 mC |
+| First floor window | 48.5 µA / 28.8 s | 26.4-29.7 µA |
+
+**One-time archive format, derived by difference: ~2.19 s and ~76.5 mC.** The two
+boots differ substantively only in whether the archive had to be formatted, and
+that lands in the single-digit seconds the 1.7 s full-chip erase implied rather
+than the ~26 s the sector-rate extrapolation projected. Derived, not measured —
+the firmware also changed between the two boots — so it wants a direct capture
+before it goes in the budget table.
+
+Two things this run did **not** settle:
+
+- **The CPU_ACTIVE marker fix is unconfirmed.** On a first boot the selftest still
+  runs and pulses the lane, so the long span still begins after it; the fix only
+  shows on wakes that skip the selftest. At 45 s against a 60 s sleep interval
+  this capture never reached a second wake. Needs ~150 s.
+- **The 48.5 µA floor is unexplained** against 26-30 µA on the previous capture.
+  Single 29 s window straight after a cold boot; not investigated.

@@ -222,7 +222,7 @@ def classify_display(tr):
         elif d > 0.5:
             labels.append((s, "panel refresh"))
         else:
-            labels.append((s, "unclassified D1 high"))
+            labels.append((s, f"unclassified D{tr.disp_ch} high"))
     return labels
 
 
