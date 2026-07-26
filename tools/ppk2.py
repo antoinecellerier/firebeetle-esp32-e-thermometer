@@ -232,15 +232,16 @@ def check_selftest(tr):
     disp_there = burst(cpu, disp_n, disp_ms)
 
     if cpu_here and disp_there:
-        return (f"*** LANES TIED TOGETHER *** both fingerprints appear on "
-                f"D{tr.cpu_ch} ({cpu_n}x{cpu_ms}ms and {disp_n}x{disp_ms}ms) and "
-                f"D{tr.disp_ch} carries nothing. One lead cannot carry two GPIOs, "
-                f"so the two are joined somewhere — most often both jumpers seated "
-                f"in the same PPK2 digital socket, which also leaves the other "
-                f"socket empty and one wire loose. Note this shorts the two GPIOs "
-                f"to each other, so the firmware drives both output drivers "
-                f"against each other whenever the markers disagree. Fix the "
-                f"harness before trusting any marker below.")
+        return (f"*** BOTH FINGERPRINTS ON D{tr.cpu_ch} *** "
+                f"{cpu_n}x{cpu_ms}ms and {disp_n}x{disp_ms}ms both appear there, "
+                f"and D{tr.disp_ch} carries nothing. The firmware drives them on "
+                f"two separate GPIOs, so one lane showing both is a harness fault "
+                f"of some kind — candidates, not a diagnosis: a lead loose enough "
+                f"to float and capacitively pick up its neighbour, both leads on "
+                f"one pin, or the two pins joined somewhere. Marker-attributed "
+                f"figures below (which charge belongs to the refresh vs the rest "
+                f"of the wake) are not trustworthy until it is resolved; "
+                f"current-derived figures are unaffected.")
     if cpu_there or disp_there:
         return (f"*** LANES CROSSED *** the {cpu_n}x{cpu_ms}ms CPU "
                 f"fingerprint is on D{tr.disp_ch}, which you declared as display. "
