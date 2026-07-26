@@ -67,8 +67,10 @@ float BMP390LSensor::GetTemperatureC()
     float temp;
     if (!bmp390l_direct_read(_i2c, &bmp390l_calib, &temp))
     {
+        // The sentinel, not 0.0f: 0.0 °C is a plausible room temperature, so a
+        // failed read returning it is indistinguishable from a real measurement.
         LOGI("ERROR: failed to read BMP390L temperature");
-        return 0.0f;
+        return TEMP_NO_PREVIOUS;
     }
     return temp;
 }
@@ -89,25 +91,42 @@ bool BMP390LSensor::SupportsUlp()
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
 // --- ESP32 ULP FSM path (HULP bit-bang I2C) ---
 
-void BMP390LSensor::InitializeUlp()
+void BMP390LSensor::InitializeUlp(bool cold_boot)
 {
 #ifdef ULP_TEST_NO_I2C
     LOGI("Initialising ULP coprocessor (TEST MODE: counter only, no I2C)");
 #else
     LOGI("Initialising ULP coprocessor for BMP390L polling");
 
-    // Only read calibration on first boot — it's stored in RTC memory and
-    // survives deep sleep (Initialize() reads it when missing)
+    // Calibration is read once and kept in RTC memory across deep sleep. A
+    // recovery reload clears it so it must be re-read: it doubles as this
+    // sensor's proof of presence, and a cached copy would let an absent part go
+    // on producing compensated numbers from an undriven bus — the hole the
+    // chip-ID check closes for BMP58x. Readings stay rejected until one lands,
+    // because bmp390l_compensate_temperature() refuses to work without it.
+    if (!cold_boot)
+        bmp390l_calib.parT1 = 0.0f;
+
     if (bmp390l_calib.parT1 == 0.0f)
     {
         Initialize();
         if (bmp390l_calib.parT1 == 0.0f)
         {
-            LOGI("ERROR: Failed to read BMP390L calibration data. ULP will not start.");
-            return;
+            LOGI("ERROR: Failed to read BMP390L calibration data");
+            if (cold_boot)
+            {
+                LOGI("ULP will not start");
+                return;
+            }
+            // On recovery, start it anyway: the ULP compares raw bytes and needs no
+            // calibration, so it can keep polling and wake the CPU when the sensor
+            // returns.
         }
-        LOGI("BMP390L calibration: parT1=%.2f parT2=%.10f parT3=%.15f",
-             bmp390l_calib.parT1, bmp390l_calib.parT2, bmp390l_calib.parT3);
+        else
+        {
+            LOGI("BMP390L calibration: parT1=%.2f parT2=%.10f parT3=%.15f",
+                 bmp390l_calib.parT1, bmp390l_calib.parT2, bmp390l_calib.parT3);
+        }
     }
     else
     {
@@ -136,29 +155,62 @@ void BMP390LSensor::InitializeUlp()
 
     // Build and load ULP program into RTC slow memory, then start
     ulp_build_and_load_program();
+
+    // ulp_build_and_load_program() zeroes the shared variables, and the program
+    // treats a zero reference as "no reference yet" and seeds it from the first
+    // sample — giving a delta of 0 and no wake. That is right on a cold boot, where
+    // it prevents a phantom refresh, and wrong after a recovery reload, where it
+    // suppresses precisely the wake that would notice the sensor is back and leaves
+    // the panel blanked until the hourly safety net. Any non-zero reference skips
+    // the seeding, so the first real sample produces a large delta and wakes.
+    if (!cold_boot)
+        ulp_write_var(ULP_DATA_BASE, ULP_VAR_PREV_TEMP_MSB, 1);
+
     ulp_start();
     LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
+}
+
+void BMP390LSensor::StopUlp()
+{
+    // Nothing to halt for the bus's sake: the FSM bit-bangs over RTC GPIOs, and
+    // release_i2c_pins_to_hp() takes those back before the CPU reads.
 }
 
 #elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP390L)
 // --- ESP32-C6 LP core path (hardware LP I2C) ---
 
-void BMP390LSensor::InitializeUlp()
+void BMP390LSensor::InitializeUlp(bool cold_boot)
 {
     LOGI("Initialising LP core for BMP390L polling");
 
-    // Read calibration on first boot — stored in RTC memory, survives deep
-    // sleep (Initialize() reads it when missing)
+    // A recovery reload re-establishes identity. The calibration block lives in RTC
+    // memory and outlives the fault, so trusting the cache would let an absent
+    // sensor go on producing compensated numbers from an undriven bus — the same
+    // hole the chip-ID check closes for BMP58x. Clearing it forces a fresh read,
+    // and bmp390l_compensate_temperature() rejects every reading until one lands.
+    if (!cold_boot)
+        bmp390l_calib.parT1 = 0.0f;
+
     if (bmp390l_calib.parT1 == 0.0f)
     {
         Initialize();
         if (bmp390l_calib.parT1 == 0.0f)
         {
-            LOGI("ERROR: Failed to read BMP390L calibration data. LP core will not start.");
-            return;
+            LOGI("ERROR: Failed to read BMP390L calibration data");
+            if (cold_boot)
+            {
+                LOGI("LP core will not start");
+                return;
+            }
+            // On recovery, start it anyway: the coprocessor compares raw bytes and
+            // needs no calibration, so it can keep polling and wake the CPU when the
+            // sensor comes back. Readings stay rejected until calibration reads.
         }
-        LOGI("BMP390L calibration: parT1=%.2f parT2=%.10f parT3=%.15f",
-             bmp390l_calib.parT1, bmp390l_calib.parT2, bmp390l_calib.parT3);
+        else
+        {
+            LOGI("BMP390L calibration: parT1=%.2f parT2=%.10f parT3=%.15f",
+                 bmp390l_calib.parT1, bmp390l_calib.parT2, bmp390l_calib.parT3);
+        }
     }
     else
     {
@@ -181,10 +233,33 @@ void BMP390LSensor::InitializeUlp()
     i2c_cfg.i2c_src_clk = LP_I2C_SCLK_LP_FAST;
     ESP_ERROR_CHECK(lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg));
 
-    // Load and start the LP core binary
+    // Load and start the LP core binary.
+    //
+    // ulp_lp_core_load_binary() memsets the whole CONFIG_ULP_COPROC_RESERVE_MEM
+    // region before copying the program — that is how it initialises .bss — so
+    // nothing in LP RAM survives a reload. The wake and error counters have to be
+    // carried across by hand or they never accumulate past one reload, and the
+    // "! LP" badge needs several errors against a wake count before it fires.
+    //
+    // prev_temp_msb is deliberately NOT carried: left at zero the first sample
+    // produces a large delta and wakes the CPU, which is what makes a repaired
+    // sensor noticed within one LP period instead of at the hourly safety net.
     uint64_t wakeup_us = (uint64_t)SLEEP_INTERVAL_S * 1000000ULL;
+    const uint32_t saved_wakes  = cold_boot ? 0 : ulp_lp_wake_count;
+    const uint32_t saved_errors = cold_boot ? 0 : ulp_lp_error_count;
+    const uint32_t saved_err    = cold_boot ? 0 : ulp_last_lp_error;
+    const uint32_t saved_op     = cold_boot ? 0 : ulp_last_lp_op;
+
     ESP_ERROR_CHECK(ulp_lp_core_load_binary(ulp_main_bin_start,
                                             (ulp_main_bin_end - ulp_main_bin_start)));
+
+    ulp_lp_wake_count  = saved_wakes;
+    ulp_lp_error_count = saved_errors;
+    ulp_last_lp_error  = saved_err;
+    ulp_last_lp_op     = saved_op;
+    ulp_sample_count   = 0;
+    ulp_wake_reason    = 0;
+
     ulp_lp_core_cfg_t cfg = {
         .wakeup_source = ULP_LP_CORE_WAKEUP_SOURCE_LP_TIMER,
         .lp_timer_sleep_duration_us = (uint32_t)wakeup_us,
@@ -194,10 +269,19 @@ void BMP390LSensor::InitializeUlp()
     LOGI("LP core started with %d µs wakeup period", (int)wakeup_us);
 }
 
+void BMP390LSensor::StopUlp()
+{
+    // Halts the core so it cannot start an LP I2C transaction while the CPU is
+    // using the same pins. InitializeUlp() reloads and restarts it.
+    ulp_lp_core_stop();
+}
+
 #else
 // --- No ULP support ---
 
-void BMP390LSensor::InitializeUlp() {}
+void BMP390LSensor::InitializeUlp(bool cold_boot) { (void)cold_boot; }
+
+void BMP390LSensor::StopUlp() {}
 
 #endif
 
@@ -230,6 +314,12 @@ static bool verify_ulp_temp(I2cBus &bus, float *temp)
         return false;
     }
     LOGI("Direct I2C re-read: %.2f °C", reread);
+    if (!temp_is_plausible(reread))
+    {
+        LOGI("Re-read %.2f is outside %.0f..%.0f — discarding both",
+             reread, TEMP_PLAUSIBLE_MIN_C, TEMP_PLAUSIBLE_MAX_C);
+        return false;
+    }
     if (fabsf(reread - *temp) <= TEMP_REREAD_CONFIRM)
     {
         LOGI("Re-read confirms ULP value, accepting %.2f", *temp);
@@ -245,6 +335,16 @@ static bool verify_ulp_temp(I2cBus &bus, float *temp)
 
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
 // --- ESP32 ULP FSM path ---
+
+// The ULP bit-bang holds SDA/SCL as RTC GPIOs across deep sleep, and I2cBus cannot
+// drive them in that state. Every path that gives up on the ULP reading falls
+// through to a direct read in setup(), so each one has to hand the pins back — a
+// failure return that skips this leaves the fall-through unable to reach the sensor.
+static void release_i2c_pins_to_hp()
+{
+    rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
+    rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
+}
 
 bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
 {
@@ -263,12 +363,20 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
     if (wake_reason == 2)
     {
         LOGI("ULP I2C error, falling back to normal boot path");
+        release_i2c_pins_to_hp();
         return false;
     }
 
     *temp_out = bmp390l_compensate_temperature(&bmp390l_calib,
                                                 (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
     LOGI("ULP compensated temp: %.2f °C", *temp_out);
+    if (!temp_is_plausible(*temp_out))
+    {
+        LOGI("ULP compensated temp %.2f outside %.0f..%.0f — rejecting", *temp_out,
+             TEMP_PLAUSIBLE_MIN_C, TEMP_PLAUSIBLE_MAX_C);
+        release_i2c_pins_to_hp();
+        return false;
+    }
 
 #ifdef TEST_CORRUPT_ULP_TEMP
     LOGI("TEST: corrupting ULP temp %.2f → %.2f", *temp_out, *temp_out + 50.0f);
@@ -279,9 +387,7 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
     {
         LOGI("Suspicious ULP temp %.2f (previous %.2f, delta %.2f) — verifying",
              *temp_out, previous_temp, *temp_out - previous_temp);
-        // Reclaim I2C pins from RTC GPIO mode (ULP bit-bang leaves them as RTC GPIOs)
-        rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
-        rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
+        release_i2c_pins_to_hp();
         if (!verify_ulp_temp(_i2c, temp_out))
             return false;
     }
@@ -318,6 +424,12 @@ bool BMP390LSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
     *temp_out = bmp390l_compensate_temperature(&bmp390l_calib,
                                                 (uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
     LOGI("LP core compensated temp: %.2f °C", *temp_out);
+    if (!temp_is_plausible(*temp_out))
+    {
+        LOGI("LP core compensated temp %.2f outside %.0f..%.0f — rejecting", *temp_out,
+             TEMP_PLAUSIBLE_MIN_C, TEMP_PLAUSIBLE_MAX_C);
+        return false;
+    }
 
 #ifdef TEST_CORRUPT_ULP_TEMP
     LOGI("TEST: corrupting LP core temp %.2f → %.2f", *temp_out, *temp_out + 50.0f);

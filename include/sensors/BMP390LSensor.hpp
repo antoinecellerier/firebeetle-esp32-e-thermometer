@@ -13,7 +13,8 @@ class BMP390LSensor : public Sensor
         float GetTemperatureC() override;
 
         bool SupportsUlp() override;
-        void InitializeUlp() override;
+        void InitializeUlp(bool cold_boot = true) override;
+        void StopUlp() override;
         bool ReadUlpTemperature(float *temp_out, float previous_temp = TEMP_NO_PREVIOUS) override;
 
     private:

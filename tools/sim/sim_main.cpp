@@ -8,6 +8,7 @@
 
 #include "Adafruit_GFX.h"
 #include "DisplayRenderer.h"
+#include "Sensor.hpp"   // TEMP_NO_PREVIOUS
 #include "HistoryStore.h"   // HistoryStoreFault, for the "! NOARCH" scenario
 #include "MockData.h"
 #include <cstdio>
@@ -228,6 +229,22 @@ int main(int argc, char **argv)
                       22.3f, 3842, false,
                       now, &nowtm, noarch_stats);
     save_and_convert(cfg.name, "_noarch", canvas);
+
+    // Scenario 10: the sensor read was rejected as implausible — a loose ground
+    // or an unpowered device. The point of the variant is that NO number is
+    // drawn: a plausible-looking value for a rejected read is the failure the
+    // gate exists to prevent, so confirm the gap plus "! SENSOR" reads as a
+    // fault at every panel size rather than as a rendering glitch.
+    canvas.fillScreen(0xFFFF);
+    DisplayStats nosensor_stats = stats;
+    nosensor_stats.dummy_sensor = false;
+    nosensor_stats.mock_data = false;
+    nosensor_stats.power_efficient = true;
+    nosensor_stats.sensor_ok = false;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      TEMP_NO_PREVIOUS, 3842, false,
+                      now, &nowtm, nosensor_stats);
+    save_and_convert(cfg.name, "_nosensor", canvas);
   }
 
   return 0;

@@ -7,6 +7,7 @@
 #include "DisplayRenderer.h"
 #include "HistoryStore.h"   // HistoryStoreFault, for the "! NOARCH" badge
 #include "app_common.h"
+#include "Sensor.hpp"   // TEMP_NO_PREVIOUS, the "no reading" sentinel
 #include "displays.h"  // DISPLAY_HAS_RED (panel tri-color capability)
 
 #ifndef GIT_HASH
@@ -197,7 +198,12 @@ void render_temperature(Adafruit_GFX &gfx, const Layout &L,
   Rect z = L.temp;
 
   char temp_str[16];
-  snprintf(temp_str, sizeof(temp_str), "%.1f", temp);
+  // No reading is not a temperature. Printing a plausible-looking number for a
+  // rejected read is the failure this exists to prevent, so show a gap instead.
+  if (temp == TEMP_NO_PREVIOUS)
+    snprintf(temp_str, sizeof(temp_str), "--.-");
+  else
+    snprintf(temp_str, sizeof(temp_str), "%.1f", temp);
 
   gfx.setFont(L.big_font);
   gfx.setTextSize(1);

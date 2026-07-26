@@ -8,6 +8,7 @@
 
 #include <math.h>
 #include "I2cBus.h"
+#include "Sensor.hpp"
 #include "app_common.h"
 
 #define BMP390L_CALIB_REG_ADDR 0x31
@@ -33,10 +34,24 @@ bool bmp390l_read_calibration(I2cBus &bus, struct BMP390LCalib *calib)
 }
 
 
+// Every path compensates here — direct read, ULP FSM and LP core — so this is the
+// one place that has to recognise a raw code no live sensor produces. Returning the
+// sentinel lets the plausibility gate the callers already apply reject it, instead
+// of each path needing its own copy of the test.
 float bmp390l_compensate_temperature(const struct BMP390LCalib *calib,
                                      uint8_t raw_0, uint8_t raw_1, uint8_t raw_2)
 {
   uint32_t uncomp_temp = (uint32_t)raw_0 | ((uint32_t)raw_1 << 8) | ((uint32_t)raw_2 << 16);
+  if (TEMP_RAW24_IS_BUS_ARTIFACT(uncomp_temp))
+    return TEMP_NO_PREVIOUS;
+
+  // With a zeroed calibration block every term below multiplies out to exactly
+  // 0.0 C for any raw code — a plausible room temperature that no downstream gate
+  // can distinguish from a real one. parT1 is the sentinel the callers already use
+  // for "calibration not read yet" (bmp390l_calib is RTC_DATA_ATTR, so a panic or
+  // battery swap zeroes it, and a failed calibration read leaves it that way).
+  if (calib->parT1 == 0.0f)
+    return TEMP_NO_PREVIOUS;
 
   float partial1 = (float)uncomp_temp - calib->parT1;
   float partial2 = partial1 * calib->parT2;

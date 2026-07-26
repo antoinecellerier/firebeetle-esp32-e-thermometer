@@ -56,10 +56,17 @@ bool BMP58xSensor::WriteRegister(uint8_t reg, uint8_t value)
     return _i2c.writeReg(BMP58X_I2C_ADDR, reg, value);
 }
 
-// BMP58x outputs already-compensated temperature as 24-bit signed, 1/65536 °C per LSB
+// BMP58x outputs already-compensated temperature as 24-bit signed, 1/65536 °C per LSB.
+//
+// Every path converts here — direct read, ULP FSM and LP core — so this is the one
+// place that has to recognise a raw code no live sensor produces. Returning the
+// sentinel lets the plausibility gate the callers already apply reject it, instead
+// of each path needing its own copy of the test.
 float BMP58xSensor::RawToTempC(uint8_t xlsb, uint8_t lsb, uint8_t msb)
 {
     uint32_t raw = (uint32_t)xlsb | ((uint32_t)lsb << 8) | ((uint32_t)msb << 16);
+    if (TEMP_RAW24_IS_BUS_ARTIFACT(raw))
+        return TEMP_NO_PREVIOUS;
     if (raw & 0x800000)
         raw |= 0xFF000000; // sign-extend 24→32 bits
     return (int32_t)raw / 65536.0f;
@@ -73,19 +80,34 @@ void BMP58xSensor::Initialize()
     _i2c.begin(I2C_SDA_PIN, I2C_SCL_PIN);
     sleep_ms(5); // BMP58x needs ~2ms after power-up before I2C is ready
 
+    // The chip ID is the only positive evidence that a BMP58x is on the bus, and
+    // it is what separates a real measurement from a number an undriven bus
+    // produced. A floating SDA yields values that pass every range and artifact
+    // test — 0x7F8000 reads as a perfectly formed 127.5 °C — so identity has to
+    // gate the reading rather than merely be logged.
     uint8_t chip_id;
+    _identified = false;
     if (ReadRegister(BMP58X_REG_CHIP_ID, &chip_id, 1))
     {
         if (chip_id == BMP581_CHIP_ID)
+        {
             LOGI("BMP581 detected (chip ID 0x%02x)", chip_id);
+            _identified = true;
+        }
         else if (chip_id == BMP585_CHIP_ID)
+        {
             LOGI("BMP585 detected (chip ID 0x%02x)", chip_id);
+            _identified = true;
+        }
         else
-            LOGI("WARNING: unexpected BMP58x chip ID 0x%02x", chip_id);
+        {
+            LOGI("WARNING: unexpected BMP58x chip ID 0x%02x — not trusting readings",
+                 chip_id);
+        }
     }
     else
     {
-        LOGI("WARNING: failed to read BMP58x chip ID");
+        LOGI("WARNING: failed to read BMP58x chip ID — not trusting readings");
     }
 
     WriteRegister(BMP58X_REG_OSR_CONFIG, BMP58X_OSR_TEMP_1X);
@@ -98,6 +120,9 @@ float BMP58xSensor::GetTemperatureC()
 {
     Initialize();
 
+    if (!_identified)
+        return TEMP_NO_PREVIOUS;
+
     // Trigger forced-mode measurement (OSR configured once in Initialize())
     WriteRegister(BMP58X_REG_ODR_CONFIG, BMP58X_FORCED_MODE);
     sleep_ms(3); // conversion ~1.6ms at 1x OSR
@@ -105,8 +130,10 @@ float BMP58xSensor::GetTemperatureC()
     uint8_t data[3];
     if (!ReadRegister(BMP58X_REG_TEMP_XLSB, data, 3))
     {
+        // The sentinel, not 0.0f: 0.0 °C is a plausible room temperature, so a
+        // failed read returning it is indistinguishable from a real measurement.
         LOGI("ERROR: failed to read BMP58x temperature");
-        return 0.0f;
+        return TEMP_NO_PREVIOUS;
     }
 
     return RawToTempC(data[0], data[1], data[2]);
@@ -128,7 +155,7 @@ bool BMP58xSensor::SupportsUlp()
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
 // --- ESP32 ULP FSM path (HULP bit-bang I2C) ---
 
-void BMP58xSensor::InitializeUlp()
+void BMP58xSensor::InitializeUlp(bool cold_boot)
 {
 #ifdef ULP_TEST_NO_I2C
     LOGI("Initialising ULP coprocessor (TEST MODE: counter only, no I2C)");
@@ -158,14 +185,31 @@ void BMP58xSensor::InitializeUlp()
 #endif
 
     ulp_build_and_load_program();
+
+    // ulp_build_and_load_program() zeroes the shared variables, and the program
+    // treats a zero reference as "no reference yet" and seeds it from the first
+    // sample — giving a delta of 0 and no wake. That is right on a cold boot, where
+    // it prevents a phantom refresh, and wrong after a recovery reload, where it
+    // suppresses precisely the wake that would notice the sensor is back and leaves
+    // the panel blanked until the hourly safety net. Any non-zero reference skips
+    // the seeding, so the first real sample produces a large delta and wakes.
+    if (!cold_boot)
+        ulp_write_var(ULP_DATA_BASE, ULP_VAR_PREV_TEMP_MSB, 1);
+
     ulp_start();
     LOGI("ULP started with %d µs wakeup period", (int)ULP_WAKEUP_PERIOD_US);
+}
+
+void BMP58xSensor::StopUlp()
+{
+    // Nothing to halt for the bus's sake: the FSM bit-bangs over RTC GPIOs, and
+    // release_i2c_pins_to_hp() takes those back before the CPU reads.
 }
 
 #elif defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP58x)
 // --- ESP32-C6 LP core path (hardware LP I2C) ---
 
-void BMP58xSensor::InitializeUlp()
+void BMP58xSensor::InitializeUlp(bool cold_boot)
 {
     LOGI("Initialising LP core for BMP58x polling");
 
@@ -189,17 +233,43 @@ void BMP58xSensor::InitializeUlp()
     ESP_ERROR_CHECK(lp_core_i2c_master_init(LP_I2C_NUM_0, &i2c_cfg));
 
     uint64_t wakeup_us = (uint64_t)SLEEP_INTERVAL_S * 1000000ULL;
+
+    // ulp_lp_core_load_binary() memsets the whole CONFIG_ULP_COPROC_RESERVE_MEM
+    // region before copying the program — that is how it initialises .bss — so
+    // nothing in LP RAM survives a reload on its own. Carry the shared state
+    // across by hand: the wake/error counters have to keep accumulating for the
+    // "! LP" badge to ever reach its threshold, and prev_temp_c is the delta
+    // reference, which reset to 0.0 makes a sensor sitting at any other
+    // temperature look like a large change and wake the CPU every LP period.
+    //
+    // On a cold boot there is nothing to carry: the symbols hold uninitialised
+    // SRAM, and the memset is exactly what is wanted.
+    const uint32_t saved_wakes  = cold_boot ? 0 : ulp_lp_wake_count;
+    const uint32_t saved_errors = cold_boot ? 0 : ulp_lp_error_count;
+    const uint32_t saved_err    = cold_boot ? 0 : ulp_last_lp_error;
+    const uint32_t saved_op     = cold_boot ? 0 : ulp_last_lp_op;
+
     ESP_ERROR_CHECK(ulp_lp_core_load_binary(ulp_main_bin_start,
                                             (ulp_main_bin_end - ulp_main_bin_start)));
-    // Zero LP shared state explicitly: .bss lives past the end of the embedded
-    // binary blob and is NOT touched by ulp_lp_core_load_binary(), so on a
-    // fresh power-on these symbols would otherwise reflect uninitialised SRAM.
-    ulp_lp_wake_count  = 0;
-    ulp_lp_error_count = 0;
-    ulp_last_lp_error  = 0;
-    ulp_last_lp_op     = 0;
+
+    ulp_lp_wake_count  = saved_wakes;
+    ulp_lp_error_count = saved_errors;
+    ulp_last_lp_error  = saved_err;
+    ulp_last_lp_op     = saved_op;
+    // Consumed by the CPU on the wake that led here; always starts clean.
     ulp_sample_count   = 0;
     ulp_wake_reason    = 0;
+    // Deliberately NOT carried across, for two reasons. It is the delta reference
+    // the LP core wakes on, and a reload only happens after something went wrong —
+    // so the reference may well be garbage the LP core latched from a floating bus
+    // during the fault. Carrying that forward can leave it within
+    // TEMP_DELTA_THRESHOLD_C of the real room temperature, in which case a
+    // repaired sensor produces no delta, never wakes the CPU, and the panel stays
+    // blanked until the hourly safety net. Resetting to 0.0 — below anything this
+    // sensor reads indoors — guarantees the next sample wakes the CPU and the
+    // reading is re-evaluated. The cost is a wake per LP period while a fault
+    // persists, which is accepted for a case that is rare and either clears on the
+    // next reading or is terminal.
     ulp_prev_temp_c    = 0.0f;
 
     ulp_lp_core_cfg_t cfg = {
@@ -211,10 +281,19 @@ void BMP58xSensor::InitializeUlp()
     LOGI("LP core started with %d µs wakeup period", (int)wakeup_us);
 }
 
+void BMP58xSensor::StopUlp()
+{
+    // Halts the core so it cannot start an LP I2C transaction while the CPU is
+    // using the same pins. InitializeUlp() reloads and restarts it.
+    ulp_lp_core_stop();
+}
+
 #else
 // --- No ULP support ---
 
-void BMP58xSensor::InitializeUlp() {}
+void BMP58xSensor::InitializeUlp(bool cold_boot) { (void)cold_boot; }
+
+void BMP58xSensor::StopUlp() {}
 
 #endif
 
@@ -228,8 +307,25 @@ void BMP58xSensor::InitializeUlp() {}
 
 // Direct I2C re-read for plausibility verification
 // (OSR was already configured in Initialize() before ULP/LP-core took over the bus)
+//
+// Returns false only when the bus transfer failed, so the caller can tell an I2C
+// failure from a sensor that answered with a value — the distinction the whole
+// verification exists to make, and one that is lost if this folds the plausibility
+// test into its return. *temp_out carries whatever was read, sentinel included.
 static bool bmp58x_direct_read(I2cBus &bus, float *temp_out)
 {
+    // Identity first: this runs on the coprocessor path, which never calls
+    // Initialize(), so it is the only place the re-read can establish that the
+    // reply is coming from a sensor rather than from an undriven bus.
+    uint8_t chip_id;
+    if (!bus.readReg(BMP58X_I2C_ADDR, BMP58X_REG_CHIP_ID, &chip_id, 1))
+        return false;
+    if (chip_id != BMP581_CHIP_ID && chip_id != BMP585_CHIP_ID)
+    {
+        LOGI("Re-read: chip ID 0x%02x is not a BMP58x — no sensor on the bus", chip_id);
+        return false;
+    }
+
     if (!bus.writeReg(BMP58X_I2C_ADDR, BMP58X_REG_ODR_CONFIG, BMP58X_FORCED_MODE))
         return false;
 
@@ -239,10 +335,7 @@ static bool bmp58x_direct_read(I2cBus &bus, float *temp_out)
     if (!bus.readReg(BMP58X_I2C_ADDR, BMP58X_REG_TEMP_XLSB, data, 3))
         return false;
 
-    uint32_t raw = (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16);
-    if (raw & 0x800000)
-        raw |= 0xFF000000;
-    *temp_out = (int32_t)raw / 65536.0f;
+    *temp_out = BMP58xSensor::RawToTempC(data[0], data[1], data[2]);
     return true;
 }
 
@@ -258,6 +351,12 @@ static bool verify_ulp_temp(I2cBus &bus, float *temp)
         return false;
     }
     LOGI("Direct I2C re-read: %.2f °C", reread);
+    if (!temp_is_plausible(reread))
+    {
+        LOGI("Re-read %.2f is outside %.0f..%.0f — discarding both",
+             reread, TEMP_PLAUSIBLE_MIN_C, TEMP_PLAUSIBLE_MAX_C);
+        return false;
+    }
     if (fabsf(reread - *temp) <= TEMP_REREAD_CONFIRM)
     {
         LOGI("Re-read confirms ULP value, accepting %.2f", *temp);
@@ -273,6 +372,16 @@ static bool verify_ulp_temp(I2cBus &bus, float *temp)
 
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_ULP_FSM_SUPPORTED)
 // --- ESP32 ULP FSM path ---
+
+// The ULP bit-bang holds SDA/SCL as RTC GPIOs across deep sleep, and I2cBus cannot
+// drive them in that state. Every path that gives up on the ULP reading falls
+// through to a direct read in setup(), so each one has to hand the pins back — a
+// failure return that skips this leaves the fall-through unable to reach the sensor.
+static void release_i2c_pins_to_hp()
+{
+    rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
+    rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
+}
 
 bool BMP58xSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
 {
@@ -291,11 +400,19 @@ bool BMP58xSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
     if (wake_reason == 2)
     {
         LOGI("ULP I2C error, falling back to normal boot path");
+        release_i2c_pins_to_hp();
         return false;
     }
 
     *temp_out = RawToTempC((uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
     LOGI("ULP temp: %.2f °C", *temp_out);
+    if (!temp_is_plausible(*temp_out))
+    {
+        LOGI("ULP temp %.2f outside %.0f..%.0f — rejecting", *temp_out,
+             TEMP_PLAUSIBLE_MIN_C, TEMP_PLAUSIBLE_MAX_C);
+        release_i2c_pins_to_hp();
+        return false;
+    }
 
 #ifdef TEST_CORRUPT_ULP_TEMP
     LOGI("TEST: corrupting ULP temp %.2f → %.2f", *temp_out, *temp_out + 50.0f);
@@ -306,8 +423,7 @@ bool BMP58xSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
     {
         LOGI("Suspicious ULP temp %.2f (previous %.2f, delta %.2f) — verifying",
              *temp_out, previous_temp, *temp_out - previous_temp);
-        rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
-        rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
+        release_i2c_pins_to_hp();
         if (!verify_ulp_temp(_i2c, temp_out))
             return false;
     }
@@ -341,6 +457,12 @@ bool BMP58xSensor::ReadUlpTemperature(float *temp_out, float previous_temp)
 
     *temp_out = RawToTempC((uint8_t)raw_0, (uint8_t)raw_1, (uint8_t)raw_2);
     LOGI("LP core temp: %.2f °C", *temp_out);
+    if (!temp_is_plausible(*temp_out))
+    {
+        LOGI("LP core temp %.2f outside %.0f..%.0f — rejecting", *temp_out,
+             TEMP_PLAUSIBLE_MIN_C, TEMP_PLAUSIBLE_MAX_C);
+        return false;
+    }
 
 #ifdef TEST_CORRUPT_ULP_TEMP
     LOGI("TEST: corrupting LP core temp %.2f → %.2f", *temp_out, *temp_out + 50.0f);

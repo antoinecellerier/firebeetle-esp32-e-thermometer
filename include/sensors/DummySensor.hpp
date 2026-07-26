@@ -12,7 +12,8 @@ class DummySensor : public Sensor
 
 #if !defined(NO_ULP) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
         bool SupportsUlp() override;
-        void InitializeUlp() override;
+        void InitializeUlp(bool cold_boot = true) override;
+        void StopUlp() override;
         bool ReadUlpTemperature(float *temp_out, float previous_temp = TEMP_NO_PREVIOUS) override;
 #endif
 };

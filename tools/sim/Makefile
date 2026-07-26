@@ -28,9 +28,13 @@ $(FONT_STAMP): $(FONT_SCRIPT) $(FONT_CONFIG)
 	python3 $(FONT_SCRIPT) --all
 	touch $@
 
+# Both extensions: include/ carries .h and .hpp, and a glob that misses one lets
+# `make screenshots` render PNGs from a binary built against the older header.
 $(TARGET): $(FONT_STAMP) sim_main.cpp $(PROJECT_ROOT)/src/DisplayRenderer.cpp \
-           $(wildcard $(PROJECT_ROOT)/include/*.h) $(wildcard $(PROJECT_ROOT)/include/generated/*.h) \
-           $(wildcard stubs/*.h)
+           $(wildcard $(PROJECT_ROOT)/include/*.h) $(wildcard $(PROJECT_ROOT)/include/*.hpp) \
+           $(wildcard $(PROJECT_ROOT)/include/sensors/*.hpp) \
+           $(wildcard $(PROJECT_ROOT)/include/generated/*.h) \
+           $(wildcard stubs/*.h) $(wildcard stubs/*.hpp)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -o $@ \
 		sim_main.cpp \
 		$(PROJECT_ROOT)/src/DisplayRenderer.cpp \

@@ -87,7 +87,7 @@ void ulp_check_data_overlap();
 // RtcHistory, RTC_HISTORY_VERSION and the self_addr scheme live in
 // include/RtcHistory.h so HistoryStore.cpp can serialize the same layout.
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_STATE_VERSION   0xDA050003
+#define RTC_STATE_VERSION   0xDA050005
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -231,8 +231,23 @@ RTC_DATA_ATTR time_t first_boot_time = 0;
 RTC_DATA_ATTR time_t next_clear_time = 0;
 const time_t one_day = 86400;
 
+// The last temperature actually measured, and the reference the sensor drivers
+// compare a suspicious coprocessor reading against (a jump past TEMP_REREAD_DELTA
+// triggers a direct I2C re-read). They skip that check when it holds the sentinel,
+// so this must never be blanked: doing so switches the verification off for
+// exactly the wakes following a fault, which is when it is needed most.
 RTC_DATA_ATTR float previous_temp = TEMP_NO_PREVIOUS;
+// What the panel is showing, which is a different question — a rejected reading
+// blanks it to "--.-" while previous_temp keeps the last real value — so the two
+// cannot share one variable. Costs 4 bytes of the RTC area the ULP data segment
+// sits above; the build prints the remaining headroom on every ESP32-E build.
+RTC_DATA_ATTR bool panel_shows_reading = false;
 RTC_DATA_ATTR int previous_boot_count = -1;
+// While the panel is blanked nothing changes, so nothing redraws and the counters
+// on screen freeze — leaving a wedged device indistinguishable from a quiet one.
+// Repaint occasionally so the fault stays legible, counted in wakes because that
+// is what the fault itself drives.
+#define FAULT_REPAINT_WAKES 30
 
 RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
@@ -285,6 +300,11 @@ RTC_DATA_ATTR uint8_t drift_ppm_count = 0;
 RTC_DATA_ATTR bool wifi_ok = false;
 RTC_DATA_ATTR bool ntp_synced = false;
 RTC_DATA_ATTR bool last_sensor_ok = true;
+// This wake only, so deliberately not RTC state: "the coprocessor handed up a
+// reading we could not use". It is the sole trigger for the recovery reload
+// below — every route to a coprocessor problem sets it, and a stale RTC flag in
+// that condition would reload the program on wakes where nothing went wrong.
+static bool s_ulp_read_failed = false;
 
 // Gather/scatter the drift block for the flash archive. Keeping it in one place
 // means the on-flash layout (HistoryDriftState) and these RTC variables can
@@ -364,7 +384,13 @@ static void hourly_append(time_t hour_start, const HourlyEntry &entry)
 // When the clock hour changes, the accumulated entry is finalized and appended
 // to the circular buffer. Any skipped hours (shouldn't happen normally since
 // the safety net wakes every hour) are filled with sentinel entries.
-static void update_hourly_history(time_t now, const struct tm *nowtm, float temp)
+// Called on every wake, including those whose reading was rejected: has_reading
+// false still advances the hour bookkeeping, it only skips the accumulation. If
+// it were skipped entirely the hour anchor would freeze for the whole outage,
+// and the eventual recovery would look like one long gap to the fill logic below
+// — which would repeat the last good hour across hours that measured nothing.
+static void update_hourly_history(time_t now, const struct tm *nowtm, float temp,
+                                  bool has_reading)
 {
   // Nothing here is meaningful without a wall clock: entries are filed by clock
   // hour, and a 1970 timestamp would file them ~54 years before everything
@@ -374,8 +400,6 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
   // ring with one repeated value.
   if (!time_is_plausible(now))
     return;
-
-  int16_t temp_x10 = (int16_t)(temp * 10);
 
   // Compute wall-clock start-of-hour for current local time
   struct tm hour_tm = *nowtm;
@@ -397,13 +421,21 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
   bool extends_history = (hour_start - 3600) > historical_data.hourly_latest_time;
   if (hour_advanced && extends_history)
   {
-    // Clock hour changed — finalize the completed hour's entry
+    // Clock hour changed — finalize the completed hour's entry. An hour that
+    // accepted no readings is recorded as measured-nothing rather than with the
+    // accumulator's init values, which are sentinels, not temperatures.
     HourlyEntry entry;
-    entry.min_x10 = historical_data.current_hour_min_x10;
-    entry.max_x10 = historical_data.current_hour_max_x10;
-    entry.avg_x10 = (historical_data.current_hour_sample_count > 0)
-      ? (int16_t)(historical_data.current_hour_sum_x10 / historical_data.current_hour_sample_count)
-      : historical_data.current_hour_min_x10;
+    if (historical_data.current_hour_sample_count > 0)
+    {
+      entry.min_x10 = historical_data.current_hour_min_x10;
+      entry.max_x10 = historical_data.current_hour_max_x10;
+      entry.avg_x10 = (int16_t)(historical_data.current_hour_sum_x10 /
+                                historical_data.current_hour_sample_count);
+    }
+    else
+    {
+      entry.min_x10 = entry.max_x10 = entry.avg_x10 = HOURLY_NO_DATA;
+    }
 
     hourly_append(historical_data.current_hour_start, entry);
 
@@ -475,7 +507,11 @@ static void update_hourly_history(time_t now, const struct tm *nowtm, float temp
 
   historical_data.current_hour_start = hour_start;
 
+  if (!has_reading)
+    return;
+
   // Accumulate reading into current hour's stats
+  int16_t temp_x10 = (int16_t)(temp * 10);
   historical_data.current_hour_sample_count++;
   historical_data.current_hour_sum_x10 += temp_x10;
   if (temp_x10 < historical_data.current_hour_min_x10)
@@ -623,11 +659,12 @@ DisplayStats make_display_stats()
   int32_t  lp_last_err = 0;
   uint32_t lp_last_op = 0;
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED
-  // These counters live in the LP core's .bss, which is zeroed only by
-  // InitializeUlp() (ulp_lp_core_load_binary() doesn't touch .bss). On a cold
-  // boot that runs *after* this render, so the symbols still hold uninitialised
-  // SRAM — leave the stats at 0 until an LP/timer wake proves the LP core has
-  // run this power cycle. Avoids a phantom "! LP" indicator on the first frame.
+  // These counters live in the LP core's .bss, which ulp_lp_core_load_binary()
+  // zeroes along with the rest of the reserve region — InitializeUlp() carries
+  // them across a reload by hand. On a cold boot that runs *after* this render,
+  // so the symbols still hold uninitialised SRAM — leave the stats at 0 until an
+  // LP/timer wake proves the LP core has run this power cycle. Avoids a phantom
+  // "! LP" indicator on the first frame.
   if (wake != 0)
   {
     lp_wakes    = ulp_lp_wake_count;
@@ -1337,6 +1374,25 @@ float read_temperature()
   LOGI("Getting temperature");
   float temp = sensor.GetTemperatureC();
   LOGI("temp: %f °C", temp);
+  // The single gate for the whole system. Sensor drivers only have to return the
+  // sentinel (or anything outside the range) when they cannot produce a reading;
+  // the policy for what to do about it lives here, on the CPU that can afford it.
+  if (!temp_is_plausible(temp))
+  {
+    // Returning the sentinel rather than the value: every recording site skips it,
+    // and the renderer shows "--.-" instead of a number a reader would believe.
+    LOGI("Reading %.2f outside %.0f..%.0f — reporting no reading", temp,
+         TEMP_PLAUSIBLE_MIN_C, TEMP_PLAUSIBLE_MAX_C);
+    last_sensor_ok = false;
+    return TEMP_NO_PREVIOUS;
+  }
+  // A direct read that rescued the wake produces a good number, but it does not
+  // make the sensor subsystem healthy: the coprocessor that failed is still being
+  // reloaded every wake. Clearing the badge here would render a frame that looks
+  // entirely normal while that continues, which is the silent degradation the
+  // project forbids. Only a wake with nothing wrong clears it.
+  if (!s_ulp_read_failed)
+    last_sensor_ok = true;
   return temp;
 }
 
@@ -1507,16 +1563,33 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 #endif
   crash_log.cur_time = (uint32_t)now;
 
-  update_temp_extremes(temp);
-  update_hourly_history(now, &nowtm, temp);
+#ifdef MOCK_DISPLAY_DATA
+  // Override the sensor reading to match the mock data range so it doesn't
+  // distort the chart Y-axis (DummySensor returns a constant 12.3°C). Applied
+  // before validity is decided, so the substitute is treated as the reading for
+  // every purpose below rather than being rendered as a number the same frame
+  // calls invalid.
+  temp = 22.3f;
+#endif
+
+  // One decision, used for recording and display alike, so the two can never
+  // disagree about what was believed. A rejected reading must reach neither: it
+  // would be a fabricated point in the sparkline, the hourly ring and the min/max,
+  // none of which can be undone once mirrored to flash.
+  //
+  // A reading that arrives over the CPU's own bus carries the sensor's identity
+  // with it, because Initialize() rechecks the chip ID. One from the coprocessor
+  // does not — see setup() for why recovery on the C6 has to accept it anyway.
+  const bool temp_trusted = (temp != TEMP_NO_PREVIOUS);
+
+  if (temp_trusted)
+    update_temp_extremes(temp);
+  // Called either way: the hour bookkeeping has to keep moving so the outage is
+  // recorded as hours that measured nothing.
+  update_hourly_history(now, &nowtm, temp, temp_trusted);
 
   LOGI("now: %ld. next clear time: %ld. first boot time: %ld. prev_temp: %.1f",
        (long)now, (long)next_clear_time, (long)first_boot_time, previous_temp);
-#ifdef MOCK_DISPLAY_DATA
-  // Override sensor reading to match mock data range so it doesn't
-  // distort the chart Y-axis (DummySensor returns a constant 12.3°C)
-  temp = 22.3f;
-#endif
   // RENDER covers both the periodic clear and the refresh below — either can
   // die mid-EPD-write (SPI, busy-wait light sleep, panel power)
   crash_log.stage = STAGE_RENDER;
@@ -1539,8 +1612,18 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 #endif
   }
 #endif
+  // Reasons to redraw. Gaining or losing a reading is tested against the panel
+  // rather than against previous_temp, since the delta is meaningless when either
+  // side is not a measurement; and a persistent fault redraws only on the
+  // heartbeat, so it cannot churn the panel.
+  const bool fault_heartbeat = !temp_trusted && !panel_shows_reading &&
+                               previous_boot_count >= 0 &&
+                               (boot_count - previous_boot_count) >= FAULT_REPAINT_WAKES;
   bool should_refresh = periodic_display_clear(now, nowtm) ||
-                         fabsf(temp - previous_temp) >= DISPLAY_TEMP_DELTA;
+                        previous_boot_count < 0 ||   // nothing rendered yet this RTC epoch
+                        temp_trusted != panel_shows_reading ||
+                        fault_heartbeat ||
+                        (temp_trusted && fabsf(temp - previous_temp) >= DISPLAY_TEMP_DELTA);
   if (!should_refresh)
   {
     LOGI("temperature hasn't changed significantly, no need to refresh display");
@@ -1554,30 +1637,54 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
     // Same plausibility gate as update_hourly_history(): a 1970 timestamp here
     // would sit ~54 years before every stored point and never leave the window.
     // Not journaled — the sparkline rides along in the base snapshot instead.
-    if (time_is_plausible(now))
+    if (time_is_plausible(now) && temp_trusted)
       temp_history_record(historical_data.temp, &historical_data.temp_count,
                           now, (int16_t)(temp * 10));
 
+    // The badge describes the frame about to be drawn, so fold in the trust
+    // decision without discarding what the read path already reported: a wake
+    // rescued by a direct read after the coprocessor failed still gets a badge.
+    last_sensor_ok = last_sensor_ok && temp_trusted;
+
     PPK2_DISPLAY_HIGH();
-    display_show_temperature(temp, battery_mv, battery_mv < low_battery_mv,
+    display_show_temperature(temp_trusted ? temp : TEMP_NO_PREVIOUS,
+                             battery_mv, battery_mv < low_battery_mv,
                              now, &nowtm, make_display_stats());
     PPK2_DISPLAY_LOW();
 
-    previous_temp = temp;
+    if (temp_trusted)
+      previous_temp = temp;
+    panel_shows_reading = temp_trusted;
     previous_boot_count = boot_count;
   }
 
-  // Only (re)load the LP/ULP program on a fresh boot. On deep-sleep wakes
-  // the LP core is still running with its existing configuration — reloading
-  // the binary would wipe its counters and is not needed. Must test the
-  // CACHED cause: by this point the EPD light sleeps have overwritten the
-  // live one, and querying it here re-inited the LP core on every refresh.
+  // Reload the coprocessor program on a fresh boot, and on any wake whose
+  // coprocessor reading could not be used. InitializeUlp() is the only thing that
+  // writes OSR_CONFIG and loads the program, so a sensor that lost power comes
+  // back at its reset defaults and stays misconfigured until something reloads it;
+  // doing it here is what a manual power cycle would otherwise be needed for. An
+  // ordinary wake must not reload — the coprocessor is running and configured.
+  //
+  // The cause tested must be the CACHED one: the EPD busy-wait light sleeps have
+  // replaced the live wakeup cause with their own GPIO wake by this point, so
+  // reading it here reports a fresh boot on every refresh.
+  //
+  // Deliberately unbounded. A sensor that NACKs makes the LP core wake the CPU on
+  // every failed read (both error paths in ulp/lp_core_*.h wake unconditionally), so
+  // the program reloads once per SLEEP_INTERVAL_S for as long as the fault lasts.
+  // Accepted rather than bounded: the mode is rare, and it either clears on the next
+  // reading or the device is unusable anyway. Note the "uN" footer count climbs but
+  // is only re-rendered when something else triggers a refresh, so a persistent fault
+  // sits on the panel as "! SENSOR" beside a stale count, not a visibly rising one.
   if (sensor.SupportsUlp()
-      && s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED)
+      && (s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED || s_ulp_read_failed || !temp_trusted))
   {
     crash_log.stage = STAGE_LP_INIT;
     ulp_reinit_count++;
-    sensor.InitializeUlp();
+    // Only a genuine power cycle leaves the coprocessor's shared state
+    // uninitialised; a recovery reload must keep the counters and delta reference
+    // it already has.
+    sensor.InitializeUlp(s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED);
   }
 
   start_deep_sleep();
@@ -1605,6 +1712,7 @@ static void reset_rtc_state()
   first_boot_time = 0;
   next_clear_time = 0;
   previous_temp = TEMP_NO_PREVIOUS;
+  panel_shows_reading = false;
   previous_boot_count = -1;
   max_battery_mv = 0;
   bad_pin27_count = 0;
@@ -1824,8 +1932,25 @@ void setup()
       refresh_and_sleep(battery_mv, temp);
       return; // never reached
     }
-    // ULP I2C error — fall through to normal sensor read
+
+    // ULP I2C error, or a reading the driver rejected — fall through to a direct
+    // read, which rescues the wake on the ESP32-E, where release_i2c_pins_to_hp()
+    // hands the bit-banged pins back.
+    //
+    // It cannot rescue it on the C6. lp_core_i2c_master_init() routes the shared
+    // pins to the LP I2C peripheral and the IDF offers no deinit, so the HP bus
+    // cannot drive them again for the rest of the power cycle — measured, with the
+    // LP core reading the sensor on 28 of 30 cycles while every CPU-side read
+    // failed. Halting the core does not help; the routing is the peripheral's, not
+    // the core's. Recovery there therefore runs through the coprocessor, whose
+    // reading is accepted above: it detects an absent sensor as a NACK, which is
+    // the failure that matters. The gap left is a bus that ACKs without being the
+    // sensor, and closing it means giving the LP core the chip-ID check — cheap if
+    // done only when it is about to wake the CPU, ~10-30 reads a day rather than
+    // one per sample.
     last_sensor_ok = false;
+    sensor.StopUlp();
+    s_ulp_read_failed = true;
   }
 
   if (boot_count == 1)

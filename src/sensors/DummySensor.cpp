@@ -24,7 +24,7 @@ bool DummySensor::SupportsUlp()
     return true;
 }
 
-void DummySensor::InitializeUlp()
+void DummySensor::InitializeUlp(bool cold_boot)
 {
     LOGI("Starting LP core (idle mode, no I2C)");
     uint32_t wakeup_us = (uint32_t)SLEEP_INTERVAL_S * 1000000U;
@@ -35,6 +35,13 @@ void DummySensor::InitializeUlp()
         .lp_timer_sleep_duration_us = wakeup_us,
     };
     ESP_ERROR_CHECK(ulp_lp_core_run(&cfg));
+}
+
+void DummySensor::StopUlp()
+{
+    // Halts the core so it cannot start an LP I2C transaction while the CPU is
+    // using the same pins. InitializeUlp() reloads and restarts it.
+    ulp_lp_core_stop();
 }
 
 bool DummySensor::ReadUlpTemperature(float *temp_out, float previous_temp)
