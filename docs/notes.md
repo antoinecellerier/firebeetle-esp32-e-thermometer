@@ -889,3 +889,42 @@ for battery life; at 26 µA it does not.
 **Tool gap:** `--raw-out` writes a stream that cannot be re-analysed later,
 because decoding needs the calibration modifiers read from the device at connect
 time. Either save them in a sidecar or keep `--out`.
+
+### Sleep floor resolved: 22 µA settled, 28 µA per cycle (2026-07-26)
+
+`91f08eb`, production build (no `PPK2_DEBUG`, no markers, GPIO16/17 untouched),
+PPK2 at 4.2 V on the XIAO BAT pads, board propped in air.
+
+| Window | Mean |
+|---|---|
+| Settled tail, t=105-139 s | **22.75 µA** |
+| Full wake-to-wake cycle, t=85-139 s | **28.06 µA → 2.42 C/day** |
+
+**The elevated floors chased all afternoon were a post-wake transient**, not a
+leak and not a measurement fault. After each wake the floor is elevated for
+~20-25 s and then decays to 22 µA and stays flat until the next wake. The
+logbook's 22.0 µA stands as the settled figure; **28 µA is the number the battery
+sees**, since a real deployment pays the transient once per wake.
+
+Budget: 2.42 C/day floor + ~0.45 C/day of measured events ≈ **2.9 C/day, ~500
+days** on the 400 mAh pack. The floor is ~84% of it.
+
+Why the earlier readings scattered so badly (26, 48, 52, 76, 141 µA): every one
+was a mean over a window that included a different amount of transient, and the
+short windows sat right after boot, whose 12-28 s awake phase produces the
+largest transient of all. **A floor figure is only meaningful averaged over whole
+wake-to-wake cycles.**
+
+Not established: the 52.25 µA measured on fabric versus 28.06 µA in air is **not**
+a matched comparison — the fabric window is post-boot and the air window is a
+steady cycle, and the 92 s fabric capture never reached a second wake. The
+transient does scale with the preceding awake phase, which is consistent with
+self-heating raising leakage, but the fabric-vs-air gap is mostly window
+selection. A 5-minute capture on fabric would settle it.
+
+**Separate anomaly worth chasing:** one propped-in-air capture
+(`ppk-20260726T121809.csv`) floors at **4.3-4.8 µA** with ~350 µA excursions
+every ~50 s. That is below the 14 µA bare-board baseline, which suggests the LP
+core was not running — no sensor polling, so no delta wakes and a panel that only
+refreshes on the hourly safety net. Intermittent, and more concerning than
+anything about the floor.
