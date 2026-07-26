@@ -51,15 +51,18 @@ facts that do damage when unknown:
   (task watchdog, EPD busy wait, battery budget) with `ms_now()` and measure
   before committing. Without that board/panel, say so and mark it unmeasured — as
   `docs/notes.md` already does.
-- Never derive a charge figure from a PPK2 screenshot. Ask for the selection
-  window's average current and duration, and say which region to select.
+- Never derive a charge figure from a PPK2 screenshot: export the capture and run
+  `tools/ppk2.py`, which integrates over regions the firmware's markers bound.
+- **A measured number can still be wrong** — a true average of the wrong thing.
+  Check a figure's time evolution before blaming a mechanism, average rates over
+  whole duty cycles, and treat anything past the longest window you captured as an
+  estimate. How that cost an afternoon: the `/device-session` skill.
 - **Device-intrinsic costs get precise figures; environment-dependent ones get an
   order of magnitude and their driver named.** A flash base snapshot is fixed
-  work, and `docs/notes.md` has the measured figure. Refresh cadence is not: being
-  delta-triggered it tracks how volatile the room is, from a handful of refreshes
-  on a stable day to tens per day in a heatwave with the windows open. Reason with
-  what survives that spread — refreshes beat the sleep floor by ~an order of
-  magnitude, so the budget is single-digit coulombs/day, not the microamp floor.
+  work. Refresh cadence is not: being delta-triggered it tracks how volatile the
+  room is — single digits on a stable day, tens in a heatwave. Don't assume which
+  term dominates either: measured, it is refreshes on the E rig and the sleep
+  floor on the C6. Both land at single-digit coulombs/day.
 - Logbooks, in order of authority: `docs/notes.md` (power), `docs/clock-drift.md`
   (drift), `docs/footprint.md` (size/build time — append a row after significant
   changes), `docs/history-store-validation.md` (proven on hardware). Read the log
@@ -103,18 +106,14 @@ check` gates everything. Next phase there: `BRINGUP.md` (rev A ordered, inbound)
 
 ## Commit style
 
-Imperative present tense, no conventional-commit prefixes:
-```
-Restore ULP safety-net timer for periodic housekeeping wakeups
-Migrate C6 to pure framework=espidf on stock platform, drop fork
-```
+Imperative present tense, no conventional-commit prefixes — e.g. "Migrate C6 to
+pure framework=espidf on stock platform, drop fork".
 
 ## IMPORTANT: Revert debug changes before committing
 
 Check for and revert temporary debug state before any cleanup or feature commit:
 test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
-`HISTORY_BASE_EVERY_WAKE`), temporary build_flags, hardcoded test values. Past
-sessions have had regressions from debug changes leaking into commits.
+`HISTORY_BASE_EVERY_WAKE`), temporary build_flags, hardcoded test values.
 
 ## Workflow preferences
 
@@ -123,9 +122,8 @@ sessions have had regressions from debug changes leaking into commits.
 - **Batch questions to the end of a work item; don't block mid-run.** Prefer a
   short prose question carrying a recommendation over AskUserQuestion cards,
   unless the choice really is 2-4 discrete alternatives.
-- **Sequence hardware requests**: finish all USB-only work before asking for a
-  rewire, and group physical asks into one message. When asking the user to read
-  the panel, give the exact expected string so the reply is yes/no.
+- **Group physical asks into one message** (`/device-session` has the sequencing).
+  Asking the user to read the panel? Give the exact string, so the reply is yes/no.
 - **Say what is on the device.** After any flash, erase or inject, state env +
   `PLATFORMIO_BUILD_FLAGS` + git hash and append it to
   `docs/history-store-validation.md` — debug flags change what the panel shows,

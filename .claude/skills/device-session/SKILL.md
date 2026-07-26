@@ -212,6 +212,45 @@ Practicalities:
 - Batch physical asks. Finish all USB-only work before requesting a rewire, and
   ask for the whole wiring change in one message.
 
+### Reading a measurement — where a whole afternoon went
+
+A measured number can be wrong in ways an estimate cannot: it can be a real
+average of the wrong thing. These are the specific ways it happened here.
+
+- **A window mean is not a device property.** Before attributing any figure to a
+  mechanism, look at its *time evolution* — per-second means, not one average.
+  Five sleep-floor figures spanning 26–141 µA on the C6 rig were a single
+  post-wake transient averaged over windows containing different amounts of it,
+  and each one got its own hardware explanation before anyone plotted it.
+- **Average rates over whole duty cycles, and check the bench rate against the
+  field rate.** A floor is only meaningful over complete wake-to-wake cycles.
+  Bench delta wakes every ~60 s put the post-wake transient at ~40% duty; the
+  field rate of 31 wakes/day puts it at ~1%, which is a 50% difference in the
+  headline number.
+- **Extrapolating past the longest window measured is an estimate.** Label it.
+  The longest sleep window ever captured here is 163 s against a ~46 min
+  deployment interval, so any deployed-floor figure is an extrapolation until a
+  wake-free capture of a full interval exists.
+- **Instrumentation changes what it measures.** `PPK2_DEBUG` adds a triple 50 ms
+  D1 preamble to every archive persist — 300 ms of awake time, ~4–6 mC per wake.
+  Compare debug figures only with debug figures, and prefer a production build for
+  anything that ships in the budget.
+- **Before naming a cause, check whether the suspect was present in the
+  counter-example.** Digital-probe leakage, the shield's ETA9740 and the
+  acquisition path were each proposed as the cause of an elevated floor, and each
+  died on the same observation: the variable was present in the *low* reading too.
+- **A single contradicting capture is data, not an outlier.** One flat 57 s
+  window got dismissed as noise; it was the only evidence that the transient is
+  not a deterministic consequence of every wake, which is still unexplained.
+- **Sanity-check against the instrument's limits.** A capture here contained
+  samples reading 17–20 A on an instrument that stops near 1 A, as bit-identical
+  quartets at two separate times — a decode artifact, and four such samples in a
+  500k-sample bin shift its mean by ~160 µA.
+- **`ppk2_api` reports every conversion failure as "Measurement outside of
+  range!"** from a bare `except`, so a missing decoder field (mode, vdd,
+  modifiers) presents as corrupt data. `tools/ppk2.py raw` writes a sidecar with
+  those fields at capture time so a stream stays decodable without the device.
+
 ## 8. On-device anomaly triage — physical causes first
 
 This rig fails mechanically about as often as it fails in firmware, and the
