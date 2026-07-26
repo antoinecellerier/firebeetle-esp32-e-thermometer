@@ -196,8 +196,11 @@ def check_selftest(tr):
         return (f"*** LANES CROSSED *** the 5x20ms CPU burst is on D{tr.disp_ch}, "
                 f"which you declared as display. Re-run with "
                 f"--cpu-ch {tr.disp_ch} --display-ch {tr.cpu_ch}")
+    if cpu and tr.dur(cpu[0]) > 1.0:
+        return ("no selftest in this capture — expected, only the first boot "
+                "after an RTC wipe emits it; the CPU lane is continuously high")
     return ("inconclusive: no clean selftest fingerprint. Either the capture "
-            "started after setup(), or PPK2_DEBUG is not in the build")
+            "started mid-wake, or PPK2_DEBUG is not in the build")
 
 
 def classify_display(tr):
@@ -280,12 +283,17 @@ def report(tr, bin_ms=None):
             # contains the tail of one wake and the ramp of the next, and its
             # mean is not a floor. Trim generously and report both, loudly, so a
             # contaminated window can never be mistaken for a sleep current.
-            trim = tr.index_at(tr.t[i0] + SLEEP_TRIM_S) - i0
+            # Never trim so hard that nothing is left: a short gap gets a
+            # proportional trim instead, since reporting a zero-width window as
+            # a floor is worse than reporting a slightly contaminated one.
+            gap = tr.t[min(i1, len(tr) - 1)] - tr.t[i0]
+            trim_s = min(SLEEP_TRIM_S, gap * 0.25)
+            trim = tr.index_at(tr.t[i0] + trim_s) - i0
             j0, j1 = i0 + trim, max(i0 + trim + 1, i1 - trim)
             dur, mean, mc = tr.integrate(i0, i1)
             tdur, tmean, tmc = tr.integrate(j0, j1)
             print(f"  t={tr.t[i0]:9.3f}s  {tdur:8.3f} s  floor {tmean:9.2f} uA  "
-                  f"{tmc:9.4f} mC   (trimmed {SLEEP_TRIM_S:.1f}s each end)")
+                  f"{tmc:9.4f} mC   (trimmed {trim_s:.2f}s each end)")
             if mean > tmean * 1.2:
                 print(f"      untrimmed mean over the full {dur:.3f}s gap is "
                       f"{mean:.2f} uA — that is wake transition charge, not "
@@ -454,51 +462,114 @@ def capture_live(args):
         ppk.set_source_voltage(mv)
         print(f"source meter on {port} at {mv} mV, rail {args.rail}")
 
-    samples, digital_raw = [], []
+    # Acquisition and decode are separated deliberately. The PPK2 streams
+    # 4 bytes per sample at a fixed 100 kSps = ~400 kB/s, and get_samples() is
+    # pure Python doing per-sample work, so decoding inline cannot keep up: the
+    # kernel serial buffer backs up and samples are lost silently. The capture
+    # loop therefore does nothing but read bytes and stash them; everything is
+    # decoded afterwards, from the same object so the calibration modifiers and
+    # the cross-chunk remainder state still apply.
+    #
+    # The inrush abort is the one thing that must be live, so the first
+    # ABORT_WINDOW_S is decoded as it arrives. Decoding then continues from
+    # exactly where that left off, since get_samples() carries its remainder
+    # forward.
+    ABORT_WINDOW_S = 0.5
+    CHUNK = 1 << 20
+
+    t_arr, cur, cum = array("d"), array("f"), array("d")
+    digital_raw = []
+    pending = bytearray()
+    raw_fh = open(args.raw_out, "wb") if args.raw_out else None
+    prefix_samples = []
+
+    abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
     ppk.start_measuring()
+    t_start = time.time()
     if sourcing and args.power_cycle:
         ppk.toggle_DUT_power("OFF")
         time.sleep(args.off_seconds)
         # Sampling is already running, so the DUT's first boot cannot be missed.
         ppk.toggle_DUT_power("ON")
-        print(f"DUT powered at t~{args.off_seconds:.1f}s into the capture")
+        print(f"DUT powered at t~{time.time() - t_start:.2f}s into the capture")
 
-    abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
-    deadline = time.time() + args.seconds
+    nbytes = 0
+    deadline = t_start + args.seconds
     try:
         while time.time() < deadline:
-            time.sleep(0.01)
             buf = ppk.get_data()
             if not buf:
+                time.sleep(0.002)
                 continue
-            s, d = ppk.get_samples(buf)
-            samples.extend(s)
-            digital_raw.extend(d)
-            if abort_ma and s and max(s) / 1000.0 > abort_ma:
-                ppk.toggle_DUT_power("OFF")
-                sys.exit(f"ABORTED: {max(s)/1000:.0f} mA exceeded the "
-                         f"{abort_ma:.0f} mA ceiling for rail {args.rail!r}. "
-                         f"Power cut. Check the connection before retrying.")
+            nbytes += len(buf)
+            if time.time() - t_start < ABORT_WINDOW_S:
+                sm, dg = ppk.get_samples(buf)
+                prefix_samples.extend(sm)
+                digital_raw.extend(dg)
+                if abort_ma and sm and max(sm) / 1000.0 > abort_ma:
+                    ppk.toggle_DUT_power("OFF")
+                    sys.exit(f"ABORTED: {max(sm)/1000:.0f} mA exceeded the "
+                             f"{abort_ma:.0f} mA ceiling for rail {args.rail!r}. "
+                             f"Power cut. Check the connection before retrying.")
+            elif raw_fh:
+                raw_fh.write(buf)
+            else:
+                pending.extend(buf)
     finally:
         ppk.stop_measuring()
         if sourcing:
             ppk.toggle_DUT_power("OFF")
+        if raw_fh:
+            raw_fh.close()
+
+    elapsed = time.time() - t_start
+    got = nbytes // 4
+    expect = int(elapsed * PPK2_SAMPLE_HZ)
+    print(f"captured {nbytes} bytes = {got} samples in {elapsed:.2f}s "
+          f"({got/elapsed/1000:.1f} kSps of an expected "
+          f"{PPK2_SAMPLE_HZ/1000:.0f})")
+    if got < expect * 0.98:
+        print(f"  WARNING: {expect - got} samples short ({100*(1-got/expect):.1f}%). "
+              f"Charge over a region is still the integral of what arrived, but "
+              f"a gap inside a region under-reports it.")
+
+    print("decoding...")
+    samples = array("f", prefix_samples)
+
+    def feed(buf):
+        sm, dg = ppk.get_samples(buf)
+        samples.extend(sm)
+        digital_raw.extend(dg)
+
+    if raw_fh:
+        with open(args.raw_out, "rb") as fh:
+            while True:
+                b = fh.read(CHUNK)
+                if not b:
+                    break
+                feed(b)
+    else:
+        for off in range(0, len(pending), CHUNK):
+            feed(pending[off:off + CHUNK])
+        del pending
 
     chans = ppk.digital_channels(digital_raw) if digital_raw else []
     digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
+    del digital_raw
 
-    t, cur, cum = array("d"), array("f"), array("d")
     acc, power_on = 0.0, 0
-    for i, ua in enumerate(samples):
-        ts = i / PPK2_SAMPLE_HZ
-        if i:
-            acc += 0.5 * (samples[i - 1] + ua) / PPK2_SAMPLE_HZ
-        t.append(ts)
-        cur.append(ua)
+    prev = None
+    dt = 1.0 / PPK2_SAMPLE_HZ
+    for i in range(len(samples)):
+        ua = samples[i]
+        if prev is not None:
+            acc += 0.5 * (prev + ua) * dt
+        t_arr.append(i * dt)
         cum.append(acc)
         if not power_on and ua > POWER_ON_UA:
             power_on = i
-    tr = Trace(t, cur, cum, digital, power_on)
+        prev = ua
+    tr = Trace(t_arr, samples, cum, digital, power_on)
 
     if args.out:
         with open(args.out, "w", newline="") as fh:
@@ -506,7 +577,7 @@ def capture_live(args):
             ch = sorted(digital)
             w.writerow(["Timestamp(ms)", "Current(uA)"] + [f"D{c}" for c in ch])
             for i in range(len(samples)):
-                w.writerow([f"{t[i]*1000:.3f}", f"{samples[i]:.3f}"]
+                w.writerow([f"{i/PPK2_SAMPLE_HZ*1000:.3f}", f"{samples[i]:.3f}"]
                            + [digital[c][i] for c in ch])
         print(f"wrote {args.out}")
 
@@ -537,7 +608,10 @@ def main():
                         "running, so a cold boot cannot be missed")
     l.add_argument("--off-seconds", type=float, default=2.0)
     l.add_argument("--port")
-    l.add_argument("--out", metavar="CSV", help="also save the capture")
+    l.add_argument("--out", metavar="CSV", help="also save the capture as CSV")
+    l.add_argument("--raw-out", metavar="BIN",
+                   help="stream raw PPK2 bytes here during capture instead of "
+                        "buffering in RAM (~400 kB/s); use for long captures")
 
     for sp in (c, l):
         sp.add_argument("--cpu-ch", type=int, default=0, metavar="N",
