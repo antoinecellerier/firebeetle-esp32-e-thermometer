@@ -40,6 +40,7 @@ physical connection. See .claude/skills/device-session/SKILL.md.
 
 import argparse
 import csv
+import math
 import json
 import os
 import re
@@ -762,6 +763,15 @@ def capture_live(args):
     abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
     nbytes = 0
 
+    # Decoding is what runs out of memory, and it happens after the capture — so
+    # a forgotten --decimate would waste the whole run. Cap the decoded point
+    # count instead of trusting the flag.
+    expect = args.seconds * PPK2_SAMPLE_HZ
+    dec_n = max(args.decimate, math.ceil(expect / 20e6))
+    if dec_n > args.decimate:
+        print(f"auto-decimating {dec_n}x: {expect/1e6:.0f}M samples would not fit "
+              f"undecimated (means and charge are unaffected)")
+
     def stash(buf):
         if raw_fh:
             raw_fh.write(buf)
@@ -828,11 +838,11 @@ def capture_live(args):
 
     print("decoding...")
     samples = array("f")
+    dec = _Decimator(dec_n)
 
     def feed(buf):
         sm, dg = ppk.get_samples(buf)
-        samples.extend(sm)
-        digital_raw.extend(dg)
+        dec.feed(sm, dg, samples, digital_raw)
 
     if raw_fh:
         with open(args.raw_out, "rb") as fh:
@@ -857,32 +867,18 @@ def capture_live(args):
                   f"ceiling for rail {args.rail!r}. Power is already off. "
                   f"Check the connection before trusting this capture.")
 
-    chans = ppk.digital_channels(digital_raw) if digital_raw else []
-    digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
+    tr = _trace_from_samples(samples, digital_raw, ppk, dec.n / PPK2_SAMPLE_HZ)
     del digital_raw
-
-    acc, power_on = 0.0, 0
-    prev = None
-    dt = 1.0 / PPK2_SAMPLE_HZ
-    for i in range(len(samples)):
-        ua = samples[i]
-        if prev is not None:
-            acc += 0.5 * (prev + ua) * dt
-        t_arr.append(i * dt)
-        cum.append(acc)
-        if not power_on and ua > POWER_ON_UA:
-            power_on = i
-        prev = ua
-    tr = Trace(t_arr, samples, cum, digital, power_on)
 
     if args.out:
         with open(args.out, "w", newline="") as fh:
             w = csv.writer(fh)
-            ch = sorted(digital)
+            ch = sorted(tr.digital)
             w.writerow(["Timestamp(ms)", "Current(uA)"] + [f"D{c}" for c in ch])
+            step_ms = dec.n / PPK2_SAMPLE_HZ * 1000
             for i in range(len(samples)):
-                w.writerow([f"{i/PPK2_SAMPLE_HZ*1000:.3f}", f"{samples[i]:.3f}"]
-                           + [digital[c][i] for c in ch])
+                w.writerow([f"{i*step_ms:.3f}", f"{samples[i]:.3f}"]
+                           + [tr.digital[c][i] for c in ch])
         print(f"wrote {args.out}")
 
     if sourcing:
