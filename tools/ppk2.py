@@ -281,6 +281,28 @@ def window(tr, from_s, to_s):
         print(f"  raw current {st[0]:.1f} .. {st[1]:.1f} uA")
 
 
+def floor_of(tr, i0, i1, win_s=10.0):
+    """The lowest sustained current in a region — what "floor" actually means.
+
+    The quietest rolling `win_s` mean, which unlike a median or a percentile does
+    not move with how much of the region a transient occupies. A region's mean is
+    what the battery pays; this is the level it settles to. When the two diverge
+    the region is not homogeneous and no single number describes it.
+    """
+    span = tr.t[min(i1, len(tr) - 1)] - tr.t[i0]
+    if span <= win_s:
+        return tr.integrate(i0, i1)[1]
+    step = max(1, tr.index_at(tr.t[i0] + win_s) - i0)
+    best = None
+    k = i0
+    while k + step <= i1:
+        _, mean, _ = tr.integrate(k, k + step)
+        if best is None or mean < best:
+            best = mean
+        k += max(1, step // 2)          # half-overlapping windows
+    return best if best is not None else tr.integrate(i0, i1)[1]
+
+
 def _marker_plausible(tr, ch, stride=97, max_hi_in_sleep=0.20):
     """Is this channel a marker, or an undriven pin floating into the logic input?
 
@@ -371,6 +393,13 @@ def report(tr, bin_ms=None):
             kind = "AWAKE" if mean > 1000 else "sleep"
             print(f"  {kind:6s} t={tr.t[lo]:8.3f}s  {dur:8.3f} s  "
                   f"{mean:10.2f} uA  {mc:10.4f} mC")
+            if kind == "sleep":
+                fl = floor_of(tr, lo, hi)
+                if mean > fl * 1.2:
+                    excess = mc - fl * dur / 1000.0
+                    print(f"         NOT homogeneous: settles to {fl:.2f} uA, so "
+                          f"{excess:.4f} mC of this is transient, not floor. Do not "
+                          f"quote the mean as a floor.")
     else:
         print("\nSelftest: " + check_selftest(tr))
 
@@ -413,12 +442,18 @@ def report(tr, bin_ms=None):
             j0, j1 = i0 + trim, max(i0 + trim + 1, i1 - trim)
             dur, mean, mc = tr.integrate(i0, i1)
             tdur, tmean, tmc = tr.integrate(j0, j1)
-            print(f"  t={tr.t[i0]:9.3f}s  {tdur:8.3f} s  floor {tmean:9.2f} uA  "
-                  f"{tmc:9.4f} mC   (trimmed {trim_s:.2f}s each end)")
+            fl = floor_of(tr, j0, j1)
+            excess = tmc - fl * tdur / 1000.0
+            print(f"  t={tr.t[i0]:9.3f}s  {tdur:8.3f} s  floor {fl:9.2f} uA  "
+                  f"mean {tmean:8.2f} uA  excess {excess:8.4f} mC")
+            if tmean > fl * 1.2:
+                print(f"      NOT homogeneous — the mean is not a floor. "
+                      f"{excess:.4f} mC sits above the settled level, which at one "
+                      f"such event per wake is what a wake really costs beyond its "
+                      f"marker.")
             if mean > tmean * 1.2:
-                print(f"      untrimmed mean over the full {dur:.3f}s gap is "
-                      f"{mean:.2f} uA — that is wake transition charge, not "
-                      f"floor. Using the trimmed figure.")
+                print(f"      (untrimmed mean over the full {dur:.3f}s gap is "
+                      f"{mean:.2f} uA — wake transition charge, excluded)")
             st = tr.stats(j0, j1)
             if st:
                 print(f"      raw {st[0]:.1f} .. {st[1]:.1f} uA, "
