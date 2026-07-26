@@ -150,6 +150,38 @@ that never came from the archive — a false pass that is hard to spot.
 Source-meter mode, plus digital channels for correlation, built with
 `-DPPK2_DEBUG`.
 
+### Confirm the connection before anything is energised — every time
+
+**The PPK2 exposes no VOUT sense.** Nothing in software can detect which rail
+the leads are on, so this cannot be automated away and cannot be carried over
+from an earlier step in the same session.
+
+Before any live capture, and before any step that energises the DUT, make the
+user **state and confirm the physical connection**, and give them the exact
+thing to check so the answer is yes/no. The failure mode is not a bad
+measurement: the source meter spans 0.8-5.0 V, the BAT pads want 3.0-4.2 V, and
+the 3V3 rail feeds the MCU, panel and sensor directly against the C6's
+datasheet absolute-max VDD of **3.6 V**. Battery voltage onto that rail destroys
+all three at once.
+
+`tools/ppk2.py` enforces what it can:
+
+- **Ampere meter is the default** — the PPK2 does not source at all, so no rail
+  can be over-volted however the leads are attached. Use it whenever the board
+  is externally powered.
+- Sourcing needs an explicit `--rail {bat,3v3}`, is **clamped per rail as a
+  refusal rather than a clip**, and demands a typed confirmation naming the
+  connection. A rail that differs from the last sourced run forces a re-confirm.
+- An inrush ceiling cuts power on a gross fault, but samples arrive USB-buffered
+  so reaction is tens of ms — that catches a short, **not** a marginal
+  over-volt. Do not treat it as protection.
+
+Prefer a physical guard over any of the above: visually distinct or
+differently-keyed harnesses for BAT vs 3V3. Note also that **the hat's JST2 is
+not a battery input** — energising it gives a ~0.2 ms 14 mA inrush and then
+nothing, which reads exactly like a dead board. Probe the XIAO's soldered BAT
+connector, which also bypasses the shield's ETA9740 path and its ~330-500 µA.
+
 **Read the `PPK2_DEBUG` block in `include/app_common.h` for the current pin
 assignments before wiring anything.** It defines which GPIO drives which PPK2
 digital channel and what each one signals, and documents where those GPIOs land
@@ -167,9 +199,16 @@ Practicalities:
   the firmware side is working, before you go looking for a bug.
 - A marker must be wide enough to see at the window in use: **12 ms is ~6 px at a
   3 s window.** Use ≥300 ms preambles.
-- **Never derive a charge figure from a screenshot.** Ask the user for the
-  selection window's average current and duration, and say exactly which region
-  to select.
+- **Never derive a charge figure from a screenshot.** Export the capture to CSV
+  and run `tools/ppk2.py csv <file>`: it integrates charge over regions
+  delimited by the firmware's own D0/D1 edges, so the numbers stop depending on
+  where a selection was dragged. It also checks the `ppk2_selftest()` fingerprint
+  and reports swapped lanes. The archive flush and the panel refresh both drive
+  D1 — the flush is the one preceded by three 50 ms blips.
+  For the phases that carry **no** marker (the one-time archive format, the WiFi
+  exchange), locate them with `--profile 500` and then bracket them with
+  `--from/--to`. Falling back to asking for a selection's average current and
+  duration is acceptable only when no CSV export is available.
 - Batch physical asks. Finish all USB-only work before requesting a rewire, and
   ask for the whole wiring change in one message.
 

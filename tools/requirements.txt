@@ -12,3 +12,4 @@
 #   python3 -m venv .venv && .venv/bin/pip install -r tools/requirements.txt
 esptool>=4.6
 pyserial>=3.5
+ppk2-api>=0.9.2  # tools/ppk2.py live capture only; CSV mode is stdlib-only
