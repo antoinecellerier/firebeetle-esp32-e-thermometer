@@ -113,7 +113,8 @@ pure framework=espidf on stock platform, drop fork".
 
 Check for and revert temporary debug state before any cleanup or feature commit:
 test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
-`HISTORY_BASE_EVERY_WAKE`), temporary build_flags, hardcoded test values.
+`HISTORY_BASE_EVERY_WAKE`, `RESYNC_INTERVAL_MIN`), temporary build_flags,
+hardcoded test values.
 
 ## Workflow preferences
 

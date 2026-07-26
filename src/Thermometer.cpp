@@ -253,7 +253,12 @@ RTC_DATA_ATTR float max_temp_since_boot = TEMP_INIT_MAX;
 // Overridable so a bench build can force attempts on a short cadence: measuring
 // the charge of a resync (successful or timed out) otherwise means waiting a day
 // for each sample. Never ship an override — see the revert list in CLAUDE.md.
-#ifndef RESYNC_INTERVAL_MIN
+#ifdef RESYNC_INTERVAL_MIN
+// Already defined means a build override is in force. Flagged so the adaptive
+// rule can be pinned (it would otherwise double the interval away from the
+// cadence the override exists to create) and so the panel can say so.
+#define RESYNC_INTERVAL_OVERRIDDEN 1
+#else
 #define RESYNC_INTERVAL_MIN  (86400)
 #endif
 // Maximum resync interval (4 weeks)
@@ -653,8 +658,12 @@ DisplayStats make_display_stats()
     false,
 #endif
     // power_efficient: true only when serial is off, sleep interval is
-    // production-length, and no debug instrumentation
-#if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG)
+    // production-length, and no debug instrumentation. A resync override counts:
+    // it can spend 1.5-4.5 C per attempt on a minutes-long cadence, and without
+    // it here the panel renders identically to production — so a photo or a
+    // harvested capture could not tell the two apart.
+#if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG) \
+    && !defined(RESYNC_INTERVAL_OVERRIDDEN)
     true,
 #else
     false,
@@ -1055,6 +1064,17 @@ static void maybe_ntp_resync(time_t now)
 
   resync_fail_count = 0;
 
+#ifdef RESYNC_INTERVAL_OVERRIDDEN
+  // Pinned. The override exists to sample resyncs on a fixed short cadence, and
+  // the adaptive rule below would defeat that: a bench rig that was just synced
+  // shows negligible drift, so the interval doubles after every success —
+  // 300s, 600, 1200, 2400, 4800 — and is back over four hours within five
+  // wall-clock hours, yielding a handful of geometrically-spaced samples instead
+  // of the steady cadence that was asked for.
+  resync_interval_s = RESYNC_INTERVAL_MIN;
+  LOGI("NTP resync: interval pinned at %d s by build override (adaptation off)",
+       (int)resync_interval_s);
+#else
   // Only shorten the interval if drift is significant (>= 1 minute).
   // For a low-fidelity EPD thermometer display, sub-minute drift is invisible.
   int32_t abs_drift = abs(last_drift_ms);
@@ -1082,6 +1102,7 @@ static void maybe_ntp_resync(time_t now)
     LOGI("NTP resync: drift negligible, extending interval to %d s (%d h)",
          (int)resync_interval_s, (int)(resync_interval_s / 3600));
   }
+#endif // RESYNC_INTERVAL_OVERRIDDEN
 
   wifi_disconnect();
   next_resync_time = after_sync + resync_interval_s;
