@@ -72,7 +72,10 @@ SLEEP_TRIM_S = 1.5
 RAILS = {
     "3v3": {"min_mv": 3000, "max_mv": 3300, "abort_ma": 200.0,
             "check": "PPK2 leads on the 3V3 rail (NOT the battery pads)"},
-    "bat": {"min_mv": 3000, "max_mv": 4200, "abort_ma": 600.0,
+    # 900mA, not 600: the EPD power-gate turn-on is a boost inrush measured at
+    # ~405mA on the E rig and 571-605mA on this one, so a 600mA ceiling flags
+    # normal operation. The PPK2 itself tops out near 1A.
+    "bat": {"min_mv": 3000, "max_mv": 4200, "abort_ma": 900.0,
             "check": "PPK2 leads on the XIAO's soldered BAT connector "
                      "(NOT the hat's JST2, which sources nothing)"},
 }
