@@ -539,12 +539,44 @@ def _connect(args):
     sys.exit(f"none of {cands} answered GET_META_DATA — is nrfconnect holding it?")
 
 
-def _trace_from_samples(samples, digital_raw, ppk):
+class _Decimator:
+    """Average groups of N samples down as they arrive.
+
+    Averaging, not sampling: the mean of equal-sized bins is exactly the mean of
+    the whole, so charge over any region spanning whole bins is preserved. What is
+    lost is sub-bin shape — PFM pulses at N=100 — which a floor or a multi-second
+    event does not need. Memory is the reason this exists: a decoded sample costs
+    ~20 bytes across the sample/time/cumulative arrays, so an hour at 100 kSps is
+    ~10 GB undecimated and ~100 MB at N=100.
+    """
+
+    def __init__(self, n):
+        self.n = max(1, int(n))
+        self.acc = 0.0
+        self.cnt = 0
+        self.dig = 0
+
+    def feed(self, vals, bits, out_samples, out_bits):
+        for i, v in enumerate(vals):
+            self.acc += v
+            if i < len(bits):
+                self.dig |= bits[i]      # any HIGH in the bin marks the bin HIGH
+            self.cnt += 1
+            if self.cnt == self.n:
+                out_samples.append(self.acc / self.n)
+                out_bits.append(self.dig)
+                self.acc = 0.0
+                self.cnt = 0
+                self.dig = 0
+
+
+def _trace_from_samples(samples, digital_raw, ppk, dt=None):
     chans = ppk.digital_channels(digital_raw) if digital_raw else []
     digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
     t_arr, cum = array("d"), array("d")
     acc, power_on, prev = 0.0, 0, None
-    dt = 1.0 / PPK2_SAMPLE_HZ
+    if dt is None:
+        dt = 1.0 / PPK2_SAMPLE_HZ
     for i in range(len(samples)):
         ua = samples[i]
         if prev is not None:
@@ -612,7 +644,7 @@ def decode_raw(args):
               f"conversion; pass --mode/--vdd if the capture differed")
     samples = array("f")
     digital_raw = []
-    total = os.path.getsize(args.path)
+    dec = _Decimator(args.decimate)
     done = 0
     with open(args.path, "rb") as fh:
         while True:
@@ -620,17 +652,18 @@ def decode_raw(args):
             if not b:
                 break
             sm, dg = ppk.get_samples(b)
-            samples.extend(sm)
-            digital_raw.extend(dg)
+            dec.feed(sm, dg, samples, digital_raw)
             done += len(b)
-    print(f"decoded {done} bytes -> {len(samples)} samples "
-          f"({len(samples)/PPK2_SAMPLE_HZ:.1f} s)")
+    dt = dec.n / PPK2_SAMPLE_HZ
+    print(f"decoded {done} bytes -> {len(samples)} points "
+          f"({len(samples)*dt:.1f} s"
+          + (f", decimated {dec.n}x -> {1/dt:.0f} Hz" if dec.n > 1 else "") + ")")
     if not len(samples):
         sys.exit("every sample was rejected. ppk2_api swallows any conversion "
                  "error as 'Measurement outside of range!', so this usually means "
                  "a missing decoder field (mode, vdd, modifiers) rather than bad "
                  "data. Check the sidecar, or pass --mode/--vdd.")
-    return _trace_from_samples(samples, digital_raw, ppk)
+    return _trace_from_samples(samples, digital_raw, ppk, dt)
 
 
 def capture_live(args):
@@ -900,6 +933,11 @@ def main():
                         help="PPK2 channel carrying CPU_ACTIVE/GPIO17 (default 0)")
         sp.add_argument("--display-ch", type=int, default=1, metavar="N",
                         help="PPK2 channel carrying DISPLAY/GPIO16 (default 1)")
+        sp.add_argument("--decimate", type=int, default=1, metavar="N",
+                        help="average N samples into one before analysis. Exact "
+                             "for means and charge; needed for long captures, "
+                             "which are ~28 bytes/sample decoded (use 100 for an "
+                             "hour). Ignored by the csv reader.")
         sp.add_argument("--profile", type=float, metavar="MS",
                         help="print mean current in bins of MS milliseconds")
         sp.add_argument("--from", dest="from_ms", type=float, metavar="MS",
