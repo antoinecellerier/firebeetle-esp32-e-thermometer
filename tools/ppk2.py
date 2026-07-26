@@ -242,6 +242,55 @@ def window(tr, from_ms, to_ms):
         print(f"  raw current {st[0]:.1f} .. {st[1]:.1f} uA")
 
 
+def _marker_plausible(tr, ch, stride=97, max_hi_in_sleep=0.20):
+    """Is this channel a marker, or an undriven pin floating into the logic input?
+
+    Both real markers are driven LOW while the CPU sleeps. An undriven pad floats
+    high the whole time, which is what a build without -DPPK2_DEBUG produces.
+    Duty is not a valid test (a boot-dominated capture has CPU_ACTIVE high most
+    of the time) and neither is correlation with current — the display marker is
+    high exactly while the CPU light-sleeps through the panel's busy wait, so it
+    anti-correlates. Strided, because the distinction is gross, not subtle.
+    """
+    bits = tr.digital[ch]
+    hi_sleep = n_sleep = 0
+    for i in range(tr.power_on, len(tr), stride):
+        if tr.current_ua[i] < 1000.0:
+            n_sleep += 1
+            if bits[i]:
+                hi_sleep += 1
+    if n_sleep < 50:
+        return True, 0.0          # no sleep to judge against; do not reject
+    frac = hi_sleep / n_sleep
+    return frac <= max_hi_in_sleep, frac
+
+
+def _current_regions(tr, thresh_ua=1000.0, min_s=0.5):
+    """Segment into awake/sleep by current alone, for builds with no markers.
+
+    Hysteresis on a 1 s smoothed mean: instantaneous current is spiky enough at
+    both extremes that a bare threshold would shred a region into hundreds.
+    """
+    step = tr.index_at(tr.t[tr.power_on] + 0.25) - tr.power_on or 1
+    out, cur_hi, start = [], None, tr.power_on
+    i = tr.power_on
+    while i < len(tr):
+        j = min(i + step, len(tr))
+        _, mean, _ = tr.integrate(i, j)
+        hi = mean > thresh_ua
+        if cur_hi is None:
+            cur_hi = hi
+        elif hi != cur_hi:
+            if tr.t[i] - tr.t[start] >= min_s:
+                out.append((start, i))
+                start = i
+            cur_hi = hi
+        i = j
+    if len(tr) - start > step:
+        out.append((start, len(tr)))
+    return out
+
+
 def report(tr, bin_ms=None):
     total = tr.t[-1] - tr.t[0]
     print(f"Samples: {len(tr)}   span: {total:.3f} s   "
@@ -250,9 +299,26 @@ def report(tr, bin_ms=None):
         print(f"DUT unpowered until t={tr.t[tr.power_on]:.3f}s "
               f"({tr.power_on} samples ignored — probed pins float there)")
 
+    # Validate markers physically rather than by duty cycle. A real CPU_ACTIVE
+    # marker is high exactly when the CPU is drawing current; an undriven pin
+    # floating into the PPK2's logic input has no relationship to current at all.
+    # Duty is the wrong test — a boot-dominated capture legitimately has the
+    # marker high most of the time.
+    for ch in list(tr.digital):
+        ok, ratio = _marker_plausible(tr, ch)
+        if not ok:
+            print(f"\nD{ch} is high for {ratio*100:.0f}% of sleep samples — an "
+                  f"undriven pin, not a marker. Expected without -DPPK2_DEBUG.")
+            del tr.digital[ch]
+
     if not tr.digital:
-        print("\nNo digital channels — regions cannot be derived from markers. "
-              "Enable logic capture on D0/D1 and re-export.")
+        print("\nNo usable digital markers — reporting current only. Regions "
+              "cannot be bounded by markers in a build without -DPPK2_DEBUG.")
+        for lo, hi in _current_regions(tr):
+            dur, mean, mc = tr.integrate(lo, hi)
+            kind = "AWAKE" if mean > 1000 else "sleep"
+            print(f"  {kind:6s} t={tr.t[lo]:8.3f}s  {dur:8.3f} s  "
+                  f"{mean:10.2f} uA  {mc:10.4f} mC")
     else:
         print("\nSelftest: " + check_selftest(tr))
 
@@ -434,6 +500,89 @@ def confirm_connection(rail, mv):
     _save_state({"rail": rail, "mv": mv, "when": time.time()})
 
 
+def _connect(args):
+    """Open the PPK2's measurement interface. Reads calibration only — does not
+    source, measure, or touch DUT power, so it is safe with any wiring."""
+    try:
+        from ppk2_api.ppk2_api import PPK2_API
+    except ImportError:
+        sys.exit("ppk2_api missing. .venv/bin/pip install -r tools/requirements.txt")
+    import serial.tools.list_ports as _lp
+
+    if args.port:
+        cands = [args.port]
+    else:
+        found = [(pt.location or "", pt.device) for pt in _lp.comports()
+                 if pt.product == "PPK2"]
+        cands = [d for _, d in sorted(found,
+                 key=lambda x: (not x[0].endswith(".1"), x[1]))]
+    if not cands:
+        sys.exit("no PPK2 found")
+    for cand in cands:
+        try:
+            trial = PPK2_API(cand)
+            # A previous capture can leave sample bytes queued, and the metadata
+            # parser decodes what it reads as text — so stop any stream and
+            # discard the backlog before asking.
+            try:
+                trial.stop_measuring()
+            except Exception:
+                pass
+            time.sleep(0.1)
+            trial.ser.reset_input_buffer()
+            if trial.get_modifiers():
+                print(f"PPK2 on {cand} (probed {len(cands)} interface(s))")
+                return trial, cand
+            trial.ser.close()
+        except Exception as exc:
+            print(f"  {cand}: {exc}")
+    sys.exit(f"none of {cands} answered GET_META_DATA — is nrfconnect holding it?")
+
+
+def _trace_from_samples(samples, digital_raw, ppk):
+    chans = ppk.digital_channels(digital_raw) if digital_raw else []
+    digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
+    t_arr, cum = array("d"), array("d")
+    acc, power_on, prev = 0.0, 0, None
+    dt = 1.0 / PPK2_SAMPLE_HZ
+    for i in range(len(samples)):
+        ua = samples[i]
+        if prev is not None:
+            acc += 0.5 * (prev + ua) * dt
+        t_arr.append(i * dt)
+        cum.append(acc)
+        if not power_on and ua > POWER_ON_UA:
+            power_on = i
+        prev = ua
+    return Trace(t_arr, samples, cum, digital, power_on)
+
+
+def decode_raw(args):
+    """Decode a stream saved by --raw-out.
+
+    The raw bytes are meaningless without the calibration modifiers, which live
+    in the device rather than the file — so this needs the PPK2 plugged in, but
+    only to read them. It sources nothing.
+    """
+    ppk, _ = _connect(args)
+    samples = array("f")
+    digital_raw = []
+    total = os.path.getsize(args.path)
+    done = 0
+    with open(args.path, "rb") as fh:
+        while True:
+            b = fh.read(1 << 20)
+            if not b:
+                break
+            sm, dg = ppk.get_samples(b)
+            samples.extend(sm)
+            digital_raw.extend(dg)
+            done += len(b)
+    print(f"decoded {done} bytes -> {len(samples)} samples "
+          f"({len(samples)/PPK2_SAMPLE_HZ:.1f} s)")
+    return _trace_from_samples(samples, digital_raw, ppk)
+
+
 def capture_live(args):
     try:
         from ppk2_api.ppk2_api import PPK2_API
@@ -462,6 +611,15 @@ def capture_live(args):
     for cand in cands:
         try:
             trial = PPK2_API(cand)
+            # A previous capture can leave sample bytes queued, and the metadata
+            # parser decodes what it reads as text — so stop any stream and
+            # discard the backlog before asking.
+            try:
+                trial.stop_measuring()
+            except Exception:
+                pass
+            time.sleep(0.1)
+            trial.ser.reset_input_buffer()
             if trial.get_modifiers():
                 ppk, port = trial, cand
                 break
@@ -651,6 +809,11 @@ def main():
     c = sub.add_parser("csv", help="analyse an exported Power Profiler CSV")
     c.add_argument("path")
 
+    r = sub.add_parser("raw", help="decode a stream saved by live --raw-out "
+                                   "(needs the PPK2 attached for calibration)")
+    r.add_argument("path")
+    r.add_argument("--port")
+
     l = sub.add_parser("live", help="capture from a connected PPK2")
     l.add_argument("--rail", choices=sorted(RAILS),
                    help="REQUIRED to source. Omit for ampere meter (safe default)")
@@ -667,7 +830,7 @@ def main():
                    help="stream raw PPK2 bytes here during capture instead of "
                         "buffering in RAM (~400 kB/s); use for long captures")
 
-    for sp in (c, l):
+    for sp in (c, r, l):
         sp.add_argument("--cpu-ch", type=int, default=0, metavar="N",
                         help="PPK2 channel carrying CPU_ACTIVE/GPIO17 (default 0)")
         sp.add_argument("--display-ch", type=int, default=1, metavar="N",
@@ -680,7 +843,12 @@ def main():
         sp.add_argument("--to", dest="to_ms", type=float, metavar="MS")
 
     args = p.parse_args()
-    tr = load_csv(args.path) if args.cmd == "csv" else capture_live(args)
+    if args.cmd == "csv":
+        tr = load_csv(args.path)
+    elif args.cmd == "raw":
+        tr = decode_raw(args)
+    else:
+        tr = capture_live(args)
     tr.cpu_ch, tr.disp_ch = args.cpu_ch, args.display_ch
     report(tr, args.profile)
     if args.from_ms is not None and args.to_ms is not None:
