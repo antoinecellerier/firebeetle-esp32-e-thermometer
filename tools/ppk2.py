@@ -557,14 +557,59 @@ def _trace_from_samples(samples, digital_raw, ppk):
     return Trace(t_arr, samples, cum, digital, power_on)
 
 
+def _offline_decoder(meta):
+    """A decoder built from a sidecar, with no serial port.
+
+    Decoding needs only the calibration modifiers, the measurement mode and the
+    bit masks — none of which require the device once they have been recorded. So
+    the fields the constructor would set are set here directly, which is coupled
+    to ppk2_api's internals but is the price of captures that stay analysable
+    without the hardware attached (and without fighting nrfconnect for the port).
+    """
+    from ppk2_api.ppk2_api import PPK2_API, PPK2_Modes
+    d = PPK2_API.__new__(PPK2_API)
+    d.modifiers = meta["modifiers"]
+    d.mode = getattr(PPK2_Modes, meta["mode"])
+    # get_adc_result() folds the supply voltage into its offset term, so this is
+    # required, not cosmetic — left unset it is None and every sample dies in the
+    # library's bare except, reported as "Measurement outside of range!".
+    d.current_vdd = meta["vdd_mv"]
+    d.adc_mult = 1.8 / 163840
+    d.MEAS_ADC = d._generate_mask(14, 0)
+    d.MEAS_RANGE = d._generate_mask(3, 14)
+    d.MEAS_LOGIC = d._generate_mask(8, 24)
+    d.rolling_avg = d.rolling_avg4 = d.prev_range = None
+    d.consecutive_range_samples = 0
+    d.spike_filter_alpha = 0.18
+    d.spike_filter_alpha5 = 0.06
+    d.spike_filter_samples = 3
+    d.after_spike = 0
+    d.remainder = {"sequence": b"", "len": 0}
+    return d
+
+
 def decode_raw(args):
     """Decode a stream saved by --raw-out.
 
-    The raw bytes are meaningless without the calibration modifiers, which live
-    in the device rather than the file — so this needs the PPK2 plugged in, but
-    only to read them. It sources nothing.
+    Prefers the sidecar written alongside the capture; falls back to reading
+    calibration off an attached PPK2, which then needs --mode to match how the
+    capture was taken, since the conversion is mode-dependent.
     """
-    ppk, _ = _connect(args)
+    side = args.path + ".json"
+    if os.path.exists(side):
+        with open(side) as fh:
+            meta = json.load(fh)
+        print(f"calibration from {side} (mode {meta['mode']}) — no device needed")
+        ppk = _offline_decoder(meta)
+    else:
+        print(f"no sidecar at {side} — reading calibration from the device")
+        ppk, _ = _connect(args)
+        from ppk2_api.ppk2_api import PPK2_Modes
+        ppk.mode = (PPK2_Modes.SOURCE_MODE if args.mode == "source"
+                    else PPK2_Modes.AMPERE_MODE)
+        ppk.current_vdd = args.vdd
+        print(f"  assuming mode={args.mode}, vdd={args.vdd} mV — both affect the "
+              f"conversion; pass --mode/--vdd if the capture differed")
     samples = array("f")
     digital_raw = []
     total = os.path.getsize(args.path)
@@ -580,6 +625,11 @@ def decode_raw(args):
             done += len(b)
     print(f"decoded {done} bytes -> {len(samples)} samples "
           f"({len(samples)/PPK2_SAMPLE_HZ:.1f} s)")
+    if not len(samples):
+        sys.exit("every sample was rejected. ppk2_api swallows any conversion "
+                 "error as 'Measurement outside of range!', so this usually means "
+                 "a missing decoder field (mode, vdd, modifiers) rather than bad "
+                 "data. Check the sidecar, or pass --mode/--vdd.")
     return _trace_from_samples(samples, digital_raw, ppk)
 
 
@@ -666,6 +716,15 @@ def capture_live(args):
     digital_raw = []
     pending = bytearray()
     raw_fh = open(args.raw_out, "wb") if args.raw_out else None
+    if args.raw_out:
+        # Save what decoding needs so the capture stays analysable later without
+        # the PPK2 attached — the modifiers are device calibration, not in the
+        # stream, and the conversion is mode-dependent.
+        with open(args.raw_out + ".json", "w") as fh:
+            json.dump({"modifiers": ppk.modifiers,
+                       "mode": "SOURCE_MODE" if sourcing else "AMPERE_MODE",
+                       "vdd_mv": mv if sourcing else 0}, fh)
+        print(f"wrote {args.raw_out}.json (calibration sidecar)")
 
     abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
     nbytes = 0
@@ -813,6 +872,12 @@ def main():
                                    "(needs the PPK2 attached for calibration)")
     r.add_argument("path")
     r.add_argument("--port")
+    r.add_argument("--vdd", type=int, default=4200, metavar="MV",
+                   help="supply voltage of the capture; only used without a "
+                        "sidecar, and it enters the conversion's offset term")
+    r.add_argument("--mode", choices=("source", "ampere"), default="source",
+                   help="how the capture was taken; only used when there is no "
+                        "sidecar, since the raw->current conversion depends on it")
 
     l = sub.add_parser("live", help="capture from a connected PPK2")
     l.add_argument("--rail", choices=sorted(RAILS),

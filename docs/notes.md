@@ -942,3 +942,38 @@ range/decode artifacts, and four such samples inside a 500k-sample bin add
 excursions. The excursion ~55 s into sleep has no glitch near it and is real,
 consistent with the LP core running. So the genuine anomaly is only the 4.3 µA
 baseline, still below the 14 µA bare-board figure.
+
+### Production floor and wake cost, three full cycles (2026-07-26)
+
+`91f08eb`, no `PPK2_DEBUG`, 4.2 V on the BAT pads, **on fabric**, 300 s decoded
+from a raw capture. Regions bounded by current, since a production build has no
+markers.
+
+| Region | Duration | Value |
+|---|---|---|
+| boot (incl. NTP) | 11.5 s | 337.7 mC |
+| sleep | 59.75 s | 33.71 µA |
+| wake + refresh | 3.25 s | **9.62 mC** |
+| sleep | 56.5 s | 35.13 µA |
+| wake + refresh | 3.25 s | **9.53 mC** |
+| sleep | 163.3 s | 28.58 µA |
+
+**Surface does not matter.** Matched ~55-60 s windows give 33.7/35.1 µA on fabric
+against 28.1 µA propped in air — a ~20% edge to air, consistent with self-heating
+raising leakage, but it only scales the post-wake transient.
+
+**The transient is a bench artifact at deployment wake rates.** Each wake buys
+~20-25 s of elevated current, ~0.7-0.95 mC. On the bench, wakes every ~60 s put
+that at ~40% duty, which is why per-cycle means read 28-35 µA. The field run did
+**31 wakes/day** — one per ~46 min — so the real duty is ~1% and the deployed
+floor is the settled figure, **~23 µA (1.98 C/day)**. Quote 23 µA for the budget,
+not the bench cycle averages.
+
+**A wake costs 9.6 mC, not the 14.05 mC measured earlier under `PPK2_DEBUG`.**
+`history_store_persist_now()` emits a triple 50 ms D1 preamble under that flag —
+300 ms of extra awake time on every wake that persists, which the code comment
+already warns about. Every `PPK2_DEBUG` wake figure in this file is inflated by
+~4-6 mC for that reason; the marker-bounded numbers measure the marker.
+
+Budget: 1.98 C/day floor + ~104 mC/day refreshes (10.8/day x 9.6 mC) +
+~78 mC/day resync ≈ **2.3 C/day, ~630 days** on the 400 mAh pack.
