@@ -52,9 +52,13 @@ from array import array
 # restated here: it is the device's specified rate, not something measured.
 PPK2_SAMPLE_HZ = 100_000
 
-# Above this, the DUT is considered powered. Well under any real awake current
-# and far above the ~0 uA the PPK2 reports with its output off.
-POWER_ON_UA = 100.0
+# Above this, the DUT is considered powered. It has to sit between "PPK2 output
+# off" (~0.1 uA measured) and "DUT asleep" (~20 uA on this rig) — NOT above the
+# sleep floor. At 100 uA it latched on the first wake instead, so an
+# externally-powered board that was asleep when sampling started was reported
+# "unpowered" for its whole leading sleep window, and that window — usually the
+# longest and cleanest floor in the capture — was silently discarded.
+POWER_ON_UA = 5.0
 
 # Debounce floor for digital spans. An undriven pin rings at us scale until the
 # app claims it, so anything shorter than this is not a marker. The shortest real
@@ -183,6 +187,9 @@ def _near(value, target, tol=0.45):
 # is clipped at a capture boundary. Keep in sync with PPK2_FP_* there.
 FP_CPU_PULSES, FP_CPU_MS = 2, 10
 FP_DISP_PULSES, FP_DISP_MS = 5, 4
+# The 400ms fingerprint this replaced, still recognised so captures taken before
+# the change stay verifiable rather than reading as unverified forever.
+FP_LEGACY = ((5, 20), (10, 10))
 
 
 def check_selftest(tr):
@@ -201,13 +208,22 @@ def check_selftest(tr):
         return (len(head) == n
                 and all(_near(tr.dur(s), ms / 1000.0) for s in head))
 
-    cpu_here = burst(cpu, FP_CPU_PULSES, FP_CPU_MS)
-    cpu_there = burst(disp, FP_CPU_PULSES, FP_CPU_MS)
-    disp_here = burst(disp, FP_DISP_PULSES, FP_DISP_MS)
-    disp_there = burst(cpu, FP_DISP_PULSES, FP_DISP_MS)
+    cpu_n, cpu_ms = FP_CPU_PULSES, FP_CPU_MS
+    disp_n, disp_ms = FP_DISP_PULSES, FP_DISP_MS
+    era = ""
+    if not (burst(cpu, cpu_n, cpu_ms) or burst(disp, cpu_n, cpu_ms)):
+        (lc_n, lc_ms), (ld_n, ld_ms) = FP_LEGACY
+        if burst(cpu, lc_n, lc_ms) or burst(disp, lc_n, lc_ms):
+            cpu_n, cpu_ms, disp_n, disp_ms = lc_n, lc_ms, ld_n, ld_ms
+            era = " (pre-80ms fingerprint)"
+
+    cpu_here = burst(cpu, cpu_n, cpu_ms)
+    cpu_there = burst(disp, cpu_n, cpu_ms)
+    disp_here = burst(disp, disp_n, disp_ms)
+    disp_there = burst(cpu, disp_n, disp_ms)
 
     if cpu_there or disp_there:
-        return (f"*** LANES CROSSED *** the {FP_CPU_PULSES}x{FP_CPU_MS}ms CPU "
+        return (f"*** LANES CROSSED *** the {cpu_n}x{cpu_ms}ms CPU "
                 f"fingerprint is on D{tr.disp_ch}, which you declared as display. "
                 f"Re-run with --cpu-ch {tr.disp_ch} --display-ch {tr.cpu_ch}. "
                 f"Every figure below is mislabelled until you do.")
@@ -215,7 +231,7 @@ def check_selftest(tr):
         tail = (" (display fingerprint also clean)" if disp_here else
                 " (display fingerprint not resolved — GPIO16 is U0TXD and the ROM "
                 "bootloader parks it high, so this is expected)")
-        return f"OK: {FP_CPU_PULSES}x{FP_CPU_MS}ms on the CPU lane D{tr.cpu_ch}{tail}"
+        return f"OK: {cpu_n}x{cpu_ms}ms on the CPU lane D{tr.cpu_ch}{era}{tail}"
 
     return (f"*** LANE MAPPING UNVERIFIED *** no fingerprint found, so "
             f"--cpu-ch {tr.cpu_ch} / --display-ch {tr.disp_ch} is taken on trust. "
@@ -283,29 +299,37 @@ def _marker_plausible(tr, ch, stride=97, max_hi_in_sleep=0.20):
     return frac <= max_hi_in_sleep, frac
 
 
-def _current_regions(tr, thresh_ua=1000.0, min_s=0.5):
+def _current_regions(tr, thresh_ua=1000.0, block_s=0.25):
     """Segment into awake/sleep by current alone, for builds with no markers.
 
-    Hysteresis on a 1 s smoothed mean: instantaneous current is spiky enough at
-    both extremes that a bare threshold would shred a region into hundreds.
+    Run-length encoding over fixed blocks, with NO minimum-duration filter. The
+    previous version discarded regions shorter than min_s but flipped its state
+    anyway, so a sub-min_s wake ended up inside the neighbouring sleep region and
+    inflated that region's reported floor 4.9x (a 0.1 s 15 mA wake turned a true
+    19 uA floor into a reported 93 uA, labelled "sleep", unflagged). Nothing is
+    absorbed now: a short excursion becomes its own labelled region, which is the
+    only honest place to put charge that really happened.
+
+    A PFM spike cannot fake a block: 12 mA for 60 us averages to ~3 uA over
+    0.25 s, three orders under the threshold. So a block reading high is a real
+    event, and there is nothing for a duration filter to protect against.
     """
-    step = tr.index_at(tr.t[tr.power_on] + 0.25) - tr.power_on or 1
-    out, cur_hi, start = [], None, tr.power_on
+    n = len(tr)
+    step = max(1, tr.index_at(tr.t[tr.power_on] + block_s) - tr.power_on)
+    out, start, cur = [], tr.power_on, None
     i = tr.power_on
-    while i < len(tr):
-        j = min(i + step, len(tr))
+    while i < n:
+        j = min(i + step, n)
         _, mean, _ = tr.integrate(i, j)
         hi = mean > thresh_ua
-        if cur_hi is None:
-            cur_hi = hi
-        elif hi != cur_hi:
-            if tr.t[i] - tr.t[start] >= min_s:
-                out.append((start, i))
-                start = i
-            cur_hi = hi
+        if cur is None:
+            cur = hi
+        elif hi != cur:
+            out.append((start, i))
+            start, cur = i, hi
         i = j
-    if len(tr) - start > step:
-        out.append((start, len(tr)))
+    if start < n - 1:
+        out.append((start, n))
     return out
 
 
@@ -329,9 +353,14 @@ def report(tr, bin_ms=None):
                   f"undriven pin, not a marker. Expected without -DPPK2_DEBUG.")
             del tr.digital[ch]
 
-    if not tr.digital:
-        print("\nNo usable digital markers — reporting current only. Regions "
-              "cannot be bounded by markers in a build without -DPPK2_DEBUG.")
+    # The marker branch needs the CPU lane specifically, so test for that rather
+    # than for any channel at all — a capture with a usable display lane and no
+    # usable CPU lane otherwise produced zero numbers and no explanation.
+    if tr.cpu_ch not in tr.digital:
+        extra = (f" (D{tr.disp_ch} is present but cannot bound a region on its own)"
+                 if tr.digital else "")
+        print(f"\nNo usable CPU-lane marker{extra} — reporting current only. "
+              f"Expected in a build without -DPPK2_DEBUG.")
         for lo, hi in _current_regions(tr):
             dur, mean, mc = tr.integrate(lo, hi)
             kind = "AWAKE" if mean > 1000 else "sleep"
@@ -442,7 +471,8 @@ def load_csv(path, verbose=True):
         cum = array("d")
         digital = {ch: array("b") for ch in dig}
         acc, prev_i, prev_t = 0.0, None, None
-        power_on, idx = 0, 0
+        power_on, idx = None, 0      # None, not 0: a trace already powered at
+                                     # sample 0 must report 0, not be falsy
 
         for line in fh:
             f = line.split(",", need)
@@ -462,7 +492,7 @@ def load_csv(path, verbose=True):
             for ch, ci in dig.items():
                 digital[ch].append(1 if f[ci].strip() not in
                                    ("", "0", "L", "false") else 0)
-            if not power_on and ua > POWER_ON_UA:
+            if power_on is None and ua > POWER_ON_UA:
                 power_on = idx
             prev_i, prev_t = ua, ts
             idx += 1
@@ -473,7 +503,7 @@ def load_csv(path, verbose=True):
         print(f"note: no timestamp column; assuming {PPK2_SAMPLE_HZ} Hz",
               file=sys.stderr)
     digital = {ch: v for ch, v in digital.items() if any(v)}
-    return Trace(t, cur, cum, digital, power_on)
+    return Trace(t, cur, cum, digital, power_on or 0)
 
 
 # --- Live source -----------------------------------------------------------
@@ -581,7 +611,7 @@ class _Decimator:
         self.n = max(1, int(n))
         self.acc = 0.0
         self.cnt = 0
-        self.dig = 0
+        self.dig_hi = 0
         # Peak of the RAW samples, tracked before averaging. The over-current
         # ceiling has to test this: a 2A fault lasting 200us averages to ~400mA
         # in a 1ms bin and slips under a 900mA limit, and any capture over ~200s
@@ -594,22 +624,27 @@ class _Decimator:
             if v > self.peak:
                 self.peak = v
             self.acc += v
-            if i < len(bits):
-                self.dig |= bits[i]      # any HIGH in the bin marks the bin HIGH
+            if i < len(bits) and bits[i]:
+                self.dig_hi += 1         # counted, not OR-ed — see below
             self.cnt += 1
             if self.cnt == self.n:
                 out_samples.append(self.acc / self.n)
-                out_bits.append(self.dig)
+                # Majority, not OR. OR-ing turned microsecond pad ringing into a
+                # solid HIGH bin, so at N>=4 a 0.6 s burst of ringing became one
+                # 600 ms span that passed the debounce and was reported as a real
+                # awake phase carrying ~9 mC. A real marker fills its bin; ringing
+                # occupies a few percent of it.
+                out_bits.append(1 if self.dig_hi * 2 > self.n else 0)
                 self.acc = 0.0
                 self.cnt = 0
-                self.dig = 0
+                self.dig_hi = 0
 
 
 def _trace_from_samples(samples, digital_raw, ppk, dt=None):
     chans = ppk.digital_channels(digital_raw) if digital_raw else []
     digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
     t_arr, cum = array("d"), array("d")
-    acc, power_on, prev = 0.0, 0, None
+    acc, power_on, prev = 0.0, None, None
     if dt is None:
         dt = 1.0 / PPK2_SAMPLE_HZ
     for i in range(len(samples)):
@@ -618,10 +653,10 @@ def _trace_from_samples(samples, digital_raw, ppk, dt=None):
             acc += 0.5 * (prev + ua) * dt
         t_arr.append(i * dt)
         cum.append(acc)
-        if not power_on and ua > POWER_ON_UA:
+        if power_on is None and ua > POWER_ON_UA:
             power_on = i
         prev = ua
-    return Trace(t_arr, samples, cum, digital, power_on)
+    return Trace(t_arr, samples, cum, digital, power_on or 0)
 
 
 def _offline_decoder(meta):
