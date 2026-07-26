@@ -70,6 +70,10 @@ void ulp_check_data_overlap();
 #include "ulp_main.h"  // exposes ulp_lp_wake_count and other LP-core globals
 #endif
 
+#if defined(SOC_USB_SERIAL_JTAG_SUPPORTED) && SOC_USB_SERIAL_JTAG_SUPPORTED
+#include "hal/usb_serial_jtag_ll.h"
+#endif
+
 // --- RTC memory layout ---
 // RTC memory survives deep sleep but NOT power-on reset (firmware upload,
 // battery swap, reset button). More precisely: the bootloader reloads
@@ -693,9 +697,55 @@ void setup_serial()
 #endif
 }
 
+#if defined(SOC_USB_SERIAL_JTAG_SUPPORTED) && SOC_USB_SERIAL_JTAG_SUPPORTED
+// Hold the CPU awake while a USB host is attached, so the port stays enumerated
+// and the board can be reflashed without being touched. The USB Serial/JTAG
+// peripheral is unpowered in deep sleep, so a sleeping C6 presents no USB device
+// at all — esptool's internal download-mode reset, which is what stands in for
+// the BOOT button on this chip, then has nothing to talk to. A normal wake is
+// also far too short to complete an enumeration, so without this hold every
+// reflash needs the button.
+//
+// SOF packets are bus-level frame markers that a live host broadcasts every 1ms
+// whether or not this device is enumerated, and the raw interrupt bit latches.
+// Testing it at sleep entry rather than at wake means the boot and sensor work
+// already supplied the observation window, so the common case — on battery, no
+// host — costs one register read. A charger supplies VBUS but sends no SOF, so
+// it cannot hold the device awake.
+static bool usb_host_attached()
+{
+  return (usb_serial_jtag_ll_get_intraw_mask() & USB_SERIAL_JTAG_INTR_SOF) != 0;
+}
+
+// Frames arrive every 1ms, so this is ample slack to re-prove the host is there.
+#define USB_HOLD_POLL_MS 200
+
+static void usb_hold_flash_window()
+{
+  if (!usb_host_attached())
+    return;
+  LOGI("USB host attached — holding awake so the port stays flashable");
+  // USB supplies the board while this spins, so the battery pays nothing for it.
+  // sleep_ms() is vTaskDelay, which yields and keeps the task watchdog fed.
+  while (usb_host_attached())
+  {
+    usb_serial_jtag_ll_clr_intsts_mask(USB_SERIAL_JTAG_INTR_SOF);
+    sleep_ms(USB_HOLD_POLL_MS);
+  }
+  LOGI("USB host gone — sleeping");
+}
+#else
+static void usb_hold_flash_window() {}
+#endif
+
 void start_deep_sleep()
 {
   history_store_persist_now();
+
+  // After the archive is safe, so pulling power during the hold loses nothing,
+  // and before PPK2_CPU_ACTIVE_LOW() so the hold is visible on a power trace
+  // rather than masquerading as a raised sleep floor.
+  usb_hold_flash_window();
 
   if (sensor.SupportsUlp())
   {
