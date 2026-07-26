@@ -437,12 +437,38 @@ def capture_live(args):
     except ImportError:
         sys.exit("ppk2_api missing. .venv/bin/pip install -r tools/requirements.txt")
 
-    ports = PPK2_API.list_devices()
-    if not ports:
+    # The PPK2 exposes two CDC interfaces and list_devices() returns both in
+    # whatever order pyserial enumerated them. Only interface .1 carries the
+    # measurement stream; commands written to the other are accepted silently
+    # and no samples ever arrive. So probe rather than guess: get_modifiers()
+    # returns False unless it actually parsed the calibration blob back.
+    import serial.tools.list_ports as _lp
+
+    def _candidates():
+        if args.port:
+            return [args.port]
+        found = [(pt.location or "", pt.device) for pt in _lp.comports()
+                 if pt.product == "PPK2"]
+        # Interface .1 first, then by device name for determinism.
+        return [d for _, d in sorted(found, key=lambda x: (not x[0].endswith(".1"), x[1]))]
+
+    cands = _candidates()
+    if not cands:
         sys.exit("no PPK2 found")
-    port = args.port or (ports[0] if isinstance(ports[0], str) else ports[0][0])
-    ppk = PPK2_API(port)
-    ppk.get_modifiers()
+    ppk, port = None, None
+    for cand in cands:
+        try:
+            trial = PPK2_API(cand)
+            if trial.get_modifiers():
+                ppk, port = trial, cand
+                break
+            trial.ser.close()
+        except Exception as exc:
+            print(f"  {cand}: {exc}")
+    if ppk is None:
+        sys.exit(f"none of {cands} answered GET_META_DATA — is nrfconnect still "
+                 f"holding the port?")
+    print(f"PPK2 on {port} (probed {len(cands)} interface(s))")
 
     sourcing = args.rail is not None
     mv = None
@@ -470,51 +496,65 @@ def capture_live(args):
     # decoded afterwards, from the same object so the calibration modifiers and
     # the cross-chunk remainder state still apply.
     #
-    # The inrush abort is the one thing that must be live, so the first
-    # ABORT_WINDOW_S is decoded as it arrives. Decoding then continues from
-    # exactly where that left off, since get_samples() carries its remainder
-    # forward.
-    ABORT_WINDOW_S = 0.5
+    # Nothing is decoded during acquisition, including the over-current check:
+    # that is post-hoc, because a live check fast enough to matter would have to
+    # decode inline and would corrupt the capture it is protecting.
     CHUNK = 1 << 20
 
     t_arr, cur, cum = array("d"), array("f"), array("d")
     digital_raw = []
     pending = bytearray()
     raw_fh = open(args.raw_out, "wb") if args.raw_out else None
-    prefix_samples = []
 
     abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
-    ppk.start_measuring()
-    t_start = time.time()
-    if sourcing and args.power_cycle:
-        ppk.toggle_DUT_power("OFF")
-        time.sleep(args.off_seconds)
-        # Sampling is already running, so the DUT's first boot cannot be missed.
-        ppk.toggle_DUT_power("ON")
-        print(f"DUT powered at t~{time.time() - t_start:.2f}s into the capture")
-
     nbytes = 0
-    deadline = t_start + args.seconds
-    try:
-        while time.time() < deadline:
+
+    def stash(buf):
+        if raw_fh:
+            raw_fh.write(buf)
+        else:
+            pending.extend(buf)
+
+    def drain(seconds):
+        """Read for `seconds`, never leaving the port unread.
+
+        At 400 kB/s the kernel CDC buffer overflows in a fraction of a second, so
+        any time.sleep() longer than a few ms loses samples and desyncs the
+        stream — get_samples() carries a remainder, so a gap corrupts every
+        sample after it, not just the missing ones.
+        """
+        nonlocal nbytes
+        end_t = time.time() + seconds
+        while time.time() < end_t:
             buf = ppk.get_data()
             if not buf:
                 time.sleep(0.002)
                 continue
             nbytes += len(buf)
-            if time.time() - t_start < ABORT_WINDOW_S:
-                sm, dg = ppk.get_samples(buf)
-                prefix_samples.extend(sm)
-                digital_raw.extend(dg)
-                if abort_ma and sm and max(sm) / 1000.0 > abort_ma:
-                    ppk.toggle_DUT_power("OFF")
-                    sys.exit(f"ABORTED: {max(sm)/1000:.0f} mA exceeded the "
-                             f"{abort_ma:.0f} mA ceiling for rail {args.rail!r}. "
-                             f"Power cut. Check the connection before retrying.")
-            elif raw_fh:
-                raw_fh.write(buf)
-            else:
-                pending.extend(buf)
+            stash(buf)
+
+    ppk.start_measuring()
+    t_start = time.time()
+
+    # Stream sanity: fail in under a second rather than after --seconds. Getting
+    # the wrong CDC interface yields a trickle of bytes and an empty capture.
+    drain(0.4)
+    if nbytes < 1000:
+        ppk.stop_measuring()
+        if sourcing:
+            ppk.toggle_DUT_power("OFF")
+        sys.exit(f"stream is dead: {nbytes} bytes in 0.4s, expected ~160000. "
+                 f"Wrong CDC interface, or another process is draining the port.")
+
+    t_power = None
+    try:
+        if sourcing and args.power_cycle:
+            ppk.toggle_DUT_power("OFF")
+            drain(args.off_seconds)
+            ppk.toggle_DUT_power("ON")
+            t_power = time.time()
+            print(f"DUT powered at t~{t_power - t_start:.2f}s into the capture")
+        drain(max(0.0, args.seconds - (time.time() - t_start)))
     finally:
         ppk.stop_measuring()
         if sourcing:
@@ -534,7 +574,7 @@ def capture_live(args):
               f"a gap inside a region under-reports it.")
 
     print("decoding...")
-    samples = array("f", prefix_samples)
+    samples = array("f")
 
     def feed(buf):
         sm, dg = ppk.get_samples(buf)
@@ -552,6 +592,17 @@ def capture_live(args):
         for off in range(0, len(pending), CHUNK):
             feed(pending[off:off + CHUNK])
         del pending
+
+    # The inrush abort is post-hoc, not live, and deliberately so: decoding
+    # inside the capture loop cannot sustain 400 kB/s, and a safety check that
+    # corrupts the measurement it is protecting is worse than an honest absence.
+    # The real safeguards are the typed confirmation and the per-rail clamp.
+    if abort_ma and len(samples):
+        peak = max(samples) / 1000.0
+        if peak > abort_ma:
+            print(f"  *** {peak:.0f} mA peak exceeded the {abort_ma:.0f} mA "
+                  f"ceiling for rail {args.rail!r}. Power is already off. "
+                  f"Check the connection before trusting this capture.")
 
     chans = ppk.digital_channels(digital_raw) if digital_raw else []
     digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
