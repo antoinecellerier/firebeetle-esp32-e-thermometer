@@ -693,7 +693,13 @@ class _Decimator:
 
 
 def _trace_from_samples(samples, digital_raw, ppk, dt=None):
-    chans = ppk.digital_channels(digital_raw) if digital_raw else []
+    if digital_raw and ppk is not None:
+        chans = ppk.digital_channels(digital_raw)
+    elif digital_raw:
+        # From cache: bits already unpacked per channel by the writer's encoding.
+        chans = [[(b >> c) & 1 for b in digital_raw] for c in range(8)]
+    else:
+        chans = []
     digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
     t_arr, cum = array("d"), array("d")
     acc, power_on, prev = 0.0, None, None
@@ -742,6 +748,49 @@ def _offline_decoder(meta):
     return d
 
 
+def _cache_paths(raw_path, n):
+    return f"{raw_path}.dec{n}.f32", f"{raw_path}.dec{n}.d8"
+
+
+def _cache_write(raw_path, n, samples, digital_raw):
+    """Save the decoded result so re-analysis is free.
+
+    Decoding runs at ~671k samples/s, so 45 s for a 300 s capture and 4.5 min for
+    a 30-minute one. The cost that actually hurts is repetition: one capture got
+    decoded four times in a session to answer four questions, which on a
+    30-minute capture is 18 minutes of waiting for bytes that never change.
+    """
+    f32, d8 = _cache_paths(raw_path, n)
+    try:
+        with open(f32, "wb") as fh:
+            samples.tofile(fh)
+        with open(d8, "wb") as fh:
+            array("b", [b & 0xFF if b < 128 else 0 for b in digital_raw]).tofile(fh)
+        print(f"cached decode -> {os.path.basename(f32)} (+ .d8)")
+    except OSError as exc:
+        print(f"  (could not cache: {exc})")
+
+
+def _cache_read(raw_path, n):
+    f32, d8 = _cache_paths(raw_path, n)
+    if not (os.path.exists(f32) and os.path.exists(d8)):
+        return None
+    # A cache older than its source is stale by definition.
+    if os.path.getmtime(f32) < os.path.getmtime(raw_path):
+        print(f"  (ignoring cache older than {os.path.basename(raw_path)})")
+        return None
+    samples = array("f")
+    dig = array("b")
+    with open(f32, "rb") as fh:
+        samples.frombytes(fh.read())
+    with open(d8, "rb") as fh:
+        dig.frombytes(fh.read())
+    if len(dig) != len(samples):
+        print("  (ignoring cache: sample/digital length mismatch)")
+        return None
+    return samples, list(dig)
+
+
 def decode_raw(args):
     """Decode a stream saved by --raw-out.
 
@@ -749,6 +798,14 @@ def decode_raw(args):
     calibration off an attached PPK2, which then needs --mode to match how the
     capture was taken, since the conversion is mode-dependent.
     """
+    cached = _cache_read(args.path, max(1, args.decimate))
+    if cached is not None:
+        samples, digital_raw = cached
+        dt = max(1, args.decimate) / PPK2_SAMPLE_HZ
+        print(f"decoded from cache: {len(samples)} points ({len(samples)*dt:.1f} s)"
+              + (f", decimated {args.decimate}x" if args.decimate > 1 else ""))
+        return _trace_from_samples(samples, digital_raw, None, dt)
+
     side = args.path + ".json"
     if os.path.exists(side):
         with open(side) as fh:
@@ -780,6 +837,7 @@ def decode_raw(args):
     print(f"decoded {done} bytes -> {len(samples)} points "
           f"({len(samples)*dt:.1f} s"
           + (f", decimated {dec.n}x -> {1/dt:.0f} Hz" if dec.n > 1 else "") + ")")
+    _cache_write(args.path, dec.n, samples, digital_raw)
     if not len(samples):
         sys.exit("every sample was rejected. ppk2_api swallows any conversion "
                  "error as 'Measurement outside of range!', so this usually means "
@@ -1008,6 +1066,8 @@ def capture_live(args):
                   f"ceiling for rail {args.rail!r}. Power is already off. "
                   f"Check the connection before trusting this capture.")
 
+    if args.raw_out:
+        _cache_write(args.raw_out, dec.n, samples, digital_raw)
     tr = _trace_from_samples(samples, digital_raw, ppk, dec.n / PPK2_SAMPLE_HZ)
     del digital_raw
 
