@@ -491,6 +491,15 @@ def confirm_connection(rail, mv):
         print("\n  If these leads are on the 3V3 rail, this will exceed the")
         print("  C6's 3.6 V absolute maximum and destroy the MCU, the panel")
         print("  and the sensor together.")
+    # A pipe is not a person. CLAUDE.md encourages delegating long capture loops
+    # to subagents, so `printf 'bat 4200\n' | ppk2.py live --rail bat` is a
+    # realistic invocation — and it would source 4.2V with nobody having looked at
+    # the leads. Requiring a tty is the only thing standing between that and a
+    # 3.6V-absolute-max rail.
+    if not sys.stdin.isatty():
+        sys.exit("aborted: stdin is not a terminal, so nobody can confirm the "
+                 "leads. Sourcing requires an interactive confirmation — run this "
+                 "in a terminal, not piped, redirected, or from a subagent.")
     print(f"\n  Type exactly: {rail} {mv}")
     try:
         got = input("  > ").strip()
@@ -556,9 +565,17 @@ class _Decimator:
         self.acc = 0.0
         self.cnt = 0
         self.dig = 0
+        # Peak of the RAW samples, tracked before averaging. The over-current
+        # ceiling has to test this: a 2A fault lasting 200us averages to ~400mA
+        # in a 1ms bin and slips under a 900mA limit, and any capture over ~200s
+        # auto-decimates, so testing bin means disables the check exactly when
+        # captures are long enough to matter.
+        self.peak = 0.0
 
     def feed(self, vals, bits, out_samples, out_bits):
         for i, v in enumerate(vals):
+            if v > self.peak:
+                self.peak = v
             self.acc += v
             if i < len(bits):
                 self.dig |= bits[i]      # any HIGH in the bin marks the bin HIGH
@@ -860,8 +877,9 @@ def capture_live(args):
     # inside the capture loop cannot sustain 400 kB/s, and a safety check that
     # corrupts the measurement it is protecting is worse than an honest absence.
     # The real safeguards are the typed confirmation and the per-rail clamp.
+    # Note this reads the decimator's raw peak, not max(samples) — see _Decimator.
     if abort_ma and len(samples):
-        peak = max(samples) / 1000.0
+        peak = dec.peak / 1000.0
         if peak > abort_ma:
             print(f"  *** {peak:.0f} mA peak exceeded the {abort_ma:.0f} mA "
                   f"ceiling for rail {args.rail!r}. Power is already off. "
