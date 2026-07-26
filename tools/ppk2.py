@@ -683,7 +683,10 @@ class _Decimator:
         self.n = max(1, int(n))
         self.acc = 0.0
         self.cnt = 0
-        self.dig_hi = 0
+        # One counter per logic channel. A single scalar here collapsed all eight
+        # channels into bit 0, so every marker appeared on D0 and D1 was always
+        # empty — majority has to be decided per channel, not across them.
+        self.dig_hi = [0] * 8
         # Peak of the RAW samples, tracked before averaging. The over-current
         # ceiling has to test this: a 2A fault lasting 200us averages to ~400mA
         # in a 1ms bin and slips under a 900mA limit, and any capture over ~200s
@@ -692,24 +695,42 @@ class _Decimator:
         self.peak = 0.0
 
     def feed(self, vals, bits, out_samples, out_bits):
+        n, hi = self.n, self.dig_hi
+        if n == 1:
+            # Identity: nothing to average, so pass the channel bitmask straight
+            # through. Also the fast path for marker captures, which must run at
+            # --decimate 1 for the fingerprint to survive.
+            for i, v in enumerate(vals):
+                if v > self.peak:
+                    self.peak = v
+                out_samples.append(v)
+                out_bits.append(bits[i] if i < len(bits) else 0)
+            return
+        half = n // 2
         for i, v in enumerate(vals):
             if v > self.peak:
                 self.peak = v
             self.acc += v
-            if i < len(bits) and bits[i]:
-                self.dig_hi += 1         # counted, not OR-ed — see below
+            b = bits[i] if i < len(bits) else 0
+            if b:
+                for c in range(8):
+                    if (b >> c) & 1:
+                        hi[c] += 1
             self.cnt += 1
-            if self.cnt == self.n:
-                out_samples.append(self.acc / self.n)
-                # Majority, not OR. OR-ing turned microsecond pad ringing into a
-                # solid HIGH bin, so at N>=4 a 0.6 s burst of ringing became one
-                # 600 ms span that passed the debounce and was reported as a real
-                # awake phase carrying ~9 mC. A real marker fills its bin; ringing
-                # occupies a few percent of it.
-                out_bits.append(1 if self.dig_hi * 2 > self.n else 0)
+            if self.cnt == n:
+                out_samples.append(self.acc / n)
+                # Per-channel majority, not OR. OR turned microsecond pad ringing
+                # into a solid HIGH bin, so at N>=4 a 0.6 s burst became one 600 ms
+                # span reported as a real awake phase carrying ~9 mC. A real marker
+                # fills its bin; ringing occupies a few percent of it.
+                mask = 0
+                for c in range(8):
+                    if hi[c] > half:
+                        mask |= 1 << c
+                    hi[c] = 0
+                out_bits.append(mask)
                 self.acc = 0.0
                 self.cnt = 0
-                self.dig_hi = 0
 
 
 def _trace_from_samples(samples, digital_raw, ppk, dt=None):
@@ -769,7 +790,9 @@ def _offline_decoder(meta):
 
 
 def _cache_paths(raw_path, n):
-    return f"{raw_path}.dec{n}.f32", f"{raw_path}.dec{n}.d8"
+    # v2: caches written before the per-channel majority fix hold digital data
+    # with all eight channels collapsed into bit 0, so they must not be reused.
+    return f"{raw_path}.dec{n}.v2.f32", f"{raw_path}.dec{n}.v2.d8"
 
 
 def _cache_write(raw_path, n, samples, digital_raw):
