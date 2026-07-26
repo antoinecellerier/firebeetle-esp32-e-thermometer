@@ -204,9 +204,18 @@ def check_selftest(tr):
     cpu, disp = tr.spans(tr.cpu_ch), tr.spans(tr.disp_ch)
 
     def burst(spans, n, ms):
-        head = spans[:n]
-        return (len(head) == n
-                and all(_near(tr.dur(s), ms / 1000.0) for s in head))
+        """Find n consecutive spans of ~ms ANYWHERE in the list.
+
+        Not just at the head: the ROM bootloader parks a UART pin high for ~218 ms
+        and glitches around it before the app claims the pad, so the fingerprint is
+        never the first thing on the channel. Checking spans[:n] meant a perfectly
+        good fingerprint went undetected and the mapping was reported unverified.
+        """
+        want = ms / 1000.0
+        for k in range(len(spans) - n + 1):
+            if all(_near(tr.dur(sp), want) for sp in spans[k:k + n]):
+                return True
+        return False
 
     cpu_n, cpu_ms = FP_CPU_PULSES, FP_CPU_MS
     disp_n, disp_ms = FP_DISP_PULSES, FP_DISP_MS
@@ -222,6 +231,16 @@ def check_selftest(tr):
     disp_here = burst(disp, disp_n, disp_ms)
     disp_there = burst(cpu, disp_n, disp_ms)
 
+    if cpu_here and disp_there:
+        return (f"*** LANES TIED TOGETHER *** both fingerprints appear on "
+                f"D{tr.cpu_ch} ({cpu_n}x{cpu_ms}ms and {disp_n}x{disp_ms}ms) and "
+                f"D{tr.disp_ch} carries nothing. One lead cannot carry two GPIOs, "
+                f"so the two are joined somewhere — most often both jumpers seated "
+                f"in the same PPK2 digital socket, which also leaves the other "
+                f"socket empty and one wire loose. Note this shorts the two GPIOs "
+                f"to each other, so the firmware drives both output drivers "
+                f"against each other whenever the markers disagree. Fix the "
+                f"harness before trusting any marker below.")
     if cpu_there or disp_there:
         return (f"*** LANES CROSSED *** the {cpu_n}x{cpu_ms}ms CPU "
                 f"fingerprint is on D{tr.disp_ch}, which you declared as display. "
@@ -765,7 +784,10 @@ def _cache_write(raw_path, n, samples, digital_raw):
         with open(f32, "wb") as fh:
             samples.tofile(fh)
         with open(d8, "wb") as fh:
-            array("b", [b & 0xFF if b < 128 else 0 for b in digital_raw]).tofile(fh)
+            # Unsigned: array("b") is signed char, and the previous guard mapped
+            # any byte >=128 to 0, silently discarding every channel for those
+            # points whenever D7 was high.
+            array("B", [b & 0xFF for b in digital_raw]).tofile(fh)
         print(f"cached decode -> {os.path.basename(f32)} (+ .d8)")
     except OSError as exc:
         print(f"  (could not cache: {exc})")
@@ -780,7 +802,7 @@ def _cache_read(raw_path, n):
         print(f"  (ignoring cache older than {os.path.basename(raw_path)})")
         return None
     samples = array("f")
-    dig = array("b")
+    dig = array("B")
     with open(f32, "rb") as fh:
         samples.frombytes(fh.read())
     with open(d8, "rb") as fh:
@@ -798,12 +820,12 @@ def decode_raw(args):
     calibration off an attached PPK2, which then needs --mode to match how the
     capture was taken, since the conversion is mode-dependent.
     """
-    cached = _cache_read(args.path, max(1, args.decimate))
+    cached = _cache_read(args.path, max(1, args.decimate or 1))
     if cached is not None:
         samples, digital_raw = cached
-        dt = max(1, args.decimate) / PPK2_SAMPLE_HZ
+        dt = max(1, args.decimate or 1) / PPK2_SAMPLE_HZ
         print(f"decoded from cache: {len(samples)} points ({len(samples)*dt:.1f} s)"
-              + (f", decimated {args.decimate}x" if args.decimate > 1 else ""))
+              + (f", decimated {args.decimate}x" if (args.decimate or 1) > 1 else ""))
         return _trace_from_samples(samples, digital_raw, None, dt)
 
     side = args.path + ".json"
@@ -823,7 +845,7 @@ def decode_raw(args):
               f"conversion; pass --mode/--vdd if the capture differed")
     samples = array("f")
     digital_raw = []
-    dec = _Decimator(args.decimate)
+    dec = _Decimator(args.decimate or 1)
     done = 0
     with open(args.path, "rb") as fh:
         while True:
@@ -923,8 +945,14 @@ def capture_live(args):
         # flag never energised the board and reported a plausible sub-microamp
         # "floor" from a DUT that was switched off — guaranteed rather than
         # intermittent, because the previous run's finally turns the output off.
-        ppk.toggle_DUT_power("ON")
-        print(f"source meter on {port} at {mv} mV, rail {args.rail}, output ON")
+        if not args.power_cycle:
+            # --power-cycle wants the capture to begin with the DUT unpowered, so
+            # energising here would boot the board and then kill it 2 s later,
+            # leaving a truncated boot in front of the real one.
+            ppk.toggle_DUT_power("ON")
+        print(f"source meter on {port} at {mv} mV, rail {args.rail}"
+              + (", output held off until the power cycle" if args.power_cycle
+                 else ", output ON"))
 
     # Acquisition and decode are separated deliberately. The PPK2 streams
     # 4 bytes per sample at a fixed 100 kSps = ~400 kB/s, and get_samples() is
@@ -964,10 +992,20 @@ def capture_live(args):
     # a forgotten --decimate would waste the whole run. Cap the decoded point
     # count instead of trusting the flag.
     expect = args.seconds * PPK2_SAMPLE_HZ
-    dec_n = max(args.decimate, math.ceil(expect / 20e6))
-    if dec_n > args.decimate:
-        print(f"auto-decimating {dec_n}x: {expect/1e6:.0f}M samples would not fit "
-              f"undecimated (means and charge are unaffected)")
+    if args.decimate is not None:
+        # Explicit beats implicit. Overriding a requested --decimate 1 defeated the
+        # reason for asking: the marker fingerprint does not survive decimation.
+        dec_n = max(1, args.decimate)
+        est_mb = expect / dec_n * 28 / 1e6
+        if est_mb > 600:
+            print(f"note: --decimate {dec_n} on {expect/1e6:.0f}M samples needs "
+                  f"~{est_mb:.0f} MB to decode. Honouring it as asked.")
+    else:
+        dec_n = max(1, math.ceil(expect / 20e6))
+        if dec_n > 1:
+            print(f"auto-decimating {dec_n}x: {expect/1e6:.0f}M samples would not "
+                  f"fit undecimated (means and charge are unaffected; pass "
+                  f"--decimate 1 to override, e.g. for marker captures)")
 
     def stash(buf):
         if raw_fh:
@@ -1198,7 +1236,7 @@ def main():
                         help="PPK2 channel carrying CPU_ACTIVE/GPIO17 (default 0)")
         sp.add_argument("--display-ch", type=int, default=1, metavar="N",
                         help="PPK2 channel carrying DISPLAY/GPIO16 (default 1)")
-        sp.add_argument("--decimate", type=int, default=1, metavar="N",
+        sp.add_argument("--decimate", type=int, default=None, metavar="N",
                         help="average N samples into one before analysis. Exact "
                              "for means and charge; needed for long captures, "
                              "which are ~28 bytes/sample decoded (use 100 for an "
