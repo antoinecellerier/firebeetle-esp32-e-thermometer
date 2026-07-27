@@ -16,7 +16,11 @@ PREVGL, VCOM, GDR, RESE, GND ×2. VSYS is reachable at J2 pin 2.
 
 Four frames in `archive/order-2026-07-20/xray/`, one per assembled board —
 distinct solder micro-features per frame prove they are not re-shots, but the
-frame↔board mapping is unknowable. Findings, consistent across all four:
+frame↔board mapping is unknowable. Per-part identification is proven, not
+eyeballed: `xray/annotated/` overlays every top-side footprint's bbox
+projected from the board file (transform + per-part verdict table in
+`xray/README.md`; `xray/annotate.py` regenerates). Findings, consistent
+across all four:
 
 - U5 (BMP581 LGA-10): all 10 joints wetted and uniform, package centered,
   no bridging.
@@ -29,8 +33,9 @@ frame↔board mapping is unknowable. Findings, consistent across all four:
   nothing about it, so the Phase 0 optical bridge check on J4 is the only
   inspection it gets.
 - Satellite solder micro-balls (~50–100µm) near U5 on 2–3 frames — see the
-  Phase 0 item below. The fuzzy round blob top-right in two frames is a
-  smudge on JLC's detector, not on the boards.
+  Phase 0 item below. The fuzzy round blob top-right in two frames is off
+  the board at (x≈−6.1, y≈−2.8)mm — on the panel rail/carrier, and too
+  faint to be solder at its ~0.9mm diameter.
 
 X-ray confirms geometry only (no bridges, nothing missing or shifted); it
 proves neither electrical contact on the LGA nor passive values — Phases 0–2
