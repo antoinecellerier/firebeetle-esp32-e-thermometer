@@ -12,12 +12,35 @@ bench power only at the J2/JP1 battery-side break.
 Test points (back side): VBAT, VBAT_ADC, 3V3 (probe-only), EPD_VCC, PREVGH,
 PREVGL, VCOM, GDR, RESE, GND ×2. VSYS is reachable at J2 pin 2.
 
+## 2026-07-27 — JLC first-article X-rays (pre-arrival; boards ETA 2026-07-30)
+
+Four frames in `archive/order-2026-07-20/xray/`, one per assembled board —
+distinct solder micro-features per frame prove they are not re-shots, but the
+frame↔board mapping is unknowable. Findings, consistent across all four:
+
+- U5 (BMP581 LGA-10): all 10 joints wetted and uniform, package centered,
+  no bridging.
+- U1 (MINI-1): castellations evenly wetted, no bridges, module centered.
+  Center GND pads unreadable through the module's internal layers — fine,
+  no thermal load. The 45°-rotated QFN is the C6 die inside the module.
+- J4 (FPC 0.5mm): pins resolve individually, no bridging.
+- Satellite solder micro-balls (~50–100µm) near U5 on 2–3 frames — see the
+  Phase 0 item below. The fuzzy round blob top-right in two frames is a
+  smudge on JLC's detector, not on the boards.
+
+X-ray confirms geometry only (no bridges, nothing missing or shifted); it
+proves neither electrical contact on the LGA nor passive values — Phases 0–2
+remain the gate.
+
 ## Phase 0 — before any power (per board)
 
 - [ ] Visual pass against the JLC renders / placement-verification table:
       J4 0.5mm-pitch row for bridges, U1 module fillets, U5 seated (vent
       pinhole NW, pin 1 SW), **U6 pads empty**, every diode band per the
       table (D1/D3 cathode E, D2 W, D4/D5 S, D6 W).
+- [ ] Loupe + brush pass around U5: the X-rays show satellite solder
+      micro-balls near the package on 2–3 boards — dislodge anything loose
+      (vent-port neighborhood; harmless once confirmed not mobile).
 - [ ] Jumper state as shipped: JP1 bridged (copper), JP2+JP5 bridged
       (0.47Ω RESE + 10µH — universal default), JP3/JP4/JP6 open.
 - [ ] DNP provisions empty: D7 (TVS), R9 (10M 32k bias), U6; J2/J5 headers
