@@ -282,3 +282,19 @@ optional.
 
 Settled deliberately 2026-07-20, do not "correct" these: **white** solder
 mask (not green) and **lead-free / high-temp** solder paste.
+
+### Import charges — budget them, they are not on JLC's invoice
+
+DHL bill for this order (2026-07-27, France): **€62.00** = €42.00 TVA
+(20% on a declared base of €210 ≈ goods + freight) + €20.00 clearance fee
+("frais additionnels de dédouanement", €16.67 + its own TVA). Actual customs
+duty: €0 — EU tariff on populated PCBs is zero, so the entire door charge is
+VAT plus the courier's fixed fee.
+
+Rule for future orders: anything over €150 gets import VAT collected by the
+courier (20% of goods + shipping) plus a ~€15–20 disbursement fee — add
+~22–25% to the checkout total to get the landed cost. Sub-€150 orders with
+IOSS (LCSC/DigiKey style) prepay VAT at checkout and owe nothing at the
+door, which is why small part orders never showed this. Splitting an order
+under €150 to dodge the fee still loses: the €22.32 PCBA setup fee is
+per-order (see shipping note above).
