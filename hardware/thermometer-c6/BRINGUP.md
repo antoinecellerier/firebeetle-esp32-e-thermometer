@@ -23,7 +23,11 @@ frame↔board mapping is unknowable. Findings, consistent across all four:
 - U1 (MINI-1): castellations evenly wetted, no bridges, module centered.
   Center GND pads unreadable through the module's internal layers — fine,
   no thermal load. The 45°-rotated QFN is the C6 die inside the module.
-- J4 (FPC 0.5mm): pins resolve individually, no bridging.
+- J3 (USB-C): 0.5mm pin row resolves individually, no bridging; shell
+  through-legs filled. **J4 is off-frame in all four images** (frames cover
+  x≲38mm of the 48mm board; J4's row sits at x≈41.5) — the X-rays say
+  nothing about it, so the Phase 0 optical bridge check on J4 is the only
+  inspection it gets.
 - Satellite solder micro-balls (~50–100µm) near U5 on 2–3 frames — see the
   Phase 0 item below. The fuzzy round blob top-right in two frames is a
   smudge on JLC's detector, not on the boards.
