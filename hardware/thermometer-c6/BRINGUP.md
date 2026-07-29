@@ -225,6 +225,15 @@ docs/history-store-validation.md.
 - [ ] Panel attached (power off first): full refresh renders; BUSY
       light-sleep path works; EPD_VCC returns to 0V after hibernate and the
       floated control pins don't back-light the panel rail (probe EPD_VCC).
+      2026-07-29 board 1, GDEM0154I61: **first render PASS** — 33.9°C /
+      16:01 CEST / 4204mV / `! DEBUG 5s` / footer `#3 r3 lp2 0d w:ULP
+      mx4.2V 91bd4d8`. `w:ULP` = the frame came from an LP delta wake;
+      `#3 r3` = archive continuity across the reflash; the refresh
+      itself proves the boost chain (GDR/RESE/pump/PREVGH/PREVGL) on
+      the as-shipped 0.47Ω/10µH. Temp read high then decayed toward
+      the 27°C room — handling + USB self-heat (Phase 3 quantifies).
+      Still open here: EPD_VCC probe after hibernate (expect the
+      floating few-hundred-mV, not 3.3V).
 - [ ] Deep-sleep floor on PPK2 (reference: XIAO C6 rig ~15.8µA; the LDO tree
       will differ — record the number in docs/notes.md power logbook).
 - [ ] LP core survives sleep cycles: lp counter increments, no echo boots,
