@@ -867,3 +867,45 @@ second ADC datapoint).
 - Rough budget for this board: 1.58 C/day floor + 0.24–1.22 C/day for
   10–50 field refreshes × 24.3 mC ≈ **1.8–2.8 C/day → ~500–800 days on a
   400 mAh pack** (cadence-dependent estimate).
+
+### Budget as measured 2026-07-29 (thermometer-c6 board 1)
+
+Charges measured on this board today (LEDs ENABLED — see below); cadences
+taken from the XIAO runs, since a delta-driven cadence measures the room,
+not the board.
+
+| Term | C/day | Share (stable) | Basis |
+|---|---|---|---|
+| Sleep floor, 18.3 µA (incl. LP polls @60 s) | 1.58 | **~78%** | measured, flat over a full field interval, 27 °C |
+| Refreshes, 10.8–50/day × 24.3 mC | 0.26–1.22 | 13% | charge measured n=8; cadence = the room (XIAO basement nominal, E heatwave ceiling) |
+| Non-refresh CPU wakes, ~20/day × 7.74 mC | 0.15 | 8% | charge measured n=1; rate from the XIAO 20-day run |
+| NTP resync | 0.02–0.08 | 1–4% | 117 mC/success (XIAO-measured); interval pending this board's crystal drift — could stretch 1.5 d → weeks |
+| Archive (journal + base + ring erase) | ~0.005 | <1% | mixed measured/estimated, noise-level |
+| **Total** | **~2.0 stable → ~3.0 volatile** | | **~480–710 days on 400 mAh at full capacity** |
+
+vs the XIAO ePaper rig's 2.12 C/day: same ballpark despite the 16% better
+floor — the wake tiers are honestly higher here (LEDs in every wake
+figure, the LDO's ~1.15× input-charge factor at 4.2 V, and the
+non-refresh term tripling once measured). The crystal's resync dividend
+is the one term that should improve and is not yet counted.
+
+Caveats that now outweigh the electronics:
+
+- **Pack self-discharge is NOT in the table**: at a typical 1–2%/month on
+  a 400 mAh pouch that is 0.5–1.0 C/day equivalent — it can rival the
+  floor. Past-one-year claims are about pack quality as much as the board.
+- **Usable window**: the 3800/3700 mV thresholds are buck-era and at face
+  value strand ~25% of capacity; the Phase 3 sag measurement re-deriving
+  them toward ~3.4–3.5 V is effectively a +30% battery-life lever in a
+  config constant.
+- **LEDs**: `DISABLE_LEDS` was deliberately left off (wake blinks = the
+  only observability with serial dark), so every wake-tier charge above
+  includes LED burn; the floor does not (LED dark in sleep). When the
+  deployment build restores `DISABLE_LEDS`, re-measure one refresh and
+  one non-refresh wake to quantify the LED share.
+- Warm floor (D2 leakage vs temperature) and failed-resync tails are the
+  untested pessimistic directions — Phase 3 / soak items.
+
+Net: **roughly 1.5–2 years on 400 mAh as measured**, threshold
+re-derivation and the crystal pushing up, pack self-discharge pushing
+down.
