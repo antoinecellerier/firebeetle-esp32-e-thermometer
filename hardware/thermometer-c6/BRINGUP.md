@@ -115,17 +115,21 @@ board 5. Board 1 is the first-article board for Phases 0–2.
       both faces mid-air doesn't work; front component pads on the same
       nets were used instead. TPs remain fine for single-face probing
       (powered floor/scope work with the board face-down or on edge).
-- [ ] **JST pigtail polarity vs the `+` silk before first battery plug**
+- [x] **JST pigtail polarity vs the `+` silk before first battery plug**
       (JST vs Adafruit pigtail convention differs — README open item 5).
-      2026-07-29: shell orientation matches the existing devices'
-      pigtails. Definitive check still to do: DMM the loose plug's
-      contacts in voltage mode (battery attached) and confirm the +
-      contact is the one that mates with J1's `+`-marked pad.
+      2026-07-29: confirmed by DMM on the loose plug — the red wire /
+      + contact mates with J1's `+`-marked pad. Shell orientation also
+      matches the existing devices' pigtails.
+
+**Phase 0 complete on board 1 (2026-07-29).** Boards 2–4 still owe the
+quick per-board pass after first-article Phases 0–2.
 
 ## Phase 1 — first power (battery + panel absent)
 
-- [ ] Power via PPK2 source mode: J2 pin 2 + GND, JST empty, JP1 wicked open
-      (or a current-limited supply, 4.0V / 50mA limit, at the same point).
+- [ ] Power via PPK2 source mode: J2 pin 2 + GND, JST empty, JP1 cut open
+      (factory copper bridge, per Phase 0 — knife cut, re-close with
+      solder afterwards; "wick" doesn't apply the first time). Or a
+      current-limited supply, 4.0V / 50mA limit, at the same point.
 - [ ] 3V3 = 3.30V at TP4 (probe only).
 - [ ] EPD_VCC = 0V (gate held off by the 10k pull-up).
 - [ ] Quiescent draw plausible (unflashed module executes ROM console — mA
