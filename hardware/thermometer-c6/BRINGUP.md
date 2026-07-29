@@ -267,7 +267,15 @@ docs/history-store-validation.md.
       floor via the 66k VBUS pulldowns; PMEG6010-class is the fallback (no
       SMA drop-in — board change for rev B if needed). [REVIEW-KICAD-HAPPY ○]
 - [ ] VBAT_ADC accuracy across 3.5–4.2V vs DMM; confirm the 5ms divider
-      settle is ample (τ = 0.5ms). While looking at this trace, also check
+      settle is ample (τ = 0.5ms). Protocol (2026-07-29): PPK2 source at
+      J1, USB OUT (the charger fights the source for VBAT); the panel
+      only shows fresh mV on a rendered frame, so press RST per step to
+      force one. 4.2→3.8V in 100mV steps, then below deliberately —
+      ≤3.8V exercises the low-battery behavior and ≤3.7V the shutdown
+      path (first hardware test of the threshold logic; revive on USB).
+      First datapoint 2026-07-29: −22mV at 4.2V. Boards 2–4 get a
+      single-point check (~4.0V) during their sweep — the curve fit is
+      shared but the 1% divider stack is per-board (±40mV worst case). While looking at this trace, also check
       whether the settle wait shows as a visible chunk of a non-refresh
       wake. Analysis 2026-07-22 (deferred pending these numbers): the read
       runs only on CPU wakes, so the blocking 5ms costs ~0.075mC (5ms ×

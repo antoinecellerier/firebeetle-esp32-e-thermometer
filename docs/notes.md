@@ -818,3 +818,10 @@ archived by hand).
   `CONFIG_BOOTLOADER_SKIP_VALIDATE_IN_DEEP_SLEEP=y`, `DISABLE_SERIAL` via
   the release profile, high-side gated VBAT divider (the floor itself rules
   out a divider leak — ungated it would add ~5 µA).
+- **NTP/WiFi observation (uncontrolled):** every sync attempt on board 1
+  today succeeded promptly — a dozen-plus cold boots across two builds,
+  zero failures — where the XIAO rigs see periodic association/SNTP
+  failures. Consistent with the MINI-1 PCB antenna + keep-out
+  outperforming the XIAO's ceramic chip antenna, but same-bench, small n,
+  not the deployment location. Worth a controlled look eventually: failed
+  resyncs are the budget's expensive tail (1.5–4.5 C each, no backoff).
