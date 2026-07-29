@@ -209,16 +209,18 @@ docs/history-store-validation.md.
 - [x] BMP581 detected at 0x47 on LP I2C (GPIO6/7); temperature plausible.
       2026-07-29 board 1: **chip ID 0x50 detected, 29.79°C** — plausible
       for a warm July room + board self-heat.
-- [ ] Logged battery mV ≈ DMM VBAT ±50mV (divider ×2 + curve-fitting cali);
+- [x] Logged battery mV ≈ DMM VBAT ±50mV (divider ×2 + curve-fitting cali);
       VDIV_EN measured 0V outside the read window.
-      2026-07-29 board 1: 4196mV logged with no pack attached — the
-      charger's float-held VBAT node, consistent with the 4.29V DMM'd
-      earlier in the float cycle. Plausibility pass; the ±50mV accuracy
-      and VDIV_EN checks need a battery attached — deferred.
+      2026-07-29 board 1: **panel 4178mV vs 4200mV PPK2-sourced at J1 =
+      −22mV — pass** (through Q6 + harness). VDIV gating proven by the
+      18.7µA sleep floor rather than a pin probe: an ungated divider
+      would add ~5µA. (Earlier USB-only reading of 4196mV was the
+      charger's float-held node, also consistent.)
 - [ ] vbus_present(): true on USB, false unplugged.
-      Not in the boot log; needs a dedicated observation. Note the
-      catch-22: the false-case has no serial (USB out) — verify via the
-      panel once attached, or a targeted debug print.
+      2026-07-29: false-case demonstrated behaviorally — full render
+      cycles on battery-path power, no spurious shutdown. Remaining
+      direct check (optional): DMM J5 pin 6 (VBUS_SENSE divider) — a
+      clean DC level with USB in, 0V without.
 - [x] Status LED on GPIO15 works (needs DISABLE_LEDS commented out in
       local-secrets.h for the test).
       2026-07-29 board 1: observed lighting on a wake.
@@ -236,8 +238,12 @@ docs/history-store-validation.md.
       floating few-hundred-mV, not 3.3V).
 - [ ] Deep-sleep floor on PPK2 (reference: XIAO C6 rig ~15.8µA; the LDO tree
       will differ — record the number in docs/notes.md power logbook).
-- [ ] LP core survives sleep cycles: lp counter increments, no echo boots,
+- [x] LP core survives sleep cycles: lp counter increments, no echo boots,
       no `uN`/PANIC forensics indicators on screen.
+      2026-07-29 board 1: `w:ULP` frames on both builds (debug 5s and
+      release 60s), `lp2` alive, **no `uN`, no `! PANIC`** across the
+      release capture's sleep cycles. Delta wakes rendered frames at
+      exactly the LP cadence while the board cooled.
 
 ## Phase 3 — first-article measurements (one board, PPK2 + scope)
 
