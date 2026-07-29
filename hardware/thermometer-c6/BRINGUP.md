@@ -43,25 +43,75 @@ remain the gate.
 
 ## Phase 0 — before any power (per board)
 
-- [ ] Visual pass against the JLC renders / placement-verification table:
+Board numbering (2026-07-29, boards in hand): the four assembled boards are
+hand-marked 1–4 on the back below the USB port — the fab put no serials on
+them, so the numbers map to neither JLC's internal count nor the X-ray
+frames. The lone unassembled board carries a factory 0005 datamatrix and is
+board 5. Board 1 is the first-article board for Phases 0–2.
+
+- [x] Visual pass against the JLC renders / placement-verification table:
       J4 0.5mm-pitch row for bridges, U1 module fillets, U5 seated (vent
       pinhole NW, pin 1 SW), **U6 pads empty**, every diode band per the
       table (D1/D3 cathode E, D2 W, D4/D5 S, D6 W).
-- [ ] Loupe + brush pass around U5: the X-rays show satellite solder
+      2026-07-29: pass on all four assembled boards. Board 4's U5 sits
+      slightly skewed (rotation). The X-rays showed all four packages
+      centered, but the frame↔board mapping is unknowable, so they can't
+      clear board 4 specifically; slight LGA skew is normally benign
+      (reflow self-alignment). Arbitrate at the Phase 2 BMP581 detect —
+      run board 4 through that check early.
+- [x] Loupe + brush pass around U5: the X-rays show satellite solder
       micro-balls near the package on 2–3 boards — dislodge anything loose
       (vent-port neighborhood; harmless once confirmed not mobile).
-- [ ] Jumper state as shipped: JP1 bridged (copper), JP2+JP5 bridged
+      2026-07-29: nothing visible under the loupe on any board; finish
+      very clean. Treating the micro-balls as under-package/immobile.
+- [x] Jumper state as shipped: JP1 bridged (copper), JP2+JP5 bridged
       (0.47Ω RESE + 10µH — universal default), JP3/JP4/JP6 open.
-- [ ] DNP provisions empty: D7 (TVS), R9 (10M 32k bias), U6; J2/J5 headers
+      2026-07-29: confirmed on all boards. Bridges are factory copper
+      (must be cut before first use as NO), matching the KiCad model.
+- [x] DNP provisions empty: D7 (TVS), R9 (10M 32k bias), U6; J2/J5 headers
       unstuffed; TPs bare. C29 (10nF ADC reservoir) IS populated.
-- [ ] DMM resistance to GND, no dead short: VBAT, VSYS (J2.2), 3V3 (TP4),
+      2026-07-29: confirmed. (R9 is an 0402 across the Y1 pads — bench-
+      stuff only if the 32k cold-start item bites.)
+- [x] DMM resistance to GND, no dead short: VBAT, VSYS (J2.2), 3V3 (TP4),
       EPD_VCC, PREVGH, PREVGL, VCOM.
-- [ ] Diode-mode sanity: D2 drop VSYS→VBUS only; Q6 body-diode direction at
-      the JST; LP I2C pull-ups read ~4.7k from GPIO6/7 pads to 3V3.
+      2026-07-29: boards 1 and 5 clear on all seven rails. The RESE TP is
+      *not* in this list and must not be added: TP9 sits on EPD_RESE,
+      which is R14 (0.47Ω) through bridged JP2 straight to GND — board
+      1's 0.60Ω there is the sense resistor plus jumper/probe resistance,
+      by design. Board 5 reads open at RESE only because the bare board
+      has no R14. Boards 2–4 get this pass in the remaining-boards sweep.
+- [ ] Diode-mode sanity (red probe = +):
+      - D2 conducts **VBUS→VSYS** — anode is the east pad, cathode band
+        west on VSYS (an earlier revision of this line said "VSYS→VBUS";
+        that was backwards). Red on the anode pad, black on the band:
+        expect a 0.2–0.35V Schottky drop. 2026-07-29 board 1: 1.96V with
+        red on VSYS — the blocked direction, reading through peripheral
+        paths (orientation not disproven); forward drop still to confirm.
+      - Q6 body diode: red on J1 pin 1 (the `+` pad), black on the VBAT
+        TP (bridged JP1 makes it the same node): expect ~0.5–0.7V —
+        AO3401A D→S body diode, BAT_IN→VBAT_RAW. Swapped: no drop.
+        2026-07-29's "GND to J1: 1.62V" probed a different path — redo
+        at these points.
+      - LP I2C pull-ups: Ω mode straight across R10 and R11 (or from
+        U6's empty SDA/SCL pads to the 3V3 TP): ~4.7k each. Board 1's
+        matched 1.4849V diode-mode readings already prove both fitted
+        and connected (DMM test current through 4.7k); the Ω figure
+        closes the item.
 - [ ] J4↔panel adapter pin-1 continuity (mouth EAST, pin 1 at the NORTH end
       of the row) — the respun footprint's first physical verification.
+      Method: the back TPs land on J4 pins — GDR→2, RESE→3, EPD_VCC→15/16,
+      PREVGH→21, PREVGL→23, VCOM→24, GND→8/17. Seat the rig's 24-pin FFC
+      in J4 with the panel NOT attached at the far end, then beep each TP
+      against the far-end contact (count from the pin-1 edge) or the
+      adapter's matching pin. RESE (pin 3, north end) plus VCOM (pin 24,
+      south end) is an asymmetric pair that catches a flipped row
+      immediately.
 - [ ] **JST pigtail polarity vs the `+` silk before first battery plug**
       (JST vs Adafruit pigtail convention differs — README open item 5).
+      2026-07-29: shell orientation matches the existing devices'
+      pigtails. Definitive check still to do: DMM the loose plug's
+      contacts in voltage mode (battery attached) and confirm the +
+      contact is the one that mates with J1's `+`-marked pad.
 
 ## Phase 1 — first power (battery + panel absent)
 
