@@ -15,9 +15,9 @@
 
 ## Where the project is
 
-**rev A was ordered 2026-07-20** (`archive/order-2026-07-20/`); boards are
-inbound. **The next phase is `BRINGUP.md`** — the first-article checklist to run
-before and at first power-on.
+**rev A is in hand and working**: ordered 2026-07-20
+(`archive/order-2026-07-20/`); board 1 passed Phases 0–2 on 2026-07-29.
+**Current phase: `BRINGUP.md` Phase 3** + the quick sweep on boards 2–4.
 
 | Doc | For |
 |---|---|
@@ -103,8 +103,8 @@ already built, and `archive/order-*/` describes them.
   (JP2/3/4); one inductor jumper (JP5/6).
 - **Never back-feed TP4 (3V3)** — RT9080 forbids VOUT > VIN + 0.3V. Inject bench
   power at the J2/JP1 battery-side break.
-- Re-verify LCSC stock at order time (thin: MINI-1, Si1308EDL; BMP581 out of
-  stock → populate U6 BMP585 instead).
+- Re-verify LCSC stock at order time (thin: MINI-1, Si1308EDL; if BMP581
+  dries up, populate U6 BMP585 instead — rev A boards carry U5 BMP581).
 
 ## Settled decisions — don't re-ask
 

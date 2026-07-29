@@ -129,7 +129,7 @@ quick per-board pass after first-article Phases 0–2.
 
 ## Phase 1 — first power (battery + panel absent)
 
-- [ ] Power via PPK2 source mode, 4.0V. Injection point options:
+- [x] Power via PPK2 source mode, 4.0V. Injection point options:
       (a) J2 pin 2 + GND with JP1 cut open (factory copper bridge, per
       Phase 0 — knife cut, re-close with solder afterwards; "wick"
       doesn't apply the first time) — excludes Q6 and the charger;
@@ -236,8 +236,12 @@ docs/history-store-validation.md.
       the 27°C room — handling + USB self-heat (Phase 3 quantifies).
       Still open here: EPD_VCC probe after hibernate (expect the
       floating few-hundred-mV, not 3.3V).
-- [ ] Deep-sleep floor on PPK2 (reference: XIAO C6 rig ~15.8µA; the LDO tree
+- [x] Deep-sleep floor on PPK2 (reference: XIAO C6 rig ~15.8µA; the LDO tree
       will differ — record the number in docs/notes.md power logbook).
+      2026-07-29 board 1: **18.3µA @ 4.2V** through the J1 deployment path,
+      flat across a 2397s quiet window ≈ the ~46min field interval
+      (docs/notes.md 2026-07-29; the first capture's 18.6–18.8µA was the
+      board still shedding USB-era heat).
 - [x] LP core survives sleep cycles: lp counter increments, no echo boots,
       no `uN`/PANIC forensics indicators on screen.
       2026-07-29 board 1: `w:ULP` frames on both builds (debug 5s and

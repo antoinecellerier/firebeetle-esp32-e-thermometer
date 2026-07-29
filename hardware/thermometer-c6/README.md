@@ -5,12 +5,19 @@ BMP581 + universal 24-pin EPD interface with on-board gated booster, USB-C
 charging, LDO power tree. Design driven by the PPK2 measurement campaign in
 `docs/notes.md` (repo root).
 
-**Status: layout + routing complete** (48×35mm 2-layer, hand-routed,
-DRC-clean at full severity), silkscreen done. Fab export is `make fab`
+**Status: rev A built and working.** Ordered 2026-07-20
+(`archive/order-2026-07-20/`; landed €273.93 ≈ €68.50/assembled board,
+breakdown in `ORDERING.md`). Board 1 passed bring-up Phases 0–2 on
+2026-07-29 (`BRINGUP.md`): first render, LP-core survival, and a measured
+18.3µA @ 4.2V deployment-path sleep floor over a full field interval
+(docs/notes.md 2026-07-29) — vs 21.7µA at the same 4.2V on the XIAO buck
+rig, validating the LDO tree. Current work: `BRINGUP.md` Phase 3
+first-article measurements + the boards 2–4 sweep. The board is 48×35mm
+2-layer, hand-routed, DRC-clean at full severity; fab export is `make fab`
 (gerbers/drill + CPL/BOM zip, git-hash+date stamped, gated by
-`verify/check_fab.py`); order per `ORDERING.md`. Pre-order schematic
-sign-off (requirements proven against primary sources, findings +
-dispositions): `SCHEMATIC-VERIFICATION.md`.
+`verify/check_fab.py`); pre-order schematic sign-off (requirements proven
+against primary sources, findings + dispositions):
+`SCHEMATIC-VERIFICATION.md`.
 
 ## Why these choices (measurement rationale)
 
@@ -126,11 +133,19 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
 
 ## Bench procedures
 
-- **IBAT break — battery-current (series) measurement**: wick JP1 and insert a
-  PPK2 (or any ammeter) across J2 (the 2-pin header silk-labelled `IBAT`, DNP by
-  default — solder one in). Battery in JST as usual.
-- **PPK2 source-mode power**: feed J2 pin 2 (system side) + GND, JST empty,
-  JP1 open. This powers the full deployment topology (LDO in circuit).
+- **PPK2 source-mode power, deployment path (used for all published board-1
+  figures)**: feed J1 through a Dupont-into-JST harness, JP1 untouched. Q6
+  and the MCP73831 VBAT-pin leakage are in the measurement by construction —
+  true battery-terminal figures.
+- **IBAT break — battery-current (series) measurement**: cut JP1 open and
+  insert a PPK2 (or any ammeter) across J2 (the 2-pin header silk-labelled
+  `IBAT`, DNP by default — solder one in). Battery in JST as usual. JP1
+  ships as a factory copper bridge: knife-cut it the first time, re-close
+  with solder afterwards (wicking only applies to a soldered re-bridge).
+- **PPK2 source-mode at J2**: feed J2 pin 2 + GND, JST empty, JP1 open.
+  Pin 2 is VBAT — the charger output node, not VSYS (VSYS has no TP or
+  header; probe D2's cathode pad). Powers the LDO tree + charger but
+  excludes Q6.
 - **Do NOT back-feed the 3V3 test pad**: RT9080 abs-max forbids VOUT > VIN
   + 0.3V, and its EN=0 active-discharge (~80Ω) would fight the source.
   TP4 (3V3) is probe-only.
@@ -140,13 +155,17 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
   divider ~5ms before reading (τ = 50k × 10n = 0.5ms).
 - BMP58x INT pins are unconnected: firmware must configure int_en=1,
   int_od=0, pad_int_drv=0 per the Bosch datasheets.
-- The 3700mV shutdown threshold inherited from the XIAO buck rig should be
-  re-derived (~3.4–3.5V defensible) after first-article PPK2 measurement —
-  the LDO tree degrades gracefully where the buck cliffed.
-- First-article PPK2 items: SS14 reverse leakage at temperature (swap to
-  PMEG6010 class if the hot floor drifts), EPD_VCC ramp with the soft-start
-  fitted, 32k crystal cold start (a 7pF FC-135 variant is the mitigation
-  if marginal).
+- The 3700mV shutdown threshold inherited from the XIAO buck rig is still in
+  Thermometer.cpp; re-deriving it (~3.4–3.5V defensible) awaits the Phase 3
+  3V3-sag measurement — the LDO tree degrades gracefully where the buck
+  cliffed, and at face value the buck-era thresholds strand ~25% of pack
+  capacity (≈ +30% battery life in a config constant, notes.md 2026-07-29).
+- The first-article measurement list lives in `BRINGUP.md` Phase 3 (VGH/VGL
+  spec at refresh, EPD_VCC soft-start ramp, 3V3 sag → threshold
+  re-derivation, boost ILIM transient, 32k crystal cold start, SS14
+  warm-floor leakage, VBAT_ADC sweep, charging self-heat). The 32k crystal
+  is proven running warm on board 1 (no RTC fallback warning); cold start
+  remains open.
 - While charging, the board self-heats slightly — BMP581 temperature reads
   high until it cools; log accordingly.
 
@@ -210,30 +229,40 @@ verified three ways: generator geometric checks (cross-net coincidence =
 build error), `kicad-cli` ERC at zero tolerance, and exact netlist matching
 against circuit.py (anonymous `~` nets matched by pin set).
 
-## Open items (user sign-off)
+## Open items (user sign-off) — all dispositioned
 
 1. **BMP581 sourcing** — RESOLVED 2026-07-17: restocked at LCSC (3,675
-   pcs); fab BOM populates U5 BMP581. The BMP585 (C18184976) remains the
-   U6 populate-one alternate (outdoor/media-resistant builds, or if the
-   581 dries up again).
-2. **Si1308EDL stock thin** (~1.4k) — order early; fallback Si1304BDL-clone
-   C7419947 (Vgs(th) ≤1.2V, same SC-70, lower Id 0.9A — adequate).
+   pcs); the ordered boards populate U5 BMP581. The BMP585 (C18184976)
+   remains the U6 populate-one alternate (outdoor/media-resistant builds,
+   or if the 581 dries up again).
+2. **Si1308EDL stock thin** — RESOLVED by the order: C469327 is on the
+   boards; the fallback Si1304BDL-clone C7419947 was never needed.
 3. **Reverse-polarity protection** — RESOLVED: Q6 AO3401A P-FET at the
    JST is fitted (see "Why these choices"); a reversed cell is blocked,
-   MCP73831's −0.3V abs-max is respected. Keyed JST + silk remain the
-   first line of defense.
-4. **EPD SPI/control series resistors omitted** (DESPI omits them; firmware
-   floats pins when the panel is gated off) — veto?
-5. **JST-PH polarity**: silk will mark +; verify against your pigtails
-   before first battery plug (JST vs Adafruit convention differs).
-6. **FPC footprint**: done — hand-drawn `local:XUNPU_FPC-05FB-24PH20`
-   (see BOM section). Respun 2026-07-19 after a numeric STEP proof
-   (`out/j4-proof/`): J4 now seats mouth-EAST / tails-WEST with pad 1 kept
-   at the north end, body depth corrected to 5.40 on 2026-07-20. Fanout
-   re-routed by hand; see ORDERING.md §2b for the remaining preview walk.
-7. **32k crystal populated by default** — ~0.1–0.5µA for real timekeeping;
-   DNP it if vetoed (firmware falls back to internal RC).
-8. Old `hardware/kicad/` Copilot draft: delete or archive — your call.
+   MCP73831's −0.3V abs-max is respected. Proven on board 1: body diode
+   0.4259V diode-mode pass (`BRINGUP.md` Phase 0). Keyed JST + silk remain
+   the first line of defense.
+4. **EPD SPI/control series resistors omitted** — CLOSED by construction,
+   no veto: boards fabbed without them, firmware floats the pins when the
+   panel is gated off (src/Display.cpp), first render passed on board 1.
+   Disposition recorded in `SCHEMATIC-VERIFICATION.md`.
+5. **JST-PH polarity** — RESOLVED 2026-07-29 on hardware: DMM on the loose
+   plug, red wire / + contact mates with J1's `+`-marked pad (`BRINGUP.md`
+   Phase 0). JST vs Adafruit convention still differs — re-check any new
+   pigtail.
+6. **FPC footprint** — DONE and hardware-verified: hand-drawn
+   `local:XUNPU_FPC-05FB-24PH20` (see BOM section), respun 2026-07-19
+   after a numeric STEP proof (`out/j4-proof/`), body depth corrected to
+   5.40 on 2026-07-20. Placement verified pre-order (75/75 placements,
+   `archive/order-2026-07-20/`); J4 pin-1 north / mouth-east confirmed by
+   continuity on board 1 (`BRINGUP.md` Phase 0).
+7. **32k crystal populated by default** — CONFIRMED: on the ordered boards
+   and proven oscillating on board 1 (no RTC fallback warning in the boot
+   log); cold start remains a `BRINGUP.md` Phase 3 item.
+8. **Old Copilot draft** — MOOT as originally written: `hardware/kicad/`
+   was never merged and exists only on the unmerged branch
+   `hardware/custom-esp32c6-pcb`. Nothing in the tree to delete; the
+   remaining call is whether to delete that branch.
 
 ## Follow-up phases
 
@@ -244,6 +273,12 @@ against circuit.py (anonymous `~` nets matched by pin set).
   envs in platformio.ini): EPD on GPIO18–23 + gate GPIO14 with float-on-off,
   battery divider GPIO2/3, VBUS sense GPIO4 (suppresses SoC shutdown on USB),
   LED GPIO15, 32k crystal via `sdkconfig.defaults.thermometer_c6`.
+- Fab order — **DONE** (2026-07-20, `archive/order-2026-07-20/`; landed
+  cost breakdown in `ORDERING.md` §8).
+- Bring-up Phases 0–2 — **DONE** on board 1 (2026-07-29, `BRINGUP.md`);
+  measured numbers in the docs/notes.md power logbook.
+- **CURRENT**: `BRINGUP.md` Phase 3 first-article measurements + the quick
+  Phase 0–1 sweep on boards 2–4.
 
 ## Routed-copper census (rev A final vs the pre-connector-fix board)
 
@@ -309,7 +344,10 @@ of a board that is otherwise order-ready.
 ### Cost reduction (researched 2026-07-22)
 
 Baseline: the €204.94 qty 5 PCB / 4 assembled itemised quote in ORDERING.md
-§8. Three structural facts frame everything: **Economy PCBA is unreachable
+§8. The order landed at €273.93 (€211.93 JLC invoice 2026-07-27 + €62.00
+DHL) ≈ €68.50/assembled board — breakdown in ORDERING.md; the per-unit
+analysis below reasons from the quote. Three structural facts frame
+everything: **Economy PCBA is unreachable
 regardless of PCB options** (U1 and U5 are Standard-PCBA-only parts, both
 locked; Economy is also single-sided-placement, ≤50pcs), **X-Ray is
 mandatory** for U5's LGA and U1's shield (tiered per inspected piece —
