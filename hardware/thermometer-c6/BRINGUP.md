@@ -139,10 +139,20 @@ quick per-board pass after first-article Phases 0–2.
       number, marginally above what (a) would show.
       A current-limited bench supply (4.0V / 50mA) at either point is
       the no-PPK2 fallback.
-- [ ] 3V3 = 3.30V at TP4 (probe only).
-- [ ] EPD_VCC = 0V (gate held off by the 10k pull-up).
-- [ ] Quiescent draw plausible (unflashed module executes ROM console — mA
+      2026-07-29 board 1: **first power clean** via (b). Inrush 0.67A
+      for ~1–2ms (cap bank through Q6 + harness), ~10ms near zero (POR
+      hold-off), then steady ROM draw — no brownout looping.
+- [x] 3V3 = 3.30V at TP4 (probe only).
+      2026-07-29 board 1: **3.299V — pass.**
+- [x] EPD_VCC ≈ 0V (gate held off by the 10k pull-up). The node floats
+      behind the off PFET — no bleed path — so a 10MΩ DMM reads the
+      leakage equilibrium, not a hard 0V: a few hundred mV is a pass
+      (tens of nA); ~3.3V would mean the gate is on.
+      2026-07-29 board 1: **0.22V — pass** (~22nA into the DMM).
+- [x] Quiescent draw plausible (unflashed module executes ROM console — mA
       range is normal; the µA floor is checked in Phase 2 after flashing).
+      2026-07-29 board 1: **~22mA steady** (sel. avg 22.22mA, max
+      24.38mA over 2.4s) — pass.
 - [ ] USB attach, battery absent: USB-Serial-JTAG enumerates; VSYS ≈ VBUS
       minus the D2 drop (load-share path). Expect the CHG LED to
       float-cycle with no battery — brief check only, then unplug (the
