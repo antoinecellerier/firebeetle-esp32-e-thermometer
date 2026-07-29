@@ -80,23 +80,24 @@ board 5. Board 1 is the first-article board for Phases 0–2.
       1's 0.60Ω there is the sense resistor plus jumper/probe resistance,
       by design. Board 5 reads open at RESE only because the bare board
       has no R14. Boards 2–4 get this pass in the remaining-boards sweep.
-- [ ] Diode-mode sanity (red probe = +):
+- [x] Diode-mode sanity (red probe = +):
       - D2 conducts **VBUS→VSYS** — anode is the east pad, cathode band
         west on VSYS (an earlier revision of this line said "VSYS→VBUS";
         that was backwards). Red on the anode pad, black on the band:
-        expect a 0.2–0.35V Schottky drop. 2026-07-29 board 1: 1.96V with
-        red on VSYS — the blocked direction, reading through peripheral
-        paths (orientation not disproven); forward drop still to confirm.
+        expect a 0.2–0.35V Schottky drop.
+        2026-07-29 board 1: **0.2142V forward — pass.** (The 1.96V first
+        measured red-on-VSYS was the blocked direction reading through
+        peripheral paths.)
       - Q6 body diode: red on J1 pin 1 (the `+` pad), black on the VBAT
-        TP (bridged JP1 makes it the same node): expect ~0.5–0.7V —
+        TP (bridged JP1 makes it the same node): expect ~0.4–0.7V —
         AO3401A D→S body diode, BAT_IN→VBAT_RAW. Swapped: no drop.
-        2026-07-29's "GND to J1: 1.62V" probed a different path — redo
-        at these points.
+        2026-07-29 board 1: **0.4259V — pass** (low end is normal at a
+        DMM's ~0.3mA test current; datasheet Vf figures are at 1A).
       - LP I2C pull-ups: Ω mode straight across R10 and R11 (or from
-        U6's empty SDA/SCL pads to the 3V3 TP): ~4.7k each. Board 1's
-        matched 1.4849V diode-mode readings already prove both fitted
-        and connected (DMM test current through 4.7k); the Ω figure
-        closes the item.
+        U6's empty SDA/SCL pads to the 3V3 TP): ~4.7k each.
+        2026-07-29 board 1: **4.67kΩ both — pass** (nominal −0.6%,
+        within the 1% tolerance). Consistent with the earlier matched
+        1.4849V diode-mode readings (≈316µA test current × 4.7k).
 - [ ] J4↔panel adapter pin-1 continuity (mouth EAST, pin 1 at the NORTH end
       of the row) — the respun footprint's first physical verification.
       Method: the back TPs land on J4 pins — GDR→2, RESE→3, EPD_VCC→15/16,
