@@ -126,10 +126,19 @@ quick per-board pass after first-article Phases 0–2.
 
 ## Phase 1 — first power (battery + panel absent)
 
-- [ ] Power via PPK2 source mode: J2 pin 2 + GND, JST empty, JP1 cut open
-      (factory copper bridge, per Phase 0 — knife cut, re-close with
-      solder afterwards; "wick" doesn't apply the first time). Or a
-      current-limited supply, 4.0V / 50mA limit, at the same point.
+- [ ] Power via PPK2 source mode, 4.0V. Injection point options:
+      (a) J2 pin 2 + GND with JP1 cut open (factory copper bridge, per
+      Phase 0 — knife cut, re-close with solder afterwards; "wick"
+      doesn't apply the first time) — excludes Q6 and the charger;
+      (b) **chosen for board 1: J1 via a Dupont-into-JST harness, JP1
+      untouched** — the real battery path, so Q6 reverse-protects a
+      mis-wired lead and all measurements are true battery-terminal
+      figures. Includes Q6's Rds(on) (negligible at these currents) and
+      the MCP73831 VBAT-pin leakage (sub-µA to low-µA, datasheet,
+      unmeasured) — the Phase 2 floor read here is the deployment
+      number, marginally above what (a) would show.
+      A current-limited bench supply (4.0V / 50mA) at either point is
+      the no-PPK2 fallback.
 - [ ] 3V3 = 3.30V at TP4 (probe only).
 - [ ] EPD_VCC = 0V (gate held off by the 10k pull-up).
 - [ ] Quiescent draw plausible (unflashed module executes ROM console — mA
