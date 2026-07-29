@@ -98,15 +98,23 @@ board 5. Board 1 is the first-article board for Phases 0–2.
         2026-07-29 board 1: **4.67kΩ both — pass** (nominal −0.6%,
         within the 1% tolerance). Consistent with the earlier matched
         1.4849V diode-mode readings (≈316µA test current × 4.7k).
-- [ ] J4↔panel adapter pin-1 continuity (mouth EAST, pin 1 at the NORTH end
+- [x] J4↔panel adapter pin-1 continuity (mouth EAST, pin 1 at the NORTH end
       of the row) — the respun footprint's first physical verification.
-      Method: the back TPs land on J4 pins — GDR→2, RESE→3, EPD_VCC→15/16,
-      PREVGH→21, PREVGL→23, VCOM→24, GND→8/17. Seat the rig's 24-pin FFC
-      in J4 with the panel NOT attached at the far end, then beep each TP
-      against the far-end contact (count from the pin-1 edge) or the
-      adapter's matching pin. RESE (pin 3, north end) plus VCOM (pin 24,
-      south end) is an asymmetric pair that catches a flipped row
-      immediately.
+      Method: J4's nets are probeable at back TPs (GDR→2, RESE→3,
+      EPD_VCC→15/16, PREVGH→21, PREVGL→23, VCOM→24, GND→8/17) or at
+      front-side component pads on the same nets. Seat the rig's 24-pin
+      FFC in J4 with the panel NOT attached at the far end, then beep
+      each net against the adapter's matching pin. RESE (pin 3, north
+      end) plus VCOM (pin 24, south end) is an asymmetric pair that
+      catches a flipped row immediately.
+      2026-07-29 board 1: **all continuous and on the right adapter
+      pins** — RESE, GDR, GND ×2, EPD_VCC ×2, PREVGH, PREVGL, VCOM.
+      The respun footprint (pin 1 north, mouth east) is verified on
+      hardware. Bench note: back TPs are impractical when the reference
+      is on the front face (FFC seated topside) — coordinating probes on
+      both faces mid-air doesn't work; front component pads on the same
+      nets were used instead. TPs remain fine for single-face probing
+      (powered floor/scope work with the board face-down or on edge).
 - [ ] **JST pigtail polarity vs the `+` silk before first battery plug**
       (JST vs Adafruit pigtail convention differs — README open item 5).
       2026-07-29: shell orientation matches the existing devices'
