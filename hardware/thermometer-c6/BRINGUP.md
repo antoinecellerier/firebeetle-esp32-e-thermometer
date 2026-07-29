@@ -177,11 +177,15 @@ quick per-board pass after first-article Phases 0–2.
       the battery + lead — charge current flows board→battery, so VIN
       faces J1): **102.97mA CC for the first ~7s — PROG confirmed.**
       Then start/stop cycling (~10↔100mA comb, aliased at 100S/s,
-      envelope declining): the harness series resistance (PPK2 burden +
-      Dupont crimps) offsets the voltage the charger sees, so CV/
-      termination and recharge cycle early — instrumentation artifact,
-      not a charger fault. Confirm on the first meterless charge that
-      CHG goes solid and terminates.
+      envelope declining): series resistance offsets the voltage the
+      charger sees, so CV/termination and recharge cycle early. Two
+      co-suspects, same signature: the measurement harness (PPK2 burden
+      + Dupont crimps) and the test pack's own internal resistance (a
+      pouch idle for ~2 years; the other packs live in running
+      prototypes). Not a charger-fault signature either way — PROG and
+      the CC plateau are the checks, and they passed. Confirm with a
+      known-good pack, meterless: CHG solid → terminates. Don't charge
+      the aged pack unattended.
 
 ## Phase 2 — firmware smoke test (`pio run -e thermometer_c6_debug`)
 
