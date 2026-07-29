@@ -198,6 +198,43 @@ Re-check LCSC/JLC stock — several parts run thin:
       in `generator/circuit.py` set U5 `dnp=True` and U6/C26/C27 `dnp=False`
       (populate-exactly-one — both strap I2C 0x47), `make check`, commit, then
       re-run `make fab`. The BOM/CPL pick up the swap automatically.
+      (In stock 2026-07-23: 6,563 pcs on JLC assembly, $2.35–3.03.)
+
+Cost-reduction checks from the 2026-07-22 research (see README "Rev B
+candidates → Cost reduction"; tiers/stock re-verified 2026-07-23 against
+JLC's part API — the BOM dialog is still ground truth at order time):
+
+- [ ] **Try matching D4–D6 MBR0530 → B5819W C8598** in the BOM dialog —
+      confirmed Basic 2026-07-23 (621k stock, $0.029, SOD-123, Vf
+      600mV@1A). One Extended feeder line saved *if* feeders are billed
+      per Extended line (see below). Leakage/Vf deltas are fine for the
+      gated booster.
+- [x] **Tiers verified 2026-07-23 (JLC part API)**: C98192, C5204746,
+      C469327 (stock 6,445 — thin), C2856831 all **Extended**. No Basic
+      4.7µF ≥50V 0805 exists (the only Basic 4.7µF 0805 is 25V — too
+      marginal for the ~22V EPD rails); nearest Basic alternative is
+      **C440198** 10µF 50V X5R 0805 (2.4M stock) — a candidate line-kill
+      needing booster re-validation, see README.
+- [ ] **Check the feeder-fee model on the next itemised quote**: JLC's
+      live assembly-price page (updated 2025-09-01) documents Standard
+      PCBA at **$1.50 per unique line, Basic included** (Economic: $3 per
+      Extended line, Basic free) — yet the 2026-07-20 quote billed
+      17 × €2.75, which matches the $3/Extended model, not the documented
+      one. The "2025-12-19 rate cut" turned out to be a third-party page
+      edit, not a JLC announcement. Which model actually bills decides
+      whether Basic swaps save feeder money at all — ask support which 17
+      parts were counted.
+- [ ] **Quote POFV at qty 5/10/20** once, to learn whether the €44.07 is
+      flat per order (amortises with volume) or scales — this decides how
+      urgent the POFV-free rev B re-route is. Not documented anywhere
+      public (2026-07-23: JLC's extra-charges article omits POFV; only
+      documented fact is POFV is free on 6–20-layer, paid on 2/4-layer),
+      so the quote calculator is the only oracle.
+- [x] **X-Ray fee decoded 2026-07-23**: tiered per inspected piece
+      ($1.57/pc at 1–10, $0.79 at 11–50, …), identical Economic/Standard;
+      €11.46 ≈ 2 parts (U1 shield + U5 LGA) × 4 boards × $1.57. Mandatory
+      for LGA/QFN/shield packages — not removable, but it scales with
+      quantity rather than being a flat order fee.
 
 ## 5. FPC connector warning
 
@@ -247,7 +284,7 @@ a bare total (~€205), which made "did that change?" unanswerable.
 | — Components (35 items) | 49.62 | 37 BOM lines, 35 unique parts — see below |
 | — Feeders Loading | 46.75 | **= 17 × €2.75 exactly** — the open feeder question |
 | — Setup Fee | 22.32 | |
-| — X-Ray Inspection | 11.46 | likely mandatory for U5's LGA; confirm |
+| — X-Ray Inspection | 11.46 | mandatory (U1 shield + U5 LGA); tiered per piece ≈ 2 × 4 × $1.57 |
 | — Stencil | 7.17 | |
 | — SMT Assembly | 2.32 | |
 | — Packaging | 0.43 | |
