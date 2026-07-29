@@ -170,9 +170,18 @@ quick per-board pass after first-article Phases 0–2.
       ways with VBUS on its gate, divider gated off, so nothing bleeds
       the node back below the recharge threshold). Charger provisionally
       working; real verdict at the battery-attach step.
-- [ ] Battery attach (JP1 re-bridged or J2 shorted): charge current ≈100mA
+- [x] Battery attach (JP1 re-bridged or J2 shorted): charge current ≈100mA
       (R3 10k → 0.25C for a 400–500mAh pouch); CHG LED solid while charging.
       Charging is indoor-only, 0–45°C (no TS pin on MCP73831).
+      2026-07-29 board 1 (JP1 never cut; PPK2 ampere meter in series on
+      the battery + lead — charge current flows board→battery, so VIN
+      faces J1): **102.97mA CC for the first ~7s — PROG confirmed.**
+      Then start/stop cycling (~10↔100mA comb, aliased at 100S/s,
+      envelope declining): the harness series resistance (PPK2 burden +
+      Dupont crimps) offsets the voltage the charger sees, so CV/
+      termination and recharge cycle early — instrumentation artifact,
+      not a charger fault. Confirm on the first meterless charge that
+      CHG goes solid and terminates.
 
 ## Phase 2 — firmware smoke test (`pio run -e thermometer_c6_debug`)
 
