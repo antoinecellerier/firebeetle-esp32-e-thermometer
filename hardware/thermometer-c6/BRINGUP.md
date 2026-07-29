@@ -189,16 +189,39 @@ quick per-board pass after first-article Phases 0–2.
 
 ## Phase 2 — firmware smoke test (`pio run -e thermometer_c6_debug`)
 
-- [ ] Flash over USB; serial monitor up.
-- [ ] Boot log has **no 32k-XTAL fallback warning** → RTC slow clock is the
+First smoke build 2026-07-29: `thermometer_c6_debug`, hash `3b42d3a`, no
+extra flags, `USE_BMP58x` + `DISABLE_DISPLAY` + LEDs enabled (no panel on
+the board yet). Bring-up panel is the **GDEM0154I61** (`USE_154_GDEY`) —
+the as-shipped JP2 0.47Ω + JP5 10µH are its correct config per the README
+jumper table; the T81 stays on the soak rig for now. Flash log in
+docs/history-store-validation.md.
+
+- [x] Flash over USB; serial monitor up.
+      2026-07-29 board 1: flashed at 3b42d3a; boot log captured via
+      devserial. Full boot→sense→persist→sleep on first power: base
+      snapshot seq 1 (erase 4ms / program 12ms / verify 4ms), LP core
+      started at 5s poll, deep sleep entered (port drops — normal).
+- [x] Boot log has **no 32k-XTAL fallback warning** → RTC slow clock is the
       FC-135 (CONFIG_RTC_CLK_SRC_EXT_CRYS). If it falls back: that's the
       32k cold-start item in Phase 3; R9 10M is the bench-stuff mitigation.
-- [ ] BMP581 detected at 0x47 on LP I2C (GPIO6/7); temperature plausible.
+      2026-07-29 board 1: **no fallback warning — FC-135 running.**
+      (W-level logs demonstrably reach this console: wifi W lines print.)
+- [x] BMP581 detected at 0x47 on LP I2C (GPIO6/7); temperature plausible.
+      2026-07-29 board 1: **chip ID 0x50 detected, 29.79°C** — plausible
+      for a warm July room + board self-heat.
 - [ ] Logged battery mV ≈ DMM VBAT ±50mV (divider ×2 + curve-fitting cali);
       VDIV_EN measured 0V outside the read window.
+      2026-07-29 board 1: 4196mV logged with no pack attached — the
+      charger's float-held VBAT node, consistent with the 4.29V DMM'd
+      earlier in the float cycle. Plausibility pass; the ±50mV accuracy
+      and VDIV_EN checks need a battery attached — deferred.
 - [ ] vbus_present(): true on USB, false unplugged.
-- [ ] Status LED on GPIO15 works (needs DISABLE_LEDS commented out in
+      Not in the boot log; needs a dedicated observation. Note the
+      catch-22: the false-case has no serial (USB out) — verify via the
+      panel once attached, or a targeted debug print.
+- [x] Status LED on GPIO15 works (needs DISABLE_LEDS commented out in
       local-secrets.h for the test).
+      2026-07-29 board 1: observed lighting on a wake.
 - [ ] Panel attached (power off first): full refresh renders; BUSY
       light-sleep path works; EPD_VCC returns to 0V after hibernate and the
       floated control pins don't back-light the panel rail (probe EPD_VCC).
