@@ -825,3 +825,45 @@ archived by hand).
   outperforming the XIAO's ceramic chip antenna, but same-bench, small n,
   not the deployment location. Worth a controlled look eventually: failed
   resyncs are the budget's expensive tail (1.5–4.5 C each, no backoff).
+
+### Hour-long capture, same rig (2026-07-29 evening)
+
+1000 S/s, 4200 mV, `/tmp/ppk-20260729T153004.csv`; forced refresh at the
+55 min mark read `#8 r7 lp55 0d w:ULP mx:4.2V cbda104`, 4176 mV (−24 mV,
+second ADC datapoint).
+
+- **Floor settled dead flat: 18.3 µA including LP polls, ~18.2 µA between
+  them.** Longest quiet window **2397 s ≈ the ~46 min field interval** —
+  the deployment floor is now measured, not extrapolated. The earlier
+  18.9→18.6 drift was the tail of the board cooling; it bottomed here.
+- **LP poll: ~4 µC each.** 1 s profile bins on the 60 s timer grid
+  (t ≡ 24 mod 60) read 22.1 µA vs the 18.3 µA baseline, ~40 consistent
+  occurrences: LP core + BMP581 read + compare = **+0.06 µA equivalent at
+  60 s cadence** (+0.8 µA at the debug 5 s cadence). `lp55` at 55 min =
+  every poll survived, no `uN`. Corroborated by a direct UI selection on
+  one blip: **3.96 µC over 8 ms, 494 µA avg, 1.11 mA peak** — shape the
+  1 s bins couldn't resolve. Not to be confused with the 7.74 mC
+  non-refresh **CPU** wake below: ~2000× a poll, different event class.
+  vs the XIAO's ~3 µC / 3 ms @ ~1 mA (2026-04-21, Arduino era — a shape
+  estimate; its "integrate charge per LP wake" box was never closed):
+  same amplitude, ~30% more charge, duration 3→8 ms — plausibly the
+  espidf migration + July LP hardening (counter carry-over, identity
+  checks) adding per-poll I2C traffic. +0.02 µA at 60 s cadence: cosmetic.
+- **Non-refresh CPU wake: 7.74 mC / 0.50 s (n=1, LEDs on)** — the first
+  *C6* measurement of the term the XIAO budgets carry as "~2.5 mC
+  estimated" (never captured on either XIAO rig: every captured wake
+  refreshed), and the first on a production build anywhere — the E's
+  2026-07-25 snapshot session ran on a non-refresh wake but under
+  `PPK2_DEBUG` (+4-6 mC). 3× the C6 estimate here; LEDs and the LDO's
+  ~1.15× input-charge factor at 4.2 V inflate vs 3.3 V figures, LED share
+  unquantified until markers.
+- **Wake + refresh: 23.8–24.6 mC, n=8**, drifting mildly down as the board
+  settled. Boot + resync event 552 mC / 19.2 s this time vs 282 mC / 9.5 s
+  at first release boot — WiFi variance dominates boot cost.
+- **One unexplained region: 20.33 µA over the 57 s after the third
+  refresh** (t=206–264), ~2 µA above every neighbour — the XIAO's
+  post-wake-transient phenomenon in miniature, single occurrence, logged
+  not theorized.
+- Rough budget for this board: 1.58 C/day floor + 0.24–1.22 C/day for
+  10–50 field refreshes × 24.3 mC ≈ **1.8–2.8 C/day → ~500–800 days on a
+  400 mAh pack** (cadence-dependent estimate).
