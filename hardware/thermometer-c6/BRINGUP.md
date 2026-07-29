@@ -10,7 +10,10 @@ RT9080 forbids VOUT > VIN + 0.3V and EN=0 active-discharges at ~80Ω; inject
 bench power only at the J2/JP1 battery-side break.
 
 Test points (back side): VBAT, VBAT_ADC, 3V3 (probe-only), EPD_VCC, PREVGH,
-PREVGL, VCOM, GDR, RESE, GND ×2. VSYS is reachable at J2 pin 2.
+PREVGL, VCOM, GDR, RESE, GND ×2. J2 (the `IBAT` header) spans the JP1
+break: pin 1 = battery side (VBAT_RAW), pin 2 = system side (VBAT — the
+charger output node, *not* VSYS). VSYS has no TP or header — probe D2's
+cathode (band/west) pad, Q1's source, or C1/C2.
 
 ## 2026-07-27 — JLC first-article X-rays (pre-arrival; boards ETA 2026-07-30)
 
@@ -153,10 +156,20 @@ quick per-board pass after first-article Phases 0–2.
       range is normal; the µA floor is checked in Phase 2 after flashing).
       2026-07-29 board 1: **~22mA steady** (sel. avg 22.22mA, max
       24.38mA over 2.4s) — pass.
-- [ ] USB attach, battery absent: USB-Serial-JTAG enumerates; VSYS ≈ VBUS
+- [x] USB attach, battery absent: USB-Serial-JTAG enumerates; VSYS ≈ VBUS
       minus the D2 drop (load-share path). Expect the CHG LED to
       float-cycle with no battery — brief check only, then unplug (the
       product rule is: don't leave USB attached without a battery).
+      2026-07-29 board 1: **all pass.** Enumerates as Espressif USB JTAG
+      serial debug unit, MAC 98:88:E0:75:47:9C (board 1's identity);
+      ROM banner clean over devserial (`boot:0x38` normal straps,
+      `invalid header: 0xffffffff` = factory-blank flash). VSYS 4.788V
+      at D2's cathode pad (≈ VBUS − 0.21V). CHG blinked once then quiet:
+      VBAT (J2.2) float-holds at 4.296V — the charger topped the
+      unloaded cap bank past termination (mild overshoot; Q1 blocks both
+      ways with VBUS on its gate, divider gated off, so nothing bleeds
+      the node back below the recharge threshold). Charger provisionally
+      working; real verdict at the battery-attach step.
 - [ ] Battery attach (JP1 re-bridged or J2 shorted): charge current ≈100mA
       (R3 10k → 0.25C for a 400–500mAh pouch); CHG LED solid while charging.
       Charging is indoor-only, 0–45°C (no TS pin on MCP73831).
