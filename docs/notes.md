@@ -781,3 +781,40 @@ numbers across; every term below except one is now measured on this rig.
 - **Trust `--from/--to` and `--profile`** — they integrate windows the operator
   chose. `tools/ppk2.py`'s automatic region segmentation has known defects and its
   output wants cross-checking before it is recorded.
+
+## thermometer-c6 rev A, board 1: first sleep floor (2026-07-29)
+
+Rig: custom board 1 + BMP581 (U5) + GDEM0154I61 in J4, PPK2 source meter at
+**4.2 V into J1 through the Dupont-into-JST harness** — i.e. the full
+deployment path: Q6 reverse FET and the MCP73831's VBAT-pin leakage are *in*
+the measurement, by construction. Build `cbda104`,
+`thermometer_c6_release`, no `PPK2_DEBUG`, **LEDs enabled** (wake blinks are
+the only observability without serial). **Ambient ~27 °C** (hot day), board
+still shedding USB-era self-heat (BMP581 read ~30 °C). Analysed with
+`tools/ppk2.py` (149 s capture, `/tmp/ppk-20260729T141836.csv`, screenshot
+archived by hand).
+
+- **Sleep floor: 18.6-18.8 µA @ 4.2 V.** Explicit `--from/--to` windows:
+  58 s → 18.8 µA, 56 s → 18.6 µA; 5 s profile bins run 18.9 → 18.6 µA
+  monotonically over 2.5 min (raw band 17.5-20.2 µA). The drift is ~0.3 µA —
+  tentatively the board still shedding USB-era heat (leakage falls with
+  temperature); it is 100× smaller than the XIAO rig's post-wake transient
+  and does not gate the figure. Longest quiet window captured: 59.75 s —
+  anything about the ~46 min field interval is extrapolation.
+- **Beats the XIAO ePaper rig's 21.7 µA at the same 4.2 V by ~3 µA**, LDO
+  tree vs buck, despite carrying the charger and Q6. Floor alone:
+  ~1.62 C/day. (The older **15.8 µA** C6 figure is not a comparator: it was
+  sourced at 3.3 V straight into the 3V3 rail — load only, input tree
+  bypassed. Decomposition closes: 15.8 load + ~2 RT9080 Iq + ~1 Q6/charger/
+  D2 leakage ≈ 18.7.)
+- **Wake + refresh: 23.40 / 23.46 mC over 2.75 s** (two observations,
+  remarkably repeatable). Not comparable to the XIAO's 10.05 mC without
+  care: different panel (I61 vs I6FD), LEDs on during the wake here, and an
+  LDO reads ~1.15× the buck's input charge for identical work at 4.2 V.
+  Marker-separated decomposition is Phase 3 work.
+- Bench cadence was one wake per 60 s — every LP poll delta-fired while the
+  board cooled; not a field rate.
+- Power-saving audit at capture time: `EPD_POWER_GATE` set,
+  `CONFIG_BOOTLOADER_SKIP_VALIDATE_IN_DEEP_SLEEP=y`, `DISABLE_SERIAL` via
+  the release profile, high-side gated VBAT divider (the floor itself rules
+  out a divider leak — ungated it would add ~5 µA).
