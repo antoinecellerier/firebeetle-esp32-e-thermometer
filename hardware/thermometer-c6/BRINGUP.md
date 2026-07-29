@@ -3,9 +3,9 @@
 Consolidates the bring-up items from README (Bench procedures, open items),
 REVIEW-KICAD-HAPPY.md (○ OPEN rows), SCHEMATIC-VERIFICATION.md (first-article
 adds), and the placement verification in
-`archive/order-2026-07-20/jlc-production-files/`. Run Phases 0–2 in order on
-the first board; Phase 3 measurements once; then a quick Phase 0–1 pass on the
-remaining boards. Bench ground rules (README): **never back-feed TP4 (3V3)** —
+[`archive/order-2026-07-20/jlc-production-files/`](archive/order-2026-07-20/jlc-production-files/).
+Run Phases 0–2 in order on the first board; Phase 3 measurements once; then a
+quick Phase 0–1 pass on the remaining boards. Bench ground rules (README): **never back-feed TP4 (3V3)** —
 RT9080 forbids VOUT > VIN + 0.3V and EN=0 active-discharges at ~80Ω; inject
 bench power only at the J2/JP1 battery-side break.
 
@@ -17,13 +17,15 @@ cathode (band/west) pad, Q1's source, or C1/C2.
 
 ## 2026-07-27 — JLC first-article X-rays (pre-arrival; boards ETA 2026-07-30)
 
-Four frames in `archive/order-2026-07-20/xray/`, one per assembled board —
-distinct solder micro-features per frame prove they are not re-shots, but the
-frame↔board mapping is unknowable. Per-part identification is proven, not
-eyeballed: `xray/annotated/` overlays every top-side footprint's bbox
-projected from the board file (transform + per-part verdict table in
-`xray/README.md`; `xray/annotate.py` regenerates). Findings, consistent
-across all four:
+Four frames in [`archive/order-2026-07-20/xray/`](archive/order-2026-07-20/xray/),
+one per assembled board — distinct solder micro-features per frame prove they
+are not re-shots, but the frame↔board mapping is unknowable. Per-part
+identification is proven, not eyeballed:
+[`xray/annotated/`](archive/order-2026-07-20/xray/annotated/) overlays every
+top-side footprint's bbox projected from the board file (transform +
+per-part verdict table in
+[`xray/README.md`](archive/order-2026-07-20/xray/README.md);
+`xray/annotate.py` regenerates). Findings, consistent across all four:
 
 - U5 (BMP581 LGA-10): all 10 joints wetted and uniform, package centered,
   no bridging.

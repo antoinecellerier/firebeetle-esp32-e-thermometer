@@ -130,7 +130,7 @@ capacitors leak current even after the display controller is put into deep sleep
 ### Fix implemented: FDN340P power gate (March 2026)
 
 P-channel MOSFET (FDN340P, SOT-23) on the DESPI-C02 3.3V line, gate driven by GPIO13/D7
-with 10kΩ pull-up to 3.3V. See `docs/wiring.md` for circuit details.
+with 10kΩ pull-up to 3.3V. See [`docs/wiring.md`](wiring.md) for circuit details.
 
 - **Deep sleep with power gate: ~18 µA average** (down from ~562 µA)
 - MOSFET cuts all power to DESPI-C02 during deep sleep (GPIO goes high-Z, pull-up holds gate at VCC)
@@ -737,7 +737,7 @@ numbers across; every term below except one is now measured on this rig.
   device: **treat 10-50/day as the operating range**, the E rig's 48/day being the
   volatile end. Same run gives ~20 non-refresh CPU wakes/day and 31 wakes total.
 - **Resync interval: ~1.5 days**, not the 1-day floor. The C6's RC drifts +452 ppm
-  (`docs/clock-drift.md`), and the adaptive rule converges where drift over the
+  ([`docs/clock-drift.md`](clock-drift.md)), and the adaptive rule converges where drift over the
   interval hits the 60 s threshold. Where there is no WiFi it is worse than
   projected, not better: failed attempts re-arm with no backoff, so it stays pinned
   at 1 day forever. This weakens the quantitative case for the FC-135 crystal on

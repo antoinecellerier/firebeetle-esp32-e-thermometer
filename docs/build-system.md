@@ -22,7 +22,7 @@ building exclusively with `idf.py`.
 
 The macro names are Arduino-era leftovers, kept only to avoid churning every
 `#if` in the tree; nothing Arduino remains. Where they come from is a rule, in
-`.claude/rules/build.md`.
+[`.claude/rules/build.md`](../.claude/rules/build.md).
 
 ## Vendored components
 
@@ -43,7 +43,7 @@ generated `sdkconfig.<env>` files are gitignored. CPU is fixed at 80 MHz at buil
 time.
 
 Worked example of why the authored/generated distinction matters (the rule is in
-`.claude/rules/build.md`): `CONFIG_RTC_CLK_CAL_CYCLES=3000` on `thermometer_c6`
+[`.claude/rules/build.md`](../.claude/rules/build.md)): `CONFIG_RTC_CLK_CAL_CYCLES=3000` on `thermometer_c6`
 looks like a tuning decision, but it is the IDF default that follows from
 selecting `EXT_CRYS`. Nobody here chose 3000.
 
@@ -89,7 +89,7 @@ On ESP32-E, `CONFIG_ULP_COPROC_RESERVE_MEM=512` preserves the layout
 ## platformio.ini structure
 
 Why base sections are plain sections rather than `[env:...]` is a rule, in
-`.claude/rules/build.md`. The consequence worth knowing separately: `build_flags`
+[`.claude/rules/build.md`](../.claude/rules/build.md). The consequence worth knowing separately: `build_flags`
 is not inherited through `extends` the way you would expect, so each env
 re-states its own. The comments in `platformio.ini` track which flags that
 affects.

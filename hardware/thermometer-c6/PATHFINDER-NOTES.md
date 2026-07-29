@@ -182,7 +182,7 @@ autorouted baseline). Every knot the three routers stalled on fell to
 interactive rip-up with human judgment. The copper was harvested wholesale
 into `generator/pcb_routes.py` (HAND_ROUTED sentinel; `extract_tracks.py
 --all -o`); route.py/pathfind.py remain for archaeology and a hypothetical
-from-scratch re-route only. As-routed snapshot: `archive/`. Follow-on
+from-scratch re-route only. As-routed snapshot: [`archive/`](archive/). Follow-on
 analysis: `verify/topo.py` + `out/topo/REPORT.md` (pour-damage ranking,
 antenna-strip audit, power-via audit).
 

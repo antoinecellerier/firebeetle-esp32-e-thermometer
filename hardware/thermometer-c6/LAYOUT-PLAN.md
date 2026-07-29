@@ -13,7 +13,8 @@ FPC for all six owned panels, MCP73831 charger with load-sharing USB-C,
 reverse-battery FET, high-side-switched battery divider, BMP581 with
 BMP585 alternate footprint (populate exactly one), 32.768kHz crystal,
 PPK2 series-measurement break. Design rationale, ESP32-C6 pin map, jumper
-tables and bench procedures: **read `README.md` first**. Extra background:
+tables and bench procedures: **read [`README.md`](README.md) first**. Extra
+background:
 memory file `project_custom_board.md`, expert-review outcomes in git log
 (`d842fee`, `f25903e`).
 
@@ -25,14 +26,15 @@ invariants, footprints resolve, zero label-over-wire/body overlaps
 
 **PCB phase is DONE**: layout, routing, GND pour + stitching, silkscreen and
 the `make fab` export are all complete (milestone history lives in the git
-log; ordering in `ORDERING.md`). The board is 48×35mm, 2-layer, DRC-clean at
-full severity, every net routed. M5 closed 2026-07-12 via **complete GUI
+log; ordering in [`ORDERING.md`](ORDERING.md)). The board is 48×35mm,
+2-layer, DRC-clean at full severity, every net routed. M5 closed 2026-07-12 via **complete GUI
 hand-routing by the user** (after three autorouters — greedy A*, PathFinder
 negotiation, Freerouting — all stalled on the same 12-terminal knot; see
 PATHFINDER-NOTES.md). The copper now lives wholesale in
 `generator/pcb_routes.py` (HAND_ROUTED sentinel; `make route` refuses to
-touch it; as-routed snapshot in `archive/`). Copper edits go through the GUI
-round-trip in `HAND-ROUTING.md` or direct polyline edits in `pcb_routes.py`,
+touch it; as-routed snapshot in [`archive/`](archive/)). Copper edits go
+through the GUI round-trip in [`HAND-ROUTING.md`](HAND-ROUTING.md) or direct
+polyline edits in `pcb_routes.py`,
 gated by DRC (`verify/drc_summary.py --gate` + `verify/check_pcb.py`). The
 M5-state sections and corridor surveys below are HISTORICAL archaeology.
 The topology-driven simplification (report `out/topo/REPORT.md`, tool
@@ -110,7 +112,7 @@ Deliverables this phase: `thermometer-c6.kicad_pcb`, JLCPCB fab zip
 
 Intent, not mechanism. The clearances DRC enforces (0.2mm netclass, not the
 0.15 board minimum), the min-width DRU rules, the geometry traps and the
-router's ordering semantics are in `CLAUDE.md` — that is the operative
+router's ordering semantics are in [`CLAUDE.md`](CLAUDE.md) — that is the operative
 reference, and it is loaded automatically.
 
 - 2 layers: top = components + signal, bottom = as-unbroken-as-possible GND
@@ -331,7 +333,7 @@ says C14 has no other legal window. That via's F.Cu annulus must clear
 `~BAT_IN`, so its centre is at y ≥ 23.65; its B.Cu halo then ends at 24.275,
 and VBAT's lane starts at 24.575. **0.30mm.** `EPD_VCC`'s spine to `L2.1` and
 `C14.1` is load-bearing and lives there; do not try to shorten it (see the
-island-seeding rule in `CLAUDE.md`).
+island-seeding rule in [`CLAUDE.md`](CLAUDE.md)).
 
 **South corridor — 4 lanes (TP7 moved).** F.Cu down the **x17.10..19.15**
 column (4 lanes now that R7 is gone — the only place a bundle crosses VBAT's
@@ -355,8 +357,8 @@ Fab export is `make fab`: it renders a git-hash+date-stamped standalone
 board, runs a full-severity DRC, exports JLCPCB gerbers + drill + CPL + BOM,
 zips them, and gates the whole bundle with `verify/check_fab.py`. The order
 checklist — board options, stock re-verification, the rotation/polarity
-preview walk, and archiving — lives in **`ORDERING.md`** (single home; don't
-duplicate the stock notes here).
+preview walk, and archiving — lives in **[`ORDERING.md`](ORDERING.md)**
+(single home; don't duplicate the stock notes here).
 
 ## 6. First-article bench checklist (PPK2)
 

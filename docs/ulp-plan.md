@@ -68,7 +68,7 @@ which is a separate hardware block from the main I2C (currently on GPIO21/22). I
    - GPIO1/GPIO3 = UART TX/RX (used when serial is enabled)
 
    If GPIO0 conflicts with EPD_CS, the RTC I2C approach requires moving the ePaper CS
-   wire. Document the outcome in `docs/wiring.md`.
+   wire. Document the outcome in [`docs/wiring.md`](wiring.md).
 
 3. **Alternative if pin conflicts are unresolvable:** bit-bang I2C in ULP assembly using
    GPIO read/write instructions on any two available RTC GPIOs. More assembly to write

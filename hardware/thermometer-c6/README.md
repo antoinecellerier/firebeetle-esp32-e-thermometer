@@ -3,21 +3,22 @@
 Custom PCB replacing the XIAO-C6/FireBeetle dev-board rigs. ESP32-C6-MINI-1 +
 BMP581 + universal 24-pin EPD interface with on-board gated booster, USB-C
 charging, LDO power tree. Design driven by the PPK2 measurement campaign in
-`docs/notes.md` (repo root).
+[`docs/notes.md`](../../docs/notes.md) (repo root).
 
 **Status: rev A built and working.** Ordered 2026-07-20
-(`archive/order-2026-07-20/`; landed €273.93 ≈ €68.50/assembled board,
-breakdown in `ORDERING.md`). Board 1 passed bring-up Phases 0–2 on
-2026-07-29 (`BRINGUP.md`): first render, LP-core survival, and a measured
-18.3µA @ 4.2V deployment-path sleep floor over a full field interval
-(docs/notes.md 2026-07-29) — vs 21.7µA at the same 4.2V on the XIAO buck
-rig, validating the LDO tree. Current work: `BRINGUP.md` Phase 3
-first-article measurements + the boards 2–4 sweep. The board is 48×35mm
+([`archive/order-2026-07-20/`](archive/order-2026-07-20/); landed €273.93 ≈
+€68.50/assembled board, breakdown in [`ORDERING.md`](ORDERING.md)). Board 1
+passed bring-up Phases 0–2 on 2026-07-29 ([`BRINGUP.md`](BRINGUP.md)): first
+render, LP-core survival, and a measured 18.3µA @ 4.2V deployment-path sleep
+floor over a full field interval (docs/notes.md 2026-07-29) — vs 21.7µA at
+the same 4.2V on the XIAO buck rig, validating the LDO tree. Current work:
+[`BRINGUP.md`](BRINGUP.md) Phase 3 first-article measurements + the boards
+2–4 sweep. The board is 48×35mm
 2-layer, hand-routed, DRC-clean at full severity; fab export is `make fab`
 (gerbers/drill + CPL/BOM zip, git-hash+date stamped, gated by
 `verify/check_fab.py`); pre-order schematic sign-off (requirements proven
 against primary sources, findings + dispositions):
-`SCHEMATIC-VERIFICATION.md`.
+[`SCHEMATIC-VERIFICATION.md`](SCHEMATIC-VERIFICATION.md).
 
 ## Why these choices (measurement rationale)
 
@@ -160,10 +161,10 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
   3V3-sag measurement — the LDO tree degrades gracefully where the buck
   cliffed, and at face value the buck-era thresholds strand ~25% of pack
   capacity (≈ +30% battery life in a config constant, notes.md 2026-07-29).
-- The first-article measurement list lives in `BRINGUP.md` Phase 3 (VGH/VGL
-  spec at refresh, EPD_VCC soft-start ramp, 3V3 sag → threshold
-  re-derivation, boost ILIM transient, 32k crystal cold start, SS14
-  warm-floor leakage, VBAT_ADC sweep, charging self-heat). The 32k crystal
+- The first-article measurement list lives in [`BRINGUP.md`](BRINGUP.md)
+  Phase 3 (VGH/VGL spec at refresh, EPD_VCC soft-start ramp, 3V3 sag →
+  threshold re-derivation, boost ILIM transient, 32k crystal cold start,
+  SS14 warm-floor leakage, VBAT_ADC sweep, charging self-heat). The 32k crystal
   is proven running warm on board 1 (no RTC fallback warning); cold start
   remains open.
 - While charging, the board self-heats slightly — BMP581 temperature reads
@@ -240,25 +241,26 @@ against circuit.py (anonymous `~` nets matched by pin set).
 3. **Reverse-polarity protection** — RESOLVED: Q6 AO3401A P-FET at the
    JST is fitted (see "Why these choices"); a reversed cell is blocked,
    MCP73831's −0.3V abs-max is respected. Proven on board 1: body diode
-   0.4259V diode-mode pass (`BRINGUP.md` Phase 0). Keyed JST + silk remain
-   the first line of defense.
+   0.4259V diode-mode pass ([`BRINGUP.md`](BRINGUP.md) Phase 0). Keyed JST
+   + silk remain the first line of defense.
 4. **EPD SPI/control series resistors omitted** — CLOSED by construction,
    no veto: boards fabbed without them, firmware floats the pins when the
    panel is gated off (src/Display.cpp), first render passed on board 1.
-   Disposition recorded in `SCHEMATIC-VERIFICATION.md`.
+   Disposition recorded in [`SCHEMATIC-VERIFICATION.md`](SCHEMATIC-VERIFICATION.md).
 5. **JST-PH polarity** — RESOLVED 2026-07-29 on hardware: DMM on the loose
-   plug, red wire / + contact mates with J1's `+`-marked pad (`BRINGUP.md`
-   Phase 0). JST vs Adafruit convention still differs — re-check any new
-   pigtail.
+   plug, red wire / + contact mates with J1's `+`-marked pad
+   ([`BRINGUP.md`](BRINGUP.md) Phase 0). JST vs Adafruit convention still
+   differs — re-check any new pigtail.
 6. **FPC footprint** — DONE and hardware-verified: hand-drawn
    `local:XUNPU_FPC-05FB-24PH20` (see BOM section), respun 2026-07-19
    after a numeric STEP proof (`out/j4-proof/`), body depth corrected to
    5.40 on 2026-07-20. Placement verified pre-order (75/75 placements,
-   `archive/order-2026-07-20/`); J4 pin-1 north / mouth-east confirmed by
-   continuity on board 1 (`BRINGUP.md` Phase 0).
+   [`archive/order-2026-07-20/`](archive/order-2026-07-20/)); J4 pin-1 north
+   / mouth-east confirmed by continuity on board 1
+   ([`BRINGUP.md`](BRINGUP.md) Phase 0).
 7. **32k crystal populated by default** — CONFIRMED: on the ordered boards
    and proven oscillating on board 1 (no RTC fallback warning in the boot
-   log); cold start remains a `BRINGUP.md` Phase 3 item.
+   log); cold start remains a [`BRINGUP.md`](BRINGUP.md) Phase 3 item.
 8. **Old Copilot draft** — MOOT as originally written: `hardware/kicad/`
    was never merged and exists only on the unmerged branch
    `hardware/custom-esp32c6-pcb`. Nothing in the tree to delete; the
@@ -268,17 +270,20 @@ against circuit.py (anonymous `~` nets matched by pin set).
 
 - PCB layout (2-layer) — **DONE**: booster switch loop tight, RESE sense
   short, no-copper zone under BMP581, antenna keep-out per Espressif HDG,
-  JLCPCB gerbers/drill + CPL/BOM via `make fab` (order per `ORDERING.md`).
+  JLCPCB gerbers/drill + CPL/BOM via `make fab` (order per
+  [`ORDERING.md`](ORDERING.md)).
 - Firmware — **DONE**: `THERMOMETER_C6_BOARD` variant (`thermometer_c6_*`
   envs in platformio.ini): EPD on GPIO18–23 + gate GPIO14 with float-on-off,
   battery divider GPIO2/3, VBUS sense GPIO4 (suppresses SoC shutdown on USB),
   LED GPIO15, 32k crystal via `sdkconfig.defaults.thermometer_c6`.
-- Fab order — **DONE** (2026-07-20, `archive/order-2026-07-20/`; landed
-  cost breakdown in `ORDERING.md` §8).
-- Bring-up Phases 0–2 — **DONE** on board 1 (2026-07-29, `BRINGUP.md`);
-  measured numbers in the docs/notes.md power logbook.
-- **CURRENT**: `BRINGUP.md` Phase 3 first-article measurements + the quick
-  Phase 0–1 sweep on boards 2–4.
+- Fab order — **DONE** (2026-07-20,
+  [`archive/order-2026-07-20/`](archive/order-2026-07-20/); landed cost
+  breakdown in [`ORDERING.md`](ORDERING.md) §8).
+- Bring-up Phases 0–2 — **DONE** on board 1 (2026-07-29,
+  [`BRINGUP.md`](BRINGUP.md)); measured numbers in the
+  [`docs/notes.md`](../../docs/notes.md) power logbook.
+- **CURRENT**: [`BRINGUP.md`](BRINGUP.md) Phase 3 first-article measurements
+  + the quick Phase 0–1 sweep on boards 2–4.
 
 ## Routed-copper census (rev A final vs the pre-connector-fix board)
 

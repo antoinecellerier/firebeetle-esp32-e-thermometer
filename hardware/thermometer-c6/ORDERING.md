@@ -3,7 +3,7 @@
 Order checklist for the `make fab` bundle. The fab pipeline (render → DRC →
 gerbers/drill → CPL/BOM → zip → `verify/check_fab.py`) is the mechanism;
 this file is the human procedure around it. Settled fab decisions live in
-`CLAUDE.md` ("Settled decisions — don't re-ask").
+[`CLAUDE.md`](CLAUDE.md) ("Settled decisions — don't re-ask").
 
 ## 1. Generate & upload
 
@@ -260,9 +260,9 @@ JLC's part API — the BOM dialog is still ground truth at order time):
 
 - [ ] Copy the exact uploaded zip + CPL + BOM + the ticked
       `rotation-checklist.md` into `archive/order-<YYYY-MM-DD>/`.
-- [ ] Append a provenance entry to `archive/README.md`: commit hash, stamp,
-      JLC order number, and the options chosen (ENIG / POFV / order-number
-      position).
+- [ ] Append a provenance entry to [`archive/README.md`](archive/README.md):
+      commit hash, stamp, JLC order number, and the options chosen (ENIG /
+      POFV / order-number position).
 - [ ] Commit.
 
 ## 8. Quote history

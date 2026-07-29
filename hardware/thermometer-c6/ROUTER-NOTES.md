@@ -6,11 +6,12 @@ rather than overwrite it. Rev A is frozen and built. `route.py` and its A* are
 kept for one hypothetical: a re-route from scratch.
 
 Nothing here is needed to edit the board today — see the `pcb-edit` skill and
-`HAND-ROUTING.md` for that. This file exists so the knowledge survives, and so
-nobody re-derives it the hard way if the router is ever unretired.
+[`HAND-ROUTING.md`](HAND-ROUTING.md) for that. This file exists so the
+knowledge survives, and so nobody re-derives it the hard way if the router is
+ever unretired.
 
-Companion: `PATHFINDER-NOTES.md` (the negotiated-congestion experiment, also
-not adopted).
+Companion: [`PATHFINDER-NOTES.md`](PATHFINDER-NOTES.md) (the
+negotiated-congestion experiment, also not adopted).
 
 ## The model
 
@@ -68,7 +69,7 @@ a single legal window, which are de-facto rigid:
   stubs from the NE.
 
 Blocking any of these fails 5–6 nets 15mm away (M5 negative-results table in
-`LAYOUT-PLAN.md`).
+[`LAYOUT-PLAN.md`](LAYOUT-PLAN.md)).
 
 With no rip-up, any block you author reshuffles unrelated nets across the whole
 board — one `EPD_VCC` spine broke `+3V3` and both crystal terminals 20mm away.

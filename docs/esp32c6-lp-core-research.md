@@ -6,7 +6,7 @@
 > LP core* is not: the platform fork this doc calls "current" was retired by the
 > ESP-IDF migration, and the LP core is now built natively by `ulp_embed_binary`
 > in `src/CMakeLists.txt` on the stock platform. For how it works today, read
-> `docs/build-system.md` and `.claude/rules/ulp.md`. Sections marked *at the
+> [`docs/build-system.md`](build-system.md) and [`.claude/rules/ulp.md`](../.claude/rules/ulp.md). Sections marked *at the
 > time* are kept as a record of what was tried.
 
 ## Architecture Difference
@@ -149,11 +149,11 @@ These can replace or complement the manual `NO_ULP` build flag.
 
 ## Status at the time
 
-**LP core idle mode tested on hardware.** Both ESP32-E (ULP FSM) and ESP32-C6 (LP core) targets compile and link. LP_CORE_IDLE mode (no I2C, simulated sensor timing) has been verified on a bare XIAO ESP32C6 with PPK2 power measurements (see `docs/notes.md`).
+**LP core idle mode tested on hardware.** Both ESP32-E (ULP FSM) and ESP32-C6 (LP core) targets compile and link. LP_CORE_IDLE mode (no I2C, simulated sensor timing) has been verified on a bare XIAO ESP32C6 with PPK2 power measurements (see [`docs/notes.md`](notes.md)).
 
 The "remaining work" this section listed is done, on a prototype rig rather than
 a built board: a Bosch sensor is wired to the C6, validated over LP I2C, and its
 power measured. It landed as BMP58x rather than the BMP390L planned here —
 `LP_CORE_IDLE` survives as a manual override for power measurement.
-`docs/notes.md` is the authoritative log for the resulting figures. The one item
+[`docs/notes.md`](notes.md) is the authoritative log for the resulting figures. The one item
 still open is tuning `TEMP_DELTA_THRESHOLD` and `SLEEP_INTERVAL_S`.
