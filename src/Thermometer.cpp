@@ -1807,6 +1807,16 @@ RTC_DATA_ATTR uint8_t usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
 // One window pass: exactly what a timer wake would have done, minus the sleep.
 static void usb_window_cycle()
 {
+  // boot_count counts trips through the high-power path, not power-ons — every
+  // deep-sleep wake is a fresh boot, and ntp_bootstrap_due() already reads it as
+  // "wakes". A parked cycle does the same work on the same cadence, so it counts
+  // too. Three things depend on that: the fault heartbeat, which repaints a
+  // faulted panel every FAULT_REPAINT_WAKES and would otherwise freeze the frame
+  // for the whole session; the NTP bootstrap throttle, which with a frozen count
+  // either never retries or retries every single cycle; and the "#" on the panel.
+  boot_count++;
+  crash_log.cur_boot_count = boot_count;
+
   // Per-wake fault flag, so it has to be cleared per cycle here. Left latched it
   // would reload the coprocessor program on every remaining pass of a session
   // that can last hours, on the strength of one stale failure — and each reload
