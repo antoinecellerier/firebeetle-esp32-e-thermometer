@@ -1501,9 +1501,22 @@ void handle_permanent_shutdown(uint32_t battery_mv)
 #else
   const bool button_pressed = (pin27 == 0);
 #endif
+#ifdef BATTERY_SHUTDOWN_DISABLED
+  // Bench sweep builds only (tools/ppk2.py sweep): never latch off on voltage.
+  // A stock build below no_battery_mv renders the empty-battery panel, persists
+  // history to flash and powers down on every fresh boot — flash and panel wear
+  // on every sweep step, and indistinguishable from a dead board on the PPK2.
+  // The button path stays live. Must never ship: CLAUDE.md revert list.
+  const bool battery_dead = false;
+  if (battery_mv < no_battery_mv)
+    LOGI("BATTERY_SHUTDOWN_DISABLED: ignoring %d mV < %d mV",
+         (int)battery_mv, (int)no_battery_mv);
+#else
   // On USB power the measured voltage is the charger CV node, not battery
   // SoC — never let it trigger the permanent shutdown while charging.
-  if (button_pressed || (battery_mv < no_battery_mv && !vbus_present()))
+  const bool battery_dead = battery_mv < no_battery_mv && !vbus_present();
+#endif
+  if (button_pressed || battery_dead)
   {
     // If button is pressed or battery is dead, powerdown
     if (button_pressed)
