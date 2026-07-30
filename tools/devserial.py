@@ -9,9 +9,12 @@
 captured from the first line — `pio run -t upload` resets on exit and the banner
 is usually gone before you can attach.
 
-`watch` never touches the control lines. Use it on a board you must not disturb:
-a reset presents as POWERON_RESET and wipes RTC state (boot counters, the
-in-progress hour, the drift window).
+`watch` opens with DTR and RTS deasserted, so it does not disturb a board you
+must not disturb: a reset presents as POWERON_RESET and wipes RTC state (boot
+counters, the in-progress hour, the drift window). That matters most on the C6
+boards, where DTR reaches GPIO9 — both the BOOT strap and the firmware's
+shutdown button — so a default port open can park the chip in the bootloader or
+hold its shutdown button down.
 
 Needs pyserial. The zero-install path is the PlatformIO venv, which already has
 it:
@@ -43,11 +46,22 @@ def find_port():
 
 
 def stream(port, baud, timeout_s, pattern, reset):
-    with serial.Serial(port, baud, timeout=1) as s:
+    # Configure before opening: the serial.Serial(port, ...) constructor asserts
+    # both DTR and RTS as it opens, which on the C6 boards drives GPIO9 (BOOT
+    # strap and shutdown button) and EN. Nothing here may touch the chip until
+    # the caller asked for it.
+    s = serial.Serial()
+    s.port = port
+    s.baudrate = baud
+    s.timeout = 1
+    s.dtr = False
+    s.rts = False
+    with s:
         if reset:
             # Classic auto-reset: EN low via RTS while BOOT (DTR) stays high, the
-            # same pulse esptool uses. A no-op on USB-Serial-JTAG, which reboots
-            # by re-enumerating instead.
+            # same pulse esptool uses. On USB-Serial-JTAG the controller emulates
+            # the same two signals, so DTR/RTS still reach GPIO9/EN — the port
+            # then drops off the bus and re-enumerates rather than staying up.
             s.setDTR(False)
             s.setRTS(True)
             time.sleep(0.1)

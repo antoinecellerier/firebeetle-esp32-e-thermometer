@@ -1461,12 +1461,23 @@ void handle_permanent_shutdown(uint32_t battery_mv)
 {
   uint16_t pin27 = buttonRead(SHUTDOWN_BUTTON_PIN);
   LOGI("Button read %d: %d", SHUTDOWN_BUTTON_PIN, pin27);
+#if defined(THERMOMETER_C6_BOARD)
+  // The button shares GPIO9 with the BOOT strap, which a host asserts through
+  // DTR when it opens the port — so a console attach can hold the "button" down
+  // for as long as it likes, and a wake landing in that window reads a confirmed
+  // press and clears the panel into permanent shutdown. Requiring USB to be
+  // detached costs nothing real: storing the device is an unplugged act, and the
+  // dead-battery arm below is already VBUS-suppressed.
+  const bool button_pressed = (pin27 == 0) && !vbus_present();
+#else
+  const bool button_pressed = (pin27 == 0);
+#endif
   // On USB power the measured voltage is the charger CV node, not battery
   // SoC — never let it trigger the permanent shutdown while charging.
-  if (pin27 == 0 || (battery_mv < no_battery_mv && !vbus_present()))
+  if (button_pressed || (battery_mv < no_battery_mv && !vbus_present()))
   {
     // If button is pressed or battery is dead, powerdown
-    if (pin27 == 0)
+    if (button_pressed)
     {
       // Looks like we might be getting extremely rare spurious reads of 0
       // Double check after a delay ...
