@@ -83,6 +83,17 @@ RAILS = {
     "bat": {"min_mv": 3000, "max_mv": 4200, "abort_ma": 900.0,
             "check": "PPK2 leads on the XIAO's soldered BAT connector "
                      "(NOT the hat's JST2, which sources nothing)"},
+    # thermometer-c6 rev A battery injection, hardware/thermometer-c6/README.md
+    # "Bench procedures". J1 is the deployment path (Q6 + charger leakage in the
+    # measurement); J2 pin 2 is the VBAT node behind Q6. Same 900mA ceiling: it
+    # must clear the 0.67A first-power inrush measured in Phase 1. NEVER source
+    # into TP4/3V3 — RT9080 abs-max forbids VOUT > VIN + 0.3V.
+    "reva-j1": {"min_mv": 3000, "max_mv": 4200, "abort_ma": 900.0,
+                "check": "rev A board: PPK2 through the Dupont-into-JST harness "
+                         "at J1, JP1 untouched, no battery, USB unplugged"},
+    "reva-j2": {"min_mv": 3000, "max_mv": 4200, "abort_ma": 900.0,
+                "check": "rev A board: PPK2 on J2 pin 2 (VBAT) + GND, JST "
+                         "empty, JP1 cut open, USB unplugged"},
 }
 
 STATE_PATH = os.path.join(
@@ -594,39 +605,53 @@ def _save_state(state):
         json.dump(state, fh)
 
 
-def confirm_connection(rail, mv):
-    """Typed confirmation of the physical connection. Never inferred, never
-    remembered across a rail change — see the device-session skill."""
+def _connection_banner(rail, mv_text):
+    """The what-is-about-to-be-energised block, shared by live and sweep."""
     spec = RAILS[rail]
     last = _load_state().get("rail")
     print("\n" + "=" * 68)
-    print(f"  ABOUT TO SOURCE {mv} mV  (rail: {rail})")
+    print(f"  ABOUT TO SOURCE {mv_text}  (rail: {rail})")
     print("=" * 68)
     print(f"  Confirm: {spec['check']}")
     if last and last != rail:
         print(f"\n  !! Last sourced run used rail {last!r}. You are now")
         print(f"     declaring {rail!r}. Confirm the leads actually moved.")
-    if rail == "bat":
+    # Any rail allowed above 3.3V is a battery-voltage rail, and battery voltage
+    # on the 3V3 rail is the destructive mix-up.
+    if spec["max_mv"] > 3300:
         print("\n  If these leads are on the 3V3 rail, this will exceed the")
         print("  C6's 3.6 V absolute maximum and destroy the MCU, the panel")
         print("  and the sensor together.")
-    # A pipe is not a person. CLAUDE.md encourages delegating long capture loops
-    # to subagents, so `printf 'bat 4200\n' | ppk2.py live --rail bat` is a
-    # realistic invocation — and it would source 4.2V with nobody having looked at
-    # the leads. Requiring a tty is the only thing standing between that and a
-    # 3.6V-absolute-max rail.
+
+
+def confirm_connection(rail, mv):
+    """Typed confirmation of the physical connection. Never inferred, never
+    remembered across a rail change — see the device-session skill."""
+    _connection_banner(rail, f"{mv} mV")
+    _typed_confirmation(f"{rail} {mv}")
+    _save_state({"rail": rail, "mv": mv, "when": time.time()})
+
+
+def _typed_confirmation(expected):
+    """Demand `expected` typed back on a real terminal, or abort.
+
+    A pipe is not a person. CLAUDE.md encourages delegating long capture loops
+    to subagents, so `printf 'bat 4200\\n' | ppk2.py live --rail bat` is a
+    realistic invocation — and it would source 4.2V with nobody having looked at
+    the leads. Requiring a tty is the only thing standing between that and a
+    3.6V-absolute-max rail.
+    """
     if not sys.stdin.isatty():
         sys.exit("aborted: stdin is not a terminal, so nobody can confirm the "
                  "leads. Sourcing requires an interactive confirmation — run this "
                  "in a terminal, not piped, redirected, or from a subagent.")
-    print(f"\n  Type exactly: {rail} {mv}")
+    print(f"\n  Type exactly: {expected}")
     try:
         got = input("  > ").strip()
     except EOFError:
         sys.exit("aborted: no confirmation possible on a non-interactive stdin")
-    if got != f"{rail} {mv}":
+    if got != expected:
         sys.exit("aborted: confirmation did not match")
-    _save_state({"rail": rail, "mv": mv, "when": time.time()})
 
 
 def _connect(args):
