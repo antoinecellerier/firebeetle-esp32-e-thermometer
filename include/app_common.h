@@ -143,13 +143,12 @@ static inline void gpio_out_init(int pin)
 #define USB_WINDOW_POLL_MS 100          // VBUS/host re-check cadence while parked
 #define USB_WINDOW_ENUM_GRACE_MS 3000   // wait for host traffic before calling it a charger
 #define USB_WINDOW_VBUS_DEBOUNCE_N 3    // consecutive low reads before believing an unplug
-#define USB_WINDOW_HOST_IDLE_S 60       // host traffic gone this long (VBUS still up) closes the window
-// Sleeps to skip the host probe after one found only a charger. The probe costs
-// USB_WINDOW_ENUM_GRACE_MS of CPU-active time, and a docked board wakes every
-// interval, so probing each time would be a recurring burst against a bus with
-// nothing on it. Any wake that sees VBUS absent resets it, so plugging into a
-// host is still noticed immediately.
-#define USB_WINDOW_PROBE_SKIP_WAKES 10
+// Probing costs USB_WINDOW_ENUM_GRACE_MS of CPU-active time and a docked board
+// wakes every interval, so a bus with nothing on it must not be probed every
+// time. Back off geometrically instead of by a fixed count: a charger settles
+// into probing rarely, while a host missed because the probe landed while the
+// port was suspended is retried on the very next wake. Skips 1,2,4..2^SHIFT_MAX.
+#define USB_WINDOW_PROBE_SHIFT_MAX 4
 
 // Sleeps a host would have held open that are spent on real deep sleep instead,
 // so deep-sleep paths can be exercised without unplugging the cable. A reflash

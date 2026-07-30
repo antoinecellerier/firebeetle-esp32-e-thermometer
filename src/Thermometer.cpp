@@ -98,7 +98,7 @@ static void usb_service_window(void);
 // RtcHistory, RTC_HISTORY_VERSION and the self_addr scheme live in
 // include/RtcHistory.h so HistoryStore.cpp can serialize the same layout.
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_STATE_VERSION   0xDA050006
+#define RTC_STATE_VERSION   0xDA050007
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -1815,9 +1815,13 @@ static void wake_work(uint32_t battery_mv, float temp)
 // cycles and then the port comes back unattended.
 RTC_DATA_ATTR uint8_t usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
 
-// Sleeps left to skip before probing for a host again — see
-// USB_WINDOW_PROBE_SKIP_WAKES.
+// Whether a host has answered on this cable session, and the geometric backoff
+// for looking again when none has — see USB_WINDOW_PROBE_SHIFT_MAX. All three
+// are cleared by any wake that finds VBUS absent, so a fresh plug is always
+// judged on its own evidence.
+RTC_DATA_ATTR bool usb_host_seen = false;
 RTC_DATA_ATTR uint8_t usb_probe_skip = 0;
+RTC_DATA_ATTR uint8_t usb_probe_shift = 0;
 
 // One window pass: exactly what a timer wake does, minus the sleep. Nothing here
 // but the two calls a real wake makes — the coprocessor keeps sampling on its own
@@ -1841,44 +1845,62 @@ static void usb_service_window(void)
 {
   if (!vbus_present())
   {
-    // Any absence of VBUS makes the next plug worth probing immediately.
+    // Cable out. Forget what was learned about that session, so the next plug is
+    // judged on its own evidence and probed at once.
+    usb_host_seen = false;
     usb_probe_skip = 0;
+    usb_probe_shift = 0;
     return;  // the battery case: one GPIO read, then sleep as usual
   }
 
-  // A charger stays a charger. Re-running the grace on every sleep would spend
-  // seconds of CPU-active time per wake for as long as the board is docked —
-  // energy that is free on USB, but heat that lands on the sensor next door.
-  if (usb_probe_skip > 0)
-  {
-    usb_probe_skip--;
-    return;
-  }
+  // A host, once it has answered, is assumed to still be there for as long as
+  // the cable is. SOF stops whenever the OS suspends an idle port — 2s by
+  // default on Linux, and nothing holds this port open between reflashes — but a
+  // suspended device is still enumerated and still perfectly flashable. Reading
+  // that silence as departure would shut the window on precisely the board
+  // someone left plugged in so they could flash it later.
+  bool host = usb_host_seen;
 
-  // Distinguish a host from a charger. usb_serial_jtag_is_connected() tracks SOF
-  // frames, which only a live bus sends, but it starts out optimistically
-  // "connected" and decays a few ticks into the boot — so the first look is
-  // deliberately taken one poll interval in, never immediately.
-  bool host = false;
-  for (uint32_t waited = 0; waited < USB_WINDOW_ENUM_GRACE_MS; waited += USB_WINDOW_POLL_MS)
-  {
-    sleep_ms(USB_WINDOW_POLL_MS);
-    if (usb_serial_jtag_is_connected())
-    {
-      host = true;
-      break;
-    }
-    if (!vbus_present())
-      return;  // plugged and unplugged inside the grace
-  }
   if (!host)
   {
-    usb_probe_skip = USB_WINDOW_PROBE_SKIP_WAKES;
-    LOGI("VBUS with no host traffic — charger, not a bus; sleeping normally "
-         "(next probe in %d wakes)", USB_WINDOW_PROBE_SKIP_WAKES);
-    return;
+    if (usb_probe_skip > 0)
+    {
+      usb_probe_skip--;
+      return;
+    }
+
+    // usb_serial_jtag_is_connected() tracks SOF frames, which only a live bus
+    // sends, but it starts out optimistically "connected" and decays a few ticks
+    // into the boot — so the first look is deliberately taken one poll interval
+    // in, never immediately.
+    for (uint32_t waited = 0; waited < USB_WINDOW_ENUM_GRACE_MS; waited += USB_WINDOW_POLL_MS)
+    {
+      sleep_ms(USB_WINDOW_POLL_MS);
+      if (usb_serial_jtag_is_connected())
+      {
+        host = true;
+        break;
+      }
+      if (!vbus_present())
+      {
+        usb_probe_skip = 0;
+        usb_probe_shift = 0;
+        return;  // plugged and unplugged inside the grace
+      }
+    }
+    if (!host)
+    {
+      usb_probe_skip = (uint8_t)(1u << usb_probe_shift);
+      if (usb_probe_shift < USB_WINDOW_PROBE_SHIFT_MAX)
+        usb_probe_shift++;
+      LOGI("VBUS with no host traffic — charger, not a bus; sleeping normally "
+           "(next probe in %u wakes)", (unsigned)usb_probe_skip);
+      return;
+    }
+    usb_host_seen = true;
+    usb_probe_skip = 0;
+    usb_probe_shift = 0;
   }
-  usb_probe_skip = 0;
 
   // Spent only on sleeps a host would actually have held open, so docking on a
   // charger cannot quietly consume the bench budget.
@@ -1897,7 +1919,11 @@ static void usb_service_window(void)
   // energy that costs is irrelevant — the window only ever runs on USB power.
   display_set_busy_wait_plain(true);
 
-  uint32_t host_idle_ms = 0;
+  // VBUS is the only thing that closes this. SOF silence cannot: an idle port is
+  // suspended within seconds and stays that way until something opens it, which
+  // is the normal state of a board left plugged in waiting to be flashed. The
+  // case that leaves is a host that powers down while still supplying 5V — the
+  // board then stays awake on that supply, which the "! USB" badge says out loud.
   bool leaving = false;
   while (!leaving)
   {
@@ -1919,25 +1945,6 @@ static void usb_service_window(void)
         LOGI("USB unplugged — closing the window");
         leaving = true;
         break;
-      }
-
-      // VBUS can outlive the bus: a host that suspends or powers down keeps
-      // supplying 5V. Closing on that returns the board to its measured floor
-      // instead of leaving it awake against a dead bus.
-      if (usb_serial_jtag_is_connected())
-      {
-        host_idle_ms = 0;
-      }
-      else
-      {
-        host_idle_ms += USB_WINDOW_POLL_MS;
-        if (host_idle_ms >= (uint32_t)USB_WINDOW_HOST_IDLE_S * 1000u)
-        {
-          LOGI("host gone for %ds with VBUS still up — closing the window",
-               USB_WINDOW_HOST_IDLE_S);
-          leaving = true;
-          break;
-        }
       }
     }
     if (leaving)
@@ -2001,6 +2008,9 @@ static void reset_rtc_state()
   last_sensor_ok = true;
 #ifdef HAS_USB_SERVICE_WINDOW
   usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
+  usb_host_seen = false;
+  usb_probe_skip = 0;
+  usb_probe_shift = 0;
 #endif
   rtc_state_version = RTC_STATE_VERSION;
 }
