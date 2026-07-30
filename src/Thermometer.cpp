@@ -70,6 +70,13 @@ void ulp_check_data_overlap();
 #include "ulp_main.h"  // exposes ulp_lp_wake_count and other LP-core globals
 #endif
 
+#ifdef HAS_USB_SERVICE_WINDOW
+#include "driver/usb_serial_jtag.h"  // usb_serial_jtag_is_connected()
+// Both defined below start_deep_sleep(), which is the first caller.
+static void usb_service_window(void);
+bool vbus_present();
+#endif
+
 // --- RTC memory layout ---
 // RTC memory survives deep sleep but NOT power-on reset (firmware upload,
 // battery swap, reset button). More precisely: the bootloader reloads
@@ -87,7 +94,7 @@ void ulp_check_data_overlap();
 // RtcHistory, RTC_HISTORY_VERSION and the self_addr scheme live in
 // include/RtcHistory.h so HistoryStore.cpp can serialize the same layout.
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_STATE_VERSION   0xDA050005
+#define RTC_STATE_VERSION   0xDA050006
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -305,6 +312,20 @@ RTC_DATA_ATTR bool last_sensor_ok = true;
 // below — every route to a coprocessor problem sets it, and a stale RTC flag in
 // that condition would reload the program on wakes where nothing went wrong.
 static bool s_ulp_read_failed = false;
+// Also this boot only: the coprocessor program has been loaded, so the
+// fresh-boot reload condition is satisfied and must not fire again. Only matters
+// while the USB service window runs several cycles inside one boot — without it,
+// a cold boot with a host attached would reload the program every cycle.
+static bool s_lp_loaded_this_boot = false;
+
+#ifdef HAS_USB_SERVICE_WINDOW
+// Whether the USB flash-service window is currently holding the CPU awake, and
+// whether the frame on the panel says so. Both this boot only: every reset that
+// loses them also forces a first frame (previous_boot_count < 0), which repaints
+// whatever is true then.
+static bool s_usb_window_active = false;
+static bool s_panel_has_usb_badge = false;
+#endif
 
 // Gather/scatter the drift block for the flash archive. Keeping it in one place
 // means the on-flash layout (HistoryDriftState) and these RTC variables can
@@ -642,7 +663,8 @@ DisplayStats make_display_stats()
 
   // Map ESP-IDF wake cause to a portable int for display
   int wake = (s_wake_cause == ESP_SLEEP_WAKEUP_ULP) ? 1 :
-             (s_wake_cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 : 0;
+             (s_wake_cause == ESP_SLEEP_WAKEUP_TIMER) ? 2 :
+             (s_wake_cause == ESP_SLEEP_WAKEUP_GPIO) ? 3 : 0;
 
   // Compute in-progress hour entry from accumulator
   bool has_current = (historical_data.current_hour_sample_count > 0);
@@ -705,6 +727,11 @@ DisplayStats make_display_stats()
 #else
     false,
 #endif
+#ifdef HAS_USB_SERVICE_WINDOW
+    s_usb_window_active,
+#else
+    false,
+#endif
     last_drift_ms, last_drift_window_s, last_sync_time, resync_fail_count,
     archive_fault, history_store_flash_format(),
     drift_ppm_hist, drift_win_min, drift_ppm_count,
@@ -743,6 +770,13 @@ void start_deep_sleep()
 {
   history_store_persist_now();
 
+#ifdef HAS_USB_SERVICE_WINDOW
+  // After the archive is safe, so losing power inside the window costs nothing
+  // already earned, and before PPK2_CPU_ACTIVE_LOW() below, so time spent held
+  // awake reads as awake time on a power trace instead of a raised sleep floor.
+  usb_service_window();
+#endif
+
   if (sensor.SupportsUlp())
   {
     // ULP is polling the sensor — it will wake us when temperature changes
@@ -756,6 +790,15 @@ void start_deep_sleep()
     esp_sleep_enable_timer_wakeup((uint64_t)SLEEP_INTERVAL_S * 1000000ULL);
     LOGI("Sleeping for %d seconds", SLEEP_INTERVAL_S);
   }
+#ifdef HAS_USB_SERVICE_WINDOW
+  // Wake as soon as USB is plugged in, so a reflash never has to wait out a
+  // sleep interval. Armed only while VBUS reads low: arming a wake-on-high with
+  // the level already high — a charger docked, or a window that closed with the
+  // cable still in — wakes again immediately, forever. Whenever that is the
+  // case, the next ordinary wake re-arms it once VBUS has gone away.
+  if (!vbus_present())
+    app_enable_gpio_high_wakeup(VBUS_SENSE_GPIO);
+#endif
   fflush(stdout);
   PPK2_CPU_ACTIVE_LOW();
   crash_log.stage = STAGE_SLEEP;
@@ -1549,7 +1592,12 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
   return true;
 }
 
-void refresh_and_sleep(uint32_t battery_mv, float temp)
+// Everything a wake does apart from going back to sleep: resync, record, decide
+// whether to redraw, redraw. Split out from refresh_and_sleep() so the USB
+// service window can run the same cycle repeatedly without sleeping between
+// passes — a held-open window that skipped this would freeze the hour
+// accumulator and leave a stale frame on the panel.
+static void wake_work(uint32_t battery_mv, float temp)
 {
   time_t now;
   struct tm nowtm;
@@ -1624,6 +1672,12 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
                         temp_trusted != panel_shows_reading ||
                         fault_heartbeat ||
                         (temp_trusted && fabsf(temp - previous_temp) >= DISPLAY_TEMP_DELTA);
+#ifdef HAS_USB_SERVICE_WINDOW
+  // The window badge is a claim about right now — the port is held open, and the
+  // reading carries the CPU's self-heating — so gaining or losing it repaints
+  // even when the temperature has not moved.
+  should_refresh = should_refresh || (s_usb_window_active != s_panel_has_usb_badge);
+#endif
   if (!should_refresh)
   {
     LOGI("temperature hasn't changed significantly, no need to refresh display");
@@ -1656,6 +1710,9 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
       previous_temp = temp;
     panel_shows_reading = temp_trusted;
     previous_boot_count = boot_count;
+#ifdef HAS_USB_SERVICE_WINDOW
+    s_panel_has_usb_badge = s_usb_window_active;
+#endif
   }
 
   // Reload the coprocessor program on a fresh boot, and on any wake whose
@@ -1676,19 +1733,193 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
   // reading or the device is unusable anyway. Note the "uN" footer count climbs but
   // is only re-rendered when something else triggers a refresh, so a persistent fault
   // sits on the panel as "! SENSOR" beside a stale count, not a visibly rising one.
-  if (sensor.SupportsUlp()
-      && (s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED || s_ulp_read_failed || !temp_trusted))
+  // The fresh-boot term is spent once per boot; the recovery terms are not, so a
+  // fault still reloads on every cycle it persists.
+  const bool cold_boot_reload =
+      (s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED) && !s_lp_loaded_this_boot;
+  if (sensor.SupportsUlp() && (cold_boot_reload || s_ulp_read_failed || !temp_trusted))
   {
     crash_log.stage = STAGE_LP_INIT;
     ulp_reinit_count++;
     // Only a genuine power cycle leaves the coprocessor's shared state
     // uninitialised; a recovery reload must keep the counters and delta reference
     // it already has.
-    sensor.InitializeUlp(s_wake_cause == ESP_SLEEP_WAKEUP_UNDEFINED);
+    sensor.InitializeUlp(cold_boot_reload);
+    s_lp_loaded_this_boot = true;
   }
+}
 
+void refresh_and_sleep(uint32_t battery_mv, float temp)
+{
+  wake_work(battery_mv, temp);
   start_deep_sleep();
 }
+
+#ifdef HAS_USB_SERVICE_WINDOW
+// --- USB flash-service window ---
+//
+// The USB Serial/JTAG controller is unpowered in deep sleep, so a sleeping board
+// presents no USB device at all and esptool's download-mode reset — what stands
+// in for the BOOT button on this chip — has nothing to talk to. Holding the CPU
+// awake while a host is attached keeps the port enumerated, which is what makes a
+// reflash hands-free.
+//
+// The predecessor of this code was deleted for two reasons, and both shape it:
+// it detected the host from the USB SOF interrupt bit at sleep entry, which is
+// not set that early after a wake (enumeration takes longer than the wake's
+// active phase); and it then spun in place, so the board stopped measuring,
+// refreshing, resyncing and arming wake sources, silently. So: entry is decided
+// by VBUS, which is a live voltage rather than a latched event, and the hold runs
+// the ordinary cycle on the ordinary schedule — the wait replaces deep sleep, it
+// does not replace the work.
+
+// Sleeps still owed to real deep sleep before the window may open. Deep-sleep
+// paths (wake stubs, RTC restore, boot chain) cannot be exercised while the
+// window substitutes a delay for the sleep, so a bench build can ask for the
+// first N to be genuine. Reloaded from its initialiser by every reset that is
+// not a deep-sleep wake — including a reflash — so each flash buys N real
+// cycles and then the port comes back unattended.
+RTC_DATA_ATTR uint8_t usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
+
+// One window pass: exactly what a timer wake would have done, minus the sleep.
+static void usb_window_cycle()
+{
+  uint32_t battery_mv = read_battery_level();
+  float temp;
+  if (sensor.SupportsUlp())
+  {
+    crash_log.stage = STAGE_ULP_READ;
+    if (sensor.ReadUlpTemperature(&temp, previous_temp))
+    {
+      last_sensor_ok = true;
+    }
+    else
+    {
+      // Same fault handling as the equivalent wake in setup(), including the
+      // direct read that rescues it on the ESP32-E and cannot on the C6. Whatever
+      // it returns, wake_work() decides trust and reloads the coprocessor.
+      last_sensor_ok = false;
+      sensor.StopUlp();
+      s_ulp_read_failed = true;
+      crash_log.stage = STAGE_SENSOR;
+      temp = read_temperature();
+    }
+  }
+  else
+  {
+    crash_log.stage = STAGE_SENSOR;
+    temp = read_temperature();
+  }
+  wake_work(battery_mv, temp);
+  // Mirror to flash before parking again, so the window keeps the same "nothing
+  // in the archive is older than the last completed cycle" guarantee that
+  // start_deep_sleep() gives an ordinary wake.
+  history_store_persist_now();
+}
+
+static void usb_service_window(void)
+{
+  if (!vbus_present())
+    return;  // the battery case: one GPIO read, then sleep as usual
+
+  // Distinguish a host from a charger. usb_serial_jtag_is_connected() tracks SOF
+  // frames, which only a live bus sends, but it starts out optimistically
+  // "connected" and decays a few ticks into the boot — so the first look is
+  // deliberately taken one poll interval in, never immediately.
+  bool host = false;
+  for (uint32_t waited = 0; waited < USB_WINDOW_ENUM_GRACE_MS; waited += USB_WINDOW_POLL_MS)
+  {
+    sleep_ms(USB_WINDOW_POLL_MS);
+    if (usb_serial_jtag_is_connected())
+    {
+      host = true;
+      break;
+    }
+    if (!vbus_present())
+      return;  // plugged and unplugged inside the grace
+  }
+  if (!host)
+  {
+    LOGI("VBUS with no host traffic — charger, not a bus; sleeping normally");
+    return;
+  }
+
+  // Spent only on sleeps a host would actually have held open, so docking on a
+  // charger cannot quietly consume the bench budget.
+  if (usb_observe_left > 0)
+  {
+    usb_observe_left--;
+    LOGI("USB host attached, but this sleep is an observe cycle (%u more after it)"
+         " — sleeping for real", (unsigned)usb_observe_left);
+    return;
+  }
+
+  LOGI("USB host attached — flash-service window open, port stays enumerated");
+  s_usb_window_active = true;
+  // A refresh must not light-sleep from here on: light sleep gates the USB PHY
+  // clock, and the port may not come back without replugging the cable. The
+  // energy that costs is irrelevant — the window only ever runs on USB power.
+  display_set_busy_wait_plain(true);
+
+  uint32_t host_idle_ms = 0;
+  bool leaving = false;
+  while (!leaving)
+  {
+    // Park where deep sleep would have been. sleep_ms() is vTaskDelay, so the
+    // idle task still runs and the task watchdog stays fed however long this is.
+    crash_log.stage = STAGE_USB_WINDOW;
+    uint32_t vbus_low = 0;
+    for (uint32_t parked = 0; parked < (uint32_t)SLEEP_INTERVAL_S * 1000u;
+         parked += USB_WINDOW_POLL_MS)
+    {
+      sleep_ms(USB_WINDOW_POLL_MS);
+
+      if (vbus_present())
+      {
+        vbus_low = 0;
+      }
+      else if (++vbus_low >= USB_WINDOW_VBUS_DEBOUNCE_N)
+      {
+        LOGI("USB unplugged — closing the window");
+        leaving = true;
+        break;
+      }
+
+      // VBUS can outlive the bus: a host that suspends or powers down keeps
+      // supplying 5V. Closing on that returns the board to its measured floor
+      // instead of leaving it awake against a dead bus.
+      if (usb_serial_jtag_is_connected())
+      {
+        host_idle_ms = 0;
+      }
+      else
+      {
+        host_idle_ms += USB_WINDOW_POLL_MS;
+        if (host_idle_ms >= (uint32_t)USB_WINDOW_HOST_IDLE_S * 1000u)
+        {
+          LOGI("host gone for %ds with VBUS still up — closing the window",
+               USB_WINDOW_HOST_IDLE_S);
+          leaving = true;
+          break;
+        }
+      }
+    }
+    if (leaving)
+      break;
+
+    usb_window_cycle();
+  }
+
+  s_usb_window_active = false;
+  // Restored before the last frame, so a board that just went back on battery
+  // pays the light-sleep-free busy wait for none of it.
+  display_set_busy_wait_plain(false);
+  // The panel must not keep claiming the port is held open.
+  if (s_panel_has_usb_badge)
+    usb_window_cycle();
+  LOGI("flash-service window closed");
+}
+#endif  // HAS_USB_SERVICE_WINDOW
 
 
 // Reset history buffers (sparkline + hourly).
@@ -1730,6 +1961,9 @@ static void reset_rtc_state()
   wifi_ok = false;
   ntp_synced = false;
   last_sensor_ok = true;
+#ifdef HAS_USB_SERVICE_WINDOW
+  usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
+#endif
   rtc_state_version = RTC_STATE_VERSION;
 }
 
@@ -1921,7 +2155,12 @@ void setup()
 
   handle_permanent_shutdown(battery_mv);
 
-  if ((wakeup_cause == ESP_SLEEP_WAKEUP_ULP || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
+  // A VBUS wake (USB just plugged in) takes the coprocessor path too: its last
+  // sample is at most one LP period old, and on the C6 a direct read cannot
+  // succeed while the LP core owns the I2C pins, so falling through would paint a
+  // "! SENSOR" badge for a wake where nothing is wrong.
+  if ((wakeup_cause == ESP_SLEEP_WAKEUP_ULP || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
+       wakeup_cause == ESP_SLEEP_WAKEUP_GPIO)
       && sensor.SupportsUlp())
   {
     float temp;

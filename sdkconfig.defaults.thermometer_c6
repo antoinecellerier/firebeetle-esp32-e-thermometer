@@ -8,3 +8,11 @@
 # after editing THIS file, delete the generated sdkconfig.thermometer_c6_*
 # (or run pio run -t fullclean) to force a reconfigure.
 CONFIG_RTC_CLK_SRC_EXT_CRYS=y
+
+# VBUS sense (GPIO4) is a 100k/100k divider, and it is armed as a wake-on-high
+# deep-sleep source. With this option on, esp_deep_sleep_start() enables the
+# pad's internal pulldown (~45k) for a high-level trigger, which loads the
+# divider hard enough that VBUS present reads ~1.2V — under VIH, so the wake
+# would not fire. IDF's own guidance is to disable it when the pad has an
+# external resistor network. No other GPIO deep-sleep wake exists here.
+CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS=n

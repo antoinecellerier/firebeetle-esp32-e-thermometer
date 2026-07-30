@@ -183,8 +183,17 @@ static void epd_pin_sleep_hold()
     gpio_sleep_sel_dis((gpio_num_t)pins[i]);
 }
 
+static bool s_busy_wait_plain = false;
+
 static void epd_busy_light_sleep(const void *)
 {
+  if (s_busy_wait_plain)
+  {
+    // GxEPD2 re-reads BUSY between callbacks, so a short slice just paces the
+    // polling; the wait still ends as soon as the panel releases the line.
+    sleep_ms(5);
+    return;
+  }
   int busy_level = gpio_get_level((gpio_num_t)EPD_BUSY);
   gpio_wakeup_enable((gpio_num_t)EPD_BUSY,
                      busy_level ? GPIO_INTR_LOW_LEVEL : GPIO_INTR_HIGH_LEVEL);
@@ -223,6 +232,15 @@ static void init_for_render(int boot_count)
 
 #endif // DISABLE_DISPLAY
 
+
+void display_set_busy_wait_plain(bool plain)
+{
+#ifndef DISABLE_DISPLAY
+  s_busy_wait_plain = plain;
+#else
+  (void)plain;
+#endif
+}
 
 void display_clear()
 {

@@ -1025,7 +1025,8 @@ static void build_footer_text(char *out, size_t n, time_t now,
   if (stats.wake_cause == 0 && (stats.wake_causes_raw & ~1u) != 0)
     snprintf(wake_unk, sizeof(wake_unk), "?%x", (unsigned)stats.wake_causes_raw);
   const char *wake_str = (stats.wake_cause == 1) ? "ULP" :
-                          (stats.wake_cause == 2) ? "TMR" : wake_unk;
+                          (stats.wake_cause == 2) ? "TMR" :
+                          (stats.wake_cause == 3) ? "USB" : wake_unk;
 
   // Format first boot date if NTP-synced (epoch > 1 day means real time)
   char boot_date[12] = "";
@@ -1096,7 +1097,13 @@ void render_footer(Adafruit_GFX &gfx, const Rect &zone,
 
 // --- Status indicators (top-left corner of temp zone) ---
 
-#define IND_MAX_TOKENS 10
+// Must cover every token that can be emitted in one frame, because nothing
+// bounds-checks ntok: overrunning tok[] is a stack overwrite, not a dropped
+// badge. The worst case is 11 — lab flags, USB window, NOARCH, crash,
+// WIFI-or-NTP, NOSYNC, SENSOR, DRIFT, its ppm summary, LP, and the git hash the
+// footer could not fit — so this carries one spare slot. Count again before
+// adding a badge.
+#define IND_MAX_TOKENS 12
 #define IND_TOKEN_LEN  80
 #define IND_LINE_LEN   128
 
@@ -1153,7 +1160,8 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   if (stats.wifi_ok && stats.ntp_synced && stats.sensor_ok
       && !stats.dummy_sensor && !stats.mock_data && !significant_drift
       && !resync_failing && stats.archive_fault == 0
-      && !debug_build && !lp_errors_significant && stats.crash_count == 0)
+      && !debug_build && !lp_errors_significant && stats.crash_count == 0
+      && !stats.usb_window)
     return;
 
   // Badges, most severe first — the tail is what gets replaced by a "+" when
@@ -1182,6 +1190,14 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
     if (pos)
       snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
   }
+
+  // Held awake to keep the USB port enumerated for a reflash. Ranked with the
+  // lab flags and for the same reason: the board is drawing milliamps instead of
+  // microamps, and its own CPU is warming the sensor beside it, so the number
+  // above is biased upward while this is on the panel. It is also the only way to
+  // tell a parked board from a sleeping one without instruments.
+  if (stats.usb_window)
+    snprintf(tok[ntok++], IND_TOKEN_LEN, "! USB");
 
   // Nothing is being archived. Ranked ahead of the crash badge because it is
   // the only condition here that is still destroying data: every hour it goes
@@ -1217,7 +1233,7 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
     // the live-fault badges below: those describe a state you can still go and
     // read, this describes an event that is already over.
     static const char *stage_names[] = {
-      "?", "boot", "ulp", "sensor", "ntp", "render", "lpinit", "sleep"};
+      "?", "boot", "ulp", "sensor", "ntp", "render", "lpinit", "sleep", "usb"};
     uint8_t st = (stats.crash_stage < sizeof(stage_names) / sizeof(stage_names[0]))
                  ? stats.crash_stage : 0;
     char *rst_str = tok[ntok++];

@@ -245,6 +245,23 @@ int main(int argc, char **argv)
                       TEMP_NO_PREVIOUS, 3842, false,
                       now, &nowtm, nosensor_stats);
     save_and_convert(cfg.name, "_nosensor", canvas);
+
+    // Scenario 11: parked awake for a USB host, so the port stays enumerated
+    // for a reflash. An otherwise clean field build, USB-powered: the badge is
+    // the only thing saying the board is burning milliamps and that its own CPU
+    // is warming the sensor, so check it survives on the narrowest panel — and
+    // that the plug-in wake reads as "w:USB" in the footer.
+    canvas.fillScreen(0xFFFF);
+    DisplayStats usb_stats = stats;
+    usb_stats.dummy_sensor = false;
+    usb_stats.mock_data = false;
+    usb_stats.power_efficient = true;
+    usb_stats.usb_window = true;
+    usb_stats.wake_cause = 3;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 4180, false,
+                      now, &nowtm, usb_stats);
+    save_and_convert(cfg.name, "_usb", canvas);
   }
 
   return 0;

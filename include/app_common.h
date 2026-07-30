@@ -9,12 +9,24 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "soc/soc_caps.h" // SOC_ULP_FSM_SUPPORTED / SOC_LP_CORE_SUPPORTED guards
+#include "sdkconfig.h"    // CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED
 
 // SoC has a ULP FSM (ESP32-E) or LP core (C6) and NO_ULP isn't set. Defined
 // here — not in per-sensor headers — so every TU sees the same value
 // regardless of include order.
 #if (!defined(NO_ULP)) && (defined(SOC_ULP_FSM_SUPPORTED) || (defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED))
 #define HAS_ULP_SUPPORT 1
+#endif
+
+// USB flash-service window: hold the CPU awake while a USB host is attached so
+// the USB-Serial-JTAG port stays enumerated and esptool can reset the chip into
+// download mode without the BOOT button. Requires a way to detect USB presence
+// *before* the port comes up, which only the custom board has (VBUS divider on
+// VBUS_SENSE_GPIO). The XIAO has no VBUS-visible pin and the SoC capability
+// macro is deliberately NOT the gate: keying on it is what once shipped this
+// behaviour to boards that cannot detect the host, where it stranded them.
+#if defined(THERMOMETER_C6_BOARD) && defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG_ENABLED) && !defined(DISABLE_USB_WINDOW)
+#define HAS_USB_SERVICE_WINDOW 1
 #endif
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -26,8 +38,11 @@ static inline uint32_t ms_now(void) { return (uint32_t)(esp_timer_get_time() / 1
 static inline void sleep_ms(uint32_t ms) { vTaskDelay(pdMS_TO_TICKS(ms)); }
 
 // Wakeup cause, collapsed to the single value this app branches on.
-// IDF 6 deprecated the scalar API in favor of a bitmap; only ULP and TIMER
-// wake sources are ever armed here, so priority-picking them is lossless.
+// IDF 6 deprecated the scalar API in favor of a bitmap; ULP, TIMER and (with
+// HAS_USB_SERVICE_WINDOW) the VBUS GPIO are the only wake sources ever armed
+// here, so priority-picking them is lossless. A cause left unmapped reads as
+// UNDEFINED, which the app treats as a cold boot and answers by reloading the
+// ULP — so every armed source must appear below.
 #include "esp_sleep.h"
 #include "esp_idf_version.h"
 static inline esp_sleep_wakeup_cause_t app_wakeup_cause(void)
@@ -38,6 +53,8 @@ static inline esp_sleep_wakeup_cause_t app_wakeup_cause(void)
     return ESP_SLEEP_WAKEUP_ULP;
   if (causes & BIT(ESP_SLEEP_WAKEUP_TIMER))
     return ESP_SLEEP_WAKEUP_TIMER;
+  if (causes & BIT(ESP_SLEEP_WAKEUP_GPIO))
+    return ESP_SLEEP_WAKEUP_GPIO;
   return ESP_SLEEP_WAKEUP_UNDEFINED;
 #else
   return esp_sleep_get_wakeup_cause();
@@ -55,6 +72,23 @@ static inline uint32_t app_wakeup_causes_raw(void)
   return (uint32_t)esp_sleep_get_wakeup_cause();
 #endif
 }
+
+#ifdef HAS_USB_SERVICE_WINDOW
+// Deep-sleep wake when a pad goes high. IDF 6 renamed both the call and its mode
+// enum; the fork belongs here rather than at the call site.
+// Relies on CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS=n
+// (sdkconfig.defaults.thermometer_c6): the internal pulldown IDF would otherwise
+// add for a high trigger loads the VBUS divider below VIH.
+static inline esp_err_t app_enable_gpio_high_wakeup(int pin)
+{
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+  return esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown(1ULL << pin,
+                                                             ESP_GPIO_WAKEUP_GPIO_HIGH);
+#else
+  return esp_deep_sleep_enable_gpio_wakeup(1ULL << pin, ESP_GPIO_WAKEUP_GPIO_HIGH);
+#endif
+}
+#endif
 
 static inline void gpio_out_init(int pin)
 {
@@ -95,6 +129,30 @@ static inline void gpio_out_init(int pin)
 // Timer safety net when ULP is running: main CPU wakes periodically for
 // housekeeping (daily display clear, battery check) even if temperature is stable.
 #define ULP_SAFETY_NET_US (3600ULL * 1000000ULL)  // 1 hour
+
+#if defined(THERMOMETER_C6_BOARD)
+// R22/R23 100k/100k divider from VBUS. Reads ~2.5V with USB attached, a hard 0V
+// (R23 to GND, zero drain) without — so it is also usable as a deep-sleep wake
+// source, GPIO4 being inside the C6's LP-IO range.
+#define VBUS_SENSE_GPIO 4
+#endif
+
+#ifdef HAS_USB_SERVICE_WINDOW
+// All four are estimates, not measured: the window only runs on USB power, so
+// none of them affects a battery figure.
+#define USB_WINDOW_POLL_MS 100          // VBUS/host re-check cadence while parked
+#define USB_WINDOW_ENUM_GRACE_MS 3000   // wait for host traffic before calling it a charger
+#define USB_WINDOW_VBUS_DEBOUNCE_N 3    // consecutive low reads before believing an unplug
+#define USB_WINDOW_HOST_IDLE_S 60       // host traffic gone this long (VBUS still up) closes the window
+
+// Sleeps a host would have held open that are spent on real deep sleep instead,
+// so deep-sleep paths can be exercised without unplugging the cable. A reflash
+// wipes RTC and so re-arms the count: every flash gets N real cycles, then the
+// port comes back by itself.
+#ifndef USB_WINDOW_OBSERVE_CYCLES
+#define USB_WINDOW_OBSERVE_CYCLES 0
+#endif
+#endif
 
 // PPK2 debug pins — wire to PPK2 digital channels for power trace correlation
 // D10/GPIO17 → PPK2 D0: HIGH while main CPU is awake

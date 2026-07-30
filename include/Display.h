@@ -52,6 +52,7 @@ enum CrashStage : uint8_t {
   STAGE_RENDER,    // display clear/refresh (incl. busy-wait light sleep)
   STAGE_LP_INIT,   // (re)loading the ULP/LP program
   STAGE_SLEEP,     // entering deep sleep
+  STAGE_USB_WINDOW,// parked awake for a USB host instead of sleeping
 };
 
 // Sentinel value for hours with no readings (e.g., gap after device restart).
@@ -85,6 +86,8 @@ struct DisplayStats {
   bool dummy_sensor;   // true if USE_DUMMY_SENSOR is defined
   bool mock_data;      // true if MOCK_DISPLAY_DATA is defined
   bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
+  bool usb_window;     // true while held awake for a USB host: the port is
+                       // enumerated and the reading carries CPU self-heating
   int32_t clock_drift_ms;    // drift at last NTP resync (positive = clock ahead), 0 = no resync yet
   int32_t drift_window_s;    // measured span the drift accumulated over (since the clock was last set)
   time_t  last_sync_time;    // wall-clock of last successful NTP sync (0 = never)
@@ -139,6 +142,13 @@ struct DisplayStats {
   char     crash_elf_sha[9];   // first 8 hex chars of the crashing build's
                                // ELF SHA256 — pairs the PC with the right ELF
 };
+
+// Poll the panel's BUSY line with plain delays instead of light sleep. Light
+// sleep gates the USB PHY clock, and the port may not re-enumerate afterwards
+// without replugging the cable — so a refresh that happens while a USB host is
+// being served must not use it. Costs the light-sleep saving for those refreshes,
+// which only ever run on USB power.
+void display_set_busy_wait_plain(bool plain);
 
 // Clear the e-paper to white and hibernate.
 void display_clear();
