@@ -782,8 +782,21 @@ void start_deep_sleep()
     // ULP is polling the sensor — it will wake us when temperature changes
     esp_sleep_enable_ulp_wakeup();
     // Timer safety net for periodic housekeeping (display clear, battery check)
-    esp_sleep_enable_timer_wakeup(ULP_SAFETY_NET_US);
-    LOGI("Sleeping with ULP wakeup (timer safety net: %d min)", (int)(ULP_SAFETY_NET_US / 60000000ULL));
+    uint64_t safety_net_us = ULP_SAFETY_NET_US;
+#ifdef HAS_USB_SERVICE_WINDOW
+    // Sleeping with the cable in means no window opened: a charger, a host that
+    // went away, or an observe cycle. The bus can come back with VBUS never
+    // transitioning — replugging into a different port, or the host resuming —
+    // and the level wake armed below cannot fire against a level already high,
+    // so looking again is the only way back. An hour is the wrong "soon": it is
+    // how long the port would stay missing, and USB_WINDOW_OBSERVE_CYCLES=2
+    // would put a bench reflash two hours out. Costs nothing but wakes, and
+    // those are on USB power by definition.
+    if (vbus_present())
+      safety_net_us = (uint64_t)SLEEP_INTERVAL_S * 1000000ULL;
+#endif
+    esp_sleep_enable_timer_wakeup(safety_net_us);
+    LOGI("Sleeping with ULP wakeup (timer safety net: %d s)", (int)(safety_net_us / 1000000ULL));
   }
   else
   {
@@ -791,11 +804,10 @@ void start_deep_sleep()
     LOGI("Sleeping for %d seconds", SLEEP_INTERVAL_S);
   }
 #ifdef HAS_USB_SERVICE_WINDOW
-  // Wake as soon as USB is plugged in, so a reflash never has to wait out a
-  // sleep interval. Armed only while VBUS reads low: arming a wake-on-high with
-  // the level already high — a charger docked, or a window that closed with the
-  // cable still in — wakes again immediately, forever. Whenever that is the
-  // case, the next ordinary wake re-arms it once VBUS has gone away.
+  // Wake the instant USB is plugged in, so a reflash never has to wait out a
+  // sleep interval. Only meaningful while VBUS reads low — a wake-on-high armed
+  // against a level that is already high fires immediately and forever. The
+  // cable-already-in case is covered by the shortened safety net above instead.
   if (!vbus_present())
     app_enable_gpio_high_wakeup(VBUS_SENSE_GPIO);
 #endif
