@@ -1953,8 +1953,10 @@ static void usb_service_window(void)
 
   s_usb_window_active = false;
   // Restored before the last frame, so a board that just went back on battery
-  // pays the light-sleep-free busy wait for none of it.
-  display_set_busy_wait_plain(false);
+  // pays the light-sleep-free busy wait for none of it. Still plain while the
+  // cable is in, matching the rule setup() applies: light sleep and an
+  // enumerated port do not coexist.
+  display_set_busy_wait_plain(vbus_present());
   // The panel must not keep claiming the port is held open.
   if (s_panel_has_usb_badge)
     usb_window_cycle();
@@ -2122,6 +2124,18 @@ void setup()
   // Must run before anything that can light-sleep (see s_wake_cause).
   s_wake_causes_raw = app_wakeup_causes_raw();
   s_wake_cause = app_wakeup_cause();
+
+#ifdef HAS_USB_SERVICE_WINDOW
+  // Also before anything that can light-sleep, and for the same reason the EPD
+  // busy-wait cannot use it while serving a host: light sleep gates the USB PHY
+  // clock and the port may not come back without replugging the cable. This wake
+  // may well render before start_deep_sleep() ever asks whether a host is there
+  // — the first frame after a reflash always does — and a light sleep inside
+  // that render would have killed the port before the question was put, on
+  // exactly the boot the window exists to cover.
+  if (vbus_present())
+    display_set_busy_wait_plain(true);
+#endif
 
   setup_serial();
   crash_forensics_on_boot();
