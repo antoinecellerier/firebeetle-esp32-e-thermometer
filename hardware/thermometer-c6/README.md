@@ -338,27 +338,54 @@ of a board that is otherwise order-ready.
   channel carries which polarity. Irrelevant at the C6's 12 Mbps full speed
   (~31ps against an 83,333ps bit period, 4–20ns edges); it would start to
   matter only if this path ever carried High Speed.
-- **The default sensor sits against the module; the alternate one does not.**
-  U1's courtyard ends at y20.85. U5 (BMP581, populated) starts at y21.30 —
-  a 0.45mm gap — while U6 (BMP585, DNP) starts at y24.85, 4.00mm away. So the
-  site 9× further from the only heat source on the board is the one left
-  unpopulated. The no-pour keep-outs under both sensors remove the plane
-  coupling (Bosch thermal-fidelity guidance) but buy no distance, and the
-  self-heat is real: board 1 read 33.9°C on USB against 29.8°C an hour earlier
-  (USB self-heat + bench sun, unseparated — `BRINGUP.md` Phase 3). A firmware
-  USB service window now holds the board awake for a host, which makes the
-  docked case longer-lived and the bias worth designing against.
-  **Not a coordinate swap**: U6's courtyard is 3.5mm square against U5's 2.2mm,
+- **Sensor placement against the board's heat sources — open, and not the swap
+  it first looks like.** Edge-to-edge courtyard gaps:
+
+  | heat source | → U5 (fitted) | → U6 (DNP alt) |
+  |---|---|---|
+  | U1 ESP32-C6 module | 2.25mm | 4.25mm |
+  | U2 RT9080 LDO | 4.90mm | 3.00mm |
+  | U4 MCP73831 charger | 36.8mm | 38.0mm |
+
+  Populating U6 instead of U5 gains 2.0mm from the module and gives back 1.9mm
+  to the LDO, so as a thermal move it is close to a wash — the obvious "put the
+  default sensor at the far site" is not obviously an improvement.
+
+  Which source matters depends on the mode, and duty cycle dominates the
+  arithmetic (all figures below are calculated, none measured):
+  - **Charging**: (5.0−3.7)V × 100mA ≈ **130mW continuous** at U4 for the whole
+    CC phase — much the largest steady source, and 37mm from both sites, so it
+    reaches the die as whole-board bulk warming through the pour rather than as
+    a local gradient. **Sensor placement cannot fix this one**; a thermal moat,
+    a lower charge current, or suppressing/flagging readings while charging are
+    the levers.
+  - **Deployed on battery**: the CPU is awake ~1s per wake, so ~100mW while
+    awake time-averages to single-digit mW, and the LDO is sub-mW. Nothing here
+    needs fixing — this is the mode the device actually lives in.
+  - **Parked on USB** (the new service window, `docs` in `BRINGUP.md` Phase 3):
+    the CPU is continuously awake, ~100mW at 2.25mm, plus ~50mW at the LDO
+    (1.7V drop at ~30mA) 3–5mm away. This is the mode where local placement
+    would actually pay, and it is a bench mode, not a deployment one.
+
+  The no-pour keep-outs under both sensors already remove the plane coupling
+  (Bosch thermal-fidelity guidance) but buy no distance.
+
+  **There is no usable measurement yet.** Board 1's 33.9°C-vs-29.8°C is not
+  evidence: it mixes bench sun, USB self-heat and the operator's fingers on the
+  board (it decayed afterwards). Get a clean equilibrium delta per mode before
+  anyone moves a footprint — `BRINGUP.md` Phase 3.
+
+  If placement is revisited, the target is a site far from **both** U1 and U2 —
+  the south/south-west edge — not U6's slot. Note a literal U5/U6 coordinate
+  swap is infeasible anyway: U6's courtyard is 3.5mm square against U5's 2.2mm,
   and the northern slot has 0.45mm of headroom with the antenna keep-out and C12
-  boxing it in, so the bigger footprint does not fit there. It wants a re-flow
-  of the sensor picket (U5/U6 + C12/C13/C26/C27) southward — there is free FR4
-  between U6 and C13/H2.
-  **Measure before respinning**: rev A can answer this on its own. The two sites
-  are populate-exactly-one and the driver reads the chip ID (0x50/0x51), so
-  building one of boards 2–4 with U6 instead of U5 gives a direct A/B at
-  +3.55mm on the same rig. Not a pure placement test — different package and
-  die-to-pad path — but enough to bound the gain. Needs a BMP585 (C18184976) in
-  the next order.
+  boxing it in, so it wants a re-flow of the sensor picket (U5/U6 +
+  C12/C13/C26/C27), which is also what would let both move away from the LDO.
+  Rev A can still bound the U1-proximity term on its own: the sites are
+  populate-exactly-one and the driver reads the chip ID (0x50/0x51), so building
+  one of boards 2–4 with U6 gives an A/B on the same rig (confounded by the
+  different package and die-to-pad path). Needs a BMP585 (C18184976) in the next
+  order.
 - **No GND reference under the USB path.** Opposite-layer pour coverage is
   16.8% / 0.0% / 2.4% / 0.0% across the four USB nets against 28%/40%
   board-wide — the 0.5mm zone clearance starves the pour out in the dense

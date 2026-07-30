@@ -291,13 +291,24 @@ docs/history-store-validation.md.
       elapsed-time remainder guard in read_battery_level() (logging hides
       the settle only in debug builds), or (b) trim 5ms→3ms (6τ, ~10mV
       battery-scale error) for a zero-complexity 60% cut.
-- [ ] Charging self-heat: quantify how far BMP581 reads high while charging
-      (README notes it; get a number for logging). Board 1 gave 33.9°C on USB
-      against 29.8°C an hour earlier, but that mixes bench sun in — separate
-      them. Now also the input to a rev B candidate (README: the populated
-      sensor site sits 0.45mm from the module, the DNP one 4.00mm), so take
-      the equilibrium delta, not a spot reading. Cheap A/B without a respin:
-      build one of boards 2–4 with U6 BMP585 instead of U5 and repeat.
+- [ ] **Self-heat, separated by source.** There is no usable number yet: board
+      1's 33.9°C against 29.8°C an hour earlier mixes bench sun, USB self-heat
+      and the operator's fingers on the board (it decayed afterwards), so it
+      bounds nothing. Take **equilibrium** deltas against a reference
+      thermometer, one mode at a time, lid off and hands off:
+      (a) battery only, sleeping — expect no measurable rise (calculated
+          single-digit mW average);
+      (b) USB parked in the service window, no pack — isolates U1+U2, the
+          ~150mW continuous case;
+      (c) USB with a pack charging — adds U4's ~130mW, which is 37mm away and
+          so should present as whole-board warming rather than a local
+          gradient. If (c) ≫ (b), the charger dominates and no sensor
+          placement fixes it (README rev B candidate); if (b) ≈ (c), the local
+          sources do.
+      Then decide whether readings taken while charging should be suppressed or
+      flagged rather than filed into the hourly ring.
+      Cheap A/B for the U1-proximity term without a respin: build one of boards
+      2–4 with U6 BMP585 instead of U5 and repeat (b).
 - [ ] **USB flash-service window** (`fc9e72c`, untested on hardware). Plug a
       host into a sleeping board: expect a near-instant GPIO4 wake (measure
       plug→boot), `w:USB` in the footer, `! USB` on the panel, and the by-id
