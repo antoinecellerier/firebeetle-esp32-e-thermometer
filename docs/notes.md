@@ -917,3 +917,39 @@ Caveats that now outweigh the electronics:
 Net: **roughly 1.5–2 years on 400 mAh as measured**, threshold
 re-derivation and the crystal pushing up, pack self-discharge pushing
 down.
+
+## thermometer-c6 board 1: sleep floor with the VBUS wake armed (2026-07-30)
+
+Same rig and protocol as the 2026-07-29 floor above — PPK2 source meter at
+**4.2 V into J1**, battery and USB both out, so Q6 and the MCP73831's VBAT-pin
+leakage stay inside the measurement. Build `497024a`,
+`thermometer_c6_release`, no `PPK2_DEBUG`, LEDs enabled. Capture
+`/tmp/ppk-20260730T184218.csv`, 440 s, analysed with `tools/ppk2.py` and
+cross-checked against operator-chosen `--from/--to` windows.
+
+What is being tested: the USB service window arms a GPIO wake on the VBUS
+divider (GPIO4) at **every sleep entry where VBUS is low** — i.e. permanently,
+on battery, in the field. The concern was that
+`esp_sleep_enable_gpio_wakeup_on_hp_periph_powerdown()` might hold an LP/RTC
+domain up that would otherwise power down.
+
+- **Seven consecutive 57–60 s windows, monotonically decreasing**: 19.06 →
+  18.72 → 18.62 → 18.56 → 18.45 → 18.39 → **18.35 µA**, still falling when the
+  capture ended at 440 s. Explicit `--from/--to` windows agree.
+- **No measurable cost.** The comparator is the settled **18.3 µA** from the
+  hour-long capture above (`dc426ed`), not the 18.6–18.8 µA of the short one,
+  which was itself still settling. At matched elapsed time the two runs agree to
+  **0.04 µA** — 18.35 µA here at t=374 s against 18.31 µA there at t=387 s — and
+  this run is heading to the same floor on the same curve. Whatever the armed
+  wake costs is smaller than the run-to-run spread.
+- **This capture never settled, so it cannot bound the cost below ~0.1 µA.** The
+  hour-long run needed ~6 min to flatten and then held 18.31 µA for 40 min; this
+  one stopped at 7 min while still descending. A sub-0.1 µA claim would need the
+  same treatment, or the controlled interleave (B-A-B with
+  `-DDISABLE_USB_WINDOW`). Not run: nothing in the data suggests an effect worth
+  that.
+- **Open anomaly, not explained**: wakes here are 2.749 s / **26.4–26.6 mC**,
+  against **23.8–24.6 mC** for the same 2.75 s in the hour-long run — ~8% more
+  charge for an identical duration. Same panel, rail, voltage and 60 s
+  delta-fired cadence; the board was hotter here, having just come off a USB
+  session. Not investigated; do not fold into a budget until it is.
