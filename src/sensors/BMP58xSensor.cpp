@@ -36,6 +36,7 @@
 #if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP58x)
 #include "ulp_lp_core.h"
 #include "lp_core_i2c.h"
+#include "driver/rtc_io.h"  // rtc_gpio_deinit(), to take the pads back from LP I2C
 #include "ulp_main.h"
 
 extern const uint8_t ulp_main_bin_start[] asm("_binary_ulp_main_bin_start");
@@ -87,7 +88,33 @@ void BMP58xSensor::Initialize()
     // gate the reading rather than merely be logged.
     uint8_t chip_id;
     _identified = false;
-    if (ReadRegister(BMP58X_REG_CHIP_ID, &chip_id, 1))
+    bool got_id = ReadRegister(BMP58X_REG_CHIP_ID, &chip_id, 1);
+
+#if defined(HAS_ULP_SUPPORT) && defined(SOC_LP_CORE_SUPPORTED) && SOC_LP_CORE_SUPPORTED && defined(USE_BMP58x)
+    if (!got_id)
+    {
+        // The bus may not be ours. lp_core_i2c_master_init() routes these pads to
+        // the LP domain (rtc_gpio_init -> LP_AON_GPIO_MUX_SEL) and that routing
+        // lives in the always-on domain, so it outlives a chip reset: after a
+        // reflash the first direct read finds no sensor at all, and the frame
+        // renders "--.-" on a board whose sensor is fine. rtc_gpio_deinit() is the
+        // exact inverse of what LP init did; there is no lp_core_i2c_master_deinit().
+        //
+        // Only ever reached when a read has already failed, and every path to a
+        // direct read has the LP core stopped or never started — so this cannot
+        // take the bus away from a coprocessor that is using it. If the pads were
+        // not the problem the retry fails too, and the caller still gets the
+        // honest "no reading" answer rather than a fabricated one.
+        LOGI("Chip ID read failed — reclaiming I2C pads from the LP domain and retrying");
+        rtc_gpio_deinit((gpio_num_t)I2C_SDA_PIN);
+        rtc_gpio_deinit((gpio_num_t)I2C_SCL_PIN);
+        _i2c.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+        sleep_ms(5);
+        got_id = ReadRegister(BMP58X_REG_CHIP_ID, &chip_id, 1);
+    }
+#endif
+
+    if (got_id)
     {
         if (chip_id == BMP581_CHIP_ID)
         {
