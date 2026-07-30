@@ -264,6 +264,15 @@ docs/history-store-validation.md.
       Then decide: keep 3800/3700mV thresholds (Thermometer.cpp) or
       re-derive to ~3.4–3.5V — the LDO tree degrades gracefully where the
       XIAO buck cliffed. [SCHEMATIC-VERIFICATION]
+      The regime map half is automated: `ppk2.py sweep --rail reva-j1`
+      (fresh boot + classification per 100mV step 4.2→3.0V, then a 10mV
+      bisect of the edge — `tools/ppk2.py` docstring has the flow). Flash
+      `PLATFORMIO_BUILD_FLAGS="-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI"
+      pio run -e thermometer_c6_debug -t upload` first, detach serial, USB
+      out; closeout = revive on USB, reflash release (gets the shutdown
+      latch back), append report.md to the notes.md power logbook. The
+      sweep sees input current only — the scope-on-3V3 dropout check stays
+      manual, aimed at the edge the sweep finds.
 - [ ] Boost transient current vs the Si1308EDL 610mA ILIM at refresh start.
       [SCHEMATIC-VERIFICATION]
 - [ ] 32k crystal **cold start**: power-on from fridge-cold (ESR rises when

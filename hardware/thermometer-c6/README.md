@@ -137,7 +137,8 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
 - **PPK2 source-mode power, deployment path (used for all published board-1
   figures)**: feed J1 through a Dupont-into-JST harness, JP1 untouched. Q6
   and the MCP73831 VBAT-pin leakage are in the measurement by construction —
-  true battery-terminal figures.
+  true battery-terminal figures. `tools/ppk2.py` rail id: `reva-j1` (also
+  what `ppk2.py sweep` sweeps for the battery-floor regime map).
 - **IBAT break — battery-current (series) measurement**: cut JP1 open and
   insert a PPK2 (or any ammeter) across J2 (the 2-pin header silk-labelled
   `IBAT`, DNP by default — solder one in). Battery in JST as usual. JP1
@@ -146,7 +147,7 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
 - **PPK2 source-mode at J2**: feed J2 pin 2 + GND, JST empty, JP1 open.
   Pin 2 is VBAT — the charger output node, not VSYS (VSYS has no TP or
   header; probe D2's cathode pad). Powers the LDO tree + charger but
-  excludes Q6.
+  excludes Q6. `tools/ppk2.py` rail id: `reva-j2`.
 - **Do NOT back-feed the 3V3 test pad**: RT9080 abs-max forbids VOUT > VIN
   + 0.3V, and its EN=0 active-discharge (~80Ω) would fight the source.
   TP4 (3V3) is probe-only.
