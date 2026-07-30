@@ -6,6 +6,7 @@ Two data sources, one analysis path:
     ppk2.py csv  trace.csv                 # export from nRF Connect Power Profiler
     ppk2.py live --seconds 30              # ampere meter (DUT externally powered)
     ppk2.py live --rail bat --power-cycle  # source meter; see SAFETY below
+    ppk2.py sweep --rail reva-j1           # battery-floor voltage sweep + bisect
 
 The point of the marker-driven regions is that charge figures stop depending on
 where a human dragged a selection. `-DPPK2_DEBUG` drives two GPIOs:
@@ -15,10 +16,25 @@ where a human dragged a selection. `-DPPK2_DEBUG` drives two GPIOs:
                  flush -- the flush is preceded by three 50ms blips, which is
                  the only way to tell the two apart
 
-`ppk2_selftest()` runs before D0 first goes high and emits 5x20ms on D0 then
-10x10ms on D1. That fingerprint is the probe-orientation check, and on a
-DISABLE_SERIAL build it is the *only* one available, since the selftest's
-pass/fail line goes to a console that is not there.
+`ppk2_selftest()` runs before D0 first goes high and emits 2x10ms on D0 then
+5x4ms on D1 (older captures with the 5x20/10x10 fingerprint still verify).
+That fingerprint is the probe-orientation check, and on a DISABLE_SERIAL build
+it is the *only* one available, since the selftest's pass/fail line goes to a
+console that is not there.
+
+`sweep` maps the rev A board's operating regimes vs battery voltage: one typed
+confirmation of the whole plan, then unattended fresh-boot steps down the
+list, each classified from current alone (floor, LP-blip liveness, refresh,
+boot-loops, storms), then an automatic bisect of the topmost
+healthy/unhealthy edge plus a re-run of each side. Device firmware for it:
+
+    PLATFORMIO_BUILD_FLAGS="-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI" \\
+        pio run -e thermometer_c6_debug -t upload
+
+then detach serial and unplug USB. Results land in <out-dir>/report.md (a
+paste-ready logbook table), summary.json, and replayable per-step raw
+captures (`sweep --replay DIR`, `sweep --classify-file F --vin MV`;
+`sweep --selftest` checks the classifier against synthesized signatures).
 
 Traces run to millions of samples (100 kSps fills 14M rows in 144 s), so samples
 are held in `array` rather than lists and charge is accumulated once into a
@@ -504,6 +520,337 @@ def report(tr, bin_ms=None):
             dur, mean, _ = tr.integrate(i0, i1)
             if dur > 0:
                 print(f"  t={t0 + b*step:9.3f}s  {mean/1000:9.4f} mA")
+
+
+# --- Sweep step classification ----------------------------------------------
+#
+# Labels one voltage step of a battery-floor sweep from the current signature
+# alone: the rev A board's UART is unusable mid-measurement (DTR reaches GPIO9,
+# the BOOT strap and shutdown button) and PPK2_DEBUG markers land on the same
+# J5 UART pins, so current is the only honest witness. The XIAO's "sag = input
+# power drops" tell is a buck bootstrap artefact and deliberately not ported —
+# through an LDO, input current tracks output current, and the expected failure
+# is graceful dropout, brownout boot-loops, or a refresh that never completes.
+#
+# Thresholds come from measured numbers (docs/notes.md power logbook,
+# 2026-07-29 rev A entries; Phase 1 in hardware/thermometer-c6/BRINGUP.md).
+# All tests run on fixed 1 ms bin means, so they behave the same for a live
+# decimated capture and a full-rate CSV replay; a sub-bin peak is only a lower
+# bound here, and the orchestrator checks the decimator's raw peak separately.
+
+STEP_BIN_S = 0.001
+EV_UA = 200.0             # event floor: ~10x the 18-19 uA sleep floor, ~0.4x
+                          # the 494 uA LP-poll mean — survives a blip split
+                          # across two bins
+EV_MERGE_S = 0.002
+BLIP_MAX_S = 0.050        # LP poll measured 8 ms / 3.96 uC / 1.11 mA peak
+BLIP_CEIL_UA = 5000.0
+WAKE_MIN_S = 0.100        # non-refresh CPU wake measured ~0.5 s at ~15 mA
+WAKE_MIN_UA = 5000.0
+REFRESH_MIN_S = 1.0       # wake+refresh measured 23.4-24.6 mC over seconds
+REFRESH_MIN_MC = 10.0
+REFRESH_SURE_MC = 15.0    # charge alone proves a refresh when 1 ms bins
+                          # average the EPD inrush below REFRESH_PEAK_UA (the
+                          # 2026-07-29 hour capture hides 5 of its 8 that way):
+                          # a non-refresh wake measured 7.74 mC, a wake+refresh
+                          # 23.4-24.6 mC — 15 sits between
+REFRESH_PEAK_UA = 50e3    # EPD boost inrush measured 571-605 mA on the C6
+                          # prototype rig — far above any WiFi-less CPU wake
+INRUSH_PEAK_UA = 100e3    # first-power inrush measured 0.67 A for 1-2 ms
+INRUSH_MAX_S = 0.100
+INRUSH_QUIET_S = 0.100    # a quiet lead-in separates a cold boot from the EPD
+INRUSH_QUIET_UA = 1000.0  # inrush mid-wake, which mA-scale drive precedes
+BOOTLOOP_MIN = 3
+STORM_PEAK_UA = 50e3
+DEAD_SAG_UA = 5.0         # a starved LDO input reads uA-scale while the board
+                          # does nothing — distinct from PPK2-output-off ~0.1 uA
+CLUSTER_GAP_S = 3.0       # the EPD busy-wait light-sleeps mid-refresh, dropping
+                          # the current under EV_UA for seconds — the hour-long
+                          # 2026-07-29 capture splits each wake+refresh into
+                          # ~mA fragments. Non-blip activity closer than this is
+                          # one episode; blips stay their own events
+WAKE_MIN_MC = 1.0
+
+
+def _bin_means(tr, t0, t1, bin_s=STEP_BIN_S):
+    """Mean current per fixed bin over [t0, t1), from the cumulative array.
+
+    For a 1 kS/s capture and 1 ms bins this is the identity; for a full-rate
+    CSV it is the resample that makes the thresholds above rate-independent.
+    """
+    out_t, out_ua = array("d"), array("f")
+    i0 = tr.index_at(t0)
+    t = t0
+    while t < t1 and i0 < len(tr):
+        i1 = tr.index_at(t + bin_s)
+        if i1 > i0 + 1:
+            mean = tr.integrate(i0, i1)[1]
+        else:
+            # Zero or one new sample in this bin (source coarser than the bin):
+            # hold the nearest sample rather than fabricating an integral.
+            mean = tr.current_ua[min(i0, len(tr) - 1)]
+        out_t.append(t)
+        out_ua.append(mean)
+        i0 = max(i0, i1)
+        t += bin_s
+    return out_t, out_ua
+
+
+def _events(bt, bua, bin_s=STEP_BIN_S, thresh_ua=EV_UA, merge_s=EV_MERGE_S):
+    """Merge above-threshold bins into events with width/mean/peak/charge."""
+    gap_bins = max(1, int(merge_s / bin_s))
+    runs, start, last_hi = [], None, None
+    for k in range(len(bua)):
+        if bua[k] > thresh_ua:
+            if start is None:
+                start = k
+            last_hi = k
+        elif start is not None and k - last_hi > gap_bins:
+            runs.append((start, last_hi + 1))
+            start = None
+    if start is not None:
+        runs.append((start, last_hi + 1))
+    out = []
+    for k0, k1 in runs:
+        seg = bua[k0:k1]
+        w = (k1 - k0) * bin_s
+        mean = sum(seg) / len(seg)
+        out.append({"k0": k0, "k1": k1, "t0": bt[k0], "w": w, "mean": mean,
+                    "peak": max(seg), "mc": mean * w / 1000.0})
+    return out
+
+
+def _clusters(events, gap_s=CLUSTER_GAP_S):
+    """Group events into activity episodes: one wake+refresh is one cluster even
+    though its busy-wait light sleeps split it into many events."""
+    out = []
+    for ev in events:
+        if out and ev["t0"] - out[-1]["t1"] < gap_s:
+            c = out[-1]
+            c["t1"] = ev["t0"] + ev["w"]
+            c["mc"] += ev["mc"]
+            c["peak"] = max(c["peak"], ev["peak"])
+        else:
+            out.append({"t0": ev["t0"], "t1": ev["t0"] + ev["w"],
+                        "mc": ev["mc"], "peak": ev["peak"]})
+    for c in out:
+        c["span"] = c["t1"] - c["t0"]
+        c["kind"] = _cluster_kind(c)
+    return out
+
+
+def _cluster_kind(c):
+    if c["span"] >= REFRESH_MIN_S and (
+            (c["mc"] >= REFRESH_MIN_MC and c["peak"] >= REFRESH_PEAK_UA)
+            or c["mc"] >= REFRESH_SURE_MC):
+        return "refresh"
+    if (c["span"] >= WAKE_MIN_S and c["mc"] >= WAKE_MIN_MC
+            and c["peak"] < STORM_PEAK_UA):
+        return "wake"
+    mean_ua = c["mc"] / max(c["span"], 1e-9) * 1000.0
+    if c["peak"] > STORM_PEAK_UA or mean_ua > WAKE_MIN_UA:
+        return "storm"
+    return "other"
+
+
+def _median(vals):
+    vals = sorted(vals)
+    return vals[len(vals) // 2] if vals else None
+
+
+def classify_step(tr, cfg):
+    """Label one sweep step. Pure: a Trace and a config dict in, a dict out.
+
+    cfg keys: mv, boot_s, blip_period_s, power_cycle, t_on (trace time of the
+    commanded power-on; None falls back to the current-derived index, which a
+    deeply sagged board can defeat — see the note on POWER_ON_UA).
+    """
+    t_end = tr.t[-1]
+    t_on = cfg.get("t_on")
+    t_cur = tr.t[tr.power_on]
+    if t_on is None:
+        t_on = t_cur
+    notes = []
+    if cfg.get("t_on") is not None and abs(t_cur - cfg["t_on"]) > 1.0:
+        notes.append(f"current-derived power-on t={t_cur:.2f}s disagrees with "
+                     f"the commanded t={cfg['t_on']:.2f}s — trusting the "
+                     f"commanded one")
+    boot_end = min(t_on + cfg["boot_s"], t_end) if cfg["power_cycle"] else t_on
+
+    bt, bua = _bin_means(tr, t_on, t_end)
+    res = {"label": None, "mv": cfg.get("mv"), "notes": notes,
+           "floor_ua": None, "power_uw": None, "peak_ma": None,
+           "blips": 0, "blips_expected": 0, "blip_median_s": None,
+           "wakes": 0, "dwell_refreshes": 0, "refresh": None, "bootloops": 0,
+           "bootloop_median_s": None, "storms": 0, "storm_peak_ma": None,
+           "alive": False, "dwell_s": max(0.0, t_end - boot_end)}
+    if not len(bua):
+        res["label"] = "DEAD"
+        notes.append("empty capture window")
+        return res
+
+    peak_bin = max(bua)
+    res["peak_ma"] = peak_bin / 1000.0
+    if peak_bin < POWER_ON_UA:
+        res["label"] = "DEAD"
+        notes.append(f"current never rose above {POWER_ON_UA} uA — open "
+                     f"leads, or the output never came on")
+        return res
+
+    evs = _events(bt, bua)
+    blips_all, solid = [], []
+    for ev in evs:
+        (blips_all if ev["w"] <= BLIP_MAX_S and ev["peak"] < BLIP_CEIL_UA
+         else solid).append(ev)
+
+    # A cold boot announces itself: an inrush-class spike out of silence. The
+    # EPD inrush mid-wake fails the quiet lead-in; the very first event of the
+    # window (power-on) passes it by construction. Counted on raw events, not
+    # clusters — a ~600 ms boot loop merges into one cluster and would hide.
+    lead = int(INRUSH_QUIET_S / STEP_BIN_S)
+    boots = []
+    for ev in solid:
+        if ev["w"] < INRUSH_MAX_S and ev["peak"] > INRUSH_PEAK_UA:
+            pre = bua[max(0, ev["k0"] - lead):ev["k0"]]
+            if not len(pre) or max(pre) < INRUSH_QUIET_UA:
+                boots.append(ev)
+    res["bootloops"] = len(boots)
+    res["bootloop_median_s"] = _median(
+        [b["t0"] - a["t0"] for a, b in zip(boots, boots[1:])])
+
+    clusters = _clusters(solid)
+    blips = [e for e in blips_all if e["t0"] >= boot_end]
+    dwell = [c for c in clusters if c["t0"] >= boot_end]
+    wakes = [c for c in dwell if c["kind"] == "wake"]
+    refr_d = [c for c in dwell if c["kind"] == "refresh"]
+    storms = [c for c in dwell if c["kind"] == "storm"]
+    odd = [c for c in dwell if c["kind"] == "other"]
+    res["blips"], res["wakes"], res["storms"] = len(blips), len(wakes), len(storms)
+    res["dwell_refreshes"] = len(refr_d)
+    if storms:
+        res["storm_peak_ma"] = max(c["peak"] for c in storms) / 1000.0
+    if odd:
+        notes.append(f"{len(odd)} unclassified small episode(s) in the dwell")
+    long_c = [c for c in dwell if c["span"] > 0.2 * max(res["dwell_s"], 1e-9)]
+    if long_c and res["dwell_s"] > 30:
+        notes.append(f"continuous activity: an episode spans "
+                     f"{max(c['span'] for c in long_c):.0f}s of the "
+                     f"{res['dwell_s']:.0f}s dwell — burst/churn regime, "
+                     f"not sleep")
+
+    refresh_b = [c for c in clusters
+                 if c["kind"] == "refresh" and c["t0"] < boot_end]
+    if refresh_b:
+        c = max(refresh_b, key=lambda c: c["mc"])
+        res["refresh"] = {"mc": c["mc"], "s": c["span"],
+                          "peak_ma": c["peak"] / 1000.0}
+
+    # Liveness: the LP core polls the sensor every blip_period, so a living
+    # board cannot be quiet for long. Wakes and delta refreshes count too — a
+    # volatile room converts blips into wakes, not into silence.
+    expected = res["dwell_s"] / cfg["blip_period_s"]
+    res["blips_expected"] = expected
+    live = len(blips) + len(wakes) + len(refr_d)
+    count_ok = live >= 0.5 * expected
+    res["blip_median_s"] = _median(
+        [b["t0"] - a["t0"] for a, b in zip(blips, blips[1:])])
+    cadence_ok = True
+    if len(blips) >= 3:
+        cadence_ok = (0.5 * cfg["blip_period_s"] <= res["blip_median_s"]
+                      <= 1.5 * cfg["blip_period_s"])
+    res["alive"] = count_ok and cadence_ok
+
+    i0, i1 = tr.index_at(boot_end), len(tr)
+    if i1 - i0 > 2:
+        res["floor_ua"] = floor_of(tr, i0, i1)
+        if cfg.get("mv"):
+            res["power_uw"] = res["floor_ua"] * cfg["mv"] / 1000.0
+
+    if res["bootloops"] >= BOOTLOOP_MIN:
+        res["label"] = "BOOTLOOP"
+    elif not res["alive"]:
+        res["label"] = "DEAD"
+        if res["floor_ua"] is not None and res["floor_ua"] < DEAD_SAG_UA:
+            notes.append(f"floor {res['floor_ua']:.2f} uA — sagged/starved, "
+                         f"not merely idle")
+        else:
+            notes.append("no liveness at the expected cadence")
+    elif res["storms"] or (cfg["power_cycle"] and not refresh_b):
+        res["label"] = "DEGRADED"
+        if cfg["power_cycle"] and not refresh_b:
+            notes.append("no completed refresh in the boot window")
+    else:
+        res["label"] = "HEALTHY"
+    return res
+
+
+def _synth_trace(dur_s, base_ua, events, dt=0.001):
+    """A synthetic 1 kS/s trace: a base level with (t0, width_s, ua) overlays,
+    applied in order so later entries paint over earlier ones."""
+    n = int(dur_s / dt)
+    cur = array("f", [base_ua] * n)
+    for t0, w, ua in events:
+        for i in range(int(t0 / dt), min(n, int((t0 + w) / dt))):
+            cur[i] = ua
+    t, cum = array("d"), array("d")
+    acc, prev = 0.0, None
+    for i in range(n):
+        if prev is not None:
+            acc += 0.5 * (prev + cur[i]) * dt
+        t.append(i * dt)
+        cum.append(acc)
+        prev = cur[i]
+    return Trace(t, cur, cum)
+
+
+def run_selftest():
+    """Classifier checks on synthesized signatures. No hardware, no files."""
+    cfg = {"mv": 3800, "boot_s": 20.0, "blip_period_s": 5.0,
+           "power_cycle": True, "t_on": 2.0}
+    powered = [(2.0, 110.0, 19.0)]
+    boot_wake = [(2.0, 0.002, 500e3), (2.002, 0.5, 15e3)]
+    refresh = [(2.5, 4.0, 20e3), (2.6, 0.003, 450e3)]
+    blips = [(10.0 + 5 * k, 0.008, 500.0) for k in range(21)]
+
+    cases = [
+        ("healthy", cfg, powered + boot_wake + refresh + blips, "HEALTHY",
+         lambda r: r["refresh"] and r["storms"] == 0 and r["alive"]
+         and 18.0 < r["floor_ua"] < 20.0),
+        ("bootloop", cfg, [(2.0 + 0.6 * k, 0.02, 300e3) for k in range(180)],
+         "BOOTLOOP", lambda r: r["bootloops"] >= 3
+         and 0.5 < (r["bootloop_median_s"] or 0) < 0.7),
+        ("dead-sagged", cfg, [(2.0, 0.002, 500e3), (2.002, 109.998, 3.0)],
+         "DEAD", lambda r: r["floor_ua"] < DEAD_SAG_UA),
+        ("degraded-storms", cfg,
+         powered + boot_wake + refresh + blips
+         + [(40.0, 0.03, 8e3), (60.0, 0.03, 8e3), (80.0, 0.02, 120e3)],
+         "DEGRADED", lambda r: r["storms"] == 3),
+        ("degraded-no-refresh", cfg, powered + boot_wake + blips,
+         "DEGRADED", lambda r: r["refresh"] is None and r["alive"]),
+        ("wrong-cadence", cfg,
+         powered + boot_wake + refresh
+         + [(10.0, 0.008, 500.0), (70.0, 0.008, 500.0)],
+         "DEAD", lambda r: not r["alive"] and r["floor_ua"] > 15.0),
+        ("ampere-dwell",
+         {"mv": 4200, "boot_s": 0.0, "blip_period_s": 5.0,
+          "power_cycle": False, "t_on": None},
+         [(5.0 + 5 * k, 0.008, 500.0) for k in range(21)],
+         "HEALTHY", lambda r: r["alive"] and r["refresh"] is None),
+    ]
+
+    failed = 0
+    for name, c, events, want, extra in cases:
+        base = 0.1 if c["power_cycle"] else 19.0
+        res = classify_step(_synth_trace(112.0, base, events), c)
+        ok = res["label"] == want and extra(res)
+        failed += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  {name:20s} -> {res['label']:9s}"
+              f" floor={res['floor_ua'] if res['floor_ua'] is None else round(res['floor_ua'], 2)}"
+              f" blips={res['blips']} storms={res['storms']}"
+              f" bootloops={res['bootloops']}"
+              + (f"  notes={res['notes']}" if not ok else ""))
+    print(f"selftest: {len(cases) - failed}/{len(cases)} passed")
+    return 1 if failed else 0
 
 
 # --- CSV source ------------------------------------------------------------
@@ -1248,6 +1595,392 @@ def capture_live(args):
     return tr
 
 
+# --- Sweep orchestration ----------------------------------------------------
+#
+# One interactive typed confirmation of the whole plan (rail, full voltage
+# range, dwell), then an unattended walk down the list with a fresh power-cycled
+# boot per step, classification per step, and an automatic bisect of the
+# topmost healthy/unhealthy edge. The firmware on the device must be a sweep
+# build — thermometer_c6_debug with -DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI —
+# or every step below 3700 mV latches the board off (and writes flash) before
+# a single LP blip can prove it alive.
+
+
+class _SweepAbort(Exception):
+    pass
+
+
+def _git_describe():
+    import subprocess
+    try:
+        out = subprocess.run(["git", "describe", "--always", "--dirty"],
+                             cwd=os.path.dirname(os.path.abspath(__file__)),
+                             capture_output=True, text=True, timeout=5)
+        return out.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _sweep_mv_list(args):
+    spec = RAILS[args.rail]
+    if args.mv:
+        try:
+            mvs = [int(v) for v in args.mv.split(",")]
+        except ValueError:
+            sys.exit(f"--mv wants comma-separated integers, got {args.mv!r}")
+    else:
+        if args.step <= 0:
+            sys.exit("--step must be positive")
+        mvs = list(range(args.start, args.stop - 1, -args.step))
+        if mvs and mvs[-1] != args.stop:
+            mvs.append(args.stop)
+    mvs = sorted(set(mvs), reverse=True)
+    if not mvs:
+        sys.exit("empty voltage list")
+    for mv in mvs:
+        if not spec["min_mv"] <= mv <= spec["max_mv"]:
+            sys.exit(f"refusing {mv} mV on rail {args.rail!r}: allowed "
+                     f"{spec['min_mv']}-{spec['max_mv']} mV")
+    return mvs
+
+
+def _step_row(res):
+    fl = res.get("floor_ua")
+    pw = res.get("power_uw")
+    rf = res.get("refresh")
+    floor_s = f"{fl:9.2f} uA" if fl is not None else "      n/a"
+    power_s = f"{pw:7.1f} uW" if pw is not None else "    n/a"
+    rf_s = f"{rf['mc']:.1f}mC/{rf['peak_ma']:.0f}mA" if rf else "-"
+    return (f"  {res['mv']/1000:5.2f} V  floor {floor_s}  {power_s}  "
+            f"{res['label']:10s} "
+            f"blips {res['blips']:3d}/{res['blips_expected']:4.0f}  "
+            f"refresh {rf_s:>14s}  "
+            f"storms {res['storms']:2d}  peak {(res['peak_ma'] or 0):6.0f} mA  "
+            f"[{res.get('phase', '?')}]")
+
+
+def _md_row(res):
+    fl = res.get("floor_ua")
+    pw = res.get("power_uw")
+    rf = res.get("refresh")
+    cells = [
+        f"{res['mv']/1000:.2f} V",
+        f"{fl:.2f} uA" if fl is not None else "n/a",
+        f"{pw:.0f} uW" if pw is not None else "n/a",
+        res["label"],
+        f"{rf['mc']:.1f} mC / {rf['s']:.1f} s / {rf['peak_ma']:.0f} mA" if rf else "-",
+        f"{res['blips']}/{res['blips_expected']:.0f}",
+        str(res["storms"]) + (f" (pk {res['storm_peak_ma']:.0f} mA)"
+                              if res.get("storm_peak_ma") else ""),
+        f"{(res['peak_ma'] or 0):.0f} mA",
+        res.get("phase", "?"),
+        "; ".join(res.get("notes", [])) or "-",
+    ]
+    return "| " + " | ".join(cells) + " |"
+
+
+def _write_outputs(plan, steps, status, edge):
+    out_dir = plan["out_dir"]
+    with open(os.path.join(out_dir, "summary.json"), "w") as fh:
+        json.dump({"status": status, "plan": plan, "edge": edge,
+                   "steps": steps}, fh, indent=1)
+    lines = [f"# Battery-floor sweep — rail {plan['rail']} — {plan['date']}", ""]
+    lines.append(f"- status: **{status}**")
+    lines.append(f"- connection: {RAILS[plan['rail']]['check']}")
+    lines.append(f"- host git: {plan['git']}; on-device build: "
+                 + (plan["build_note"] or "**not recorded — record it!**"))
+    lines.append(f"- dwell {plan['dwell_s']} s, boot window {plan['boot_s']} s, "
+                 f"off {plan['off_s']} s, decimate {plan['decimate']} "
+                 f"({plan['decimate']/PPK2_SAMPLE_HZ*1000:g} ms bins), "
+                 f"blip period {plan['blip_period_s']} s, "
+                 f"power-cycle per step: {plan['power_cycle']}")
+    lines.append("")
+    lines.append("| VIN | floor | input power | regime | refresh | blips "
+                 "| storms | peak | phase | notes |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
+    for r in steps:
+        lines.append(_md_row(r))
+    lines.append("")
+    if edge:
+        if edge.get("first_unhealthy_mv"):
+            lines.append(f"**Edge**: lowest HEALTHY fresh boot "
+                         f"{edge['lowest_healthy_mv']} mV; first non-healthy "
+                         f"{edge['first_unhealthy_mv']} mV.")
+        else:
+            lines.append(f"**Edge**: none — every step down to "
+                         f"{edge['lowest_healthy_mv']} mV was HEALTHY.")
+        for a in edge.get("anomalies", []):
+            lines.append(f"- anomaly: {a}")
+    lines.append("")
+    lines.append("A fresh-boot regime map, not a deployment threshold by "
+                 "itself: re-derive Thermometer.cpp thresholds with margin for "
+                 "cold (VTH rises), battery ESR + protection-PCB drop, and the "
+                 "refresh peak. Raw steps replay with "
+                 "`ppk2.py raw <step>.bin` or `sweep --replay`.")
+    with open(os.path.join(out_dir, "report.md"), "w") as fh:
+        fh.write("\n".join(lines) + "\n")
+
+
+def _run_step(ppk, args, mv, dec_n, out_dir, seq, phase):
+    power_cycle = not args.no_power_cycle
+    raw = (None if args.no_raw else
+           os.path.join(out_dir, f"step{seq:02d}-{mv}mv.bin"))
+    meta = {"modifiers": ppk.modifiers, "mode": "SOURCE_MODE", "vdd_mv": mv}
+    if power_cycle:
+        ppk.toggle_DUT_power("OFF")
+    ppk.set_source_voltage(mv)
+    stream = _Stream(ppk, meta, raw_out=raw, label=f"{mv}mV")
+    stream.start()
+    t_on = None
+    try:
+        if power_cycle:
+            stream.drain(max(0.0, args.off_seconds - 0.4))
+            # Commanded, not inferred: a deeply sagged board floats below
+            # POWER_ON_UA and current-based detection would blind the classifier
+            # exactly in the regime the sweep exists to find.
+            t_on = stream.nbytes // 4 / PPK2_SAMPLE_HZ
+            ppk.toggle_DUT_power("ON")
+            stream.drain(args.boot_window + args.dwell)
+        else:
+            ppk.toggle_DUT_power("ON")
+            stream.drain(args.dwell)
+    finally:
+        stream.stop()
+        if power_cycle:
+            ppk.toggle_DUT_power("OFF")
+    stream.print_capture_stats()
+    samples, digital_raw, dec = stream.decode(dec_n)
+    if raw:
+        _cache_write(raw, dec.n, samples, digital_raw)
+    tr = _trace_from_samples(samples, digital_raw, ppk, dec.n / PPK2_SAMPLE_HZ)
+    cfg = {"mv": mv, "boot_s": args.boot_window,
+           "blip_period_s": args.blip_period,
+           "power_cycle": power_cycle, "t_on": t_on}
+    res = classify_step(tr, cfg)
+    # The decimator's raw peak sees sub-bin spikes the 1 ms means cannot.
+    res["peak_ma"] = max(res["peak_ma"] or 0.0, dec.peak / 1000.0)
+    res["phase"] = phase
+    res["capture"] = os.path.basename(raw) if raw else None
+    if raw:
+        # Patch the calibration sidecar with what --replay needs.
+        with open(raw + ".json") as fh:
+            side = json.load(fh)
+        side["sweep"] = cfg
+        with open(raw + ".json", "w") as fh:
+            json.dump(side, fh)
+    return res
+
+
+def _classify_file(args):
+    path = args.classify_file
+    if path.endswith(".csv"):
+        tr = load_csv(path)
+    else:
+        ns = argparse.Namespace(path=path, port=args.port, vdd=args.vin,
+                                mode="source", decimate=args.decimate)
+        tr = decode_raw(ns)
+    cfg = {"mv": args.vin, "boot_s": args.boot_window,
+           "blip_period_s": args.blip_period,
+           # A capture that starts unpowered contains a boot to judge.
+           "power_cycle": tr.power_on > 0, "t_on": None}
+    res = classify_step(tr, cfg)
+    print(json.dumps(res, indent=1))
+    return 0
+
+
+def _replay_dir(args):
+    names = sorted(n for n in os.listdir(args.replay) if n.endswith("mv.bin"))
+    if not names:
+        sys.exit(f"no step-*.bin captures in {args.replay!r}")
+    for name in names:
+        path = os.path.join(args.replay, name)
+        with open(path + ".json") as fh:
+            side = json.load(fh)
+        cfg = side.get("sweep")
+        if cfg is None:
+            print(f"  {name}: no sweep config in sidecar, skipping")
+            continue
+        ns = argparse.Namespace(path=path, port=None, vdd=side["vdd_mv"],
+                                mode="source", decimate=args.decimate)
+        res = classify_step(decode_raw(ns), cfg)
+        res["phase"] = "replay"
+        print(_step_row(res))
+    return 0
+
+
+def run_sweep(args):
+    if args.selftest:
+        return run_selftest()
+    if args.classify_file:
+        return _classify_file(args)
+    if args.replay:
+        return _replay_dir(args)
+    if not args.rail:
+        sys.exit("sweep needs --rail (or --selftest/--classify-file/--replay)")
+
+    mv_list = _sweep_mv_list(args)
+    power_cycle = not args.no_power_cycle
+    cap_s = ((args.off_seconds + args.boot_window if power_cycle else 0.0)
+             + args.dwell)
+    # ~671k samples/s decode (see _cache_write) plus per-step housekeeping;
+    # an estimate for the ETA line, nothing downstream depends on it.
+    step_s = cap_s + cap_s * PPK2_SAMPLE_HZ / 671e3 + 3.0
+    worst_steps = (len(mv_list) + args.max_bisect_steps
+                   + 2 * args.confirm_edge)
+    out_dir = args.out_dir or time.strftime("ppk2-sweep-%Y%m%d-%H%M%S")
+    plan = {"rail": args.rail, "mv_list": mv_list, "dwell_s": args.dwell,
+            "boot_s": args.boot_window, "off_s": args.off_seconds,
+            "decimate": args.decimate, "blip_period_s": args.blip_period,
+            "power_cycle": power_cycle, "abort_ma": RAILS[args.rail]["abort_ma"],
+            "bisect_mv": args.bisect_mv, "out_dir": out_dir,
+            "date": time.strftime("%Y-%m-%d %H:%M"), "git": _git_describe(),
+            "build_note": args.build_note, "no_raw": args.no_raw}
+
+    need_b = 0 if args.no_raw else int(worst_steps * cap_s * 400e3)
+    print(f"Sweep plan: rail {args.rail}, {len(mv_list)} linear steps "
+          f"{mv_list[0]}->{mv_list[-1]} mV"
+          + (f", then bisect to {args.bisect_mv} mV" if args.bisect_mv else ""))
+    print(f"  steps: {' '.join(str(m) for m in mv_list)}")
+    print(f"  per step: off {args.off_seconds}s + boot {args.boot_window}s + "
+          f"dwell {args.dwell}s, decimate {args.decimate}, fresh boot: "
+          f"{power_cycle}")
+    print(f"  duration ~{worst_steps * step_s / 60:.0f} min worst-case "
+          f"({len(mv_list)} linear + up to "
+          f"{args.max_bisect_steps + 2 * args.confirm_edge} probes, estimate)")
+    print(f"  output: {out_dir}/ (~{need_b/1e6:.0f} MB raw"
+          + (", disabled by --no-raw)" if args.no_raw else ")"))
+    print(f"  liveness assumes SLEEP_INTERVAL_S={args.blip_period:g} on the "
+          f"device; the sweep build is thermometer_c6_debug + "
+          f"-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI (a stock build latches "
+          f"off below 3700 mV and reads DEAD)")
+    if args.dry_run:
+        print("dry run: no serial port opened, nothing energised.")
+        return 0
+
+    if not args.no_raw:
+        st = os.statvfs(os.path.dirname(os.path.abspath(out_dir)))
+        free_b = st.f_bavail * st.f_frsize
+        if need_b > free_b * 0.9:
+            sys.exit(f"~{need_b/1e6:.0f} MB of raw captures won't fit in "
+                     f"{free_b/1e6:.0f} MB free at {out_dir!r} — free space "
+                     f"or pass --no-raw")
+
+    _connection_banner(args.rail,
+                       f"{mv_list[0]} down to {mv_list[-1]} mV "
+                       f"({len(mv_list)} steps + bisect)")
+    print(f"\n  After this single confirmation the sweep runs unattended for "
+          f"~{worst_steps * step_s / 60:.0f} min (estimate). Every bisect "
+          f"probe stays inside {mv_list[-1]}-{mv_list[0]} mV.")
+    _typed_confirmation(f"{args.rail} {mv_list[-1]}-{mv_list[0]}")
+    _save_state({"rail": args.rail, "mv": mv_list[0], "when": time.time()})
+
+    os.makedirs(out_dir, exist_ok=True)
+    ppk, _port = _connect(args)
+    ppk.use_source_meter()
+    dec_n = max(1, args.decimate)
+    abort_ma = RAILS[args.rail]["abort_ma"]
+    steps, edge, seq = [], None, 0
+    status = "interrupted"
+
+    def step(mv, phase):
+        nonlocal seq
+        seq += 1
+        print(f"\n-- step {seq}: {mv} mV [{phase}] --")
+        res = _run_step(ppk, args, mv, dec_n, out_dir, seq, phase)
+        steps.append(res)
+        print(_step_row(res))
+        with open(os.path.join(out_dir, f"step{seq:02d}-{mv}mv.step.json"),
+                  "w") as fh:
+            json.dump(res, fh, indent=1)
+        _write_outputs(plan, steps, "running", edge)
+        if res["peak_ma"] and res["peak_ma"] > abort_ma:
+            res["label"] = "OVERCURRENT"
+            raise _SweepAbort(
+                f"aborted: {res['peak_ma']:.0f} mA peak exceeded the "
+                f"{abort_ma:.0f} mA ceiling at {mv} mV — power is off, check "
+                f"the connection")
+        return res
+
+    try:
+        try:
+            linear = []
+            for i, mv in enumerate(mv_list):
+                res = step(mv, "linear")
+                linear.append(res)
+                if i == 0 and res["label"] != "HEALTHY":
+                    raise _SweepAbort(
+                        f"aborted: the first (highest) step at {mv} mV is "
+                        f"{res['label']}, not HEALTHY — wiring, build "
+                        f"(BATTERY_SHUTDOWN_DISABLED? blip period?) or panel "
+                        f"suspect. Not descending.")
+
+            anomalies = []
+            hi = lo = None
+            for a, b in zip(linear, linear[1:]):
+                if a["label"] == "HEALTHY" and b["label"] != "HEALTHY":
+                    if hi is None:
+                        hi, lo = a["mv"], b["mv"]
+                    else:
+                        anomalies.append(f"additional healthy->unhealthy "
+                                         f"transition {a['mv']}->{b['mv']} mV")
+                elif a["label"] != "HEALTHY" and b["label"] == "HEALTHY":
+                    anomalies.append(f"recovery below a failure: {b['mv']} mV "
+                                     f"HEALTHY under {a['mv']} mV "
+                                     f"{a['label']}")
+
+            if hi is None:
+                edge = {"lowest_healthy_mv": mv_list[-1],
+                        "first_unhealthy_mv": None, "anomalies": anomalies}
+                print(f"\nno edge: every linear step was HEALTHY down to "
+                      f"{mv_list[-1]} mV")
+            else:
+                probes = 0
+                while (args.bisect_mv and hi - lo > args.bisect_mv
+                       and probes < args.max_bisect_steps):
+                    mid = lo + (hi - lo) // 2
+                    mid = int(round(mid / args.bisect_mv) * args.bisect_mv)
+                    if mid in (hi, lo):
+                        break
+                    probes += 1
+                    res = step(mid, "bisect")
+                    if res["label"] == "HEALTHY":
+                        hi = mid
+                    else:
+                        lo = mid
+                for _ in range(args.confirm_edge):
+                    if step(hi, "confirm-hi")["label"] != "HEALTHY":
+                        anomalies.append(f"bistable: {hi} mV HEALTHY during "
+                                         f"bisect, not on re-run")
+                    if step(lo, "confirm-lo")["label"] == "HEALTHY":
+                        anomalies.append(f"bistable: {lo} mV unhealthy during "
+                                         f"bisect, HEALTHY on re-run")
+                edge = {"lowest_healthy_mv": hi, "first_unhealthy_mv": lo,
+                        "anomalies": anomalies}
+                print(f"\nedge: lowest HEALTHY {hi} mV, first non-healthy "
+                      f"{lo} mV" + (f"; {len(anomalies)} anomaly(ies)"
+                                    if anomalies else ""))
+            status = "complete"
+        except _SweepAbort as exc:
+            status = str(exc)
+            print(f"\n{status}")
+        except KeyboardInterrupt:
+            status = "interrupted (^C)"
+            print(f"\n{status}")
+        except (RuntimeError, OSError) as exc:
+            status = f"aborted: {exc}"
+            print(f"\n{status}")
+    finally:
+        for act in (ppk.stop_measuring,
+                    lambda: ppk.toggle_DUT_power("OFF")):
+            try:
+                act()
+            except Exception:
+                pass
+        _write_outputs(plan, steps, status, edge)
+        print(f"\n{len(steps)} step(s) recorded -> {out_dir}/report.md")
+    return 0 if status == "complete" else 2
+
+
 # --- CLI -------------------------------------------------------------------
 
 def main():
@@ -1289,6 +2022,63 @@ def main():
                    help="stream raw PPK2 bytes here during capture instead of "
                         "buffering in RAM (~400 kB/s); use for long captures")
 
+    s = sub.add_parser("sweep", help="automated battery-floor voltage sweep "
+                                     "(source meter; one typed confirmation, "
+                                     "then unattended)")
+    s.add_argument("--rail", choices=sorted(RAILS),
+                   help="REQUIRED to run on hardware; names the injection point")
+    s.add_argument("--start", type=int, default=4200, metavar="MV")
+    s.add_argument("--stop", type=int, default=3000, metavar="MV")
+    s.add_argument("--step", type=int, default=100, metavar="MV")
+    s.add_argument("--mv", metavar="LIST",
+                   help="explicit comma-separated voltage list; beats "
+                        "--start/--stop/--step")
+    s.add_argument("--dwell", type=float, default=90.0, metavar="S",
+                   help="sleep-observation window per step; storms need >=60s "
+                        "to show (XIAO sweep, notes.md 2026-07-05)")
+    s.add_argument("--boot-window", type=float, default=20.0, metavar="S",
+                   help="boot->render allowance after power-on; assumes a "
+                        "DISABLE_WIFI build")
+    s.add_argument("--off-seconds", type=float, default=2.0, metavar="S")
+    s.add_argument("--bisect-mv", type=int, default=10, metavar="MV",
+                   help="bisect the topmost healthy/unhealthy edge down to "
+                        "this resolution; 0 disables")
+    s.add_argument("--max-bisect-steps", type=int, default=8, metavar="N")
+    s.add_argument("--confirm-edge", type=int, default=1, metavar="N",
+                   help="re-runs of each side of the found edge; the XIAO "
+                        "showed a bistable band, one boot proves little")
+    s.add_argument("--no-power-cycle", action="store_true",
+                   help="step the voltage live instead of a fresh boot per "
+                        "step (hysteresis exploration; no refresh evidence, "
+                        "excluded from HEALTHY/bisect semantics)")
+    s.add_argument("--blip-period", type=float, default=5.0, metavar="S",
+                   help="SLEEP_INTERVAL_S of the flashed build; liveness is "
+                        "judged against it (5 = *_debug envs)")
+    s.add_argument("--out-dir", metavar="DIR")
+    s.add_argument("--decimate", type=int, default=100, metavar="N",
+                   help="fixed decode decimation (100 = 1 ms bins, matches "
+                        "the classifier); never auto-scaled")
+    s.add_argument("--no-raw", action="store_true",
+                   help="skip step-*.bin raw captures (saves ~44 MB/step, "
+                        "loses --replay)")
+    s.add_argument("--build-note", metavar="TEXT",
+                   help="what is flashed (env, PLATFORMIO_BUILD_FLAGS, git "
+                        "hash) — lands in the report header")
+    s.add_argument("--dry-run", action="store_true",
+                   help="print the plan and exit; opens no serial port, works "
+                        "without a tty")
+    s.add_argument("--replay", metavar="DIR",
+                   help="re-classify the step-*.bin captures of an earlier "
+                        "sweep; no hardware")
+    s.add_argument("--classify-file", metavar="PATH",
+                   help="classify one capture (.csv or raw .bin); no hardware")
+    s.add_argument("--vin", type=int, default=4200, metavar="MV",
+                   help="supply voltage of --classify-file, for the power "
+                        "column and (bin) the conversion")
+    s.add_argument("--selftest", action="store_true",
+                   help="classifier checks on synthesized signatures")
+    s.add_argument("--port")
+
     for sp in (c, r, l):
         sp.add_argument("--cpu-ch", type=int, default=0, metavar="N",
                         help="PPK2 channel carrying CPU_ACTIVE/GPIO17 (default 0)")
@@ -1308,6 +2098,8 @@ def main():
         sp.add_argument("--to", dest="to_s", type=float, metavar="SECONDS")
 
     args = p.parse_args()
+    if args.cmd == "sweep":
+        sys.exit(run_sweep(args))
     if args.cmd == "csv":
         tr = load_csv(args.path)
     elif args.cmd == "raw":
