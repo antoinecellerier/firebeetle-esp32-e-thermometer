@@ -625,6 +625,14 @@ is the only way to catch one — normal cadence is ~1/day). Measured on a
 non-refresh wake, so no EPD current is involved; `epd_power_off()` has already
 gated the panel rail by the time this runs anyway.
 
+**Take the capture, then flash the build back out.** Forcing the snapshot moves
+the write rate off the wall clock and onto the wake rate, which is the one thing
+the archive's endurance margin depends on. Left running — worst case parked in
+the USB service window at a 5s interval — that is ~8,600 erases per base slot
+per day against the usual 100k-cycle NOR figure, so a slot is spent in under a
+fortnight. Derived from the layout, not measured, and the flash part is not
+identified in this repo; normal operation sits four orders of magnitude away.
+
 The write is bracketed on D1 by a 3x50ms preamble, so it can be found zoomed
 out and selected exactly.
 

@@ -562,6 +562,16 @@ static void update_temp_extremes(float temp)
 // is the last thing in the active phase, right before PPK2_CPU_ACTIVE_LOW().
 // Build with -DHISTORY_BASE_EVERY_WAKE to force one per wake and measure the
 // delta against a normal wake.
+//
+// That flag is for a capture, not for a session. Normally the snapshot rate is
+// wall-clock-bound — roughly one a day, alternating between the two base slots,
+// so the partition outlives the product. Forced per wake it becomes rate-bound
+// instead: parked in the USB service window at a 5s interval that is ~8,600
+// erases per slot per day, and at the usual 100k-cycle NOR figure a base slot is
+// spent in under a fortnight of continuous running. Derived, not measured, and
+// the flash part is not identified anywhere in this repo — but the margin is
+// four orders of magnitude smaller than normal operation, so treat it as real.
+// Flash it, take the trace, flash it back out.
 static void history_store_persist_now()
 {
   HistoryDriftState drift;

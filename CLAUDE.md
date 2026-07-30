@@ -113,8 +113,9 @@ pure framework=espidf on stock platform, drop fork".
 
 Check for and revert temporary debug state before any cleanup or feature commit:
 test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
-`HISTORY_BASE_EVERY_WAKE`, `RESYNC_INTERVAL_MIN`), temporary build_flags,
-hardcoded test values.
+`HISTORY_BASE_EVERY_WAKE`, `USB_WINDOW_OBSERVE_CYCLES`, `RESYNC_INTERVAL_MIN`),
+temporary build_flags, hardcoded test values. **Get `HISTORY_BASE_EVERY_WAKE` off
+the device too**, not just out of the tree — it is the one that wears flash out.
 
 ## Workflow preferences
 
