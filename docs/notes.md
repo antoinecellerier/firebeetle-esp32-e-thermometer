@@ -967,20 +967,41 @@ LP polls are the liveness heartbeat, the 3700 mV latch is disabled, no NTP so
 nothing reaches the archive. 30 s dwell per step (below the ≥60 s the XIAO
 storm statistics needed — zero storms were seen, but the dwell cannot prove
 their absence), 20 s boot window, ambient not recorded (indoor bench,
-evening). Artifacts: `ppk2-sweep-20260730-214824/` and `-220452/` (report.md
-+ replayable raw bins; their DEAD labels predate the `ee0a8d0` relabel — read
-them as DEGRADED).
+evening). Artifacts: `ppk2-sweep-20260730-214824/`, `-220452/` (edge hunts)
+and `-224515/` (the 10-step gap fill that completes the curve below), each
+with report.md + replayable raw bins; the first two reports' DEAD labels
+predate the `ee0a8d0` relabel — read them as DEGRADED.
+
+Merged floor-vs-VIN curve, all points same rig/build/dwell:
 
 | VIN | floor | input power | regime (fresh boot) |
 |---|---|---|---|
-| 4.20 V | 18.97 µA | 80 µW | healthy; raw peak 667 mA = first-power inrush, matching Phase 1's 0.67 A |
-| 3.60 V | 20.61 µA | 74 µW | healthy |
+| 4.20 V | 18.97–18.99 µA | 80 µW | healthy; raw peak 667–673 mA = first-power inrush, matching Phase 1's 0.67 A |
+| 4.10 V | 19.23 µA | 79 µW | healthy |
+| 4.00 V | 19.45 µA | 78 µW | healthy |
+| 3.90 V | 19.73 µA | 77 µW | healthy |
+| 3.80 V | 20.01 µA | 76 µW | healthy |
+| 3.70 V | 20.28 µA | 75 µW | healthy |
+| 3.60 V | 20.61–20.63 µA | 74 µW | healthy |
+| 3.55 V | 20.81 µA | 74 µW | healthy |
+| 3.50 V | 21.05 µA | 74 µW | healthy |
 | 3.45 V | 21.28 µA | 73 µW | healthy |
+| 3.40 V | 21.75 µA | 74 µW | healthy |
 | 3.38 V | 22.01 µA | 74 µW | healthy |
-| 3.34 V | 23.74 µA | 79 µW | healthy |
+| 3.34 V | 23.74 µA | 79 µW | healthy — first departure from the linear trend |
 | 3.32 V | 29.5–29.8 µA | ~99 µW | healthy, floor elevated ~+30% — the LDO tree announcing marginality |
 | 3.31 V | 103–105 µA | ~343 µW | boots AND completes the render, then sleep is broken: ~55 Hz small events over a ~104 µA floor |
 | 3.00 V | 1213 µA | 3639 µW | continuous churn through the boot window, no liveness |
+
+- **The healthy curve is a gentle straight line until 3.34 V**: floor rises
+  ~3.5 µA per volt of VIN drop over 4.2→3.38 V (18.99→22.01 µA) with input
+  power near-flat at 74–80 µW, then the knee at 3.34 and the +30% step at
+  3.32. So the whole deployment window costs within ~2 µA of the published
+  18.7 µA figure, and the knee is a ~60 mV early warning above the cliff.
+- **Run-to-run reproducibility at the repeated points**: 4.20 V read
+  18.97/18.99 µA and 3.60 V read 20.61/20.63 µA across independent sweeps an
+  hour apart — ~0.02 µA agreement, tighter than the thermal drift within a
+  single capture.
 
 - **The fresh-boot cliff is at 3317–3320 mV and razor sharp.** Run 1 (10 mV
   bisect): lowest healthy 3320, first non-healthy 3310, re-runs of both sides
