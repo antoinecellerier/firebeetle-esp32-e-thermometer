@@ -77,6 +77,15 @@ def flashwait(env, poll_s, timeout_s, extra):
     firmware-side USB service window (custom board only) is the standing version
     of the same trick.
     """
+    # Build first. The window this waits for is one wake — a second or two — and
+    # a cold PlatformIO invocation spends longer than that on its own startup and
+    # dependency check, so building after the port appears would miss the window
+    # it just caught and burn the wake.
+    print(f"[building {env}]", file=sys.stderr)
+    rc = subprocess.call([PIO, "run", "-e", env] + list(extra))
+    if rc != 0:
+        return rc
+
     print(f"[waiting up to {timeout_s:g}s for {ESPRESSIF_BY_ID}]", file=sys.stderr)
     deadline = time.time() + timeout_s
     while True:
