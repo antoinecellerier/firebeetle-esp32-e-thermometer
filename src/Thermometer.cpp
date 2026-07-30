@@ -1807,6 +1807,14 @@ RTC_DATA_ATTR uint8_t usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
 // One window pass: exactly what a timer wake would have done, minus the sleep.
 static void usb_window_cycle()
 {
+  // Per-wake fault flag, so it has to be cleared per cycle here. Left latched it
+  // would reload the coprocessor program on every remaining pass of a session
+  // that can last hours, on the strength of one stale failure — and each reload
+  // bumps the RTC-persisted "uN" counter that is the coprocessor's health
+  // reading, so the diagnostic would end up recording the bug rather than the
+  // fault. Outside the window the flag self-clears at the next boot.
+  s_ulp_read_failed = false;
+
   uint32_t battery_mv = read_battery_level();
   float temp;
   if (sensor.SupportsUlp())
