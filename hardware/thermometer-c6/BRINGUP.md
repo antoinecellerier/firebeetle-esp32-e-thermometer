@@ -285,8 +285,16 @@ docs/history-store-validation.md.
       **Sweep DONE 2026-07-30** (notes.md): fresh-boot cliff **3317–3320mV**,
       ≤1–2mV wide; render never failed down to 3.31V, the sleep is what
       breaks (~104µA / ~55Hz oscillation below the edge); floor rises
-      19→30µA over 3.38→3.32V. Candidate thresholds **3550/3450mV** — apply
-      only after the BOD probe and the cold checks above.
+      19→30µA over 3.38→3.32V.
+      **BOD probe DONE 2026-07-30** (notes.md BOD subsection): the rail
+      crosses the ~3.27V trip when VIN ≤ ~3.57V (stochastic 3.56–3.59,
+      deterministic churn ≤3.55) → **total droop at the ~425mA peak
+      ≈ 300mV** (LDO dropout + harness IR + trip-estimate error) — near the
+      datasheet worst case, not comfortably better. At 3450mV every refresh
+      peak pulls the rail to ≈3.15V on a stiff source, ~150mV over the C6's
+      3.0V spec min. Candidate thresholds **3550/3450mV** — decide after
+      the cold + real-cell checks above; the droop number argues the
+      conservative end (~3500–3550 shutdown).
 - [ ] Boost transient current vs the Si1308EDL 610mA ILIM at refresh start.
       [SCHEMATIC-VERIFICATION]
 - [ ] 32k crystal **cold start**: power-on from fridge-cold (ESR rises when

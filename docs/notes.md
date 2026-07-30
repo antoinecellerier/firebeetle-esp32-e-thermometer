@@ -1023,13 +1023,52 @@ Merged floor-vs-VIN curve, all points same rig/build/dwell:
 - **Threshold consequence — candidate, not applied**: the buck-era 3800/3700
   in Thermometer.cpp could re-derive to ~**3550 warn / 3450 shutdown**:
   ~130 mV above the measured cliff and above the floor-elevation knee. Gated
-  on the remaining Phase 3 checks before touching the constants: scope on 3V3
-  during a refresh near 3.45 V (the PPK2 is stiff — a real cell adds ESR +
-  protection-PCB drop, worst at the ~465 mA peak) and the cold test (the edge
-  is a VTH-flavored effect; the XIAO's shifted up when cold). At face value
-  this reopens most of the ~25% of pack capacity the 3700 mV cutoff strands
-  (OCV-curve estimate, README).
+  on the remaining Phase 3 checks before touching the constants: the
+  3V3-droop-at-refresh measurement (run the same evening as a BOD probe —
+  next subsection, and its ~300 mV result argues for the conservative end of
+  the band) and the cold test (the edge is a VTH-flavored effect; the XIAO's
+  shifted up when cold). At face value this reopens most of the ~25% of pack
+  capacity the 3700 mV cutoff strands (OCV-curve estimate, README).
 - Debug-build floor note: 18.97 µA at 4.2 V vs 18.3 µA on the release build's
   hour capture is consistent with the 5 s LP poll cadence (two extra
   ~3.96 µC polls per 10 s floor window ≈ +0.8 µA, estimate) — not a
   regression.
+
+### BOD probe: 3V3 droop at the refresh peak, no scope (2026-07-30)
+
+Same rig and flags, build `6e2fa64` `thermometer_c6_bod_probe` — identical to
+the sweep build except the brownout detector is raised from 2.51 V (level 7)
+to ~3.27 V (level 2, the top setting; IDF calls the level voltages
+estimates). That turns the chip into a comparator on its own 3V3: a dip below
+the trip during the ~425 mA EPD-boost peak is a BROWN reset, which the sweep
+classifier reads as a non-HEALTHY step. Runs: `ppk2-sweep-20260730-233220/`
+(13 steps, 4.2→3.35 V + bisect) and `-234959/` (7-step edge re-run).
+
+| VIN | behavior under BOD ~3.27 V |
+|---|---|
+| ≥ 3.60 V | HEALTHY, both runs — normal ~50 mC refresh, blips on cadence |
+| 3.56–3.59 V | stochastic: bistable flips both directions across the two runs |
+| ≤ 3.55 V | deterministic churn: 430–1190 mC across the full 50 s capture, zero blips |
+
+- **The trip is at the refresh peak, not at boot.** Every churn step still
+  shows ~430–460 mA raw peaks — each attempt survives boot (tens of mA,
+  small droop) and dies at/after EPD gate-on, then retries for the whole
+  window. The stochastic band matches the attempt-to-attempt spread of the
+  inrush peak itself (404–511 mA across these runs).
+- **Total droop at the peak ≈ 300 mV**: the rail crosses the ~3.27 V trip
+  when VIN ≤ ~3.57 V, so LDO dropout at ~425 mA + harness/connector IR +
+  trip-estimate error ≈ 3.57 − 3.27 V. Calibration caveat: the trip level is
+  an IDF estimate with per-chip variation, so the split between those terms
+  is unknown — but the sum is what deployment margin arithmetic needs.
+- **This lands near the RT9080 datasheet worst case, not comfortably better**
+  (SCHEMATIC-VERIFICATION: VIN ≥ ~3.71 V to hold a full 3.3 V at 465 mA;
+  measured: holds ≥ ~3.27 V down to ~3.6 V). The intrinsic sweep's "render
+  never failed to 3.31 V" is *functional* headroom below the droop, not
+  absence of droop: at the 3450 mV candidate shutdown every refresh peak
+  pulls the rail to ≈ 3.15 V on a stiff bench source — ~150 mV over the C6's
+  3.0 V spec minimum, and both remaining gates (cold, real-cell ESR +
+  protection drop) eat directly into that at the peak. Expect the final
+  shutdown constant to land at ~3500–3550 mV rather than 3450 unless the
+  cold/cell numbers come back kind.
+- Release builds keep the 2.51 V level, so deployed behavior is unchanged;
+  the churn regime exists only under the probe build.
