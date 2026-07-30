@@ -44,25 +44,25 @@ facts that do damage when unknown:
 
 ## Numbers are measured, not guessed
 
-- Timing and energy estimates here have a poor track record — off by 3-10x in
-  both directions, once shipping a watchdog boot-loop. **Label any figure you did
-  not measure as an estimate**, in comments and docs alike.
+- Estimates here have a poor track record — off by 3-10x both ways, once shipping
+  a watchdog boot-loop. **Label any figure you did not measure as an estimate**,
+  and **give every number a source you can point at**: a capture, a log line, a
+  timestamp. Never recorded? Say so — an unknown is data, an invented one is a
+  lie a logbook will hand back as fact, and that applies to prose as much as docs.
 - **With hardware attached this is a gate**: instrument new deadline-bound paths
   (task watchdog, EPD busy wait, battery budget) with `ms_now()` and measure
-  before committing. Without that board/panel, say so and mark it unmeasured — as
-  `docs/notes.md` already does.
+  before committing. Without the board, mark it unmeasured, as `docs/notes.md` does.
 - Never derive a charge figure from a PPK2 screenshot: export the capture and run
   `tools/ppk2.py`, which integrates over regions the firmware's markers bound.
 - **A measured number can still be wrong** — a true average of the wrong thing.
-  Check a figure's time evolution before blaming a mechanism, average rates over
-  whole duty cycles, and treat anything past the longest window you captured as an
-  estimate. How that cost an afternoon: the `/device-session` skill.
+  Check time evolution before blaming a mechanism, average over whole duty cycles,
+  and treat anything past the longest window captured as an estimate. How that
+  cost an afternoon: the `/device-session` skill.
 - **Device-intrinsic costs get precise figures; environment-dependent ones get an
-  order of magnitude and their driver named.** A flash base snapshot is fixed
-  work. Refresh cadence is not: being delta-triggered it tracks how volatile the
-  room is — single digits on a stable day, tens in a heatwave. Don't assume which
-  term dominates either: measured, it is refreshes on the E rig and the sleep
-  floor on the C6. Both land at single-digit coulombs/day.
+  order of magnitude and their driver named.** A base snapshot is fixed work;
+  refresh cadence is delta-triggered, so it tracks how volatile the room is.
+  Don't assume which dominates: measured, it is refreshes on the E rig and the
+  sleep floor on the C6, both single-digit coulombs/day.
 - Logbooks, in order of authority: `docs/notes.md` (power), `docs/clock-drift.md`
   (drift), `docs/footprint.md` (size/build time — append a row after significant
   changes), `docs/history-store-validation.md` (proven on hardware). Read the log
