@@ -157,11 +157,13 @@ BMP58x temperature (belt and braces; it cannot stop the charger).
   divider ~5ms before reading (τ = 50k × 10n = 0.5ms).
 - BMP58x INT pins are unconnected: firmware must configure int_en=1,
   int_od=0, pad_int_drv=0 per the Bosch datasheets.
-- The 3700mV shutdown threshold inherited from the XIAO buck rig is still in
-  Thermometer.cpp; re-deriving it (~3.4–3.5V defensible) awaits the Phase 3
-  3V3-sag measurement — the LDO tree degrades gracefully where the buck
-  cliffed, and at face value the buck-era thresholds strand ~25% of pack
-  capacity (≈ +30% battery life in a config constant, notes.md 2026-07-29).
+- Battery thresholds are board-scoped in Thermometer.cpp: **3550 warn /
+  3500mV shutdown** (applied 2026-07-31 from the sweep + BOD-probe
+  measurements, notes.md 2026-07-30 — droop at the refresh peak ≈300mV, so
+  3500 keeps ~200mV of rail margin over the C6's 3.0V spec floor). That
+  recovers most of the ~25% of pack capacity the buck-era 3700mV cutoff
+  stranded; the cold and real-cell BOD-probe runs decide whether 3450
+  (~5-8% more, OCV estimate) is safe.
 - The first-article measurement list lives in [`BRINGUP.md`](BRINGUP.md)
   Phase 3 (VGH/VGL spec at refresh, EPD_VCC soft-start ramp, 3V3 sag →
   threshold re-derivation, boost ILIM transient, 32k crystal cold start,

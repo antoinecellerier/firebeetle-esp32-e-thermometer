@@ -259,11 +259,11 @@ docs/history-store-validation.md.
       [REVIEW-KICAD-HAPPY ○]
 - [ ] EPD_VCC ramp with the R24/C28 soft-start on a scope (no brownout at
       gate-on). [README PPK2 items]
-- [ ] **3V3 sag during the ~465mA refresh peak at VBAT = 3.7V** (bench
-      supply at J2). Worst-case RT9080 dropout sits right at the cutoff.
-      Then decide: keep 3800/3700mV thresholds (Thermometer.cpp) or
-      re-derive to ~3.4–3.5V — the LDO tree degrades gracefully where the
-      XIAO buck cliffed. [SCHEMATIC-VERIFICATION]
+- [x] **3V3 sag during the ~465mA refresh peak** — measured via the BOD
+      probe (below), and the thresholds re-derived: **3550 warn / 3500mV
+      shutdown** applied 2026-07-31 (Thermometer.cpp, board-scoped; the
+      XIAO keeps 3800/3700). Revisit hooks: a cold (~0°C) and a real-cell
+      BOD-probe run decide between 3500 and 3450. [SCHEMATIC-VERIFICATION]
       The regime map half is automated: `ppk2.py sweep --rail reva-j1`
       (fresh boot + classification per 100mV step 4.2→3.0V, then a 10mV
       bisect of the edge — `tools/ppk2.py` docstring has the flow). Flash

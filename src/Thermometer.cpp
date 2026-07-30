@@ -1216,17 +1216,24 @@ static void maybe_ntp_resync(time_t now)
 #endif // DISABLE_WIFI
 
 // Battery thresholds (mV).
-#if defined(ARDUINO_XIAO_ESP32C6)
+#if defined(THERMOMETER_C6_BOARD)
+// RT9080 LDO tree, measured on board 1 (docs/notes.md 2026-07-30): total
+// droop at the ~425mA refresh peak is ~300mV (BOD probe), the fresh-boot
+// cliff 3317-3320mV, the sleep-floor knee 3.34V. At 3500mV the rail still
+// holds ~3.2V through the peak on a stiff source; the ~200mV over the C6's
+// 3.0V spec floor is what cold dropout and real-cell ESR spend from, and
+// the shutdown itself is a render + persist that must complete. Hold the
+// conservative end until the cold and real-cell BOD-probe runs report;
+// they decide between here and 3450 (~5-8% more pack, OCV estimate).
+const uint32_t low_battery_mv = 3550;
+const uint32_t no_battery_mv = 3500;
+#elif defined(ARDUINO_XIAO_ESP32C6)
 // The XIAO's 3V3 rail is a pure buck (SGM6029C): at VBAT ≤3.6V it enters a
 // bootstrap-starvation sag band (rail sags ~VTH below VIN; wakes collapse it
 // into 0.5-0.9A brownout-restart storms; 30Hz sawtooth at 3.3V). Fine sweep
 // 2026-07-05 (docs/notes.md): 3.7V is the lowest verified-healthy point,
 // 3.6V is already inside the sag band — so shut down at the electrical
 // cliff, not the battery's own limit (~12-15% SoC abandoned per OCV curve).
-// The custom thermometer-c6 board (RT9080 LDO, not a buck) keeps the same
-// numbers: worst-case LDO dropout at the refresh peak sits right at this
-// cutoff, and SCHEMATIC-VERIFICATION.md says keep shutdown ≥3.6V pending
-// the first-article dropout measurement.
 const uint32_t low_battery_mv = 3800;
 const uint32_t no_battery_mv = 3700;
 #else
@@ -1297,7 +1304,7 @@ uint32_t read_battery_level()
   // charger CV output, not battery SoC — see vbus_present().
   // ADC-failure fallback sits between no_battery_mv and low_battery_mv:
   // visible as a warning, can never trigger permanent shutdown.
-  const uint32_t adc_fail_mv = 3750;
+  const uint32_t adc_fail_mv = 3525;
 
   gpio_out_init(3 /* VDIV_EN */);
   gpio_set_level(GPIO_NUM_3, 1);

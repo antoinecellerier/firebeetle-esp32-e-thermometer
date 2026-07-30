@@ -1020,15 +1020,16 @@ Merged floor-vs-VIN curve, all points same rig/build/dwell:
   dropout is the suspect, unverified — a scope on 3V3 would say); it sits
   below any sane threshold, so recorded, not chased. Replay:
   `ppk2.py raw ppk2-sweep-20260730-220452/step02-3317mv.bin --profile 500`.
-- **Threshold consequence — candidate, not applied**: the buck-era 3800/3700
-  in Thermometer.cpp could re-derive to ~**3550 warn / 3450 shutdown**:
-  ~130 mV above the measured cliff and above the floor-elevation knee. Gated
-  on the remaining Phase 3 checks before touching the constants: the
-  3V3-droop-at-refresh measurement (run the same evening as a BOD probe —
-  next subsection, and its ~300 mV result argues for the conservative end of
-  the band) and the cold test (the edge is a VTH-flavored effect; the XIAO's
-  shifted up when cold). At face value this reopens most of the ~25% of pack
-  capacity the 3700 mV cutoff strands (OCV-curve estimate, README).
+- **Threshold consequence — APPLIED 2026-07-31 as 3550 warn / 3500 shutdown**
+  (board-scoped in Thermometer.cpp; the XIAO keeps 3800/3700, the ADC-fail
+  fallback moved into the new band at 3525). The original candidate was
+  3550/3450, but the BOD probe (next subsection) measured ~300 mV of droop
+  at the refresh peak, so 3500 holds ~200 mV of rail margin over the C6's
+  3.0 V spec floor where 3450 would leave ~150 — and the shutdown itself is
+  a render + persist that must complete on a cold, sagging cell. Reopens
+  most of the ~25% of pack capacity the 3700 mV cutoff strands (OCV-curve
+  estimate, README); the cold (~0°C) and real-cell BOD-probe runs decide
+  whether the last ~5-8% (3450) is safe.
 - Debug-build floor note: 18.97 µA at 4.2 V vs 18.3 µA on the release build's
   hour capture is consistent with the 5 s LP poll cadence (two extra
   ~3.96 µC polls per 10 s floor window ≈ +0.8 µA, estimate) — not a
