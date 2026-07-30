@@ -70,11 +70,15 @@ void ulp_check_data_overlap();
 #include "ulp_main.h"  // exposes ulp_lp_wake_count and other LP-core globals
 #endif
 
+// The wake cycle lives next to setup(), where the sequence reads in the order a
+// boot performs it.
+static void begin_wake_cycle(void);
+static void run_wake_cycle(bool ulp_sample_available);
+bool vbus_present();
+
 #ifdef HAS_USB_SERVICE_WINDOW
 #include "driver/usb_serial_jtag.h"  // usb_serial_jtag_is_connected()
-// Both defined below start_deep_sleep(), which is the first caller.
 static void usb_service_window(void);
-bool vbus_present();
 #endif
 
 // --- RTC memory layout ---
@@ -1618,11 +1622,11 @@ bool periodic_display_clear(const time_t now, struct tm nowtm)
   return true;
 }
 
-// Everything a wake does apart from going back to sleep: resync, record, decide
-// whether to redraw, redraw. Split out from refresh_and_sleep() so the USB
-// service window can run the same cycle repeatedly without sleeping between
-// passes — a held-open window that skipped this would freeze the hour
-// accumulator and leave a stale frame on the panel.
+// Everything a trip does once it has a reading: resync, record, decide whether
+// to redraw, redraw. Separate from the sleep that normally follows, because a
+// parked session runs it repeatedly without sleeping between passes — and a hold
+// that skipped it would freeze the hour accumulator and leave a stale frame on
+// the panel, which is how the first attempt at that hold failed.
 static void wake_work(uint32_t battery_mv, float temp)
 {
   time_t now;
@@ -1775,12 +1779,6 @@ static void wake_work(uint32_t battery_mv, float temp)
   }
 }
 
-void refresh_and_sleep(uint32_t battery_mv, float temp)
-{
-  wake_work(battery_mv, temp);
-  start_deep_sleep();
-}
-
 #ifdef HAS_USB_SERVICE_WINDOW
 // --- USB flash-service window ---
 //
@@ -1811,57 +1809,21 @@ RTC_DATA_ATTR uint8_t usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
 // USB_WINDOW_PROBE_SKIP_WAKES.
 RTC_DATA_ATTR uint8_t usb_probe_skip = 0;
 
-// One window pass: exactly what a timer wake would have done, minus the sleep.
+// One window pass: exactly what a timer wake does, minus the sleep. Nothing here
+// but the two calls a real wake makes — the coprocessor keeps sampling on its own
+// timer whether or not the CPU slept, so a parked cycle always has a sample
+// waiting, the same one a timer wake would have come up to.
 static void usb_window_cycle()
 {
-  // boot_count counts trips through the high-power path, not power-ons — every
-  // deep-sleep wake is a fresh boot, and ntp_bootstrap_due() already reads it as
-  // "wakes". A parked cycle does the same work on the same cadence, so it counts
-  // too. Three things depend on that: the fault heartbeat, which repaints a
-  // faulted panel every FAULT_REPAINT_WAKES and would otherwise freeze the frame
-  // for the whole session; the NTP bootstrap throttle, which with a frozen count
-  // either never retries or retries every single cycle; and the "#" on the panel.
-  boot_count++;
-  crash_log.cur_boot_count = boot_count;
-
-  // Per-wake fault flag, so it has to be cleared per cycle here. Left latched it
-  // would reload the coprocessor program on every remaining pass of a session
-  // that can last hours, on the strength of one stale failure — and each reload
-  // bumps the RTC-persisted "uN" counter that is the coprocessor's health
-  // reading, so the diagnostic would end up recording the bug rather than the
-  // fault. Outside the window the flag self-clears at the next boot.
-  s_ulp_read_failed = false;
-
-  uint32_t battery_mv = read_battery_level();
-  float temp;
-  if (sensor.SupportsUlp())
-  {
-    crash_log.stage = STAGE_ULP_READ;
-    if (sensor.ReadUlpTemperature(&temp, previous_temp))
-    {
-      last_sensor_ok = true;
-    }
-    else
-    {
-      // Same fault handling as the equivalent wake in setup(), including the
-      // direct read that rescues it on the ESP32-E and cannot on the C6. Whatever
-      // it returns, wake_work() decides trust and reloads the coprocessor.
-      last_sensor_ok = false;
-      sensor.StopUlp();
-      s_ulp_read_failed = true;
-      crash_log.stage = STAGE_SENSOR;
-      temp = read_temperature();
-    }
-  }
-  else
-  {
-    crash_log.stage = STAGE_SENSOR;
-    temp = read_temperature();
-  }
-  wake_work(battery_mv, temp);
-  // Mirror to flash before parking again, so the window keeps the same "nothing
-  // in the archive is older than the last completed cycle" guarantee that
-  // start_deep_sleep() gives an ordinary wake.
+  begin_wake_cycle();
+  run_wake_cycle(true);
+  // What start_deep_sleep() does for a sleeping board, at the point a parked one
+  // stops working: nothing in the archive is older than the last completed
+  // cycle. It cannot live inside the cycle itself — the sleep path would then
+  // reach it twice, which is free in a stock build but not under PPK2_DEBUG,
+  // where each call adds a 300ms marker preamble, or HISTORY_BASE_EVERY_WAKE,
+  // where the second call re-dirties and writes a whole second snapshot. Those
+  // are the measurement builds; doubling their cost corrupts the instrument.
   history_store_persist_now();
 }
 
@@ -2142,6 +2104,111 @@ static void ppk2_selftest()
 }
 #endif
 
+// What every trip through the high-power path opens with. A real wake inherits
+// part of this from the boot — statics come up zeroed — but a parked cycle runs
+// inside one boot and has to be explicit, so both paths call the same thing
+// rather than each keeping its own idea of what starting a trip means.
+static void begin_wake_cycle(void)
+{
+  // boot_count counts trips through this path, not power-ons: every deep-sleep
+  // wake is a fresh boot, and ntp_bootstrap_due() already reads it as "wakes".
+  // The fault heartbeat's repaint interval, that NTP throttle and the "#" the
+  // panel reports all key off it.
+  boot_count++;
+  crash_log.cur_boot_count = boot_count;
+
+  // Per-trip, not per-boot: "the coprocessor handed up a reading we could not
+  // use". Latched across the cycles of a parked session it would reload the
+  // coprocessor program on every one of them, on the strength of one stale
+  // failure, and inflate the "uN" health counter while doing it.
+  s_ulp_read_failed = false;
+}
+
+// One trip through the high-power path, from the battery reading to the flash
+// mirror. The coprocessor's sample is used when this trip has one that can be
+// trusted, and a direct read is the fallback — which rescues the wake on the
+// ESP32-E and, today, cannot on the C6 (see below).
+//
+// Shared deliberately, and kept as wide as it can be: a board parked on USB runs
+// this same function on the same cadence a sleeping one does, so what the bench
+// observes is what the field executes. A second copy of the sequence would mean
+// iterating against code the deployed device never runs. The only thing the
+// window is allowed to differ in is window management itself — the park in place
+// of the sleep, and the wake sources that go with it.
+static void run_wake_cycle(bool ulp_sample_available)
+{
+  const uint32_t battery_mv = read_battery_level();
+
+  // Shared even though it can only fire on battery: both of its arms require
+  // VBUS to be absent, so inside a window it is a no-op by construction. Running
+  // it anyway keeps the parked path honest rather than quietly shorter.
+  handle_permanent_shutdown(battery_mv);
+
+  // Reachable only on the very first trip, which is always a real boot — a
+  // parked cycle cannot precede setup()'s own. Kept here so the order a first
+  // boot runs in (battery, shutdown, first-boot, then measure) is the order this
+  // function defines, not one split across two call sites.
+  if (boot_count == 1)
+  {
+    initialize_status_led();
+    on_first_boot();
+    clear_status_led(); // TODO: double check that this stops drawing power
+  }
+
+#ifdef MOCK_DISPLAY_DATA
+  // Fill mock data if history is empty (handles both first boot and stale RTC
+  // memory after firmware upload without power-cycle)
+  if (historical_data.temp_count == 0)
+  {
+    time_t mock_now;
+    struct tm mock_nowtm;
+    get_time(&mock_now, &mock_nowtm);
+    fill_mock_data(mock_now);
+    // Force display refresh by invalidating previous_temp
+    previous_temp = TEMP_NO_PREVIOUS;
+  }
+#endif
+
+  float temp;
+  if (ulp_sample_available && sensor.SupportsUlp())
+  {
+    crash_log.stage = STAGE_ULP_READ;
+    if (sensor.ReadUlpTemperature(&temp, previous_temp))
+    {
+      last_sensor_ok = true;
+      wake_work(battery_mv, temp);
+      return;
+    }
+
+    // ULP I2C error, or a reading the driver rejected — fall through to a direct
+    // read, which rescues the wake on the ESP32-E, where release_i2c_pins_to_hp()
+    // hands the bit-banged pins back.
+    //
+    // It does not rescue it on the C6 today. lp_core_i2c_master_init() calls
+    // rtc_gpio_init() on the shared pins, which sets their LP_AON_GPIO_MUX_SEL bit
+    // and routes the pads out of the digital GPIO domain, where the HP I2C driver
+    // cannot reach them — measured, with the LP core reading the sensor on 28 of 30
+    // cycles while every CPU-side read failed. ulp_lp_core_stop() is no help: it
+    // halts the core and touches no GPIO or I2C register.
+    //
+    // rtc_gpio_deinit() on both pins clears that bit and hands the pads back, which
+    // is the same call the FSM path above already makes. Not done here yet: it is
+    // unverified on this board, and on the C6 rtc_gpio_deinit() also force-disables
+    // the shared LP IO clock gate under an open IDF TODO (IDF-14951), which may
+    // disturb other LP peripherals. Until that is tested, recovery runs through the
+    // coprocessor, whose reading is accepted above — it reports an absent sensor as
+    // a NACK, which is the failure that matters. The gap left is a bus that ACKs
+    // without being the sensor.
+    last_sensor_ok = false;
+    sensor.StopUlp();
+    s_ulp_read_failed = true;
+  }
+
+  crash_log.stage = STAGE_SENSOR;
+  temp = read_temperature();
+  wake_work(battery_mv, temp);
+}
+
 void setup()
 {
   // Must run before anything that can light-sleep (see s_wake_cause).
@@ -2205,8 +2272,7 @@ void setup()
     restore_drift_from_flash();  // history survived; the drift block did not
   }
 
-  boot_count++;
-  crash_log.cur_boot_count = boot_count;
+  begin_wake_cycle();
   // CPU frequency is fixed at 80 MHz at build time (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
   // — replaces the Arduino-era setCpuFrequencyMhz(80) on non-first boots.
 
@@ -2229,75 +2295,18 @@ void setup()
   esp_sleep_wakeup_cause_t wakeup_cause = s_wake_cause;
   LOGI("Wakeup caused by %d (raw 0x%x)", (int)wakeup_cause, (unsigned)s_wake_causes_raw);
 
-  uint32_t battery_mv = read_battery_level();
+  // Which wakes come up to a coprocessor sample. A cold boot does not — nothing
+  // has been sampling — and neither does a reset. A VBUS wake does, and takes
+  // that path for the same reason a timer wake does: its sample is at most one
+  // period old, and on the C6 a direct read cannot succeed while the LP core owns
+  // the I2C pins, so falling through would paint "! SENSOR" on a wake where
+  // nothing is wrong.
+  const bool ulp_sample_available =
+      (wakeup_cause == ESP_SLEEP_WAKEUP_ULP || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
+       wakeup_cause == ESP_SLEEP_WAKEUP_GPIO);
 
-  handle_permanent_shutdown(battery_mv);
-
-  // A VBUS wake (USB just plugged in) takes the coprocessor path too: its last
-  // sample is at most one LP period old, and on the C6 a direct read cannot
-  // succeed while the LP core owns the I2C pins, so falling through would paint a
-  // "! SENSOR" badge for a wake where nothing is wrong.
-  if ((wakeup_cause == ESP_SLEEP_WAKEUP_ULP || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
-       wakeup_cause == ESP_SLEEP_WAKEUP_GPIO)
-      && sensor.SupportsUlp())
-  {
-    float temp;
-    crash_log.stage = STAGE_ULP_READ;
-    if (sensor.ReadUlpTemperature(&temp, previous_temp))
-    {
-      last_sensor_ok = true;
-      refresh_and_sleep(battery_mv, temp);
-      return; // never reached
-    }
-
-    // ULP I2C error, or a reading the driver rejected — fall through to a direct
-    // read, which rescues the wake on the ESP32-E, where release_i2c_pins_to_hp()
-    // hands the bit-banged pins back.
-    //
-    // It does not rescue it on the C6 today. lp_core_i2c_master_init() calls
-    // rtc_gpio_init() on the shared pins, which sets their LP_AON_GPIO_MUX_SEL bit
-    // and routes the pads out of the digital GPIO domain, where the HP I2C driver
-    // cannot reach them — measured, with the LP core reading the sensor on 28 of 30
-    // cycles while every CPU-side read failed. ulp_lp_core_stop() is no help: it
-    // halts the core and touches no GPIO or I2C register.
-    //
-    // rtc_gpio_deinit() on both pins clears that bit and hands the pads back, which
-    // is the same call the FSM path above already makes. Not done here yet: it is
-    // unverified on this board, and on the C6 rtc_gpio_deinit() also force-disables
-    // the shared LP IO clock gate under an open IDF TODO (IDF-14951), which may
-    // disturb other LP peripherals. Until that is tested, recovery runs through the
-    // coprocessor, whose reading is accepted above — it reports an absent sensor as
-    // a NACK, which is the failure that matters. The gap left is a bus that ACKs
-    // without being the sensor.
-    last_sensor_ok = false;
-    sensor.StopUlp();
-    s_ulp_read_failed = true;
-  }
-
-  if (boot_count == 1)
-  {
-    initialize_status_led();
-    on_first_boot();
-    clear_status_led(); // TODO: double check that this stops drawing power
-  }
-
-#ifdef MOCK_DISPLAY_DATA
-  // Fill mock data if history is empty (handles both first boot and stale RTC
-  // memory after firmware upload without power-cycle)
-  if (historical_data.temp_count == 0)
-  {
-    time_t mock_now;
-    struct tm mock_nowtm;
-    get_time(&mock_now, &mock_nowtm);
-    fill_mock_data(mock_now);
-    // Force display refresh by invalidating previous_temp
-    previous_temp = TEMP_NO_PREVIOUS;
-  }
-#endif
-
-  crash_log.stage = STAGE_SENSOR;
-  float temp = read_temperature();
-  refresh_and_sleep(battery_mv, temp);
+  run_wake_cycle(ulp_sample_available);
+  start_deep_sleep();
 }
 
 extern "C" void app_main(void)
