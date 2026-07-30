@@ -16,9 +16,7 @@
 ## Build & test
 
 ```bash
-~/.platformio/penv/bin/pio run -e dfrobot_firebeetle2_esp32e_debug   # ESP32-E (default env)
-~/.platformio/penv/bin/pio run -e seeed_xiao_esp32c6_debug           # C6
-~/.platformio/penv/bin/pio run -e thermometer_c6_debug               # custom rev A board
+~/.platformio/penv/bin/pio run -e thermometer_c6_debug   # rev A; also seeed_xiao_esp32c6_debug, dfrobot_firebeetle2_esp32e_debug
 make -C tools/sim screenshots      # render all display sizes -> tools/mock_*.png
 make -C tools/hstest [sample]      # HistoryStore checks, host-only; `sample` also gates the Python decoder
 ```
@@ -113,9 +111,11 @@ pure framework=espidf on stock platform, drop fork".
 
 Check for and revert temporary debug state before any cleanup or feature commit:
 test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
-`HISTORY_BASE_EVERY_WAKE`, `USB_WINDOW_OBSERVE_CYCLES`, `RESYNC_INTERVAL_MIN`),
-temporary build_flags, hardcoded test values. **Get `HISTORY_BASE_EVERY_WAKE` off
-the device too**, not just out of the tree — it is the one that wears flash out.
+`HISTORY_BASE_EVERY_WAKE`, `USB_WINDOW_OBSERVE_CYCLES`, `RESYNC_INTERVAL_MIN`,
+`BATTERY_SHUTDOWN_DISABLED`), temporary build_flags, hardcoded test values.
+**Get `HISTORY_BASE_EVERY_WAKE` and `BATTERY_SHUTDOWN_DISABLED` off the device
+too**, not just out of the tree — one wears flash out, the other lets a
+deployed pack over-discharge.
 
 ## Workflow preferences
 

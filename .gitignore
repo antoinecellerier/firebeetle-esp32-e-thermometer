@@ -24,3 +24,6 @@ include/generated/
 
 # Archive images pulled off a device by tools/history.py backup
 hist-*.bin
+
+# ppk2.py sweep output (raw captures + reports; cited from docs/notes.md by dirname)
+/ppk2-sweep-*/
