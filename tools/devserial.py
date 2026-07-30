@@ -146,9 +146,10 @@ def main(argv=None):
     p.add_argument("--port", help="default: first ttyUSB*, else first ttyACM*")
     p.add_argument("--baud", type=int, default=115200,
                    help="ignored by USB-Serial-JTAG (C6); default 115200")
-    p.add_argument("--timeout", type=float, default=25.0,
+    p.add_argument("--timeout", type=float,
                    help="seconds to stream before exiting (default 25); for "
-                        "flashwait, how long to wait for the board to appear")
+                        "flashwait, how long to wait for the board to appear "
+                        "(default 180)")
     p.add_argument("--grep", metavar="REGEX",
                    help="only print matching lines, e.g. 'Boot count|base snapshot'")
     p.add_argument("--env", default="thermometer_c6_debug",
@@ -161,15 +162,18 @@ def main(argv=None):
     args = p.parse_args(argv)
 
     if args.mode == "flashwait":
-        # A long wait is the normal case: on a release build the board sleeps 60s
-        # between wakes, so the default 25s can easily miss the window.
-        timeout = args.timeout if args.timeout != 25.0 else 180.0
+        # Waiting out a whole sleep interval is the normal case, and a release
+        # build sleeps 60s between wakes, so the streaming default is far too
+        # short here. Left unset rather than compared against, so an explicitly
+        # requested timeout is honoured whatever value it happens to be.
+        timeout = 180.0 if args.timeout is None else args.timeout
         return flashwait(args.env, args.poll, timeout, args.pio_args)
 
+    timeout = 25.0 if args.timeout is None else args.timeout
     port = args.port or find_port()
-    print(f"[{port} @ {args.baud}, {args.mode}, {args.timeout:g}s]", file=sys.stderr)
+    print(f"[{port} @ {args.baud}, {args.mode}, {timeout:g}s]", file=sys.stderr)
     try:
-        stream(port, args.baud, args.timeout, args.grep, reset=args.mode == "boot")
+        stream(port, args.baud, timeout, args.grep, reset=args.mode == "boot")
     except KeyboardInterrupt:
         pass
     except serial.SerialException as e:
