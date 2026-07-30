@@ -631,7 +631,13 @@ def confirm_connection(rail, mv):
 
 def _connect(args):
     """Open the PPK2's measurement interface. Reads calibration only — does not
-    source, measure, or touch DUT power, so it is safe with any wiring."""
+    source, measure, or touch DUT power, so it is safe with any wiring.
+
+    The PPK2 exposes two CDC interfaces and pyserial enumerates them in either
+    order. Only interface .1 carries the measurement stream; commands written to
+    the other are accepted silently and no samples ever arrive. So probe rather
+    than guess: get_modifiers() returns False unless it actually parsed the
+    calibration blob back."""
     try:
         from ppk2_api.ppk2_api import PPK2_API
     except ImportError:
@@ -892,53 +898,225 @@ def decode_raw(args):
     return _trace_from_samples(samples, digital_raw, ppk, dt)
 
 
-def capture_live(args):
-    try:
-        from ppk2_api.ppk2_api import PPK2_API
-    except ImportError:
-        sys.exit("ppk2_api missing. .venv/bin/pip install -r tools/requirements.txt")
+class _Stream:
+    """Acquisition state for one capture: raw bytes in, decoded samples out.
 
-    # The PPK2 exposes two CDC interfaces and list_devices() returns both in
-    # whatever order pyserial enumerated them. Only interface .1 carries the
-    # measurement stream; commands written to the other are accepted silently
-    # and no samples ever arrive. So probe rather than guess: get_modifiers()
-    # returns False unless it actually parsed the calibration blob back.
-    import serial.tools.list_ports as _lp
+    Owns the read loop, the progress peeker and the byte buffers, so a caller
+    can run several captures over one connection (the sweep does) without
+    re-plumbing the acquisition rules.
 
-    def _candidates():
-        if args.port:
-            return [args.port]
-        found = [(pt.location or "", pt.device) for pt in _lp.comports()
-                 if pt.product == "PPK2"]
-        # Interface .1 first, then by device name for determinism.
-        return [d for _, d in sorted(found, key=lambda x: (not x[0].endswith(".1"), x[1]))]
+    Acquisition and decode are separated deliberately. The PPK2 streams
+    4 bytes per sample at a fixed 100 kSps = ~400 kB/s, and get_samples() is
+    pure Python doing per-sample work, so decoding inline cannot keep up: the
+    kernel serial buffer backs up and samples are lost silently. The capture
+    loop therefore does nothing but read bytes and stash them; everything is
+    decoded afterwards. Nothing is decoded during acquisition, including the
+    over-current check: that is post-hoc, because a live check fast enough to
+    matter would have to decode inline and would corrupt the capture it is
+    protecting.
+    """
 
-    cands = _candidates()
-    if not cands:
-        sys.exit("no PPK2 found")
-    ppk, port = None, None
-    for cand in cands:
+    CHUNK = 1 << 20
+    # Progress is sampled often enough never to miss a 3 s HP wake, but printed
+    # only on a state change or once a minute — a 24-minute quiet stretch should
+    # cost 24 lines, not 700. LP wakes (~3 ms at ~1 mA) cannot show up here: a
+    # sampled peek essentially never lands on one, and catching them would need
+    # the continuous decoding that cannot keep up with the stream. Read the lp
+    # counter off the panel footer instead.
+    # PEEK_BYTES is a ceiling: a single read at 400 kB/s with millisecond polling
+    # returns a few hundred bytes, so a peek is typically 1-4 ms of signal.
+    PEEK_EVERY_S, PRINT_EVERY_S, PEEK_BYTES = 1.0, 60.0, 4000
+    AWAKE_UA = 1000.0
+
+    def __init__(self, ppk, meta, raw_out=None, label=""):
+        self.ppk = ppk
+        self.raw_out = raw_out
+        self.label = label
+        self.pending = bytearray()
+        self.nbytes = 0
+        self.t_start = None
+        self.state = {"awake": None, "wakes": 0,
+                      "next_peek": 0.0, "next_print": 0.0}
+        self.raw_fh = open(raw_out, "wb") if raw_out else None
+        if raw_out:
+            # Save what decoding needs so the capture stays analysable later
+            # without the PPK2 attached — the modifiers are device calibration,
+            # not in the stream, and the conversion is mode-dependent.
+            # vdd_mv is the real voltage in both modes: get_adc_result() folds
+            # current_vdd into its offset term with no mode guard, so writing 0
+            # for ampere captures biased every offline decode.
+            with open(raw_out + ".json", "w") as fh:
+                json.dump(meta, fh)
+            print(f"wrote {raw_out}.json (calibration sidecar)")
+        self.peeker = None
         try:
-            trial = PPK2_API(cand)
-            # A previous capture can leave sample bytes queued, and the metadata
-            # parser decodes what it reads as text — so stop any stream and
-            # discard the backlog before asking.
-            try:
-                trial.stop_measuring()
-            except Exception:
-                pass
-            time.sleep(0.1)
-            trial.ser.reset_input_buffer()
-            if trial.get_modifiers():
-                ppk, port = trial, cand
-                break
-            trial.ser.close()
+            self.peeker = _offline_decoder(meta)
         except Exception as exc:
-            print(f"  {cand}: {exc}")
-    if ppk is None:
-        sys.exit(f"none of {cands} answered GET_META_DATA — is nrfconnect still "
-                 f"holding the port?")
-    print(f"PPK2 on {port} (probed {len(cands)} interface(s))")
+            print(f"  (no live progress: {exc})")
+
+    def start(self, sanity=True):
+        self.ppk.start_measuring()
+        self.t_start = time.time()
+        if sanity:
+            # Stream sanity: fail in under a second rather than after the full
+            # capture. Getting the wrong CDC interface yields a trickle of bytes
+            # and an empty capture.
+            self.drain(0.4)
+            if self.nbytes < 1000:
+                self.stop()
+                raise RuntimeError(
+                    f"stream is dead: {self.nbytes} bytes in 0.4s, expected "
+                    f"~160000. Wrong CDC interface, or another process is "
+                    f"draining the port.")
+
+    def stop(self):
+        try:
+            self.ppk.stop_measuring()
+        finally:
+            if self.raw_fh:
+                self.raw_fh.close()
+                self.raw_fh = None
+
+    def drain(self, seconds):
+        """Read for `seconds`, never leaving the port unread.
+
+        At 400 kB/s the kernel CDC buffer overflows in a fraction of a second, so
+        any time.sleep() longer than a few ms loses samples and desyncs the
+        stream — get_samples() carries a remainder, so a gap corrupts every
+        sample after it, not just the missing ones.
+        """
+        end_t = time.time() + seconds
+        while time.time() < end_t:
+            buf = self.ppk.get_data()
+            if not buf:
+                time.sleep(0.002)
+                continue
+            self.nbytes += len(buf)
+            if self.raw_fh:
+                self.raw_fh.write(buf)
+            else:
+                self.pending.extend(buf)
+            now = time.time()
+            if now >= self.state["next_peek"]:
+                self.state["next_peek"] = now + self.PEEK_EVERY_S
+                self.progress(now, buf)
+
+    def progress(self, now, buf):
+        """Estimate current from a small aligned slice of the newest bytes.
+
+        Peeks go through a throwaway decoder: get_samples() carries remainder
+        state forward, so peeking through the real one would corrupt the full
+        decode afterwards.
+        """
+        state = self.state
+        if self.peeker is None or len(buf) < 8:
+            return
+        off = len(buf) % 4                      # align to a 4-byte sample boundary
+        slice_ = bytes(buf[off:off + self.PEEK_BYTES])
+        if len(slice_) < 8:
+            return
+        try:
+            self.peeker.remainder = {"sequence": b"", "len": 0}
+            sm, _ = self.peeker.get_samples(slice_)
+        except Exception:
+            return
+        if not sm:
+            return
+        ua = sum(sm) / len(sm)
+        awake = ua > self.AWAKE_UA
+        changed = state["awake"] is not None and awake != state["awake"]
+        if awake and not state["awake"]:
+            state["wakes"] += 1
+        state["awake"] = awake
+        if changed or now >= state["next_print"]:
+            el = now - self.t_start
+            rate = self.nbytes / 4 / max(el, 1e-6) / 1000
+            label = ("sleep -> AWAKE" if changed and awake else
+                     "AWAKE -> sleep" if changed else "....")
+            # Tilde because this is a few milliseconds of signal, not a figure: a
+            # short slice of a PFM floor reads anywhere from 12 to 100 uA
+            # depending on whether a spike lands in it. It is here to show
+            # liveness and sleep-vs-awake, both of which survive that noise
+            # against a 1000 uA threshold. Never quote it.
+            shown = f"~{ua/1000:7.2f} mA" if awake else f"~{ua:7.1f} uA"
+            pre = f"[{self.label}] " if self.label else ""
+            print(f"{pre}t={el:8.1f}s  {label:14s} {shown}  {rate:5.1f} kSps  "
+                  f"{state['wakes']} wake(s)", flush=True)
+            state["next_print"] = now + self.PRINT_EVERY_S
+
+    def print_capture_stats(self):
+        elapsed = time.time() - self.t_start
+        got = self.nbytes // 4
+        expect = int(elapsed * PPK2_SAMPLE_HZ)
+        print(f"captured {self.nbytes} bytes = {got} samples in {elapsed:.2f}s "
+              f"({got/elapsed/1000:.1f} kSps of an expected "
+              f"{PPK2_SAMPLE_HZ/1000:.0f})")
+        if got < expect * 0.98:
+            print(f"  WARNING: {expect - got} samples short "
+                  f"({100*(1-got/expect):.1f}%). Charge over a region is still "
+                  f"the integral of what arrived, but a gap inside a region "
+                  f"under-reports it.")
+
+    def decode(self, dec_n):
+        """Decode everything captured. Returns (samples, digital_raw, decimator).
+
+        get_samples() keeps cross-chunk remainder state on the ppk object, so it
+        is cleared first — a previous capture on the same connection must not
+        bleed a partial sample into this one.
+        """
+        samples = array("f")
+        digital_raw = []
+        dec = _Decimator(dec_n)
+        self.ppk.remainder = {"sequence": b"", "len": 0}
+
+        def feed(buf):
+            sm, dg = self.ppk.get_samples(buf)
+            dec.feed(sm, dg, samples, digital_raw)
+
+        if self.raw_out:
+            with open(self.raw_out, "rb") as fh:
+                while True:
+                    b = fh.read(self.CHUNK)
+                    if not b:
+                        break
+                    feed(b)
+        else:
+            for off in range(0, len(self.pending), self.CHUNK):
+                feed(self.pending[off:off + self.CHUNK])
+            self.pending = bytearray()
+        return samples, digital_raw, dec
+
+
+def _choose_decimation(expect_samples, requested):
+    """Pick the decode decimation. Decoding is what runs out of memory, and it
+    happens after the capture — so a forgotten --decimate would waste the whole
+    run. Cap the decoded point count instead of trusting the flag."""
+    if requested is not None:
+        # Explicit beats implicit. Overriding a requested --decimate 1 defeated the
+        # reason for asking: the marker fingerprint does not survive decimation.
+        dec_n = max(1, requested)
+        est_mb = expect_samples / dec_n * 28 / 1e6
+        if est_mb > 600:
+            print(f"note: --decimate {dec_n} on {expect_samples/1e6:.0f}M samples "
+                  f"needs ~{est_mb:.0f} MB to decode. Honouring it as asked.")
+        return dec_n
+    dec_n = max(1, math.ceil(expect_samples / 20e6))
+    if dec_n > 1:
+        print(f"auto-decimating {dec_n}x: {expect_samples/1e6:.0f}M samples would "
+              f"not fit undecimated (means and charge are unaffected; pass "
+              f"--decimate 1 to override, e.g. for marker captures)")
+    return dec_n
+
+
+def _overcurrent_msg(peak_ma, rail):
+    return (f"  *** {peak_ma:.0f} mA peak exceeded the "
+            f"{RAILS[rail]['abort_ma']:.0f} mA ceiling for rail {rail!r}. "
+            f"Power is already off. Check the connection before trusting "
+            f"this capture.")
+
+
+def capture_live(args):
+    ppk, port = _connect(args)
 
     sourcing = args.rail is not None
     mv = None
@@ -978,158 +1156,19 @@ def capture_live(args):
               + (", output held off until the power cycle" if args.power_cycle
                  else ", output ON"))
 
-    # Acquisition and decode are separated deliberately. The PPK2 streams
-    # 4 bytes per sample at a fixed 100 kSps = ~400 kB/s, and get_samples() is
-    # pure Python doing per-sample work, so decoding inline cannot keep up: the
-    # kernel serial buffer backs up and samples are lost silently. The capture
-    # loop therefore does nothing but read bytes and stash them; everything is
-    # decoded afterwards, from the same object so the calibration modifiers and
-    # the cross-chunk remainder state still apply.
-    #
-    # Nothing is decoded during acquisition, including the over-current check:
-    # that is post-hoc, because a live check fast enough to matter would have to
-    # decode inline and would corrupt the capture it is protecting.
-    CHUNK = 1 << 20
-
-    t_arr, cur, cum = array("d"), array("f"), array("d")
-    digital_raw = []
-    pending = bytearray()
-    meta_for_peek = {"modifiers": ppk.modifiers,
-                     "mode": "SOURCE_MODE" if sourcing else "AMPERE_MODE",
-                     "vdd_mv": mv if sourcing else args.vdd}
-    raw_fh = open(args.raw_out, "wb") if args.raw_out else None
-    if args.raw_out:
-        # Save what decoding needs so the capture stays analysable later without
-        # the PPK2 attached — the modifiers are device calibration, not in the
-        # stream, and the conversion is mode-dependent.
-        # The real voltage in both modes: get_adc_result() folds current_vdd into
-        # its offset term with no mode guard, so writing 0 for ampere captures
-        # biased every offline decode.
-        with open(args.raw_out + ".json", "w") as fh:
-            json.dump(meta_for_peek, fh)
-        print(f"wrote {args.raw_out}.json (calibration sidecar)")
-
+    meta = {"modifiers": ppk.modifiers,
+            "mode": "SOURCE_MODE" if sourcing else "AMPERE_MODE",
+            "vdd_mv": mv if sourcing else args.vdd}
+    stream = _Stream(ppk, meta, raw_out=args.raw_out)
     abort_ma = RAILS[args.rail]["abort_ma"] if sourcing else None
-    nbytes = 0
+    dec_n = _choose_decimation(args.seconds * PPK2_SAMPLE_HZ, args.decimate)
 
-    # Decoding is what runs out of memory, and it happens after the capture — so
-    # a forgotten --decimate would waste the whole run. Cap the decoded point
-    # count instead of trusting the flag.
-    expect = args.seconds * PPK2_SAMPLE_HZ
-    if args.decimate is not None:
-        # Explicit beats implicit. Overriding a requested --decimate 1 defeated the
-        # reason for asking: the marker fingerprint does not survive decimation.
-        dec_n = max(1, args.decimate)
-        est_mb = expect / dec_n * 28 / 1e6
-        if est_mb > 600:
-            print(f"note: --decimate {dec_n} on {expect/1e6:.0f}M samples needs "
-                  f"~{est_mb:.0f} MB to decode. Honouring it as asked.")
-    else:
-        dec_n = max(1, math.ceil(expect / 20e6))
-        if dec_n > 1:
-            print(f"auto-decimating {dec_n}x: {expect/1e6:.0f}M samples would not "
-                  f"fit undecimated (means and charge are unaffected; pass "
-                  f"--decimate 1 to override, e.g. for marker captures)")
-
-    def stash(buf):
-        if raw_fh:
-            raw_fh.write(buf)
-        else:
-            pending.extend(buf)
-
-    # Progress is sampled often enough never to miss a 3 s HP wake, but printed
-    # only on a state change or once a minute — a 24-minute quiet stretch should
-    # cost 24 lines, not 700. LP wakes (~3 ms at ~1 mA) cannot show up here: a
-    # sampled peek essentially never lands on one, and catching them would need
-    # the continuous decoding that cannot keep up with the stream. Read the lp
-    # counter off the panel footer instead.
-    # PEEK_BYTES is a ceiling: a single read at 400 kB/s with millisecond polling
-    # returns a few hundred bytes, so a peek is typically 1-4 ms of signal.
-    PEEK_EVERY_S, PRINT_EVERY_S, PEEK_BYTES = 1.0, 60.0, 4000
-    AWAKE_UA = 1000.0
-    peeker = None
-    if meta_for_peek is not None:
-        try:
-            peeker = _offline_decoder(meta_for_peek)
-        except Exception as exc:
-            print(f"  (no live progress: {exc})")
-    state = {"awake": None, "wakes": 0, "next_peek": 0.0, "next_print": 0.0}
-
-    def progress(now, buf):
-        """Estimate current from a small aligned slice of the newest bytes.
-
-        Peeks go through a throwaway decoder: get_samples() carries remainder
-        state forward, so peeking through the real one would corrupt the full
-        decode afterwards.
-        """
-        if peeker is None or len(buf) < 8:
-            return
-        off = len(buf) % 4                      # align to a 4-byte sample boundary
-        slice_ = bytes(buf[off:off + PEEK_BYTES])
-        if len(slice_) < 8:
-            return
-        try:
-            peeker.remainder = {"sequence": b"", "len": 0}
-            sm, _ = peeker.get_samples(slice_)
-        except Exception:
-            return
-        if not sm:
-            return
-        ua = sum(sm) / len(sm)
-        awake = ua > AWAKE_UA
-        changed = state["awake"] is not None and awake != state["awake"]
-        if awake and not state["awake"]:
-            state["wakes"] += 1
-        state["awake"] = awake
-        if changed or now >= state["next_print"]:
-            el = now - t_start
-            rate = nbytes / 4 / max(el, 1e-6) / 1000
-            label = ("sleep -> AWAKE" if changed and awake else
-                     "AWAKE -> sleep" if changed else "....")
-            # Tilde because this is a few milliseconds of signal, not a figure: a
-            # short slice of a PFM floor reads anywhere from 12 to 100 uA
-            # depending on whether a spike lands in it. It is here to show
-            # liveness and sleep-vs-awake, both of which survive that noise
-            # against a 1000 uA threshold. Never quote it.
-            shown = f"~{ua/1000:7.2f} mA" if awake else f"~{ua:7.1f} uA"
-            print(f"t={el:8.1f}s  {label:14s} {shown}  {rate:5.1f} kSps  "
-                  f"{state['wakes']} wake(s)", flush=True)
-            state["next_print"] = now + PRINT_EVERY_S
-
-    def drain(seconds):
-        """Read for `seconds`, never leaving the port unread.
-
-        At 400 kB/s the kernel CDC buffer overflows in a fraction of a second, so
-        any time.sleep() longer than a few ms loses samples and desyncs the
-        stream — get_samples() carries a remainder, so a gap corrupts every
-        sample after it, not just the missing ones.
-        """
-        nonlocal nbytes
-        end_t = time.time() + seconds
-        while time.time() < end_t:
-            buf = ppk.get_data()
-            if not buf:
-                time.sleep(0.002)
-                continue
-            nbytes += len(buf)
-            stash(buf)
-            now = time.time()
-            if now >= state["next_peek"]:
-                state["next_peek"] = now + PEEK_EVERY_S
-                progress(now, buf)
-
-    ppk.start_measuring()
-    t_start = time.time()
-
-    # Stream sanity: fail in under a second rather than after --seconds. Getting
-    # the wrong CDC interface yields a trickle of bytes and an empty capture.
-    drain(0.4)
-    if nbytes < 1000:
-        ppk.stop_measuring()
+    try:
+        stream.start()
+    except RuntimeError as exc:
         if sourcing:
             ppk.toggle_DUT_power("OFF")
-        sys.exit(f"stream is dead: {nbytes} bytes in 0.4s, expected ~160000. "
-                 f"Wrong CDC interface, or another process is draining the port.")
+        sys.exit(str(exc))
 
     t_power = None
     try:
@@ -1137,48 +1176,20 @@ def capture_live(args):
             # Output is already on; this is the OFF/wait/ON sequence that puts a
             # cold boot inside the capture.
             ppk.toggle_DUT_power("OFF")
-            drain(args.off_seconds)
+            stream.drain(args.off_seconds)
             ppk.toggle_DUT_power("ON")
             t_power = time.time()
-            print(f"DUT powered at t~{t_power - t_start:.2f}s into the capture")
-        drain(max(0.0, args.seconds - (time.time() - t_start)))
+            print(f"DUT powered at t~{t_power - stream.t_start:.2f}s into the capture")
+        stream.drain(max(0.0, args.seconds - (time.time() - stream.t_start)))
     finally:
-        ppk.stop_measuring()
+        stream.stop()
         if sourcing:
             ppk.toggle_DUT_power("OFF")
-        if raw_fh:
-            raw_fh.close()
 
-    elapsed = time.time() - t_start
-    got = nbytes // 4
-    expect = int(elapsed * PPK2_SAMPLE_HZ)
-    print(f"captured {nbytes} bytes = {got} samples in {elapsed:.2f}s "
-          f"({got/elapsed/1000:.1f} kSps of an expected "
-          f"{PPK2_SAMPLE_HZ/1000:.0f})")
-    if got < expect * 0.98:
-        print(f"  WARNING: {expect - got} samples short ({100*(1-got/expect):.1f}%). "
-              f"Charge over a region is still the integral of what arrived, but "
-              f"a gap inside a region under-reports it.")
+    stream.print_capture_stats()
 
     print("decoding...")
-    samples = array("f")
-    dec = _Decimator(dec_n)
-
-    def feed(buf):
-        sm, dg = ppk.get_samples(buf)
-        dec.feed(sm, dg, samples, digital_raw)
-
-    if raw_fh:
-        with open(args.raw_out, "rb") as fh:
-            while True:
-                b = fh.read(CHUNK)
-                if not b:
-                    break
-                feed(b)
-    else:
-        for off in range(0, len(pending), CHUNK):
-            feed(pending[off:off + CHUNK])
-        del pending
+    samples, digital_raw, dec = stream.decode(dec_n)
 
     # The inrush abort is post-hoc, not live, and deliberately so: decoding
     # inside the capture loop cannot sustain 400 kB/s, and a safety check that
@@ -1188,9 +1199,7 @@ def capture_live(args):
     if abort_ma and len(samples):
         peak = dec.peak / 1000.0
         if peak > abort_ma:
-            print(f"  *** {peak:.0f} mA peak exceeded the {abort_ma:.0f} mA "
-                  f"ceiling for rail {args.rail!r}. Power is already off. "
-                  f"Check the connection before trusting this capture.")
+            print(_overcurrent_msg(peak, args.rail))
 
     if args.raw_out:
         _cache_write(args.raw_out, dec.n, samples, digital_raw)

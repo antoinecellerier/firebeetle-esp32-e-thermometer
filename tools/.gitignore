@@ -9,3 +9,7 @@ render_display
 
 # check_sample.py imports history.py, so running the gate byte-compiles it.
 __pycache__/
+
+# PPK2 captures kept as classifier fixtures / for re-analysis: hundreds of MB,
+# referenced from docs/notes.md by filename.
+/captures/
