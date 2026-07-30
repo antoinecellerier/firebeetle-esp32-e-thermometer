@@ -161,6 +161,14 @@ def main(argv=None):
                    help="flashwait: extra args passed through to pio run")
     args = p.parse_args(argv)
 
+    # Only flashwait passes anything through. Without this, `watch /dev/ttyACM1`
+    # — the natural slip for `--port /dev/ttyACM1` — parses fine, the path lands
+    # here unused, and the capture silently comes from whatever find_port()
+    # picked first, which with two boards attached is the wrong one.
+    if args.pio_args and args.mode != "flashwait":
+        p.error(f"unexpected argument(s) for {args.mode}: "
+                f"{' '.join(args.pio_args)}")
+
     if args.mode == "flashwait":
         # Waiting out a whole sleep interval is the normal case, and a release
         # build sleeps 60s between wakes, so the streaming default is far too
