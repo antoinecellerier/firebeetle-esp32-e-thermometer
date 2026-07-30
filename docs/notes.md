@@ -953,3 +953,62 @@ domain up that would otherwise power down.
   charge for an identical duration. Same panel, rail, voltage and 60 s
   delta-fired cadence; the board was hotter here, having just come off a USB
   session. Not investigated; do not fold into a budget until it is.
+
+## thermometer-c6 board 1: battery-floor voltage sweep at J1 (2026-07-30)
+
+First run of the automated harness (`tools/ppk2.py sweep --rail reva-j1`,
+added same day): fresh power-cycled boot per voltage step, regime classified
+from current alone, automatic bisect of the healthy/unhealthy edge. Rig:
+board 1 + BMP581 + GDEM0154I61, PPK2 source meter at **J1 through the JST
+harness** (deployment path: Q6 + charger VBAT-pin leakage included), battery
+and USB out. Build `1d567b6`, `thermometer_c6_debug` +
+`PLATFORMIO_BUILD_FLAGS="-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI"` — 5 s
+LP polls are the liveness heartbeat, the 3700 mV latch is disabled, no NTP so
+nothing reaches the archive. 30 s dwell per step (below the ≥60 s the XIAO
+storm statistics needed — zero storms were seen, but the dwell cannot prove
+their absence), 20 s boot window, ambient not recorded (indoor bench,
+evening). Artifacts: `ppk2-sweep-20260730-214824/` and `-220452/` (report.md
++ replayable raw bins; their DEAD labels predate the `ee0a8d0` relabel — read
+them as DEGRADED).
+
+| VIN | floor | input power | regime (fresh boot) |
+|---|---|---|---|
+| 4.20 V | 18.97 µA | 80 µW | healthy; raw peak 667 mA = first-power inrush, matching Phase 1's 0.67 A |
+| 3.60 V | 20.61 µA | 74 µW | healthy |
+| 3.45 V | 21.28 µA | 73 µW | healthy |
+| 3.38 V | 22.01 µA | 74 µW | healthy |
+| 3.34 V | 23.74 µA | 79 µW | healthy |
+| 3.32 V | 29.5–29.8 µA | ~99 µW | healthy, floor elevated ~+30% — the LDO tree announcing marginality |
+| 3.31 V | 103–105 µA | ~343 µW | boots AND completes the render, then sleep is broken: ~55 Hz small events over a ~104 µA floor |
+| 3.00 V | 1213 µA | 3639 µW | continuous churn through the boot window, no liveness |
+
+- **The fresh-boot cliff is at 3317–3320 mV and razor sharp.** Run 1 (10 mV
+  bisect): lowest healthy 3320, first non-healthy 3310, re-runs of both sides
+  agree. Run 2 seeded at that pair with a 1 mV bisect: 3318/3317, with one
+  bistable flip (3317 unhealthy during bisect, healthy on re-run) — so the
+  edge itself is ≤1–2 mV wide plus a hair of run-to-run hysteresis.
+  Contrast the XIAO buck's comparator edge at 3545 mV: the LDO tree buys
+  ~230 mV and fails soft where the buck stormed at 0.5–0.9 A.
+- **The render never failed.** Every step down to 3.31 V completed a full
+  refresh (56–60 mC); even 3.00 V drew boot-shaped current for the whole
+  window. The failure mode is the *sleep* degrading, not the refresh — the
+  opposite polarity to the XIAO, and it makes the elevated floor
+  (19→24→30 µA over 3.38→3.32 V) the useful leading indicator.
+- **Below the edge is an oscillation, not death**: ~104 µA floor with 200 µA+
+  sub-50 ms events at ~55 Hz. What oscillates is not identified (RT9080 at
+  dropout is the suspect, unverified — a scope on 3V3 would say); it sits
+  below any sane threshold, so recorded, not chased. Replay:
+  `ppk2.py raw ppk2-sweep-20260730-220452/step02-3317mv.bin --profile 500`.
+- **Threshold consequence — candidate, not applied**: the buck-era 3800/3700
+  in Thermometer.cpp could re-derive to ~**3550 warn / 3450 shutdown**:
+  ~130 mV above the measured cliff and above the floor-elevation knee. Gated
+  on the remaining Phase 3 checks before touching the constants: scope on 3V3
+  during a refresh near 3.45 V (the PPK2 is stiff — a real cell adds ESR +
+  protection-PCB drop, worst at the ~465 mA peak) and the cold test (the edge
+  is a VTH-flavored effect; the XIAO's shifted up when cold). At face value
+  this reopens most of the ~25% of pack capacity the 3700 mV cutoff strands
+  (OCV-curve estimate, README).
+- Debug-build floor note: 18.97 µA at 4.2 V vs 18.3 µA on the release build's
+  hour capture is consistent with the 5 s LP poll cadence (two extra
+  ~3.96 µC polls per 10 s floor window ≈ +0.8 µA, estimate) — not a
+  regression.

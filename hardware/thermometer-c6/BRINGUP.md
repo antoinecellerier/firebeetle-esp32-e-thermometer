@@ -273,6 +273,11 @@ docs/history-store-validation.md.
       latch back), append report.md to the notes.md power logbook. The
       sweep sees input current only — the scope-on-3V3 dropout check stays
       manual, aimed at the edge the sweep finds.
+      **Sweep DONE 2026-07-30** (notes.md): fresh-boot cliff **3317–3320mV**,
+      ≤1–2mV wide; render never failed down to 3.31V, the sleep is what
+      breaks (~104µA / ~55Hz oscillation below the edge); floor rises
+      19→30µA over 3.38→3.32V. Candidate thresholds **3550/3450mV** — apply
+      only after the scope-at-3.45V and cold checks above.
 - [ ] Boost transient current vs the Si1308EDL 610mA ILIM at refresh start.
       [SCHEMATIC-VERIFICATION]
 - [ ] 32k crystal **cold start**: power-on from fridge-cold (ESR rises when
