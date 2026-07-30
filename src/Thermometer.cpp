@@ -1807,6 +1807,10 @@ void refresh_and_sleep(uint32_t battery_mv, float temp)
 // cycles and then the port comes back unattended.
 RTC_DATA_ATTR uint8_t usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
 
+// Sleeps left to skip before probing for a host again — see
+// USB_WINDOW_PROBE_SKIP_WAKES.
+RTC_DATA_ATTR uint8_t usb_probe_skip = 0;
+
 // One window pass: exactly what a timer wake would have done, minus the sleep.
 static void usb_window_cycle()
 {
@@ -1864,7 +1868,20 @@ static void usb_window_cycle()
 static void usb_service_window(void)
 {
   if (!vbus_present())
+  {
+    // Any absence of VBUS makes the next plug worth probing immediately.
+    usb_probe_skip = 0;
     return;  // the battery case: one GPIO read, then sleep as usual
+  }
+
+  // A charger stays a charger. Re-running the grace on every sleep would spend
+  // seconds of CPU-active time per wake for as long as the board is docked —
+  // energy that is free on USB, but heat that lands on the sensor next door.
+  if (usb_probe_skip > 0)
+  {
+    usb_probe_skip--;
+    return;
+  }
 
   // Distinguish a host from a charger. usb_serial_jtag_is_connected() tracks SOF
   // frames, which only a live bus sends, but it starts out optimistically
@@ -1884,9 +1901,12 @@ static void usb_service_window(void)
   }
   if (!host)
   {
-    LOGI("VBUS with no host traffic — charger, not a bus; sleeping normally");
+    usb_probe_skip = USB_WINDOW_PROBE_SKIP_WAKES;
+    LOGI("VBUS with no host traffic — charger, not a bus; sleeping normally "
+         "(next probe in %d wakes)", USB_WINDOW_PROBE_SKIP_WAKES);
     return;
   }
+  usb_probe_skip = 0;
 
   // Spent only on sleeps a host would actually have held open, so docking on a
   // charger cannot quietly consume the bench budget.

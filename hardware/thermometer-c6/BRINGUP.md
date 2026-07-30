@@ -315,9 +315,12 @@ docs/history-store-validation.md.
       port appearing **and staying**. Then `pio run -e thermometer_c6_debug -t
       upload` with nothing touched, twice back to back — the second proves the
       cycle converges rather than needing a button again.
-      - [ ] Dumb 5V charger (no host): exactly one extra wake, then normal
-            cadence. No recurring ~3s awake bursts on the PPK2, and no
-            rewake loop — that is the arm-on-VBUS-low guard doing its job.
+      - [ ] Dumb 5V charger (no host): no rewake loop (the GPIO wake is armed
+            only on VBUS-low), and the ~3s host probe appears on the PPK2 once
+            per USB_WINDOW_PROBE_SKIP_WAKES wakes, not on every one. Note the
+            docked cadence is deliberately the sleep interval, not the 1h
+            safety net, so a docked board wakes far more often than a deployed
+            one — that is what keeps the port reachable.
       - [ ] Unplug mid-window: exit inside ~300ms, one badge-clearing refresh,
             then deep sleep; replug wakes instantly again.
       - [ ] **Sleep floor with GPIO4 armed** vs the 18.7µA baseline. Expected
