@@ -671,10 +671,13 @@ def classify_step(tr, cfg):
     if t_on is None:
         t_on = t_cur
     notes = []
-    if cfg.get("t_on") is not None and abs(t_cur - cfg["t_on"]) > 1.0:
-        notes.append(f"current-derived power-on t={t_cur:.2f}s disagrees with "
-                     f"the commanded t={cfg['t_on']:.2f}s — trusting the "
-                     f"commanded one")
+    # Only a LATE current-derived power-on is anomalous (no draw when power was
+    # commanded). An early one is the previous step's caps discharging through
+    # the board during the off window — every step after the first shows it.
+    if cfg.get("t_on") is not None and t_cur - cfg["t_on"] > 1.0:
+        notes.append(f"no current until t={t_cur:.2f}s despite power commanded "
+                     f"at t={cfg['t_on']:.2f}s — open leads or a board drawing "
+                     f"nothing")
     boot_end = min(t_on + cfg["boot_s"], t_end) if cfg["power_cycle"] else t_on
 
     bt, bua = _bin_means(tr, t_on, t_end)
@@ -769,8 +772,15 @@ def classify_step(tr, cfg):
     if res["bootloops"] >= BOOTLOOP_MIN:
         res["label"] = "BOOTLOOP"
     elif not res["alive"]:
-        res["label"] = "DEAD"
-        if res["floor_ua"] is not None and res["floor_ua"] < DEAD_SAG_UA:
+        # A completed boot render is proof the board runs — a broken sleep
+        # after it degrades, it does not kill (rev A at 3.31 V boots, renders,
+        # then idles at ~104 uA with ~55 Hz small events; run 2026-07-30).
+        res["label"] = "DEGRADED" if refresh_b else "DEAD"
+        if res["blips"] > 5 * max(expected, 1.0) and res["blip_median_s"]:
+            notes.append(f"sleep is broken: {res['blips']} sub-50ms events at "
+                         f"~{1.0/res['blip_median_s']:.0f} Hz — oscillation/"
+                         f"churn, not idle")
+        elif res["floor_ua"] is not None and res["floor_ua"] < DEAD_SAG_UA:
             notes.append(f"floor {res['floor_ua']:.2f} uA — sagged/starved, "
                          f"not merely idle")
         else:
@@ -830,7 +840,14 @@ def run_selftest():
         ("wrong-cadence", cfg,
          powered + boot_wake + refresh
          + [(10.0, 0.008, 500.0), (70.0, 0.008, 500.0)],
-         "DEAD", lambda r: not r["alive"] and r["floor_ua"] > 15.0),
+         "DEGRADED", lambda r: not r["alive"] and r["floor_ua"] > 15.0),
+        ("no-boot-no-liveness", cfg, powered,
+         "DEAD", lambda r: not r["alive"] and r["refresh"] is None),
+        ("oscillating-sleep", cfg,
+         powered + boot_wake + refresh
+         + [(25.0 + 0.018 * k, 0.004, 500.0) for k in range(4800)],
+         "DEGRADED", lambda r: not r["alive"]
+         and any("oscillation" in n for n in r["notes"])),
         ("ampere-dwell",
          {"mv": 4200, "boot_s": 0.0, "blip_period_s": 5.0,
           "power_cycle": False, "t_on": None},
@@ -1147,6 +1164,9 @@ def _offline_decoder(meta):
     """
     from ppk2_api.ppk2_api import PPK2_API, PPK2_Modes
     d = PPK2_API.__new__(PPK2_API)
+    # __del__ closes self.ser under `if self.ser:` — None satisfies it quietly;
+    # absent, every GC of a decoder logs a spurious closing error.
+    d.ser = None
     d.modifiers = meta["modifiers"]
     d.mode = getattr(PPK2_Modes, meta["mode"])
     # get_adc_result() folds the supply voltage into its offset term, so this is
