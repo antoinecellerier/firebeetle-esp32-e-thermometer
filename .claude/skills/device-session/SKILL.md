@@ -58,13 +58,17 @@ board:
   is normal, not a failure; reopen it. This is the C6 boards.
 
 The USJ controller emulates DTR/RTS rather than ignoring them, and on the C6
-boards **DTR reaches GPIO9 — the BOOT strap and the firmware's shutdown button**.
-So opening a port can park the chip in the ROM bootloader (silent: no banner, and
-closing the port does not release it — recovery is RST, a power cycle, or an
-esptool run) and, before `2eed456`, could clear the panel into permanent
-shutdown. `devserial.py watch` now opens with both lines deasserted; anything
-else that opens the port (`pio device monitor`, nrfconnect, a bare pyserial
-snippet) does not. Treat attaching a monitor as intrusive.
+boards **DTR reaches GPIO9 — the BOOT strap and the firmware's shutdown button**
+while RTS reaches EN. So opening a port can reset the chip or park it in the ROM
+bootloader (silent: no banner, and closing the port does not release it —
+recovery is RST, a power cycle, or an esptool run).
+
+**No client can prevent this on Linux**: cdc-acm raises both lines during port
+activation, before userspace gets control. `devserial.py watch` releases them at
+its first opportunity, which narrows the window rather than closing it; `pio
+device monitor`, nrfconnect and bare pyserial do not even do that. So: attaching
+a monitor is intrusive, always. On a board that is mid-soak or mid-measurement,
+the only safe move is not to attach.
 
 **The ttyACM number is not stable** — when the ESP32 drops off the bus another
 device can inherit `ttyACM0`, and esptool will happily sync against it. Address

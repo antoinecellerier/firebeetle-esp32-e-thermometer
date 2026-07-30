@@ -10,12 +10,13 @@
 captured from the first line — `pio run -t upload` resets on exit and the banner
 is usually gone before you can attach.
 
-`watch` opens with DTR and RTS deasserted, so it does not disturb a board you
-must not disturb: a reset presents as POWERON_RESET and wipes RTC state (boot
-counters, the in-progress hour, the drift window). That matters most on the C6
-boards, where DTR reaches GPIO9 — both the BOOT strap and the firmware's
-shutdown button — so a default port open can park the chip in the bootloader or
-hold its shutdown button down.
+`watch` deasserts DTR and RTS as early as it can, but **it cannot make attaching
+safe**: on Linux the cdc-acm driver raises both lines during port activation,
+before any of this code runs. On the C6 boards DTR reaches GPIO9 — both the BOOT
+strap and the firmware's shutdown button — and RTS reaches EN, so opening the
+port at all can reset the chip (wiping the boot counters, the in-progress hour
+and the drift window), park it in the ROM bootloader, or press its shutdown
+button. Attaching is intrusive; on a board mid-measurement, do not attach.
 
 `flashwait` polls /dev/serial/by-id for the board and runs `pio run -t upload` the
 instant it enumerates. A deep-sleeping C6 is not on the bus at all, so this is how
@@ -105,10 +106,10 @@ def flashwait(env, poll_s, timeout_s, extra):
 
 
 def stream(port, baud, timeout_s, pattern, reset):
-    # Configure before opening: the serial.Serial(port, ...) constructor asserts
-    # both DTR and RTS as it opens, which on the C6 boards drives GPIO9 (BOOT
-    # strap and shutdown button) and EN. Nothing here may touch the chip until
-    # the caller asked for it.
+    # Configure before opening, so the lines are released as early as userspace
+    # can release them. It narrows the window, it does not close it: cdc-acm
+    # raises DTR and RTS during port activation, before this code gets control,
+    # and on the C6 those reach GPIO9 (BOOT strap and shutdown button) and EN.
     s = serial.Serial()
     s.port = port
     s.baudrate = baud
