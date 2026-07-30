@@ -1481,6 +1481,9 @@ void handle_permanent_shutdown(uint32_t battery_mv)
   // detached costs nothing real: storing the device is an unplugged act, and the
   // dead-battery arm below is already VBUS-suppressed.
   const bool button_pressed = (pin27 == 0) && !vbus_present();
+  if (pin27 == 0 && !button_pressed)
+    LOGI("Shutdown button reads pressed, but USB is attached — ignoring. "
+         "Unplug, then hold it through a wake.");
 #else
   const bool button_pressed = (pin27 == 0);
 #endif
