@@ -338,6 +338,27 @@ of a board that is otherwise order-ready.
   channel carries which polarity. Irrelevant at the C6's 12 Mbps full speed
   (~31ps against an 83,333ps bit period, 4–20ns edges); it would start to
   matter only if this path ever carried High Speed.
+- **The default sensor sits against the module; the alternate one does not.**
+  U1's courtyard ends at y20.85. U5 (BMP581, populated) starts at y21.30 —
+  a 0.45mm gap — while U6 (BMP585, DNP) starts at y24.85, 4.00mm away. So the
+  site 9× further from the only heat source on the board is the one left
+  unpopulated. The no-pour keep-outs under both sensors remove the plane
+  coupling (Bosch thermal-fidelity guidance) but buy no distance, and the
+  self-heat is real: board 1 read 33.9°C on USB against 29.8°C an hour earlier
+  (USB self-heat + bench sun, unseparated — `BRINGUP.md` Phase 3). A firmware
+  USB service window now holds the board awake for a host, which makes the
+  docked case longer-lived and the bias worth designing against.
+  **Not a coordinate swap**: U6's courtyard is 3.5mm square against U5's 2.2mm,
+  and the northern slot has 0.45mm of headroom with the antenna keep-out and C12
+  boxing it in, so the bigger footprint does not fit there. It wants a re-flow
+  of the sensor picket (U5/U6 + C12/C13/C26/C27) southward — there is free FR4
+  between U6 and C13/H2.
+  **Measure before respinning**: rev A can answer this on its own. The two sites
+  are populate-exactly-one and the driver reads the chip ID (0x50/0x51), so
+  building one of boards 2–4 with U6 instead of U5 gives a direct A/B at
+  +3.55mm on the same rig. Not a pure placement test — different package and
+  die-to-pad path — but enough to bound the gain. Needs a BMP585 (C18184976) in
+  the next order.
 - **No GND reference under the USB path.** Opposite-layer pour coverage is
   16.8% / 0.0% / 2.4% / 0.0% across the four USB nets against 28%/40%
   board-wide — the 0.5mm zone clearance starves the pour out in the dense

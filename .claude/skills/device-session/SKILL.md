@@ -57,6 +57,19 @@ board:
   device **re-enumerates on reset**, so a held-open port dies mid-capture. That
   is normal, not a failure; reopen it. This is the C6 boards.
 
+The USJ controller emulates DTR/RTS rather than ignoring them, and on the C6
+boards **DTR reaches GPIO9 — the BOOT strap and the firmware's shutdown button**.
+So opening a port can park the chip in the ROM bootloader (silent: no banner, and
+closing the port does not release it — recovery is RST, a power cycle, or an
+esptool run) and, before `2eed456`, could clear the panel into permanent
+shutdown. `devserial.py watch` now opens with both lines deasserted; anything
+else that opens the port (`pio device monitor`, nrfconnect, a bare pyserial
+snippet) does not. Treat attaching a monitor as intrusive.
+
+**The ttyACM number is not stable** — when the ESP32 drops off the bus another
+device can inherit `ttyACM0`, and esptool will happily sync against it. Address
+the board by `/dev/serial/by-id/*Espressif*`.
+
 `devserial.py` picks a port automatically when you don't pass `--port`.
 
 ## 2. Flash
@@ -82,6 +95,34 @@ python3 tools/devserial.py boot --grep "Boot count|HistoryStore"
 
 esptool auto-detects the port when `--port` is omitted; pass it explicitly only
 when more than one board is plugged in.
+
+### Flashing a board that is deep-sleeping (C6)
+
+A sleeping C6 presents **no USB device at all** — the USJ controller is
+unpowered — so esptool's download-mode reset, which is what stands in for the
+BOOT button on this chip, has nothing to talk to. Three ways in, cheapest first:
+
+1. **The custom board holds the port open by itself.** With a host attached it
+   runs a USB service window instead of sleeping (`! USB` badge on the panel,
+   `w:USB` in the footer on the plug-in wake), so a plain `pio run -t upload`
+   works unattended within a wake of plugging in. Build with
+   `-DUSB_WINDOW_OBSERVE_CYCLES=N` to spend the first N of those sleeps on real
+   deep sleep instead — needed whenever what you are testing *is* the sleep path,
+   since a window replaces it — or `-DDISABLE_USB_WINDOW` to remove it entirely.
+   Both change behaviour, so both go in the log row.
+2. **Catch a wake from the host** (works on the XIAO too, no firmware support):
+
+   ```bash
+   python3 tools/devserial.py flashwait --env seeed_xiao_esp32c6_debug
+   ```
+
+   It polls the by-id path and uploads the instant the board enumerates.
+3. **Park it manually**: hold BOOT, tap RST, release BOOT, with no process
+   holding the port. This is what board 1 needed before the window existed.
+
+Any of these resets the chip and **wipes RTC** (boot counters, in-progress hour,
+drift window) — inherent to download mode, not to how you entered it. The
+`history` partition survives. Harvest at the end of a run, not during one.
 
 **Say what you flashed.** Every flash, erase or inject gets reported as env +
 `PLATFORMIO_BUILD_FLAGS` + git hash, and appended to

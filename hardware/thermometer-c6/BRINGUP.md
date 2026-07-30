@@ -292,7 +292,37 @@ docs/history-store-validation.md.
       the settle only in debug builds), or (b) trim 5ms→3ms (6τ, ~10mV
       battery-scale error) for a zero-complexity 60% cut.
 - [ ] Charging self-heat: quantify how far BMP581 reads high while charging
-      (README notes it; get a number for logging).
+      (README notes it; get a number for logging). Board 1 gave 33.9°C on USB
+      against 29.8°C an hour earlier, but that mixes bench sun in — separate
+      them. Now also the input to a rev B candidate (README: the populated
+      sensor site sits 0.45mm from the module, the DNP one 4.00mm), so take
+      the equilibrium delta, not a spot reading. Cheap A/B without a respin:
+      build one of boards 2–4 with U6 BMP585 instead of U5 and repeat.
+- [ ] **USB flash-service window** (`fc9e72c`, untested on hardware). Plug a
+      host into a sleeping board: expect a near-instant GPIO4 wake (measure
+      plug→boot), `w:USB` in the footer, `! USB` on the panel, and the by-id
+      port appearing **and staying**. Then `pio run -e thermometer_c6_debug -t
+      upload` with nothing touched, twice back to back — the second proves the
+      cycle converges rather than needing a button again.
+      - [ ] Dumb 5V charger (no host): exactly one extra wake, then normal
+            cadence. No recurring ~3s awake bursts on the PPK2, and no
+            rewake loop — that is the arm-on-VBUS-low guard doing its job.
+      - [ ] Unplug mid-window: exit inside ~300ms, one badge-clearing refresh,
+            then deep sleep; replug wakes instantly again.
+      - [ ] **Sleep floor with GPIO4 armed** vs the 18.7µA baseline. Expected
+            unchanged (R23 holds the pad at 0V, and the internal pulldown is
+            disabled by `CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS=n`),
+            but this measurement is the proof, not the reasoning.
+      - [ ] Force a refresh while the window is open: the port must survive it
+            (plain busy-wait instead of light sleep). Confirm a later
+            battery refresh still shows the light-sleep slices.
+      - [ ] `-DUSB_WINDOW_OBSERVE_CYCLES=2`: exactly two real sleep cycles
+            (port drops each time), then the port comes back and stays. Reflash
+            and confirm it repeats without touching the cable.
+      - [ ] ≥2h parked on a host: hourly ring keeps filling, NTP resyncs on
+            schedule, no TWDT. Watch for one benign extra wake on the first
+            real sleep after a long window (a latched LP wake request); log it
+            either way.
 
 Afterwards: update the shutdown thresholds in Thermometer.cpp if re-derived,
 append the floor/refresh numbers to the docs/notes.md power logbook, and file
