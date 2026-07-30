@@ -1,0 +1,7 @@
+# Overlay for the thermometer_c6_bod_probe env only (see platformio.ini):
+# raise the brownout detector from the 2.51V default to the chip's top level
+# so any 3V3 dip below ~3.27V during the refresh peak becomes a BROWN reset.
+# IDF calls the level voltages estimates with per-chip variation; if the 4.2V
+# sweep step already bootloops, this chip's trip point sits above its rail
+# (3.3V +/-1%) — fall back to SEL_3 (3.10V).
+CONFIG_ESP_BROWNOUT_DET_LVL_SEL_2=y

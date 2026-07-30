@@ -270,14 +270,23 @@ docs/history-store-validation.md.
       `PLATFORMIO_BUILD_FLAGS="-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI"
       pio run -e thermometer_c6_debug -t upload` first, detach serial, USB
       out; closeout = revive on USB, reflash release (gets the shutdown
-      latch back), append report.md to the notes.md power logbook. The
-      sweep sees input current only — the scope-on-3V3 dropout check stays
-      manual, aimed at the edge the sweep finds.
+      latch back), append report.md to the notes.md power logbook.
+      The sweep sees input current only, so the 3V3-sag half runs as a
+      **BOD probe** (no scope needed): flash `thermometer_c6_bod_probe` —
+      the same image plus `sdkconfig.defaults.bod_probe`, brownout level
+      raised to its ~3.27V top setting — and re-run the sweep. A
+      refresh-peak dip below the trip level becomes a BROWN reset, which
+      the classifier reads as a non-HEALTHY step. HEALTHY at a step proves
+      3V3 held above ~3.27V through the ~425mA peak; the topmost edge
+      minus 3.27V ≈ LDO dropout at that peak. If the 4.2V step itself
+      fails, this chip's trip point sits above its rail (3.3V ±1%) — drop
+      the overlay to SEL_3 (3.10V). ROM download mode ignores the raised
+      level, so USB reflash always recovers a bootlooping board.
       **Sweep DONE 2026-07-30** (notes.md): fresh-boot cliff **3317–3320mV**,
       ≤1–2mV wide; render never failed down to 3.31V, the sleep is what
       breaks (~104µA / ~55Hz oscillation below the edge); floor rises
       19→30µA over 3.38→3.32V. Candidate thresholds **3550/3450mV** — apply
-      only after the scope-at-3.45V and cold checks above.
+      only after the BOD probe and the cold checks above.
 - [ ] Boost transient current vs the Si1308EDL 610mA ILIM at refresh start.
       [SCHEMATIC-VERIFICATION]
 - [ ] 32k crystal **cold start**: power-on from fridge-cold (ESR rises when

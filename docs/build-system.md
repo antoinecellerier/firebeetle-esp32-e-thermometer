@@ -120,4 +120,6 @@ dfrobot_firebeetle2_esp32e_debug / _release    ESP32-E (default env)
 seeed_xiao_esp32c6_debug / _release            XIAO C6
 seeed_xiao_esp32c6_epaper_debug / _release     XIAO C6 + Seeed ePaper driver board
 thermometer_c6_debug / _release                custom rev A board
+thermometer_c6_bod_probe                       rev A bench probe: brownout raised
+                                               to ~3.27V — never deploy
 ```
