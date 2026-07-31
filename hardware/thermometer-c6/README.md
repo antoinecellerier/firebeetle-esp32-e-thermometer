@@ -396,6 +396,10 @@ of a board that is otherwise order-ready.
   B.Cu in 4.9mm and the two western signal vias have no GND stitch within
   4mm. Acceptable at full speed and the EPD boost switching nodes are not
   among the crossings, but it is the condition the path runs in.
+- **Add key presses on silkscreen.** It would make it obvious how to recover.
+  Especially: download mode, restarting firmware, as those are not softare
+  defined. The shutdown sequence would be interesting as well but might not be
+  a good idea as it could change.
 
 ### Cost reduction (researched 2026-07-22)
 
