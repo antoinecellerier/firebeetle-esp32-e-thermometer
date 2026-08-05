@@ -799,8 +799,8 @@ the measurement, by construction. Build `cbda104`,
 `thermometer_c6_release`, no `PPK2_DEBUG`, **LEDs enabled** (wake blinks are
 the only observability without serial). **Ambient ~27 °C** (hot day), board
 still shedding USB-era self-heat (BMP581 read ~30 °C). Analysed with
-`tools/ppk2.py` (149 s capture, `/tmp/ppk-20260729T141836.csv`, screenshot
-archived by hand).
+`tools/ppk2.py` (149 s capture, `local/captures/ppk-20260729T141836.csv`,
+screenshot archived by hand).
 
 - **Sleep floor: 18.6-18.8 µA @ 4.2 V.** Explicit `--from/--to` windows:
   58 s → 18.8 µA, 56 s → 18.6 µA; 5 s profile bins run 18.9 → 18.6 µA
@@ -836,7 +836,7 @@ archived by hand).
 
 ### Hour-long capture, same rig (2026-07-29 evening)
 
-1000 S/s, 4200 mV, `/tmp/ppk-20260729T153004.csv`; forced refresh at the
+1000 S/s, 4200 mV, `local/captures/ppk-20260729T153004.csv`; forced refresh at the
 55 min mark read `#8 r7 lp55 0d w:ULP mx:4.2V cbda104`, 4176 mV (−24 mV,
 second ADC datapoint).
 
@@ -924,8 +924,10 @@ Same rig and protocol as the 2026-07-29 floor above — PPK2 source meter at
 **4.2 V into J1**, battery and USB both out, so Q6 and the MCP73831's VBAT-pin
 leakage stay inside the measurement. Build `497024a`,
 `thermometer_c6_release`, no `PPK2_DEBUG`, LEDs enabled. Capture
-`/tmp/ppk-20260730T184218.csv`, 440 s, analysed with `tools/ppk2.py` and
-cross-checked against operator-chosen `--from/--to` windows.
+`ppk-20260730T184218.csv`, 440 s, analysed with `tools/ppk2.py` and
+cross-checked against operator-chosen `--from/--to` windows. That capture lived
+in `/tmp` and was never moved into the repo — not retained; the figures below
+are all that survives of it.
 
 What is being tested: the USB service window arms a GPIO wake on the VBUS
 divider (GPIO4) at **every sleep entry where VBUS is low** — i.e. permanently,
@@ -967,9 +969,11 @@ LP polls are the liveness heartbeat, the 3700 mV latch is disabled, no NTP so
 nothing reaches the archive. 30 s dwell per step (below the ≥60 s the XIAO
 storm statistics needed — zero storms were seen, but the dwell cannot prove
 their absence), 20 s boot window, ambient not recorded (indoor bench,
-evening). Artifacts: `ppk2-sweep-20260730-214824/`, `-220452/` (edge hunts)
-and `-224515/` (the 10-step gap fill that completes the curve below), each
-with report.md + replayable raw bins; the first two reports' DEAD labels
+evening). Artifacts under `local/sweeps/`: `ppk2-sweep-20260730-214824/`,
+`-220452/` (edge hunts) and `-224515/` (the 10-step gap fill that completes the
+curve below). All three keep report.md and the per-step JSON; the first two also
+keep replayable raw bins, `-224515/`'s were deleted 2026-08-05 in the `local/`
+consolidation and are not recoverable. The first two reports' DEAD labels
 predate the `ee0a8d0` relabel — read them as DEGRADED.
 
 Merged floor-vs-VIN curve, all points same rig/build/dwell:
@@ -1019,7 +1023,8 @@ Merged floor-vs-VIN curve, all points same rig/build/dwell:
   sub-50 ms events at ~55 Hz. What oscillates is not identified (RT9080 at
   dropout is the suspect, unverified — a scope on 3V3 would say); it sits
   below any sane threshold, so recorded, not chased. Replay:
-  `ppk2.py raw ppk2-sweep-20260730-220452/step02-3317mv.bin --profile 500`.
+  `ppk2.py raw local/sweeps/ppk2-sweep-20260730-220452/step02-3317mv.bin
+  --profile 500`.
 - **Threshold consequence — APPLIED 2026-07-31 as 3550 warn / 3500 shutdown**
   (board-scoped in Thermometer.cpp; the XIAO keeps 3800/3700, the ADC-fail
   fallback moved into the new band at 3525). The original candidate was
@@ -1042,8 +1047,10 @@ the sweep build except the brownout detector is raised from 2.51 V (level 7)
 to ~3.27 V (level 2, the top setting; IDF calls the level voltages
 estimates). That turns the chip into a comparator on its own 3V3: a dip below
 the trip during the ~425 mA EPD-boost peak is a BROWN reset, which the sweep
-classifier reads as a non-HEALTHY step. Runs: `ppk2-sweep-20260730-233220/`
-(13 steps, 4.2→3.35 V + bisect) and `-234959/` (7-step edge re-run).
+classifier reads as a non-HEALTHY step. Runs under `local/sweeps/`:
+`ppk2-sweep-20260730-233220/` (13 steps, 4.2→3.35 V + bisect, raws kept) and
+`-234959/` (7-step edge re-run; report and per-step JSON only, its raws deleted
+2026-08-05 in the `local/` consolidation).
 
 | VIN | behavior under BOD ~3.27 V |
 |---|---|

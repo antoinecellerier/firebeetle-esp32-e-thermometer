@@ -194,7 +194,7 @@ Testable with no board attached — it decodes a saved archive image and runs ev
 rig against it:
 
 ```bash
-python3 scripts/upload_gate.py hist-xiao_esp32c6-fffe16-2026-08-05.bin
+python3 scripts/upload_gate.py local/archives/hist-xiao_esp32c6-fffe16-2026-08-05.bin
 ```
 
 ## Rig selection

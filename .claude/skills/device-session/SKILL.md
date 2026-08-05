@@ -193,7 +193,7 @@ right".
 proves the device completed boot → render → sleep:
 
 ```bash
-~/.platformio/penv/bin/python3 tools/history.py backup
+~/.platformio/penv/bin/python3 tools/history.py backup   # -> local/archives/
 # then, on the resulting image:
 ~/.platformio/penv/bin/python3 tools/history.py dump <img> --drift
 ```
@@ -208,7 +208,7 @@ For testing restore and rendering without waiting days:
 
 ```bash
 tools/hstest/hstest --inject ...        # argument list: the --inject block in tools/hstest/hstest.cpp
-~/.platformio/penv/bin/python3 tools/history.py restore <out.bin>
+~/.platformio/penv/bin/python3 tools/history.py restore local/scratch/<out.bin>
 ```
 
 The image is built by the real store code, so it cannot disagree with the
@@ -223,6 +223,11 @@ that never came from the archive — a false pass that is hard to spot.
 
 Source-meter mode, plus digital channels for correlation, built with
 `-DPPK2_DEBUG`.
+
+`sweep` writes to `local/sweeps/` on its own. `live` does not — pass
+`--out local/captures/<name>.csv` and `--raw-out local/captures/<name>.bin`, or
+the capture ends up wherever you happened to be standing and gets lost. Layout:
+`docs/build-system.md`, "Local artifacts".
 
 ### Confirm the connection before anything is energised — every time
 

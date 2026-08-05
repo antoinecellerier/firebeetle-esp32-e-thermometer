@@ -30,7 +30,7 @@ flash, or panic reset, and the device only retains the last
 
 ```
 ~/.platformio/penv/bin/python3 tools/history.py backup
-python3 tools/history.py dump hist-*.bin --drift
+python3 tools/history.py dump local/archives/hist-*.bin --drift
 ```
 
 That emits this table's columns directly — drift, window, ppm, the mean ambient
