@@ -27,3 +27,6 @@ hist-*.bin
 
 # ppk2.py sweep output (raw captures + reports; cited from docs/notes.md by dirname)
 /ppk2-sweep-*/
+
+# Byte-compiled pre-build helpers (pre_build.py imports them under SCons)
+scripts/__pycache__/

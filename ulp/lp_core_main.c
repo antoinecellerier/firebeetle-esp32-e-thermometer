@@ -6,9 +6,11 @@
 // preprocess to nothing there.
 #ifdef __riscv
 // Sensor implementations are in separate headers, selected at compile time.
-// The LP core build does NOT inherit the main project's build_flags or include
-// paths, but a relative #include reaches local-secrets.h, so the mode derives
-// from the same USE_* selector the HP build uses — they can't disagree.
+// The LP core build does NOT inherit the main project's build_flags, but a
+// relative #include reaches the generated rig selector, so the mode derives
+// from the same USE_* the HP build uses — they can't disagree. The rig header
+// rather than device-config.h: the sensor is all this needs, and it keeps the
+// WiFi credentials out of the LP translation unit.
 //
 // Modes:
 //   LP_CORE_IDLE     — power measurement: no I2C, wakes main CPU every N loops
@@ -18,7 +20,7 @@
 // Uncomment to override the sensor selection for power measurements:
 //#define LP_CORE_IDLE
 
-#include "../include/local-secrets.h"
+#include "../include/generated/rig_config.h"
 #ifndef LP_CORE_IDLE
 #if defined(USE_BMP58x)
 #define LP_CORE_BMP58X

@@ -1,7 +1,7 @@
 #pragma once
 
-// See local-secrets-example.h for a sample file if local-secrets.h is missing
-#include "local-secrets.h"
+// Rig hardware description + credentials. See include/rigs/_template.h.
+#include "device-config.h"
 
 // ESP_PLATFORM is defined for device builds (both Arduino-ESP32 and pure
 // ESP-IDF); the host simulator compiles this header without it.

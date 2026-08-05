@@ -1,4 +1,4 @@
-#include "local-secrets.h"
+#include "device-config.h"
 // DS18B20 depends on the Arduino OneWire/DallasTemperature libraries — only
 // available when this sensor is selected (and only under framework=arduino).
 #if defined(USE_DS18B20_PAR)

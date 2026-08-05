@@ -26,8 +26,28 @@ else()
     message(FATAL_ERROR "No board mapped to IDF target '${IDF_TARGET}'")
 endif()
 
+# Rig selection: PlatformIO refreshes this every run from custom_rig/RIG via
+# scripts/pre_build.py. For plain idf.py builds, generate it once here from
+# -DRIG=<name> or $ENV{RIG}. Must precede ulp_embed_binary below — the LP core
+# reads its sensor from this header. No fallback rig on purpose: GIT_HASH's
+# fallback is cosmetic, a wrong rig is a wrong-panel flash.
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../include/generated/rig_config.h)
+    if(NOT DEFINED RIG AND DEFINED ENV{RIG})
+        set(RIG $ENV{RIG})
+    endif()
+    if(NOT DEFINED RIG)
+        file(GLOB rig_headers ${CMAKE_CURRENT_SOURCE_DIR}/../include/rigs/[a-z]*.h)
+        message(FATAL_ERROR "No rig selected: pass -DRIG=<name>. Available: ${rig_headers}")
+    endif()
+    execute_process(
+        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/gen_rig_config.py ${RIG}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+        COMMAND_ERROR_IS_FATAL ANY
+    )
+endif()
+
 # Generated fonts: PlatformIO builds refresh these every run via
-# scripts/pre_build_fonts.py (which also injects GIT_HASH); for plain idf.py
+# scripts/pre_build.py (which also injects GIT_HASH); for plain idf.py
 # builds, generate them once here if missing.
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../include/generated/font_config.h)
     execute_process(

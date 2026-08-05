@@ -95,12 +95,13 @@ def compute_font_sizes(w, h):
 
 
 def detect_display():
-    """Read local-secrets.h to find which display is configured."""
-    secrets_path = os.path.join(PROJECT_ROOT, "include", "local-secrets.h")
-    if not os.path.isfile(secrets_path):
+    """Read the active rig's header to find which display is configured."""
+    import gen_rig_config
+    rig_header = gen_rig_config.active_header()
+    if rig_header is None or not os.path.isfile(rig_header):
         return None
 
-    with open(secrets_path) as f:
+    with open(rig_header) as f:
         content = f.read()
 
     for define in DISPLAYS:
@@ -192,7 +193,14 @@ def write_font_config(display_fonts):
         # dimensions so the firmware can assert the runtime display matches — a
         # mismatch means a stale font_config.h and giant/clipped temperature
         # text. Omitted in --all (simulator) mode, which is genuinely multi-panel.
-        if len(display_fonts) == 1:
+        # Emitted only when the fonts were sized for a real panel: the firmware
+        # asserts them against the runtime display, and the pre-build staleness
+        # test reads them to decide whether to regenerate. Deliberately absent
+        # in --all (simulator) mode, which is genuinely multi-panel, and for the
+        # no-display fallback below, whose 200x200 is a placeholder rather than
+        # a panel — claiming it would make a later switch to a real 200x200
+        # panel look up to date and ship the fallback's font sizes.
+        if len(display_fonts) == 1 and display_fonts[0][0] != "NONE":
             _, dw, dh, _, _, _, _ = display_fonts[0]
             f.write(f"\n#define FONT_CONFIG_W {dw}\n")
             f.write(f"#define FONT_CONFIG_H {dh}\n")

@@ -1,4 +1,4 @@
-#include "local-secrets.h"
+#include "device-config.h"
 // With DISABLE_DISPLAY the whole renderer (and its Adafruit_GFX dependency)
 // drops out of the build — required for pure-IDF targets without the display
 // component stack.
