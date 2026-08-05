@@ -7,15 +7,11 @@
 // and the font generator instead of being duplicated here; Display.cpp
 // static_asserts cross-check them.
 //
-// To add a new display:
-//   1. Add a block below: DISPLAY_HAS_RED (1 only for tri-color panels) and
-//      DISPLAY_ROTATION.
-//   2. Add the GxEPD2 driver type + include in Display.cpp (library-coupled;
-//      some panels, e.g. USE_576_T81, must be heap-allocated).
-//   3. Add the resolution to the DISPLAYS dict in scripts/generate_font.py and
-//      the displays[] table in tools/sim/sim_main.cpp.
+// Adding a panel touches seven files; the full checklist is in
+// include/rigs/_template.h, which also lists the panels themselves. This one is
+// step 2: DISPLAY_HAS_RED (1 only for tri-color panels) and DISPLAY_ROTATION.
 //
-// Include AFTER common.h, which supplies the USE_* selection via local-secrets.h.
+// Include AFTER app_common.h, which supplies the USE_* selection via device-config.h.
 
 #if defined(USE_576_T81)
 #define DISPLAY_HAS_RED  0
@@ -36,5 +32,5 @@
 #define DISPLAY_HAS_RED  0
 #define DISPLAY_ROTATION 2
 #elif !defined(DISABLE_DISPLAY)
-#error "No display selected — set a USE_* panel in local-secrets.h (or define DISABLE_DISPLAY)"
+#error "No display selected — set a USE_* panel in the rig header (or define DISABLE_DISPLAY)"
 #endif
