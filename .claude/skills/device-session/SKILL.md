@@ -143,6 +143,15 @@ drift window) — inherent to download mode, not to how you entered it. The
 `docs/history-store-validation.md`. Debug flags change what the panel shows, so
 an unrecorded build makes every later observation ambiguous.
 
+**Read the hash off `git rev-parse HEAD` at the moment of each upload, not from
+the last one you noted.** `GIT_HASH` is stamped at build time, so committing
+anything between two flashes — including the log row for the first one — gives
+the second rig a different hash for identical firmware. Flashing several boards
+in a session and logging one hash for all of them is wrong, and the panel is
+what exposes it later. When rigs must be comparable, either flash them all
+before committing, or record each one's own hash and note that the difference is
+docs-only.
+
 ## 3. Read serial
 
 ```bash
