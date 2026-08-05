@@ -133,6 +133,27 @@ suits boards 2-4. **Board 1 wears the 200x200 GDEY and needs
 `RIG=revA-smallscreen`** — the one mismatch the rig cross-checks cannot catch,
 since both rigs are valid for the env.
 
+`scripts/upload_gate.py` closes it at upload time instead. HistoryStore stamps the
+panel it was built for into the `history` partition header, and that partition
+survives reflashing — so the gate reads 52 bytes back before writing anything and
+refuses to flash a rig whose panel disagrees with what the board last ran. Only
+the panel is checked: a wrong sensor or board macro still renders a frame and the
+firmware badges it, whereas a wrong panel fails silently because the panel is
+what breaks.
+
+It skips itself, out loud, whenever the answer is not decisive — no archive yet,
+unreadable header, no port — because a gate that blocks correct uploads gets
+switched off. Overrides: `ALLOW_RIG_CHANGE=1` for a deliberate panel swap,
+`SKIP_BOARD_CHECK=1` to skip the read entirely. Costs one esptool connect, which
+resets the chip; the upload that follows would have anyway.
+
+Testable with no board attached — it decodes a saved archive image and runs every
+rig against it:
+
+```bash
+python3 scripts/upload_gate.py hist-xiao_esp32c6-fffe16-2026-08-05.bin
+```
+
 ## Rig selection
 
 A rig is one hardware configuration: board + panel + sensor + the flags that

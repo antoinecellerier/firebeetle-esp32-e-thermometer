@@ -87,6 +87,31 @@ def history_partition(csv_path=None):
 
 # --- decoding ----------------------------------------------------------------
 
+def store_header(blob):
+    """Decode sector 0's header. Needs only the first STORE_HDR.size bytes, so
+    callers that want nothing but the device's identity — which panel, sensor and
+    board the firmware that formatted it was built for — can read 52 bytes rather
+    than an archive (scripts/upload_gate.py does exactly that)."""
+    if len(blob) < STORE_HDR.size:
+        raise SystemExit("image too short for a store header")
+    f = STORE_HDR.unpack_from(blob, 0)
+    h = dict(zip(
+        "magic format hdr_size journal_off journal_size rec_size base_slots "
+        "created_at base_mac chip_model chip_revision board panel sensor "
+        "git_hash crc32".split(), f))
+    if h["magic"] != HS_MAGIC:
+        raise SystemExit("not a history image (bad magic) — wrong offset?")
+    if h["format"] != HS_FORMAT:
+        raise SystemExit(f"unsupported store format {h['format']}")
+    want = crc32(blob[:STORE_HDR.size - 4])
+    if want != h["crc32"]:
+        raise SystemExit("store header CRC mismatch")
+    h["mac"] = ":".join(f"{b:02x}" for b in h["base_mac"])
+    for k in ("board", "panel", "sensor", "git_hash"):
+        h[k] = cstr(h[k])
+    return h
+
+
 class Archive:
     """A decoded partition image. Accepts a truncated image: `backup` only reads
     up to the journal cursor, so anything past it is simply absent."""
@@ -108,24 +133,7 @@ class Archive:
         self._decode()
 
     def _store_header(self):
-        if len(self.blob) < STORE_HDR.size:
-            raise SystemExit("image too short for a store header")
-        f = STORE_HDR.unpack_from(self.blob, 0)
-        h = dict(zip(
-            "magic format hdr_size journal_off journal_size rec_size base_slots "
-            "created_at base_mac chip_model chip_revision board panel sensor "
-            "git_hash crc32".split(), f))
-        if h["magic"] != HS_MAGIC:
-            raise SystemExit("not a history image (bad magic) — wrong offset?")
-        if h["format"] != HS_FORMAT:
-            raise SystemExit(f"unsupported store format {h['format']}")
-        want = crc32(self.blob[:STORE_HDR.size - 4])
-        if want != h["crc32"]:
-            raise SystemExit("store header CRC mismatch")
-        h["mac"] = ":".join(f"{b:02x}" for b in h["base_mac"])
-        for k in ("board", "panel", "sensor", "git_hash"):
-            h[k] = cstr(h[k])
-        return h
+        return store_header(self.blob)
 
     def _base(self):
         """Newest valid base slot, or (None, None)."""
