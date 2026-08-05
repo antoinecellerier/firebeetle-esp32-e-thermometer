@@ -15,6 +15,14 @@ Fixed in "Restore tri-color red…" and "Collocate per-panel attributes…":
 - The sim renders into a 16-bit color canvas (`GFXcanvas16` → PPM → PNG via
   ImageMagick), so red is visible; a `_hot` scenario exercises it.
 
+One binary renders all four sizes, so it compiles a single `DISPLAY_HAS_RED` —
+every size is drawn as if it were the tri-color panel. That is deliberate: it is
+what keeps the red path exercised at all. It also means the sim cannot show you
+how a bi-color panel degrades the same frame. Until 2026-08-05 the flag followed
+whichever rig the developer had last built for a device, and `make screenshots`
+had been quietly emitting mono PNGs while this section claimed otherwise;
+`tools/sim/stubs/generated/rig_config.h` now pins the rig.
+
 ## Open
 
 ### 1. Sim only ever renders a couple of temperatures
