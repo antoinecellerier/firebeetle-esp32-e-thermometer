@@ -661,3 +661,50 @@ That field is appended to `HistoryDriftState`, which is elastic — but only
 forwards: older firmware refuses a longer stored payload and rebuilds from the
 journal, which presents as `base (none — journal only)`, normally the signature
 of a boot loop.
+
+### Running arms (from 2026-08-05)
+
+| Rig | Arm | Hash | Cadence | Ends |
+|---|---|---|---|---|
+| FireBeetle 2 E + BMP390L + GDEH0154Z90 | **1** | `1ea3cd7` | pinned: 1440 wakes/day, repaint every 60th (24/day) | day 14 → arm 2, repaint every 5th (288/day) |
+| XIAO C6 + Seeed hat (GDEW029I6FD) | **3** | `2fa3750` | vanilla, establishing a baseline correlation it never had | day 14 → arm 4, pinned |
+| XIAO C6 + DESPI-C02 + GDEH0576T81 | **5** | `f5e1749` | vanilla control, unchanged throughout | — |
+
+All three pinned to a 12 h resync (`RESYNC_INTERVAL_MIN=43200`) for ~2 samples/day.
+The three hashes are docs-only apart; the firmware is identical (see
+[history-store-validation.md](history-store-validation.md)).
+
+**Discard the first record of every arm.** `drift_state_load()` restores
+`resync_interval_s` from the archive and the clamp leaves a pre-flash 86400 s
+untouched, so `next_resync_time = last_sync_time + resync_interval_s`
+(`src/Thermometer.cpp`) schedules the first attempt off the *old* cadence. That
+record's window therefore runs back to the last pre-flash sync and straddles the
+regime change — while carrying the *new* arm byte. It is the one case where the
+tag cannot separate the arms. Same at the day-14 crossover.
+
+### Day-2 gates — check these before trusting fourteen days of it
+
+Any one failing voids the phase; far cheaper to catch now than at harvest.
+
+```
+python3 tools/history.py dump <img> --drift    # gates 1 and 2
+python3 tools/history.py dump <img> --csv      # gate 3
+```
+
+1. **`d_boot` ≈ 720 per 12 h window** on the FireBeetle, and **uncorrelated with
+   that window's volatility**. If it still tracks the room, `ULP_ALWAYS_WAKE`
+   did not take and the wake cadence is not pinned.
+2. **`d_refresh` ≈ 12 per window** (arm 1; 144 in arm 2). If it tracks the room,
+   `DISPLAY_TEMP_DELTA` did not take and the *manipulated variable* is still
+   room-driven — the failure that would quietly invalidate the whole design.
+3. **Hourly rows show `min_c` ≠ `max_c`.** This proves the 24-samples/hour
+   density is real, and with it the intra-hour-spread covariate. An earlier
+   draft of this experiment pinned the rig to 24 wakes/day, which would have put
+   one sample in each hour, collapsed `min == max == avg`, and left the primary
+   endpoint with no covariate to test against — presenting as a clean null.
+4. **`arm` column reads 1 / 3 / 5**, not 0. Zero means the build ran without
+   `EXPERIMENT_ARM` and the record cannot be attributed.
+
+Harvesting costs a reset and the in-progress window, so fold the day-2 read into
+a moment you were going to disturb the rigs anyway, and expect to lose that
+sample.
