@@ -83,6 +83,7 @@ on them; the custom rev A board adds one deliberately.
 |------|---------------|--------|-------|------|---------------|-------|
 | 2026-07-25 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `95c7b04`/`95de00c` (2026-07-03) | **21d** (badge said 7d) | −9559s (−2h39m) | **−5265ppm** (−0.53%, −7.6min/day) | 1d (clamped) | First resync with the drift badge on screen; clock running slow. Uptime 21d and the badge's 7d interval together mean the day-7 and day-14 attempts both failed — a success at day 7 would have re-armed to 1d (or 14d on negligible drift). So the window is the whole uptime, and the naive 7d reading (−15806ppm) is 3× too large. Ambient over the window swung 21–32°C (read off the device's own 30-day chart), so this rate is a temperature-weighted average, not a fixed-temperature measurement. |
 | 2026-07-26 | XIAO ESP32-C6 + BMP581 + Seeed ePaper hat (GDEW029I6FD), `1ed89a3` (2026-07-06), `seeed_xiao_esp32c6_epaper_release`, 400mAh pack | **19d22h47m** (uptime 19d23h less the drift; the clock was set once, at install) | **+780s** (+13min), ±60s | **+452ppm** (+0.045%, ≈ +39s/day), +418…+487ppm | 1d (never reached — see notes) | **First C6 datapoint, and not device-measured**: this build never got a successful resync to sample from, and with `DISABLE_SERIAL` and no `history` partition there was nothing else to read, so the figure comes from a **forced refresh** — panel `11:54` against `11:41` real, frame fresh, both clocks to the minute (hence ±60s → ±35ppm). Cross-checked against a photo taken 13min earlier: EXIF 11:30:17 (phone on network time, verified against laptop NTP within 50s) against a panel reading `11:40`, which at a constant +13min means that frame was ~3min stale — consistent with the 1-2min refresh cadence it was running while being carried upstairs (counters moved +3 boots/+3 refreshes in 4 LP ticks). The photo alone bounds drift at ≥+338ppm, since staleness can only *increase* it; the forced read lands above that, as it must. Clock **fast**, i.e. opposite in sign to the FireBeetle row above and ~12× smaller. Ambient was 21.5–24.5°C over the window (off the device's own 30-day chart) versus 21–32°C for the E, so thermal stability explains part of the magnitude gap but not the sign. Deployed in a basement with **no WiFi**: every resync attempt failed, so `resync_interval_s` sat at its 1d floor for 20 days (failures re-arm, they don't back off) and the footer read `s19d`. Had it had WiFi, +452ppm implies the interval settles where drift over the interval hits the 60s threshold — 60s/452ppm ≈ **1.5d** — so neither the 1d floor nor the 28d cap: day 1 sees 39s (<60s → doubles to 2d), 2d sees 78s (≥60s → targets ~1.5d), and it holds there. Note this build divides by the interval *setting* rather than the measured window, so the first resync after a failure run reads the rate 20× high and clamps the next interval to the 1d floor; master computes `target` from `last_drift_window_s` instead. |
+| 2026-07-26 .. 2026-08-04 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `44ba5ba` (2026-07-25), `dfrobot_firebeetle2_esp32e_release`, on battery | **1d** × 10 resyncs, 10.11d total | +421s .. +459s (4424s total) | **+5066ppm** window-weighted (+4839…+5247, ±4.5%) | 1d (clamped) | **The collection run, harvested from the journal** — ten samples, not the badge's six, with per-window ambient and duty-cycle deltas. 10 of 10 attempts succeeded. Rate tracks **wakes/day at r=−0.900** and not ambient (r=+0.457, and it collapses to +0.275 once wakes are controlled for), which is the duty-cycle branch of the decision rules and what the mechanism section predicted. Full CSV and analysis: [below](#harvest-2026-08-05-the-runs-ten-samples). |
 | 2026-07-29 .. 2026-08-04 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `44e56b6` (2026-07-06), 400mAh pack | **1d** × 5 observed resyncs | +96s .. +116s | **+1259ppm** window-weighted (+1111…+1343, ±12%) | 1d (pinned) | **Five samples, all transcribed off photographs** — this build predates the `history` partition (`8b57f33`, 2026-07-25), so the panel is the only record and there is nothing to harvest. Per-sample table and the reasoning that the displayed `/1d` really is the window: [below](#photo-transcribed-run-c6--despi-c02-2026-07-29--2026-08-04). Clock **fast**, same sign as the other C6 row above and ~2.8× larger. The panel's `4321mV` is not a measurement — `read_battery_level()` returns a literal `4321` on the stock XIAO (`src/Thermometer.cpp`), so this run says nothing about the pack's state at 28d18h. |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
@@ -178,10 +179,11 @@ Retrieve with `history.py backup --full` then `dump --drift`; the CSV already
 computes the day-over-day `d_boot` / `d_refresh` duty-cycle deltas the decision
 rules below ask for.
 
-#### Screen readings pending harvest (2026-08-05)
+#### Screen readings taken before the harvest (2026-08-05)
 
-Neither archive has been read yet. These are photographs, recorded here so the
-frames aren't the only copy — the archive is authoritative and supersedes them.
+Photographs, recorded before either archive was read. The FireBeetle's archive
+has since been harvested and it reproduces both badges **exactly** (see below),
+so these stand as a validated cross-check rather than a superseded guess.
 EXIF `DateTimeOriginal` (+02:00) again; frame age is bounded rather than derived,
 because the 200x200 panel drops the `s` token so drift-at-render is unknown
 within its window.
@@ -196,32 +198,118 @@ The FireBeetle's mV is a real ADC read; both C6 rigs print the hardcoded `4321`
 that `read_battery_level()` returns on a stock XIAO, and `mx4.3V` is its
 running maximum, so it is the same constant. Ignore both.
 
-Three things to check against the archive, in order of how much they matter:
-
-1. **The FireBeetle's sign has flipped.** −5265ppm over the window ending
-   2026-07-25, +5037ppm over the run that started the same day — same board, same
-   panel, same room, near-identical magnitude, opposite direction. This is not a
-   convention change: `last_drift_ms = (before_sync - after_sync) * 1000` has read
-   that way since `346d27f` (2026-04-05) and `git log -S` finds no edit to it. So
-   either the reconstructed −9559s/21d window in the first row is wrong, or the
-   error genuinely reverses — which the awake-vs-asleep mechanism below would
-   allow, since the 2026-07-25 reflash also changed the duty cycle. Six journaled
-   samples decide it; the first row's was never journaled at all.
-2. **`n6 +-4%` says the rate is stable enough to correct.** Six retained samples
-   within ±4% of +5050ppm is ~17s/day of residual against a 60s budget at the
-   1-day floor — inside the ±13% the [decision rules](#decision-rules-once-6-samples-exist)
-   ask for, where the first datapoint alone could say nothing. Confirm against
-   the uncapped journal before acting on it: the badge shows the last six.
-3. **The C6 hat shows no badge and no `! NOSYNC`.** Resyncs are landing and the
-   last one measured under 60s, i.e. under 694ppm at the 1-day floor — consistent
-   with the +452ppm measured on this board in the 2026-07-26 row above, and it
-   means the archive is where the actual number is. Uptime 9d13h puts its boot at
-   ~2026-07-26 22:00, matching the `431b7b0` flash in
-   [history-store-validation.md](history-store-validation.md).
-
 The FireBeetle panel reads *behind* real time in both frames (−16.5 and −5.5 min)
 even though its clock runs fast. That is staleness, not a contradiction, and it
 is the reason a photo cannot be used to check a drift figure — only to bound it.
+The C6 hat's missing badge bounds it too: no `! DRIFT` and no `! NOSYNC` means
+resyncs are landing and the last one measured under 60s, i.e. under 694ppm at
+the 1-day floor. Its archive is unharvested.
+
+#### Harvest 2026-08-05: the run's ten samples
+
+`history.py backup --full` over the CH340 at 921600, 10d13h into the run. **Ten
+drift records, not six** — the badge's ring is capped, the journal is not.
+
+```
+sync_time,drift_s,window_s,ppm,ambient_c,ambient_hours,boot_count,d_boot,refresh_count,d_refresh
+2026-07-26 19:49:54Z,426.0,86696,4913,22.9,24,388,,297,
+2026-07-27 19:50:16Z,453.0,86875,5214,24.3,24,506,118,373,76
+2026-07-28 20:16:51Z,459.0,88454,5189,23.7,24,650,144,451,78
+2026-07-29 20:26:11Z,447.0,87407,5114,25.5,24,757,107,506,55
+2026-07-30 20:47:06Z,443.0,88098,5028,25.4,24,1033,276,724,218
+2026-07-31 20:41:36Z,432.0,86502,4994,24.4,24,1318,285,924,200
+2026-08-01 20:44:19Z,421.0,86984,4839,23.3,24,1650,332,1174,250
+2026-08-02 20:47:48Z,434.0,87043,4986,23.9,24,1848,198,1302,128
+2026-08-03 20:57:54Z,459.0,87465,5247,25.5,24,1932,84,1348,46
+2026-08-04 21:11:56Z,450.0,87692,5131,26.2,24,2109,177,1465,117
+```
+
+**+5066 ppm** window-weighted (4424 s of drift over 873216 s = 10.11 d), spread
+4839…5247, widest deviation **±4.5%**. Every figure below is computed from the
+CSV above and nothing else — no serial log, no screen reading.
+
+##### The 2026-07-25 row's sign is wrong, and its magnitude is right
+
+Ten journaled samples put this oscillator solidly **fast**, 4839–5247 ppm, with
+no sample within 4000 ppm of zero, let alone negative. The first row in the
+table above reports −5265 ppm for the same board in the same room. Its
+*magnitude* sits comfortably inside this run's own spread; only the sign
+disagrees.
+
+It is not a convention change: `last_drift_ms = (before_sync - after_sync) *
+1000` has read that way since `346d27f` (2026-04-05), and `git log -S` on both
+orderings finds one commit — the one that introduced it. So the candidates are
+a transcription error off a clipped 200x200 status line, or a real reversal.
+
+The duty-cycle model rules out the reversal arithmetically. At
+`ppm ≈ 5339 − 1.342 × wakes/day`, reaching −5265 ppm needs ~7900 wakes/day —
+one every 11 s, against a 60 s sleep interval. No duty cycle this firmware can
+reach produces a negative rate, so the mechanism that explains everything else
+in this run cannot explain that row's sign.
+
+Conclusion: **read the 2026-07-25 row as +5265 ppm.** Left as-written above per
+this file's append-only rule, flagged here instead. It also means the two
+FireBeetle observations agree rather than contradict, and the "opposite in sign
+to the FireBeetle" remark in the 2026-07-26 C6 row is wrong — all three rigs
+run fast.
+
+**The badge is exact.** Recomputing the window-weighted mean of the last six
+samples as `DisplayRenderer.cpp` does gives 5063 ppm ±4% at the 2026-08-02 photo
+and 5038 ppm ±4% at the 2026-08-05 one, against `+5063ppm n6 +-4%` and
+`+5037ppm n6 +-4%` read off the panels (the 1 ppm is integer truncation). Panel
+transcription is therefore trustworthy to the digit on this rig — which matters,
+because the DESPI-C02 run above has no other source.
+
+**All ten windows are one interval long** (86502–88454 s). A failed attempt
+stretches the next window by a whole interval, so **10 of 10 resyncs succeeded**
+over 10 days on battery. The 2-of-3 failure rate that opened the run did not
+recur, and nothing here is a stretched-window artefact.
+
+##### The rate tracks duty cycle, not temperature
+
+| Correlate | r (n=9) | p | Partial r, controlling for the other |
+|---|---|---|---|
+| **wakes/day (`d_boot`)** | **−0.900** | **0.001** | **−0.881** |
+| ambient mean °C | +0.457 | 0.22 | +0.275 |
+
+`d_boot` and `d_refresh` correlate at **+0.993** — one covariate with two
+proxies, and no way to separate them from this data.
+
+This is the third branch of the [decision rules](#decision-rules-once-6-samples-exist),
+and the mechanism section below **predicted it**: "That predicts the rate tracks
+wake/sleep duty cycle rather than ambient." More wakes, *lower* rate —
+`ppm ≈ 5339 − 1.342 × wakes/day`, spanning 5226 ppm at the quietest day
+(84 wakes) down to 4894 ppm at the busiest (332). The apparent temperature
+signal does not survive controlling for wakes; the duty-cycle signal survives
+controlling for temperature almost untouched. Ambient and wake count are
+themselves anti-correlated (−0.385) — warm days were stable days — which is how
+temperature borrowed a signal it does not own.
+
+What this does **not** establish: an awake-vs-asleep frequency decomposition.
+That needs a per-wake awake duration, and there isn't one number for it — a Z90
+refresh event is a ~21 s busy window that `epd_busy_light_sleep()` now spends in
+*light sleep*, not awake (`docs/notes.md`), so the two proxies weight it
+differently and neither is "seconds awake". Deriving ppm-per-second-awake from
+these would be inventing the denominator.
+
+##### What it means for compensation
+
+| Model | Residual | Interval it supports | Attempts/year |
+|---|---|---|---|
+| none (today) | ±5066 ppm = 438 s/day | 1d floor, 7.3 min of error | 365 |
+| constant +5066 ppm | ±227 ppm = **±19.6 s/day** | ~3d | ~120 |
+| + per-wake term | ±87 ppm = ±7.5 s/day *(in-sample)* | ~8d | ~46 |
+
+A constant correction now clears the 60 s bar with room to spare, which the
+single first datapoint could not say. The per-wake term roughly halves the
+residual again — but that is a 2-parameter fit scored on the same 9 points it
+was fitted to, so treat ±7.5 s/day as a ceiling on how good it looks, not a
+prediction. Neither reaches the 28d cap, which needs ±0.47%.
+
+The prize is still the one the [analysis](#what-compensation-could-buy) names:
+not display accuracy but WiFi wakes, 365/yr → ~120. Smaller than the 365 → 13
+that section hoped for, because that assumed a stability this oscillator does
+not have.
 
 ### Reading a datapoint
 
@@ -242,28 +330,43 @@ is the reason a photo cannot be used to check a drift figure — only to bound i
 
 ## Open questions
 
-- **Is the rate stable?** A single point can't tell drift from a one-off (RC
-  recalibration, a long WiFi stall, a missed resync). See the collection
-  protocol below — this is the question the daily samples exist to answer.
-- **Temperature coefficient.** The RC oscillator is temperature-dependent and
-  this device sits in the room whose temperature it plots, which is the
-  cheapest experiment available: ambient swung 21–32°C over the first window,
-  so if the tempco dominates, the daily rates should track each day's mean
-  temperature instead of scattering.
-- **The loop can't converge at this rate.** −5265ppm needs a ~3.2h interval to
+- **Is the rate stable?** **Answered 2026-08-05, yes** — ±4.5% over ten
+  consecutive daily samples on the FireBeetle. Enough to compensate at the 1-day
+  floor, not enough to reach the 28d cap. [Harvest](#harvest-2026-08-05-the-runs-ten-samples).
+- **Temperature coefficient.** **Answered 2026-08-05, no measurable one** —
+  r=+0.457 (p=0.22) against each window's mean ambient, collapsing to +0.275
+  once wakes/day is controlled for. The apparent signal was borrowed from duty
+  cycle, which is anti-correlated with ambient here. Caveat: this run spanned
+  only 22.9–26.2°C of *window mean*, against the 21–32°C instantaneous swing
+  that motivated the question, so a tempco outside that band is untested.
+- **What does the rate track?** **Answered 2026-08-05: wakes/day**, r=−0.900,
+  p=0.001, surviving control for ambient at −0.881. Confirms the awake-vs-asleep
+  asymmetry hypothesised in [Why the clock is slow](#why-the-clock-is-slow-mechanism)
+  — though not the frequency decomposition, which needs an awake-duration
+  denominator this data does not contain.
+- **The loop can't converge at this rate.** +5066ppm needs a ~3.4h interval to
   keep drift under a minute, but `RESYNC_INTERVAL_MIN` is 1 day. So the device
-  resyncs daily and still shows up to ~7.6min of error just before each sync,
-  at the cost of a daily WiFi wake.
-- **Why did 2 of 3 resyncs fail?** (2026-07-25) Open. The `! NOSYNC xN` badge
-  now makes a run of failures visible while it is happening, but not whether
-  the cause is the AP, the 30s SNTP timeout, or something else — the serial log
-  distinguishes them (`WiFi failed` vs `sync failed`). This is the dominant
-  energy risk (see below), not the successful resync.
+  resyncs daily and still shows up to ~7.3min of error just before each sync,
+  at the cost of a daily WiFi wake. Unchanged, and the reason compensation is
+  now worth building.
+- **Why did 2 of 3 resyncs fail?** (2026-07-25) Open, but **it did not recur**:
+  10 of 10 attempts succeeded across the 2026-07-25 run, every window one
+  interval long. So it is episodic rather than a standing property of this AP or
+  this firmware, and the `! NOSYNC xN` badge is what will catch the next one.
+  The serial log still distinguishes the causes (`WiFi failed` vs `sync
+  failed`).
 
 ## Compensation: analysis and decision (2026-07-25)
 
 Decision: **no compensation code**, and no extra RTC diagnostic fields, until
 several daily samples exist. Recorded here so the reasoning isn't re-derived.
+
+> **The precondition is now met** (2026-08-05): ten samples, ±4.5%, and a
+> covariate identified. Everything below was written against a single datapoint
+> and one of its inputs has changed — the ±10% futility threshold is cleared, so
+> "compensation buys nothing at the 1-day floor" no longer holds. The decision
+> itself has not been revisited; see the
+> [harvest](#harvest-2026-08-05-the-runs-ten-samples) for what it would buy now.
 
 ### What compensation could buy
 
