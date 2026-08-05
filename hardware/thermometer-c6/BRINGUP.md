@@ -267,7 +267,7 @@ docs/history-store-validation.md.
       The regime map half is automated: `ppk2.py sweep --rail reva-j1`
       (fresh boot + classification per 100mV step 4.2→3.0V, then a 10mV
       bisect of the edge — `tools/ppk2.py` docstring has the flow). Flash
-      `PLATFORMIO_BUILD_FLAGS="-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI"
+      `PLATFORMIO_BUILD_SRC_FLAGS="-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI"
       pio run -e thermometer_c6_debug -t upload` first, detach serial, USB
       out; closeout = revive on USB, reflash release (gets the shutdown
       latch back), append report.md to the notes.md power logbook.

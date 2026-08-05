@@ -86,11 +86,17 @@ the board by `/dev/serial/by-id/*Espressif*`.
 ~/.platformio/penv/bin/pio run -e dfrobot_firebeetle2_esp32e_debug -t upload
 ```
 
-Extra flags go through the environment, and they change what the panel shows:
+Extra flags go through the environment, and they change what the panel shows.
+Every macro on CLAUDE.md's revert list is read only under `src/`, so use
+`PLATFORMIO_BUILD_SRC_FLAGS` — `PLATFORMIO_BUILD_FLAGS` lands on the global
+SCons env and rebuilds all ~1100 IDF component objects as well:
 
 ```bash
-PLATFORMIO_BUILD_FLAGS="-DPPK2_DEBUG -DDISABLE_SERIAL" ~/.platformio/penv/bin/pio run -e ... -t upload
+PLATFORMIO_BUILD_SRC_FLAGS="-DPPK2_DEBUG -DDISABLE_SERIAL" ~/.platformio/penv/bin/pio run -e ... -t upload
 ```
+
+Either variable is part of the project checksum, so changing it still deletes
+every env's build directory — finish a flash before building anything else.
 
 **`pio run -t upload` resets the board on exit, so the boot banner is usually
 already gone by the time you attach.** To capture it, upload with the reset
@@ -143,7 +149,7 @@ drift window) — inherent to download mode, not to how you entered it. The
 `history` partition survives. Harvest at the end of a run, not during one.
 
 **Say what you flashed.** Every flash, erase or inject gets reported as env +
-`PLATFORMIO_BUILD_FLAGS` + git hash, and appended to
+the build-flag variable you used + git hash, and appended to
 `docs/history-store-validation.md`. Debug flags change what the panel shows, so
 an unrecorded build makes every later observation ambiguous.
 
@@ -345,7 +351,7 @@ Then confirm, and record it in `docs/history-store-validation.md`:
 - the boot log reports boot count 1 against a clean (non-`-dirty`) hash,
 - the store finds no base snapshot, then writes a fresh one at the first sleep,
 - a `history.py backup` decodes to an empty archive,
-- debug `#define`s and `PLATFORMIO_BUILD_FLAGS` are reverted (see CLAUDE.md).
+- debug `#define`s and any build-flag overrides are reverted (see CLAUDE.md).
 
 Compare against the previous clean-state entry in the validation log rather than
 against literal strings quoted here — the log lines move with the code.

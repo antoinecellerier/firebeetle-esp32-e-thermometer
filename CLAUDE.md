@@ -114,7 +114,7 @@ test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
 `HISTORY_BASE_EVERY_WAKE`, `USB_WINDOW_OBSERVE_CYCLES`, `RESYNC_INTERVAL_MIN`,
 `BATTERY_SHUTDOWN_DISABLED`, `EXPERIMENT_ARM` + the cadence overrides it tags:
 `REFRESH_EVERY_N_WAKES`, `DISPLAY_TEMP_DELTA`, `ULP_ALWAYS_WAKE`, delta
-thresholds), build_flags, test values. **Get them off the device too** — flash
+thresholds), build_src_flags, test values. **Get them off the device too** — flash
 wear, a flat pack, a panel gone blind. Bench builds show `! EXP` and tag `arm`.
 
 ## Workflow preferences
@@ -127,7 +127,7 @@ wear, a flat pack, a panel gone blind. Bench builds show `! EXP` and tag `arm`.
 - **Group physical asks into one message** (`/device-session` has the sequencing).
   Asking the user to read the panel? Give the exact string, so the reply is yes/no.
 - **Say what is on the device.** After any flash, erase or inject, state env +
-  `PLATFORMIO_BUILD_FLAGS` + git hash and append it to
+  `PLATFORMIO_BUILD_SRC_FLAGS` + git hash and append it to
   `docs/history-store-validation.md` — debug flags change what the panel shows,
   so an unrecorded build makes every later observation ambiguous.
 - **Incremental commits** at natural checkpoints; don't batch large changes, and

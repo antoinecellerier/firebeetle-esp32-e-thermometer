@@ -31,8 +31,9 @@ FSM pass preprocesses it to nothing, and HULP builds the FSM program at runtime
 instead. A new file in `ulp/` needs the same guard or it breaks the other board.
 
 The LP core dispatcher derives its sensor from the `USE_*` macros via a relative
-`#include "../include/generated/rig_config.h"` — the LP sub-build does not
-inherit the main build's `build_flags`, so config it must see cannot be a `-D`.
+`#include "../include/generated/rig_config.h"` — the LP sub-build inherits
+neither `build_flags` nor `build_src_flags`, so config it must see cannot be a
+`-D` at all.
 
 It compiles with **`-DIS_ULP_COCPU` and no board macros at all**
 (`IDFULPProject.cmake:107,159`), which is why the rig headers' env cross-checks
@@ -47,6 +48,12 @@ toolchain and fails the build past `CONFIG_ULP_COPROC_RESERVE_MEM/4`. It prints
 margin there before adding an instruction**, it has run close to full. The
 runtime loader also logs the count and degrades to safety-net wakes rather than
 aborting if it ever misfits.
+
+It preprocesses with `build_src_flags` applied on top of the global env,
+because that is what the ULP sources are compiled with. A bench macro that
+changes the program (`ULP_ALWAYS_WAKE` swaps the whole wake body:
+127/128 words without it, 110/128 with) must reach the check, or it reports a
+count for a program the build never compiled.
 
 ## ULP data and `RTC_DATA_ATTR` share the same 8KB
 
