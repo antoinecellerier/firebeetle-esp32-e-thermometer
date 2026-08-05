@@ -27,11 +27,11 @@ ULP_PROGRAM_SOURCES = [
 ]
 
 
-def _flatten_defines(defines):
+def _flatten_defines(build_env, defines):
     args = []
     for d in defines:
         if isinstance(d, (list, tuple)):
-            args.append("-D%s=%s" % (d[0], env.subst(str(d[1]))))
+            args.append("-D%s=%s" % (d[0], build_env.subst(str(d[1]))))
         else:
             args.append("-D%s" % d)
     return args
@@ -76,10 +76,20 @@ def check_ulp_size(source, target, env):
         return
     budget = reserve // 4
 
-    cxx = env.subst("$CXX")
+    # The ULP sources live in src/, and build_src_flags reach only the project's
+    # own component — espidf.py clones the env and applies SRC_BUILD_FLAGS
+    # there. Reading the global env alone would size a different program than
+    # the build compiles, silently, with one word of slack at 127/128: the
+    # macros passed that way are exactly the ones that change the count
+    # (ULP_ALWAYS_WAKE swaps the whole wake body, ULP_TEMP_DELTA_THRESHOLD,
+    # ULP_TEST_NO_I2C, PPK2_DEBUG_ULP_GPIO).
+    src_env = env.Clone()
+    src_env.ProcessFlags(env.get("SRC_BUILD_FLAGS"))
+
+    cxx = src_env.subst("$CXX")
     args = [cxx, "-E", "-P", "-x", "c++"]
-    args += ["-I%s" % env.subst(str(p)) for p in env.get("CPPPATH", [])]
-    args += _flatten_defines(env.get("CPPDEFINES", []))
+    args += ["-I%s" % src_env.subst(str(p)) for p in src_env.get("CPPPATH", [])]
+    args += _flatten_defines(src_env, src_env.get("CPPDEFINES", []))
 
     failed = []
     for src in ULP_PROGRAM_SOURCES:
