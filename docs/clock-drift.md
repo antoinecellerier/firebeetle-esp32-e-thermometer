@@ -84,6 +84,7 @@ on them; the custom rev A board adds one deliberately.
 | 2026-07-25 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `95c7b04`/`95de00c` (2026-07-03) | **21d** (badge said 7d) | −9559s (−2h39m) | **−5265ppm** (−0.53%, −7.6min/day) | 1d (clamped) | First resync with the drift badge on screen; clock running slow. Uptime 21d and the badge's 7d interval together mean the day-7 and day-14 attempts both failed — a success at day 7 would have re-armed to 1d (or 14d on negligible drift). So the window is the whole uptime, and the naive 7d reading (−15806ppm) is 3× too large. Ambient over the window swung 21–32°C (read off the device's own 30-day chart), so this rate is a temperature-weighted average, not a fixed-temperature measurement. |
 | 2026-07-26 | XIAO ESP32-C6 + BMP581 + Seeed ePaper hat (GDEW029I6FD), `1ed89a3` (2026-07-06), `seeed_xiao_esp32c6_epaper_release`, 400mAh pack | **19d22h47m** (uptime 19d23h less the drift; the clock was set once, at install) | **+780s** (+13min), ±60s | **+452ppm** (+0.045%, ≈ +39s/day), +418…+487ppm | 1d (never reached — see notes) | **First C6 datapoint, and not device-measured**: this build never got a successful resync to sample from, and with `DISABLE_SERIAL` and no `history` partition there was nothing else to read, so the figure comes from a **forced refresh** — panel `11:54` against `11:41` real, frame fresh, both clocks to the minute (hence ±60s → ±35ppm). Cross-checked against a photo taken 13min earlier: EXIF 11:30:17 (phone on network time, verified against laptop NTP within 50s) against a panel reading `11:40`, which at a constant +13min means that frame was ~3min stale — consistent with the 1-2min refresh cadence it was running while being carried upstairs (counters moved +3 boots/+3 refreshes in 4 LP ticks). The photo alone bounds drift at ≥+338ppm, since staleness can only *increase* it; the forced read lands above that, as it must. Clock **fast**, i.e. opposite in sign to the FireBeetle row above and ~12× smaller. Ambient was 21.5–24.5°C over the window (off the device's own 30-day chart) versus 21–32°C for the E, so thermal stability explains part of the magnitude gap but not the sign. Deployed in a basement with **no WiFi**: every resync attempt failed, so `resync_interval_s` sat at its 1d floor for 20 days (failures re-arm, they don't back off) and the footer read `s19d`. Had it had WiFi, +452ppm implies the interval settles where drift over the interval hits the 60s threshold — 60s/452ppm ≈ **1.5d** — so neither the 1d floor nor the 28d cap: day 1 sees 39s (<60s → doubles to 2d), 2d sees 78s (≥60s → targets ~1.5d), and it holds there. Note this build divides by the interval *setting* rather than the measured window, so the first resync after a failure run reads the rate 20× high and clamps the next interval to the 1d floor; master computes `target` from `last_drift_window_s` instead. |
 | 2026-07-26 .. 2026-08-04 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `44ba5ba` (2026-07-25), `dfrobot_firebeetle2_esp32e_release`, on battery | **1d** × 10 resyncs, 10.11d total | +421s .. +459s (4424s total) | **+5066ppm** window-weighted (+4839…+5247, ±4.5%) | 1d (clamped) | **The collection run, harvested from the journal** — ten samples, not the badge's six, with per-window ambient and duty-cycle deltas. 10 of 10 attempts succeeded. Rate tracks **wakes/day at r=−0.900** and not mean ambient (r=+0.457, collapsing to +0.275 once wakes are controlled for). But wakes are delta-triggered and correlate with room volatility at +0.93…+0.98, so duty cycle and a movement-sensitive tempco are not separable here — a tempco in temperature *level* is ruled out, the mechanism is not. Full CSV and analysis: [below](#harvest-2026-08-05-the-runs-ten-samples). |
+| 2026-07-27 .. 2026-08-02 | XIAO ESP32-C6 + BMP581 + Seeed ePaper hat (GDEW029I6FD), `431b7b0` (2026-07-26), `seeed_xiao_esp32c6_epaper_release`, 400mAh pack, open space at ~1.4m | 1.011d, **4.017d**, 1.737d (6.76d observed) | +22s, +139s, +17s | **+305ppm** window-weighted (+113…+400, **±63%**) | 3.47d and climbing | **Same board as the 2026-07-26 row, reharvested from its journal** — and ~17× smaller than the FireBeetle but ~14× less stable, so the adaptive interval hunts in a 1.7–3.5d band instead of pinning to the floor. Only three records because the interval is *working*: the run reconstructs the algorithm exactly, including one **failed attempt** on ~2026-07-29 visible only as a 4.017d window against a 2d setting. Not monotone in wakes/day, so the FireBeetle's duty-cycle relation does not reproduce at n=3. [Below](#c6-epaper-hat-harvested-2026-08-05). |
 | 2026-07-29 .. 2026-08-04 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `44e56b6` (2026-07-06), 400mAh pack | **1d** × 5 observed resyncs | +96s .. +116s | **+1259ppm** window-weighted (+1111…+1343, ±12%) | 1d (pinned) | **Five samples, all transcribed off photographs** — this build predates the `history` partition (`8b57f33`, 2026-07-25), so the panel is the only record and there is nothing to harvest. Per-sample table and the reasoning that the displayed `/1d` really is the window: [below](#photo-transcribed-run-c6--despi-c02-2026-07-29--2026-08-04). Clock **fast**, same sign as the other C6 row above and ~2.8× larger. The panel's `4321mV` is not a measurement — `read_battery_level()` returns a literal `4321` on the stock XIAO (`src/Thermometer.cpp`), so this run says nothing about the pack's state at 28d18h. |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
@@ -338,6 +339,96 @@ The prize is still the one the [analysis](#what-compensation-could-buy) names:
 not display accuracy but WiFi wakes, 365/yr → ~120. Smaller than the 365 → 13
 that section hoped for, because that assumed a stability this oscillator does
 not have.
+
+### C6 ePaper hat, harvested 2026-08-05
+
+XIAO ESP32-C6 + BMP581 + Seeed ePaper driver board (GDEW029I6FD), running
+`431b7b0`, `seeed_xiao_esp32c6_epaper_release`, on a 400mAh pack. Booted
+2026-07-26 ~19:00Z. **Deployed in the middle of a wide open space at ~1.4 m,
+windows open** — chosen for a less thermally stable spot than the FireBeetle's.
+Caught by polling `/dev/serial/by-id` for the enumeration; a sleeping C6 is not
+on the bus at all, and it took a manual BOOT+RST park after 229 s of waiting.
+
+```
+sync_time,drift_s,window_s,ppm,ambient_c,ambient_hours,boot_count,d_boot,refresh_count,d_refresh
+2026-07-27 19:46:33Z,22.0,87338,251,24.4,24,88,,73,
+2026-07-31 20:08:53Z,139.0,347079,400,24.7,96,821,733,787,714
+2026-08-02 13:49:44Z,17.0,150068,113,23.2,41,1431,610,1395,608
+```
+
+**+305 ppm** window-weighted (178 s over 584485 s = 6.76 d of observed window),
+range 113…400, widest deviation **±63%**. Roughly **17× smaller than the
+FireBeetle in magnitude and 14× worse in relative stability.** Quantisation is
+not the explanation: at ±1 s per sample the noise floor is 11.4/2.9/6.7 ppm
+against rates of 251/400/113, so the spread is real. But n=3 — the dispersion
+figure is itself barely constrained.
+
+**Why only three records in 9d13h: the adaptive interval is working.** This is
+the first end-to-end demonstration of it on hardware, and it reconstructs exactly:
+
+| Sync | Interval setting | Window observed | Verdict | Next interval |
+|---|---|---|---|---|
+| 2026-07-27 19:46Z | 1.00d (cold-boot floor) | 1.011d | on schedule | 22s < 60s → **doubles to 2d** |
+| 2026-07-31 20:08Z | 2.00d | **4.017d** | **one failed attempt** | 139s ≥ 60s → **targets 60s: 1.736d** |
+| 2026-08-02 13:49Z | 1.74d | 1.737d | on schedule | 17s < 60s → doubles to 3.47d |
+
+The third window matches the target computed from the second to **1 part in
+1000** (150068 s observed against 150000 s targeted), which is also proof this
+build derives `target` from `last_drift_window_s` rather than the interval
+setting. Next attempt was due ~2026-08-06 01:00Z, after the harvest — so the
+run ends cleanly on three.
+
+**A failed resync is recoverable from the archive even though it is not
+journaled.** Nothing is written when an attempt fails, but the attempt re-arms
+`next_resync_time` by a whole interval, so the *next* successful record carries a
+window that is an integer multiple of the setting. Here window 2 is 4.017d
+against a 2d setting: exactly one miss, at ~2026-07-29 19:46Z, with the
+`! NOSYNC x1` badge up for the two days until the 07-31 success. That matches
+the operator's recollection of sync misses early in the run, and it is the only
+place that event survives.
+
+**No badge on the 2026-08-05 panel is consistent**: the last drift was 17 s,
+under the 60 s threshold, and the miss had been cleared by two successes since.
+
+##### What it does and doesn't say about the FireBeetle result
+
+Three wake-rate/ppm pairs — 87→251, 182→400, 351→113 — are **not monotone**, so
+the FireBeetle's clean r=−0.900 does not reproduce here. At n=3 that is an
+anecdote rather than a refutation, and it is a different SoC and a different
+part, so no shared slope was owed. It does mean the duty-cycle relation should
+not be assumed general until the pinned-cadence run.
+
+The open-air placement did **not** buy the better tempco test it should have.
+Window-mean ambient spans only 23.2–24.7°C, *narrower* than the FireBeetle's
+22.9–26.2°C, because these windows are 1–4 days long and averaging over 96 h
+washes out exactly the volatility the placement was meant to add. A better clock
+earns longer resync intervals, and longer intervals destroy the covariate needed
+to explain it — worth knowing before designing the next run.
+
+##### The header's build stamp is not the build that wrote the records
+
+`history.py` prints `built 8712f72`, and that commit is **orphaned** — on no
+branch, unreachable from master, with no equivalent message anywhere in the repo.
+The reflog explains it: the sensor-identity work of 2026-07-26 evening was
+developed as small commits (`57d33e4` → `5bf8129` → `8712f72`, 19:29–19:32 CEST)
+and then squashed into `92da552` at 20:34, amended four times, landing as
+`431b7b0` at 21:18. The device was flashed from that intermediate state, its
+first boot formatted the store and stamped `8712f72` into the header sector —
+which is written once and never rewritten (see the known cosmetic issue in
+[history-store-validation.md](history-store-validation.md)). The base snapshot at
+17:55:34Z is 23 min after that commit, which closes the timing.
+
+**Confirmed on the device, not just inferred**: with the archive reading
+`built 8712f72`, the panel was showing `431b7b0` at the same moment (operator
+check, 2026-08-05, matching the `DSC_6110` footer). The two fields disagree
+because they mean different things.
+
+So: **the header stamp records the build that formatted the store, not the build
+that wrote any given record.** Attribute data by the panel hash and the flash
+log instead. Here every drift record postdates the `431b7b0` flash. The failure
+mode this creates is worth naming — a header can point at a commit that `git
+show` cannot resolve after a squash, which reads as a corrupt archive when it is
+an accurate record of a build that no longer exists.
 
 ### Reading a datapoint
 
