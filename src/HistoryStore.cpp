@@ -340,7 +340,20 @@ static bool store_write_header(void)
   h.rec_size = HS_REC;
   h.base_slots = 2;
   h.created_at = (int64_t)time(nullptr);
-  esp_efuse_mac_get_default(h.base_mac);
+  // Writes 8 bytes, not 6, on parts with 802.15.4 (the C6): it expands the
+  // factory MAC into an EUI-64 in place, inserting ff:fe at bytes 3-4
+  // (esp_hw_support/mac_addr.c, insert_mac_ext_into_mac). Straight into
+  // base_mac[6] that overruns the field into chip_model/chip_revision, which
+  // only survives because both are assigned two statements below.
+  //
+  // Keeping the first 6 bytes preserves the value already written into every
+  // existing archive — on the C6 that is the EUI-64 prefix (58:e6:c5:ff:fe:16
+  // where the device MAC is 58:e6:c5:16:1f:08), so history.py's filename suffix
+  // and its cross-device guard are weak there. Correcting that changes the
+  // meaning of a field in backups already taken; it is a separate change.
+  uint8_t mac[8];
+  esp_efuse_mac_get_default(mac);
+  memcpy(h.base_mac, mac, sizeof(h.base_mac));
   esp_chip_info_t ci;
   esp_chip_info(&ci);
   h.chip_model = (uint8_t)ci.model;
