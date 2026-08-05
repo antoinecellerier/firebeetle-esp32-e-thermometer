@@ -139,6 +139,37 @@ static void epd_configure_pins()
   // GxEPD2 calls SPI.begin() with no args, which configures GPIO20 as MISO
   // and GPIO21 as SS — both conflict with EPD_DC and EPD_BUSY. Pre-init SPI
   // with only SCK/MOSI (e-paper is write-only, CS managed by GxEPD2).
+  //
+  // "Write-only" is this project's choice for SOME panels and a hardware fact for
+  // others — it depends on the controller, not the board. GxEPD2 can read by
+  // turning MOSI into an input and clocking SCK by hand (GxEPD2_EPD::_readData),
+  // no MISO pin involved, but that path is gated on _sck/_mosi, which only the
+  // init(sck, mosi, ...) overload sets — so with the two-arg init() below every
+  // _readData() returns 0 regardless.
+  //
+  // Whether reviving it would help is per-controller, and measured only for one:
+  //
+  //   UC8151 (GDEY0213M21)  WORKS on this exact wiring. Probed 2026-08-05 on rev A
+  //                         board 2: cmd 0x70 -> 01 0e, 0x71 -> 13 13, 0x40 -> d2 00,
+  //                         each identical under a pulldown and a pullup, i.e.
+  //                         actively driven. Foreign commands floated, which is the
+  //                         control. See display_probe_readback() under EPD_PROBE.
+  //   SSD1681 (Z90/GDEY)    EXPECTED TO. Documents a 4-wire read procedure on a
+  //                         single SDA, and command 0x38 reads a 10-byte User ID
+  //                         out of OTP — a real identifier. Untested.
+  //   SSD2677 (T81)         UNTESTED, and no longer "unlikely". Its module bonds
+  //                         a single SDA to the FPC like every other panel here;
+  //                         SSD1677's separate SDI/SDO are CHIP pins, not module
+  //                         ones, and reading the two as equivalent was a mistake
+  //                         made once already. No module-level read procedure is
+  //                         documented — which was also true of the M21, and that
+  //                         one answers.
+  //
+  // So the T81's _Init_Full reading its controller temperature (cmd 0x40) and
+  // getting 0 — hence the coldest LUT — may not be a software oversight but a
+  // wiring limit. Do not "fix" it by enabling _readData without probing that panel
+  // first. If it is a wiring limit, the options are 3-wire mode or an SDO on the
+  // FPC, and only then does it become a board question.
   SPI.begin(19 /* SCK, D8 */, -1, 18 /* MOSI, D10 */, -1);
   // Reconfigure DC and BUSY after SPI.begin() since it may have claimed them
   // as MISO/SS (GPIO20/21 are the default SPI MISO/SS on C6).
@@ -292,6 +323,95 @@ static void epd_busy_light_sleep(const void *)
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
 }
 
+#ifdef EPD_PROBE
+// Bench probe: does the panel drive anything back, and if so what?
+//
+// There is no SDO pin. The 24-pin FPC carries SCLK on 13 and SDI on 14, with BS
+// tied low for 4-wire SPI (hardware/thermometer-c6/README.md), so a readback can
+// only happen by the panel driving SDI itself — which is what GxEPD2's own
+// _readData() assumes when it turns MOSI into an input. That path is dead in this
+// build because _sck/_mosi are set only by the init(sck, mosi, ...) overload we
+// do not call, so this drives the pins directly rather than reviving it.
+//
+// Each command is read TWICE, once with the input pulled down and once pulled up.
+// A floating pin follows its pull and the two disagree; a pin something is
+// actively driving gives the same byte both ways. That distinction is the whole
+// point — without it, 0x00 from a pulldown proves nothing at all.
+static void epd_probe_read(uint8_t cmd, uint8_t *out, int n, bool pullup)
+{
+  SPI.end();
+  pinMode(EPD_SCK, OUTPUT);
+  digitalWrite(EPD_SCK, LOW);
+  pinMode(EPD_MOSI, OUTPUT);
+
+  digitalWrite(EPD_CS, LOW);
+  digitalWrite(EPD_DC, LOW);                       // command phase
+  for (int i = 7; i >= 0; i--)
+  {
+    digitalWrite(EPD_MOSI, (cmd >> i) & 1);
+    digitalWrite(EPD_SCK, HIGH);
+    digitalWrite(EPD_SCK, LOW);
+  }
+
+  digitalWrite(EPD_DC, HIGH);                      // data phase
+  gpio_set_direction((gpio_num_t)EPD_MOSI, GPIO_MODE_INPUT);
+  if (pullup)  { gpio_pullup_en((gpio_num_t)EPD_MOSI);  gpio_pulldown_dis((gpio_num_t)EPD_MOSI); }
+  else         { gpio_pulldown_en((gpio_num_t)EPD_MOSI); gpio_pullup_dis((gpio_num_t)EPD_MOSI); }
+  for (int b = 0; b < n; b++)
+  {
+    uint8_t v = 0;
+    for (int i = 0; i < 8; i++)
+    {
+      digitalWrite(EPD_SCK, HIGH);
+      v = (uint8_t)((v << 1) | (gpio_get_level((gpio_num_t)EPD_MOSI) ? 1 : 0));
+      digitalWrite(EPD_SCK, LOW);
+    }
+    out[b] = v;
+  }
+  digitalWrite(EPD_CS, HIGH);
+  gpio_pullup_dis((gpio_num_t)EPD_MOSI);
+  gpio_pulldown_dis((gpio_num_t)EPD_MOSI);
+
+  epd_configure_pins();  // restores SPI with explicit pins; a bare SPI.begin()
+                         // would reclaim GPIO20/21 on the C6
+}
+
+void display_probe_readback(const char *when)
+{
+  // Read-only / harmless commands across the three controller families this
+  // project drives, so one dump is comparable panel to panel. Nothing here
+  // triggers a refresh or changes power state (no PON/POF/DRF/DSLP).
+  static const struct { uint8_t cmd; uint8_t n; const char *what; } probes[] = {
+    {0x70, 4, "UC8151 REV (revision)"},
+    {0x71, 2, "UC8151 FLG (get status)"},
+    {0x40, 2, "SSD2677/UC8151 temperature"},
+    {0x61, 3, "UC8151 TRES (resolution)"},
+    {0x00, 2, "UC8151 PSR (panel setting)"},
+    {0x38,10, "SSD1681 User ID (10 bytes, OTP)"},
+    {0x2F, 2, "SSD168x status"},
+    {0x1C, 2, "SSD168x temp register"},
+  };
+
+  LOGI("EPD probe [%s]: panel=%s  (dn/up differ => floating, i.e. nothing driving SDI)",
+       when, RIG_NAME);
+  for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++)
+  {
+    uint8_t dn[10] = {0}, up[10] = {0};
+    epd_probe_read(probes[i].cmd, dn, probes[i].n, false);
+    epd_probe_read(probes[i].cmd, up, probes[i].n, true);
+    char sdn[34] = {0}, sup[34] = {0};
+    for (int b = 0; b < probes[i].n; b++)
+    {
+      snprintf(sdn + b * 3, 4, "%02x ", dn[b]);
+      snprintf(sup + b * 3, 4, "%02x ", up[b]);
+    }
+    const bool driven = (memcmp(dn, up, probes[i].n) == 0);
+    LOGI("  cmd %02x  dn=%-31s up=%-31s %s  (%s)",
+         probes[i].cmd, sdn, sup,
+         driven ? "DRIVEN" : "floating", probes[i].what);
+  }
+}
+#endif // EPD_PROBE
 
 static void init_for_render(int boot_count)
 {
@@ -350,8 +470,22 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
 #ifndef DISABLE_DISPLAY
   epd_power_on();
   epd_health_begin();
+#ifdef EPD_PROBE
+  // Before GxEPD2 touches anything. TRES and PSR are host-set registers, so
+  // after init() they only echo what we wrote — any panel-intrinsic value has to
+  // be their reset/OTP default, visible only here.
+  epd_configure_pins();
+  pinMode(EPD_RESET, OUTPUT);
+  digitalWrite(EPD_RESET, HIGH); delay(10);
+  digitalWrite(EPD_RESET, LOW);  delay(10);
+  digitalWrite(EPD_RESET, HIGH); delay(10);
+  display_probe_readback("post-reset, pre-init");
+#endif
   init_for_render(stats.boot_count);
 
+#ifdef EPD_PROBE
+  display_probe_readback("after init");
+#endif
   LOGI("Display dashboard (%dx%d)", display.width(), display.height());
 #if defined(FONT_CONFIG_W)
   if (display.width() != FONT_CONFIG_W || display.height() != FONT_CONFIG_H) {
@@ -395,6 +529,17 @@ void display_show_empty_battery(uint32_t battery_mv, time_t now,
 #ifndef DISABLE_DISPLAY
   epd_power_on();
   epd_health_begin();
+#ifdef EPD_PROBE
+  // Before GxEPD2 touches anything. TRES and PSR are host-set registers, so
+  // after init() they only echo what we wrote — any panel-intrinsic value has to
+  // be their reset/OTP default, visible only here.
+  epd_configure_pins();
+  pinMode(EPD_RESET, OUTPUT);
+  digitalWrite(EPD_RESET, HIGH); delay(10);
+  digitalWrite(EPD_RESET, LOW);  delay(10);
+  digitalWrite(EPD_RESET, HIGH); delay(10);
+  display_probe_readback("post-reset, pre-init");
+#endif
   init_for_render(stats.boot_count);
   render_empty_battery(display, display.width(), display.height(),
                         battery_mv, now, stats);

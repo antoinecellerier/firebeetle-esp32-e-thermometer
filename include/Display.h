@@ -163,6 +163,11 @@ enum DisplayFault : uint8_t {
 // display_* calls below has run; DISPLAY_FAULT_NONE before that.
 uint8_t display_fault();
 
+#ifdef EPD_PROBE
+// Bench probe (EPD_PROBE builds only): dump whatever the panel drives back on the
+// data line. Call only with the panel powered and initialised.
+void display_probe_readback(const char *when);
+#endif
 
 // Poll the panel's BUSY line with plain delays instead of light sleep. Light
 // sleep gates the USB PHY clock, and the port may not re-enumerate afterwards
