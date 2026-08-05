@@ -108,6 +108,11 @@ config-specific (panel + sensor + board).
 Wall-clock `pio run`, warm caches. The env-switch row is the pain point: under
 Arduino+fork, building one board invalidates the other board's Arduino core build.
 
+**Trust the object counts over the times.** This laptop throttles hard, and
+these runs are sequential: stage E's two 1095-object rows are the same work
+measured 22s apart (73s then 52s) purely on thermal state. The recompile count
+is deterministic and is what the change is judged on.
+
 | Stage | Scenario | Time | Notes |
 |---|---|---|---|
 | B (Arduino+fork) | esp32e_debug no-op, same env | 30s | SCons+LDF overhead only, 0 recompiles |
@@ -120,3 +125,11 @@ Arduino+fork, building one board invalidates the other board's Arduino core buil
 | C | c6 first build (IDF from source) | ~5min | one-time per clean checkout |
 | D (both pure espidf) | env-switch no-op, either direction | 3–4s | 0 recompiles; Arduino-era penalty (167s/~2400 files) gone for good |
 | D | esp32e_release / c6_release incremental | 24s / 27s | |
+| E (GIT_HASH a global -D) | esp32e_debug no-op, same env | 7.5s | 0 recompiles |
+| E | **hash flip, no source change** | 73s | **1095 of 1095 objects** — `-dirty` suffix alone; the everyday cost |
+| E | rebuild back to clean hash | 52s | 1095 again; same work as the row above, 22s apart on thermal state |
+| E | env switch, both envs at one hash | 4.2s | 0 recompiles — the Arduino-era penalty was already gone |
+| F (GIT_HASH a generated header) | esp32e_debug no-op, same env | 6.6s | 0 recompiles, unchanged |
+| F | **after a commit (hash flip)** | 17.7s | **3 objects** — the files that read the hash, vs 1095 |
+| F | full rebuild, cold cache | 110s | after a project-checksum wipe |
+| F (+ build_cache_dir) | rebuild deleted env dir, warm cache | 47s | **0 recompiles**, all objects retrieved; remainder is cmake reconfigure + copy |
