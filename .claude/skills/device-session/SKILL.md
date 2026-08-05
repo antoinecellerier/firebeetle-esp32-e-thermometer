@@ -24,19 +24,23 @@ including `history.py backup` — enters download mode, which presents as
 hour, the drift window. Harvest at the end of a run, not during one. Ask before
 interrupting a soak.
 
-**Does `include/local-secrets.h` match what is wired?** Flashing a mismatched
-panel or sensor config panic-loops at ~600ms and looks like a huge sleep floor on
-the PPK2. The tell is a stale e-paper frame — old `GIT_HASH`, old time. Back the
-file up before swapping it, and restore it after:
+**Does the env you are about to flash match what is wired?** The env carries its
+rig — panel, sensor, power gate, LEDs — so there is nothing to edit and nothing
+to restore afterwards. Check which rig an env means, and what that rig is:
 
 ```bash
-cp include/local-secrets.h /tmp/.../local-secrets.h.bak
-grep -E '^#define (USE_|MY_TZ)' include/local-secrets.h   # what is selected now
+grep -A1 '^\[env:' platformio.ini | grep -B1 custom_rig   # env -> rig
+head -6 include/rigs/<rig>.h                              # rig -> hardware, MAC, port
 ```
 
-`include/local-secrets.h` is the ground truth for what is *configured*; the
-header of `docs/history-store-validation.md` records which rig the validation log
-assumes. Reconcile the two against what is physically wired before flashing.
+A rig that disagrees with its env is a compile error, so the surviving hazard is
+narrower than it used to be: **right env, wrong physical board**. Boards sharing
+one env (the custom rev A boards) are the case to watch. That still panic-loops
+at ~600ms and looks like a huge sleep floor on the PPK2; the tell is a stale
+e-paper frame — old `GIT_HASH`, old time.
+
+`RIG=<name>` overrides for a bench swap. It leaves no state behind: the next
+plain `pio run` is back on the env's own rig.
 
 ## 1. Ports differ by board
 
@@ -324,7 +328,8 @@ hypothesis:
 1. **`EPD_POWER_GATE` fails silently** — an unplugged display-enable jumper looks
    exactly like a rendering bug.
 2. **PPK2 probe orientation** — a flipped board puts the probe on the wrong lane.
-3. `local-secrets.h` mismatch (section 0).
+3. Right env, wrong physical board (section 0) — the mismatch the rig
+   cross-checks cannot catch.
 4. Supply handover — with a battery attached, unplugging USB is *not* a power
    cycle, and RTC state persists.
 
@@ -340,7 +345,6 @@ Then confirm, and record it in `docs/history-store-validation.md`:
 - the boot log reports boot count 1 against a clean (non-`-dirty`) hash,
 - the store finds no base snapshot, then writes a fresh one at the first sleep,
 - a `history.py backup` decodes to an empty archive,
-- `include/local-secrets.h` is restored from the backup,
 - debug `#define`s and `PLATFORMIO_BUILD_FLAGS` are reverted (see CLAUDE.md).
 
 Compare against the previous clean-state entry in the validation log rather than

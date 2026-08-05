@@ -31,8 +31,13 @@ FSM pass preprocesses it to nothing, and HULP builds the FSM program at runtime
 instead. A new file in `ulp/` needs the same guard or it breaks the other board.
 
 The LP core dispatcher derives its sensor from the `USE_*` macros via a relative
-`#include "../include/local-secrets.h"` — the LP sub-build does not inherit the
-main build's include paths.
+`#include "../include/generated/rig_config.h"` — the LP sub-build does not
+inherit the main build's `build_flags`, so config it must see cannot be a `-D`.
+
+It compiles with **`-DIS_ULP_COCPU` and no board macros at all**
+(`IDFULPProject.cmake:107,159`), which is why the rig headers' env cross-checks
+are wrapped in `#if !defined(IS_ULP_COCPU)`. Drop that guard and every C6 build
+fails.
 
 ## The FSM word budget is checked at build time
 

@@ -28,9 +28,9 @@ make -C tools/hstest [sample]      # HistoryStore checks, host-only; `sample` al
 Use the `/device-session` skill for anything involving a connected board. Four
 facts that do damage when unknown:
 
-- **`include/local-secrets.h` must match the wired panel/sensor before any
-  upload.** A mismatch panic-loops at ~600ms and looks like a huge sleep floor on
-  the PPK2; a stale frame (old GIT_HASH/time) is the tell.
+- **The env picks the rig — flash by env, hand-edit nothing.** A rig/env mismatch
+  is a compile error now; *right env, wrong board* still panic-loops at ~600ms
+  and reads as a huge sleep floor, with a stale frame (old GIT_HASH) as the tell.
 - **esptool and `history.py` enter download mode, which resets the chip and wipes
   RTC** (`rst:0x1 POWERON_RESET`) — destroying the boot counters, in-progress
   hour and drift window you may be measuring.
@@ -71,9 +71,9 @@ facts that do damage when unknown:
 `framework = espidf` on the stock platform, no Arduino and no fork; `idf.py`
 works too. Rationale, traps and the env list: `docs/build-system.md`. Two rules
 worth carrying everywhere: **`history` is pinned at flash offset 0x10000** (moving
-its start orphans years of archive), and **sensor/display selection lives in
-`include/local-secrets.h`** (gitignored — see `local-secrets-example.h`), not in
-platformio.ini.
+its start orphans years of archive), and **sensor/display selection lives in a
+tracked rig header** (`include/rigs/`, per env via `custom_rig`; options in
+`_template.h`). `include/local-secrets.h` is gitignored credentials only.
 
 ## Subsystem rules
 

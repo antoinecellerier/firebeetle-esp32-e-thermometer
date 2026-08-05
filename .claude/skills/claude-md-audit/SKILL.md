@@ -104,9 +104,10 @@ grep -ohE '`[a-zA-Z0-9_./-]+`' "$@" | tr -d '`' | grep '/' | sort -u \
 ```
 
 The three names in that `grep -vxF` allowlist are **conventions, not violations**
-— naming the tree or the config file *is* the rule text ("sensor/display
-selection lives in `include/local-secrets.h`", "don't modify `include/generated/`")
-and must stay. Extend the allowlist rather than removing such a line. Anything
+— naming the tree or the credentials file *is* the rule text
+("`include/local-secrets.h` holds credentials only", "don't modify
+`include/generated/`") and must stay. Extend the allowlist rather than removing
+such a line. Anything
 else the check reports is a real violation: a path to a *specific* gitignored
 file, e.g. a named header under `include/generated/`. Propose stating the lesson
 directly instead.

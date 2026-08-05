@@ -63,9 +63,9 @@ differs (0x47 vs 0x77), so both sensors can coexist on the same bus.
 | 0/D5    | SDA             |
 | 4/D12   | SCL             |
 
-Set `#define USE_BMP58x` in `local-secrets.h`. For LP core on C6, also change
-`lp_core_main.c` to `#define LP_CORE_BMP58X` (LP core build doesn't inherit
-main project defines).
+Set `#define USE_BMP58x` in the rig header (`include/rigs/<name>.h`). The LP
+core derives `LP_CORE_BMP58X` from the same selector, so there is no second
+place to change.
 
 ## DESPI-C02 power gate (FDN340P)
 

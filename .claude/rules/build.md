@@ -38,6 +38,12 @@ kept) derive from `IDF_TARGET` in `src/CMakeLists.txt`, **not** platformio.ini.
 is itself a buildable, half-configured target, and `extends` only inherits
 reliably from plain sections.
 
+**Every `[env:...]` needs a `custom_rig`.** It names the wired hardware — panel,
+sensor, power gate, LEDs — from `include/rigs/`. A new env without one fails the
+pre-build script rather than picking a default, which is deliberate: a wrong rig
+is a wrong-panel flash. Stated per env, not on the base sections, because the
+two `seeed_xiao_esp32c6`-based families take different rigs.
+
 ## sdkconfig
 
 - Authored `sdkconfig.defaults[.<target>]` are tracked; generated

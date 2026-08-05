@@ -7,10 +7,13 @@ in `tools/hstest` and are not repeated here.
 Rig unless stated otherwise: **FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90**,
 `dfrobot_firebeetle2_esp32e_debug`, `/dev/ttyUSB0`, USB-powered.
 
-`local-secrets.h` must match the wired hardware (`USE_154_Z90` + `USE_BMP390L`
-here). Flashing a mismatched panel/sensor config panic-loops at ~600ms and
-looks like a huge sleep floor on the PPK2 — a stale frame on the e-paper (old
-GIT_HASH/time) is the tell.
+Rows before 2026-08-05 record `local-secrets.h` contents because the panel and
+sensor were hand-edited there per flash. Since then the env carries its rig
+(`custom_rig` in platformio.ini, headers in `include/rigs/`), so naming the env
+names the hardware and a rig/env mismatch is a compile error. What still
+panic-loops at ~600ms — looking like a huge sleep floor on the PPK2, with a
+stale e-paper frame (old GIT_HASH/time) as the tell — is the right env flashed
+to the wrong physical board.
 
 ## Plan
 

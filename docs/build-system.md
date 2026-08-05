@@ -30,7 +30,7 @@ The macro names are Arduino-era leftovers, kept only to avoid churning every
 `components/arduino_shim`, a minimal Arduino API over IDF (GPIO, timing,
 Print/Serial, SPIClass on spi_master).
 
-Only the panels selectable in `local-secrets.h` are compiled. **Add the panel
+Only the panels a rig header can select are compiled. **Add the panel
 `.cpp` to `components/gxepd2/CMakeLists.txt` when enabling a new `USE_*` panel**,
 or the link fails with a missing vtable rather than anything that names the panel.
 
@@ -115,11 +115,41 @@ anything else.
 
 ## Environments
 
+Each carries a `custom_rig` naming the hardware it is built for, so the env is
+the whole selection:
+
 ```
-dfrobot_firebeetle2_esp32e_debug / _release    ESP32-E (default env)
-seeed_xiao_esp32c6_debug / _release            XIAO C6
-seeed_xiao_esp32c6_epaper_debug / _release     XIAO C6 + Seeed ePaper driver board
-thermometer_c6_debug / _release                custom rev A board
-thermometer_c6_bod_probe                       rev A bench probe: brownout raised
-                                               to ~3.27V — never deploy
+env                                            rig              board
+dfrobot_firebeetle2_esp32e_debug / _release    firebeetle       ESP32-E (default env)
+seeed_xiao_esp32c6_debug / _release            xiao-bigscreen   XIAO C6 + DESPI-C02
+seeed_xiao_esp32c6_epaper_debug / _release     xiao-hat         XIAO C6 + Seeed ePaper board
+thermometer_c6_debug / _release                revA-bigscreen   custom rev A board
+thermometer_c6_bod_probe                       revA-bigscreen   rev A bench probe: brownout
+                                                                raised to ~3.27V — never deploy
 ```
+
+The rev A boards differ only by panel, so they share these envs and the default
+suits boards 2-4. **Board 1 wears the 200x200 GDEY and needs
+`RIG=revA-smallscreen`** — the one mismatch the rig cross-checks cannot catch,
+since both rigs are valid for the env.
+
+## Rig selection
+
+A rig is one hardware configuration: board + panel + sensor + the flags that
+follow (`EPD_POWER_GATE`, `DISABLE_LEDS`). Each lives in a tracked
+`include/rigs/<name>.h`; `include/rigs/_template.h` lists the options and the
+add-a-rig checklist.
+
+`scripts/pre_build.py` resolves `RIG` from the environment, else the env's
+`custom_rig`, and writes `include/generated/rig_config.h` — a fixed-path,
+two-line selector. Fixed on purpose: switching rigs changes that file's
+*content*, not the project's file list, so the project checksum is undisturbed
+and another env's finished `firmware.bin` survives. Varying
+`PLATFORMIO_BUILD_FLAGS` instead would delete every env's build directory (see
+above), and the LP core would not see the change at all — its sub-build
+inherits no `build_flags` and reads the selector by relative include.
+
+Each rig header ends in a cross-check that `#error`s when the rig and the env
+disagree, so `RIG=firebeetle pio run -e seeed_xiao_esp32c6_debug` fails at
+compile time rather than at the panel. `idf.py` needs `-DRIG=<name>` once; the
+generated header persists for later bare `idf.py build` runs.
