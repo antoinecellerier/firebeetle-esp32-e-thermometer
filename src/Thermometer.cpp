@@ -2337,8 +2337,8 @@ void setup()
   // CPU frequency is fixed at 80 MHz at build time (CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ)
   // — replaces the Arduino-era setCpuFrequencyMhz(80) on non-first boots.
 
-  LOGI("Boot count: %d [%s] sizeof(TempReading)=%d sizeof(time_t)=%d",
-       boot_count, GIT_HASH, (int)sizeof(TempReading), (int)sizeof(time_t));
+  LOGI("Boot count: %d [%s] rig %s sizeof(TempReading)=%d sizeof(time_t)=%d",
+       boot_count, GIT_HASH, RIG_NAME, (int)sizeof(TempReading), (int)sizeof(time_t));
 
   // Diagnostic: dump sparkline buffer to detect packed struct corruption
   if (historical_data.temp_count > 0)
