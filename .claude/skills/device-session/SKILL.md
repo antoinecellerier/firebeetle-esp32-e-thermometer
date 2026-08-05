@@ -124,6 +124,16 @@ BOOT button on this chip, has nothing to talk to. Three ways in, cheapest first:
 3. **Park it manually**: hold BOOT, tap RST, release BOOT, with no process
    holding the port. This is what board 1 needed before the window existed.
 
+**A manually parked chip stays parked after the upload — press RST or the new
+firmware never runs.** esptool's own reset does not release the park, so the app
+never starts and the panel keeps holding its last frame. That reads exactly like
+"the flash didn't take", and the tells are subtle: the board stays *enumerated*
+indefinitely (the ROM bootloader keeps USJ alive, where a running board would
+deep-sleep and drop off the bus within seconds), esptool keeps answering, and any
+archive you read back is intact but unchanged. **Enumerated-and-quiet is the
+signature of a parked chip, not a booting one.** Confirm the app is live off the
+panel — the git hash in the footer — not off the bus.
+
 Any of these resets the chip and **wipes RTC** (boot counters, in-progress hour,
 drift window) — inherent to download mode, not to how you entered it. The
 `history` partition survives. Harvest at the end of a run, not during one.
