@@ -620,3 +620,44 @@ Note the RTC constraint: on the ESP32-E only **60 bytes** separate the app's
 RTC sections from `ULP_DATA_BASE` (the build prints the headroom every time —
 see `scripts/post_build_check_rtc.py`). Per-sample covariate arrays would not
 fit today without raising the base.
+
+## Phase 2: the pinned-cadence run (firmware landed 2026-08-05)
+
+The harvest above cannot separate duty cycle from ambient movement, because
+delta-triggered wakes make wakes/day a measurement of room volatility. Breaking
+that coupling needs the cadence pinned, which the firmware could not do — the
+delta thresholds and `DISPLAY_TEMP_DELTA` were plain `#define`s. They are now
+`#ifndef`-guarded, and `REFRESH_EVERY_N_WAKES` adds a repaint term that keys off
+the wake counter instead of the temperature.
+
+The constraint that shaped the arms: **`update_hourly_history()` runs only on an
+HP wake**, so hourly min/max/avg are built from wakes. Pinning a rig to the
+hourly safety net alone would put one sample in each hour, collapse
+`min == max == avg`, and destroy the intra-hour-spread covariate — the volatility
+measure correlating most strongly (+0.981) with wake count. The primary endpoint
+would have had nothing to test against, and it would have looked like a clean
+null. So the arms hold **wakes constant at 1440/day and vary only the refresh
+cadence**, which is also the term the slope arithmetic points at: read as an
+awake/asleep mixture, the fitted slope implies a per-event duration of 21.7 s
+against a measured ~21 s Z90 refresh window and a 710 ms bare wake.
+
+Two things make an arm self-identifying, because a bench rig that reads as a
+field rig poisons every later observation:
+
+- **`! EXP <id> <n>s` on the panel**, superseding `! DEBUG` rather than stacking
+  with it. Ranked with the lab-build badge, so overflow cannot drop it.
+- **an `arm` column in `dump --drift`**, from `EXPERIMENT_ARM` written into the
+  drift record's one spare byte. Per-record rather than per-archive: a reflash
+  between arms wipes RTC but not the journal, so one image spans several. No
+  `HS_FORMAT` bump — a bump would leave every deployed archive inert until it
+  was backed up and erased.
+
+Also fixed here, because it misread the harvest above: `history.py` printed
+`built <hash>` for a stamp written once at `store_format()` and never rewritten.
+It now prints `formatted by`, flags a hash git cannot vouch for (the C6 hat's
+resolved to an orphaned pre-squash commit while its panel showed `431b7b0`), and
+reports `last snapshot written by <hash>` from a new field in the base snapshot.
+That field is appended to `HistoryDriftState`, which is elastic — but only
+forwards: older firmware refuses a longer stored payload and rebuilds from the
+journal, which presents as `base (none — journal only)`, normally the signature
+of a boot loop.

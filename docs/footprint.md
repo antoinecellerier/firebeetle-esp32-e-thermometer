@@ -63,6 +63,8 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | J drift telemetry | c6_release | 1041152 | 25.6%*** | 40524 | — | — | measured drift window + ppm history (12B RTC) + wrapped/white-banded status line |
 | K flash history | esp32e_release | 1000768 | 47.7%**** | 39576 | — | 6544 | HistoryStore + NTP bootstrap retry |
 | K | c6_release | 1053536 | 50.2%**** | 40564 | — | 6456 | +12KB bin vs J; **0 bytes RTC** — the store derives its state from flash so `historical_data` doesn't move (60B of ULP_DATA_BASE headroom left on ESP32-E) |
+| L cadence experiment | esp32e_release | 955211 | 45.5% | 44704 | — | — | `! EXP` badge + `REFRESH_EVERY_N_WAKES` + arm byte in the drift record + `git_hash` in the base snapshot. **0 bytes RTC** — the new hash rides in the flash struct, not RTC; `post_build_check_rtc.py` reports **76B of ULP_DATA_BASE headroom**. The delta vs stage K is *not* isolated to this change: many commits separate them. |
+| L | c6_release | 1008186 | 48.1% | 45692 | — | — | Same tree. Bench arms build ~600B *smaller* than the default (E arm 1: 954575) — `ULP_ALWAYS_WAKE` drops the FSM's delta-compare block. |
 
 *** Stage F correction: through stages C-D the ACTUAL flashed partition table was
 PlatformIO's default 1MB single-app (PIO ignores the sdkconfig partition choice) —
