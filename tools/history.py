@@ -6,7 +6,7 @@ src/HistoryStore.cpp), which `pio run -t upload` does not touch. This reads it
 out over USB, so backups outlive the device and the archive can be decoded
 without one.
 
-    history.py backup                    # incremental read, auto-named
+    history.py backup                    # incremental read -> local/archives/
     history.py dump hist.bin --csv       # hourly + sparkline
     history.py dump hist.bin --drift     # the docs/clock-drift.md table
     history.py restore hist.bin          # MAC-checked
@@ -25,7 +25,7 @@ import struct
 import sys
 import zlib
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import artifacts
 
 # --- on-flash format (mirrors src/HistoryStore.cpp) --------------------------
 
@@ -73,7 +73,7 @@ def cstr(b):
 def history_partition(csv_path=None):
     """(offset, size) of the `history` partition, read from partitions.csv so a
     future resize needs no change here."""
-    path = csv_path or os.path.join(REPO, "partitions.csv")
+    path = csv_path or os.path.join(artifacts.REPO, "partitions.csv")
     with open(path) as f:
         for line in f:
             line = line.split("#", 1)[0].strip()
@@ -444,7 +444,8 @@ def write_device(blob, port=None, baud=921600):
 def cmd_backup(args):
     blob = read_device(args.port, args.baud, args.full)
     arc = Archive(blob)
-    name = args.output or (
+    name = args.output or os.path.join(
+        artifacts.artifact_dir("archives"),
         f"hist-{arc.header['board']}-"
         f"{arc.header['base_mac'][-3:].hex()}-"
         f"{dt.date.today().isoformat()}.bin")
@@ -457,7 +458,7 @@ def cmd_backup(args):
     # that here than when the device it came from is gone.
     kind = ("full partition image" if len(blob) == size
             else f"prefix of a {size}-byte partition; re-run with --full to restore")
-    print(f"wrote    {name} ({len(blob)} bytes, {kind})")
+    print(f"wrote    {artifacts.rel(name)} ({len(blob)} bytes, {kind})")
 
 
 def cmd_restore(args):

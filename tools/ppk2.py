@@ -6,7 +6,7 @@ Two data sources, one analysis path:
     ppk2.py csv  trace.csv                 # export from nRF Connect Power Profiler
     ppk2.py live --seconds 30              # ampere meter (DUT externally powered)
     ppk2.py live --rail bat --power-cycle  # source meter; see SAFETY below
-    ppk2.py sweep --rail reva-j1           # battery-floor voltage sweep + bisect
+    ppk2.py sweep --rail reva-j1           # battery-floor sweep -> local/sweeps/
 
 The point of the marker-driven regions is that charge figures stop depending on
 where a human dragged a selection. `-DPPK2_DEBUG` drives two GPIOs:
@@ -63,6 +63,8 @@ import re
 import sys
 import time
 from array import array
+
+import artifacts
 
 # The PPK2 samples at a fixed 100 kSps. ppk2_api does not expose this, so it is
 # restated here: it is the device's specified rate, not something measured.
@@ -1847,7 +1849,9 @@ def run_sweep(args):
     step_s = cap_s + cap_s * PPK2_SAMPLE_HZ / 671e3 + 3.0
     worst_steps = (len(mv_list) + args.max_bisect_steps
                    + 2 * args.confirm_edge)
-    out_dir = args.out_dir or time.strftime("ppk2-sweep-%Y%m%d-%H%M%S")
+    out_dir = args.out_dir or os.path.join(
+        artifacts.artifact_dir("sweeps"),
+        time.strftime("ppk2-sweep-%Y%m%d-%H%M%S"))
     plan = {"rail": args.rail, "mv_list": mv_list, "dwell_s": args.dwell,
             "boot_s": args.boot_window, "off_s": args.off_seconds,
             "decimate": args.decimate, "blip_period_s": args.blip_period,
@@ -1867,7 +1871,7 @@ def run_sweep(args):
     print(f"  duration ~{worst_steps * step_s / 60:.0f} min worst-case "
           f"({len(mv_list)} linear + up to "
           f"{args.max_bisect_steps + 2 * args.confirm_edge} probes, estimate)")
-    print(f"  output: {out_dir}/ (~{need_b/1e6:.0f} MB raw"
+    print(f"  output: {artifacts.rel(out_dir)}/ (~{need_b/1e6:.0f} MB raw"
           + (", disabled by --no-raw)" if args.no_raw else ")"))
     print(f"  liveness assumes SLEEP_INTERVAL_S={args.blip_period:g} on the "
           f"device; the sweep build is thermometer_c6_debug + "
@@ -1882,8 +1886,9 @@ def run_sweep(args):
         free_b = st.f_bavail * st.f_frsize
         if need_b > free_b * 0.9:
             sys.exit(f"~{need_b/1e6:.0f} MB of raw captures won't fit in "
-                     f"{free_b/1e6:.0f} MB free at {out_dir!r} — free space "
-                     f"or pass --no-raw")
+                     f"{free_b/1e6:.0f} MB free at {artifacts.rel(out_dir)!r} — "
+                     f"free space, pass --no-raw, or point $THERMO_LOCAL_DIR at "
+                     f"a bigger disk")
 
     _connection_banner(args.rail,
                        f"{mv_list[0]} down to {mv_list[-1]} mV "
@@ -1997,7 +2002,8 @@ def run_sweep(args):
             except Exception:
                 pass
         _write_outputs(plan, steps, status, edge)
-        print(f"\n{len(steps)} step(s) recorded -> {out_dir}/report.md")
+        print(f"\n{len(steps)} step(s) recorded -> "
+              f"{artifacts.rel(out_dir)}/report.md")
     return 0 if status == "complete" else 2
 
 

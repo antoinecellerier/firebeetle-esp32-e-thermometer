@@ -1,6 +1,10 @@
 *.png
 render_display
 
+# sim_main.cpp writes a PPM and deletes it in an && chain with `convert`, so a
+# missing or failing ImageMagick strands one per rendered size and state.
+*.ppm
+
 # hstest build artifacts. Path-anchored: a bare `hstest` also matches the
 # tools/hstest/ directory and silently excludes the test sources.
 /hstest/hstest
@@ -9,7 +13,3 @@ render_display
 
 # check_sample.py imports history.py, so running the gate byte-compiles it.
 __pycache__/
-
-# PPK2 captures kept as classifier fixtures / for re-analysis: hundreds of MB,
-# referenced from docs/notes.md by filename.
-/captures/

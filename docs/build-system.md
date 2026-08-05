@@ -61,6 +61,29 @@ same file.
 in place; moving its start orphans years of data. Changing the table relocates the
 app, so that one upload must not be interrupted.
 
+## Local artifacts
+
+Everything the tools pull off a device lives under a single gitignored `local/`:
+
+| Directory | Written by | Contents |
+|---|---|---|
+| `local/sweeps/` | `ppk2.py sweep` | one dir per run: raw captures, `report.md`, `summary.json` |
+| `local/archives/` | `history.py backup` | `hist-<board>-<mac>-<date>.bin` partition images |
+| `local/captures/` | `ppk2.py live --out/--raw-out`, Power Profiler exports | `ppk-*.csv`, raw bins |
+| `local/scratch/` | by hand | ad-hoc bench files |
+
+`tools/artifacts.py` resolves the root from the repo, **not from the CWD**, so an
+artifact lands in the same place wherever the tool was launched from. Point
+`$THERMO_LOCAL_DIR` at another disk when a sweep won't fit — a full one is a few
+hundred MB and `ppk2.py` refuses to start when the target filesystem is short.
+
+Two consequences worth knowing. Sweeps and captures are **cited from the
+logbooks by relative path**, so pruning one breaks a doc reference — check
+before deleting, and prefer dropping a run's `*.bin` + `.dec*` caches to
+deleting the directory, since `report.md` and the `*.json` sidecars carry every
+conclusion at 0.05% of the size. And `history.py backup -o` takes whatever path
+you type, which is why `hist-*.bin` stays in `.gitignore` as a safety net.
+
 ## Header naming
 
 **Never name a project header like an IDF-internal one.** IDF's mbedtls exposes a
