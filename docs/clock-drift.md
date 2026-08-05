@@ -636,7 +636,8 @@ hourly safety net alone would put one sample in each hour, collapse
 `min == max == avg`, and destroy the intra-hour-spread covariate — the volatility
 measure correlating most strongly (+0.981) with wake count. The primary endpoint
 would have had nothing to test against, and it would have looked like a clean
-null. So the arms hold **wakes constant at 1440/day and vary only the refresh
+null. At 1440 wakes/day there are 60 samples an hour and the covariates survive.
+So the arms hold **wakes constant at 1440/day and vary only the refresh
 cadence**, which is also the term the slope arithmetic points at: read as an
 awake/asleep mixture, the fitted slope implies a per-event duration of 21.7 s
 against a measured ~21 s Z90 refresh window and a 710 ms bare wake.
@@ -697,14 +698,36 @@ python3 tools/history.py dump <img> --csv      # gate 3
 2. **`d_refresh` ≈ 12 per window** (arm 1; 144 in arm 2). If it tracks the room,
    `DISPLAY_TEMP_DELTA` did not take and the *manipulated variable* is still
    room-driven — the failure that would quietly invalidate the whole design.
-3. **Hourly rows show `min_c` ≠ `max_c`.** This proves the 24-samples/hour
+3. **Hourly rows show `min_c` ≠ `max_c`.** This proves the 60-samples/hour
    density is real, and with it the intra-hour-spread covariate. An earlier
    draft of this experiment pinned the rig to 24 wakes/day, which would have put
    one sample in each hour, collapsed `min == max == avg`, and left the primary
    endpoint with no covariate to test against — presenting as a clean null.
+   Note this follows *mechanically* from gate 1: 1440 wakes/day is 60 per hour,
+   so if the footer ratio checks out this cannot be wrong. It is worth a look at
+   the first real harvest, not worth a reset of its own.
 4. **`arm` column reads 1 / 3 / 5**, not 0. Zero means the build ran without
    `EXPERIMENT_ARM` and the record cannot be attributed.
 
-Harvesting costs a reset and the in-progress window, so fold the day-2 read into
-a moment you were going to disturb the rigs anyway, and expect to lose that
-sample.
+#### Gates 1, 2 and 4 are readable off the panel — no reset needed
+
+The footer carries `#<boots> r<refreshes>` and the uptime, and the badge carries
+the arm, so the expensive checks are the cheap ones:
+
+| From | Arm 1 expects | Fails if |
+|---|---|---|
+| footer `#N` ÷ uptime-days | **≈1440/day** | much lower → `ULP_ALWAYS_WAKE` did not take |
+| footer `rN` ÷ uptime-days | **≈24/day** (+1/day for the daily clear) | much higher → `DISPLAY_TEMP_DELTA` did not take |
+| **`#N` ÷ `rN`** | **≈60** | anything else — this is the tell, and needs no arithmetic on elapsed time |
+| status line | `! EXP 1 60s` | absent → the build carried no `EXPERIMENT_ARM`, so gate 4 fails too |
+
+The ratio is the one to read: it is dimensionless, valid at any uptime, and both
+overrides have to be working to produce it. A photograph of the panel a day in
+settles the run's validity, and a harvest can then wait for day 14. Harvesting
+costs a reset and the in-progress window, so fold any real read into a moment
+you were going to disturb the rigs anyway, and expect to lose that sample.
+
+On the two vanilla arms (3 and 5) there is nothing to check — their counters are
+*supposed* to track the room. Their footer ratio is the baseline being measured:
+the FireBeetle's own pre-experiment run sat near 0.7 refreshes per wake, against
+the pinned 1-in-60 here.
