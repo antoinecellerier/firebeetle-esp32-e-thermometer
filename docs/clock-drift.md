@@ -83,7 +83,7 @@ on them; the custom rev A board adds one deliberately.
 |------|---------------|--------|-------|------|---------------|-------|
 | 2026-07-25 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `95c7b04`/`95de00c` (2026-07-03) | **21d** (badge said 7d) | −9559s (−2h39m) | **−5265ppm** (−0.53%, −7.6min/day) | 1d (clamped) | First resync with the drift badge on screen; clock running slow. Uptime 21d and the badge's 7d interval together mean the day-7 and day-14 attempts both failed — a success at day 7 would have re-armed to 1d (or 14d on negligible drift). So the window is the whole uptime, and the naive 7d reading (−15806ppm) is 3× too large. Ambient over the window swung 21–32°C (read off the device's own 30-day chart), so this rate is a temperature-weighted average, not a fixed-temperature measurement. |
 | 2026-07-26 | XIAO ESP32-C6 + BMP581 + Seeed ePaper hat (GDEW029I6FD), `1ed89a3` (2026-07-06), `seeed_xiao_esp32c6_epaper_release`, 400mAh pack | **19d22h47m** (uptime 19d23h less the drift; the clock was set once, at install) | **+780s** (+13min), ±60s | **+452ppm** (+0.045%, ≈ +39s/day), +418…+487ppm | 1d (never reached — see notes) | **First C6 datapoint, and not device-measured**: this build never got a successful resync to sample from, and with `DISABLE_SERIAL` and no `history` partition there was nothing else to read, so the figure comes from a **forced refresh** — panel `11:54` against `11:41` real, frame fresh, both clocks to the minute (hence ±60s → ±35ppm). Cross-checked against a photo taken 13min earlier: EXIF 11:30:17 (phone on network time, verified against laptop NTP within 50s) against a panel reading `11:40`, which at a constant +13min means that frame was ~3min stale — consistent with the 1-2min refresh cadence it was running while being carried upstairs (counters moved +3 boots/+3 refreshes in 4 LP ticks). The photo alone bounds drift at ≥+338ppm, since staleness can only *increase* it; the forced read lands above that, as it must. Clock **fast**, i.e. opposite in sign to the FireBeetle row above and ~12× smaller. Ambient was 21.5–24.5°C over the window (off the device's own 30-day chart) versus 21–32°C for the E, so thermal stability explains part of the magnitude gap but not the sign. Deployed in a basement with **no WiFi**: every resync attempt failed, so `resync_interval_s` sat at its 1d floor for 20 days (failures re-arm, they don't back off) and the footer read `s19d`. Had it had WiFi, +452ppm implies the interval settles where drift over the interval hits the 60s threshold — 60s/452ppm ≈ **1.5d** — so neither the 1d floor nor the 28d cap: day 1 sees 39s (<60s → doubles to 2d), 2d sees 78s (≥60s → targets ~1.5d), and it holds there. Note this build divides by the interval *setting* rather than the measured window, so the first resync after a failure run reads the rate 20× high and clamps the next interval to the 1d floor; master computes `target` from `last_drift_window_s` instead. |
-| 2026-07-26 .. 2026-08-04 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `44ba5ba` (2026-07-25), `dfrobot_firebeetle2_esp32e_release`, on battery | **1d** × 10 resyncs, 10.11d total | +421s .. +459s (4424s total) | **+5066ppm** window-weighted (+4839…+5247, ±4.5%) | 1d (clamped) | **The collection run, harvested from the journal** — ten samples, not the badge's six, with per-window ambient and duty-cycle deltas. 10 of 10 attempts succeeded. Rate tracks **wakes/day at r=−0.900** and not ambient (r=+0.457, and it collapses to +0.275 once wakes are controlled for), which is the duty-cycle branch of the decision rules and what the mechanism section predicted. Full CSV and analysis: [below](#harvest-2026-08-05-the-runs-ten-samples). |
+| 2026-07-26 .. 2026-08-04 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `44ba5ba` (2026-07-25), `dfrobot_firebeetle2_esp32e_release`, on battery | **1d** × 10 resyncs, 10.11d total | +421s .. +459s (4424s total) | **+5066ppm** window-weighted (+4839…+5247, ±4.5%) | 1d (clamped) | **The collection run, harvested from the journal** — ten samples, not the badge's six, with per-window ambient and duty-cycle deltas. 10 of 10 attempts succeeded. Rate tracks **wakes/day at r=−0.900** and not mean ambient (r=+0.457, collapsing to +0.275 once wakes are controlled for). But wakes are delta-triggered and correlate with room volatility at +0.93…+0.98, so duty cycle and a movement-sensitive tempco are not separable here — a tempco in temperature *level* is ruled out, the mechanism is not. Full CSV and analysis: [below](#harvest-2026-08-05-the-runs-ten-samples). |
 | 2026-07-29 .. 2026-08-04 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `44e56b6` (2026-07-06), 400mAh pack | **1d** × 5 observed resyncs | +96s .. +116s | **+1259ppm** window-weighted (+1111…+1343, ±12%) | 1d (pinned) | **Five samples, all transcribed off photographs** — this build predates the `history` partition (`8b57f33`, 2026-07-25), so the panel is the only record and there is nothing to harvest. Per-sample table and the reasoning that the displayed `/1d` really is the window: [below](#photo-transcribed-run-c6--despi-c02-2026-07-29--2026-08-04). Clock **fast**, same sign as the other C6 row above and ~2.8× larger. The panel's `4321mV` is not a measurement — `read_battery_level()` returns a literal `4321` on the stock XIAO (`src/Thermometer.cpp`), so this run says nothing about the pack's state at 28d18h. |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
@@ -265,32 +265,53 @@ stretches the next window by a whole interval, so **10 of 10 resyncs succeeded**
 over 10 days on battery. The 2-of-3 failure rate that opened the run did not
 recur, and nothing here is a stretched-window artefact.
 
-##### The rate tracks duty cycle, not temperature
+##### The rate tracks wake count — which on this firmware *is* room volatility
 
-| Correlate | r (n=9) | p | Partial r, controlling for the other |
+| Correlate | r (n=9) | p | Partial r, controlling for mean ambient |
 |---|---|---|---|
 | **wakes/day (`d_boot`)** | **−0.900** | **0.001** | **−0.881** |
-| ambient mean °C | +0.457 | 0.22 | +0.275 |
+| mean ambient °C | +0.457 | 0.22 | +0.275 |
 
-`d_boot` and `d_refresh` correlate at **+0.993** — one covariate with two
-proxies, and no way to separate them from this data.
+More wakes, *lower* rate: `ppm ≈ 5339 − 1.342 × wakes/day`, spanning 5226 ppm on
+the quietest day (84 wakes) down to 4894 ppm on the busiest (332).
 
-This is the third branch of the [decision rules](#decision-rules-once-6-samples-exist),
-and the mechanism section below **predicted it**: "That predicts the rate tracks
-wake/sleep duty cycle rather than ambient." More wakes, *lower* rate —
-`ppm ≈ 5339 − 1.342 × wakes/day`, spanning 5226 ppm at the quietest day
-(84 wakes) down to 4894 ppm at the busiest (332). The apparent temperature
-signal does not survive controlling for wakes; the duty-cycle signal survives
-controlling for temperature almost untouched. Ambient and wake count are
-themselves anti-correlated (−0.385) — warm days were stable days — which is how
-temperature borrowed a signal it does not own.
+**What this rules out** is the second decision rule: a tempco in *mean*
+temperature, `R(T) = R0 + k(T−Tref)`. It does not survive controlling for wakes
+(+0.457 → +0.275, p=0.22), and mean ambient is itself anti-correlated with wake
+count (−0.385) — warm days were stable days — which is where its apparent signal
+was borrowed from.
 
-What this does **not** establish: an awake-vs-asleep frequency decomposition.
-That needs a per-wake awake duration, and there isn't one number for it — a Z90
-refresh event is a ~21 s busy window that `epd_busy_light_sleep()` now spends in
-*light sleep*, not awake (`docs/notes.md`), so the two proxies weight it
-differently and neither is "seconds awake". Deriving ppm-per-second-awake from
-these would be inventing the denominator.
+**What it does not rule in** is the duty-cycle model, and an earlier version of
+this section wrongly said it did. Wakes are *delta-triggered*, so wakes/day is
+not an independent variable — it is a measurement of how volatile the room was.
+Recomputing the window's temperature statistics from the 254 hourly records in
+the same archive:
+
+| Volatility measure over the drift window | r with ppm | r with wakes/day |
+|---|---|---|
+| total variation of the hourly mean | −0.806 | **+0.926** |
+| window swing (max−min) | −0.780 | **+0.861** |
+| mean intra-hour spread | −0.867 | **+0.981** |
+
+Wake count and room volatility are the same variable to within the resolution of
+9 points. So the correlation admits at least two readings that this data cannot
+separate:
+
+1. **Duty cycle** — more wakes, more time at a calibrated frequency, per the
+   awake-vs-asleep asymmetry in [Why the clock is slow](#why-the-clock-is-slow-mechanism).
+2. **Thermal** — a rate that responds to temperature *movement* rather than
+   temperature level, with the wake count merely reporting that movement.
+
+Both predict the observed sign. Only a controlled run decides it: pin the wake
+cadence so it stops tracking the room (delta-trigger off, fixed interval) and
+see whether ppm still moves with volatility. Until then the honest statement is
+**the rate tracks room volatility and/or wake count, and not mean temperature**.
+
+`d_boot` and `d_refresh` correlate at **+0.993**, so they are one proxy, not two.
+And none of them is an awake-duration: a Z90 refresh is a ~21 s busy window that
+`epd_busy_light_sleep()` spends in *light sleep*, not awake (`docs/notes.md`), so
+no ppm-per-second-awake figure can be derived here without inventing the
+denominator.
 
 ##### What it means for compensation
 
@@ -301,10 +322,17 @@ these would be inventing the denominator.
 | + per-wake term | ±87 ppm = ±7.5 s/day *(in-sample)* | ~8d | ~46 |
 
 A constant correction now clears the 60 s bar with room to spare, which the
-single first datapoint could not say. The per-wake term roughly halves the
-residual again — but that is a 2-parameter fit scored on the same 9 points it
-was fitted to, so treat ±7.5 s/day as a ceiling on how good it looks, not a
-prediction. Neither reaches the 28d cap, which needs ±0.47%.
+single first datapoint could not say — and it is the one row here that does not
+depend on which mechanism is right, because it fits no covariate at all. Neither
+model reaches the 28d cap, which needs ±0.47%.
+
+The second-order term is the one to hold off on. It roughly halves the residual,
+but that is a 2-parameter fit scored on the same 9 points it was fitted to, so
+±7.5 s/day is a ceiling on how good it looks rather than a prediction — and
+"per-wake" presumes the duty-cycle reading. If the effect is thermal instead,
+the term should key off the hourly history the device already keeps, which is a
+different correction with the same fit quality on this data. Build the constant
+first; it is unconditional, and the pinned-cadence run decides the rest.
 
 The prize is still the one the [analysis](#what-compensation-could-buy) names:
 not display accuracy but WiFi wakes, 365/yr → ~120. Smaller than the 365 → 13
@@ -333,17 +361,21 @@ not have.
 - **Is the rate stable?** **Answered 2026-08-05, yes** — ±4.5% over ten
   consecutive daily samples on the FireBeetle. Enough to compensate at the 1-day
   floor, not enough to reach the 28d cap. [Harvest](#harvest-2026-08-05-the-runs-ten-samples).
-- **Temperature coefficient.** **Answered 2026-08-05, no measurable one** —
-  r=+0.457 (p=0.22) against each window's mean ambient, collapsing to +0.275
-  once wakes/day is controlled for. The apparent signal was borrowed from duty
-  cycle, which is anti-correlated with ambient here. Caveat: this run spanned
-  only 22.9–26.2°C of *window mean*, against the 21–32°C instantaneous swing
-  that motivated the question, so a tempco outside that band is untested.
-- **What does the rate track?** **Answered 2026-08-05: wakes/day**, r=−0.900,
-  p=0.001, surviving control for ambient at −0.881. Confirms the awake-vs-asleep
-  asymmetry hypothesised in [Why the clock is slow](#why-the-clock-is-slow-mechanism)
-  — though not the frequency decomposition, which needs an awake-duration
-  denominator this data does not contain.
+- **Temperature coefficient.** **Half answered 2026-08-05.** A tempco in
+  temperature *level* is ruled out: r=+0.457 (p=0.22) against each window's mean
+  ambient, collapsing to +0.275 once wakes/day is controlled for. A response to
+  temperature *movement* is not ruled out — it is indistinguishable from wake
+  count here (below). Caveat either way: this run spanned only 22.9–26.2°C of
+  *window mean*, against the 21–32°C instantaneous swing that motivated the
+  question, so anything outside that band is untested.
+- **What does the rate track?** **Open, and now sharply posed.** ppm correlates
+  with wakes/day at r=−0.900 (p=0.001, −0.881 controlling for ambient), but wakes
+  are delta-triggered and correlate with the window's temperature volatility at
+  +0.93…+0.98 — so the duty-cycle model of
+  [Why the clock is slow](#why-the-clock-is-slow-mechanism) and a
+  movement-sensitive thermal effect predict the same thing and cannot be told
+  apart observationally. **Deciding it needs a run with the wake cadence pinned**
+  so it stops tracking the room. Until then, no correction should assume which.
 - **The loop can't converge at this rate.** +5066ppm needs a ~3.4h interval to
   keep drift under a minute, but `RESYNC_INTERVAL_MIN` is 1 day. So the device
   resyncs daily and still shows up to ~7.3min of error just before each sync,
