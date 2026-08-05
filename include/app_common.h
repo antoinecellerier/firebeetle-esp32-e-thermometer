@@ -126,6 +126,15 @@ static inline void gpio_out_init(int pin)
 #define SLEEP_INTERVAL_S 60
 #endif
 
+// Bench-experiment identifier. Nonzero says this device is running a pinned
+// cadence rather than field behaviour, and it goes two places at once: the
+// ! EXP badge on the panel and the spare byte of every journaled drift record.
+// A device therefore cannot be in an experimental arm without the frame and the
+// archive both saying which one.
+#ifndef EXPERIMENT_ARM
+#define EXPERIMENT_ARM 0
+#endif
+
 // Timer safety net when ULP is running: main CPU wakes periodically for
 // housekeeping (daily display clear, battery check) even if temperature is stable.
 #define ULP_SAFETY_NET_US (3600ULL * 1000000ULL)  // 1 hour

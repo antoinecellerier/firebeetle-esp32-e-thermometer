@@ -155,7 +155,12 @@ struct __attribute__((packed)) HsRec {
 
 struct __attribute__((packed)) HsDriftRec {
   uint8_t  type;
-  uint8_t  rsvd;
+  // Was reserved-and-always-zero; now carries EXPERIMENT_ARM. Repurposing the
+  // spare byte rather than growing the record keeps HS_FORMAT where it is — a
+  // bump would leave every deployed archive inert until it was backed up and
+  // erased, and this record has no other slack (see the static_assert below).
+  // Records written before this carry 0, which decodes as "field build".
+  uint8_t  experiment_arm;
   uint16_t base_seq;
   uint32_t time;       // last_sync_time
   int32_t  drift_ms;
@@ -1034,6 +1039,7 @@ void history_store_append_drift(const HistoryDriftSample *s)
   HsDriftRec r;
   memset(&r, 0, sizeof(r));
   r.type = REC_DRIFT;
+  r.experiment_arm = (uint8_t)EXPERIMENT_ARM;
   r.base_seq = (uint16_t)(s_base_seq & 0xFFFF);
   r.time = (uint32_t)s->sync_time;
   r.drift_ms = s->drift_ms;

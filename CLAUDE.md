@@ -112,10 +112,10 @@ pure framework=espidf on stock platform, drop fork".
 Check for and revert temporary debug state before any cleanup or feature commit:
 test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
 `HISTORY_BASE_EVERY_WAKE`, `USB_WINDOW_OBSERVE_CYCLES`, `RESYNC_INTERVAL_MIN`,
-`BATTERY_SHUTDOWN_DISABLED`), temporary build_flags, hardcoded test values.
-**Get `HISTORY_BASE_EVERY_WAKE` and `BATTERY_SHUTDOWN_DISABLED` off the device
-too**, not just out of the tree — one wears flash out, the other lets a
-deployed pack over-discharge.
+`BATTERY_SHUTDOWN_DISABLED`, `EXPERIMENT_ARM` + the cadence overrides it tags:
+`REFRESH_EVERY_N_WAKES`, `DISPLAY_TEMP_DELTA`, `ULP_ALWAYS_WAKE`, delta
+thresholds), build_flags, test values. **Get them off the device too** — flash
+wear, a flat pack, a panel gone blind. Bench builds show `! EXP` and tag `arm`.
 
 ## Workflow preferences
 

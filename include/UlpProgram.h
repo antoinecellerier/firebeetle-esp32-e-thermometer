@@ -23,7 +23,12 @@
 
 // Temperature delta threshold on DATA_1 byte (~0.4°C per count)
 // 1 = wake on ~0.4°C change, 2 = ~0.8°C, etc.
+// Overridable so a bench build can decouple the wake cadence from the room: 0
+// wakes on every poll, a value past the sensor's range never wakes on delta and
+// leaves ULP_SAFETY_NET_US as the only wake source.
+#ifndef ULP_TEMP_DELTA_THRESHOLD
 #define ULP_TEMP_DELTA_THRESHOLD 20  // ~0.1°C (each DATA_1 count ≈ 0.005°C)
+#endif
 
 // In test mode (ULP_TEST_NO_I2C), wake main CPU every N ULP cycles
 #ifndef ULP_TEST_WAKE_EVERY

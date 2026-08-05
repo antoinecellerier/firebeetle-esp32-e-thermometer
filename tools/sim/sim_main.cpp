@@ -200,6 +200,20 @@ int main(int argc, char **argv)
                       now, &nowtm, drift_stats);
     save_and_convert(cfg.name, "_drift", canvas);
 
+    // Scenario 7b: a pinned-cadence bench arm. Worst case for the status line,
+    // which is why it is built on the drift scenario rather than a clean one:
+    // on the 200x200 the lab badge, the drift badge, its ppm summary and the
+    // repeated hash all compete for three lines. The lab badge must survive —
+    // it is the only thing saying the refresh cadence is not field behaviour.
+    canvas.fillScreen(0xFFFF);
+    DisplayStats exp_stats = drift_stats;
+    exp_stats.experiment_arm = 2;
+    exp_stats.power_efficient = false;   // a resync override always forces this
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, exp_stats);
+    save_and_convert(cfg.name, "_exp", canvas);
+
     // Scenario 8: resync failing right now — two attempts lost in a row, so
     // the clock has been free-running since it was last set 14d ago.
     canvas.fillScreen(0xFFFF);

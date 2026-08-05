@@ -11,7 +11,12 @@
 
 #define LP_I2C_TIMEOUT_CYCLES  5000
 // Wake HP when temperature has moved this far from the last reference.
+// Overridable so a bench build can decouple the wake cadence from the room: 0
+// wakes on every poll (the LP-core counterpart of ULP_ALWAYS_WAKE), a large
+// value never wakes on delta and leaves the safety net as the only wake source.
+#ifndef TEMP_DELTA_THRESHOLD_C
 #define TEMP_DELTA_THRESHOLD_C 0.1f
+#endif
 
 int main(void)
 {

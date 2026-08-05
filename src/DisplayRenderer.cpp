@@ -1161,7 +1161,7 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       && !stats.dummy_sensor && !stats.mock_data && !significant_drift
       && !resync_failing && stats.archive_fault == 0
       && !debug_build && !lp_errors_significant && stats.crash_count == 0
-      && !stats.usb_window)
+      && !stats.usb_window && stats.experiment_arm == 0)
     return;
 
   // Badges, most severe first — the tail is what gets replaced by a "+" when
@@ -1181,7 +1181,14 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
   {
     char lab[IND_TOKEN_LEN];
     int pos = 0;
-    if (debug_build)
+    // An experiment arm supersedes the plain debug badge rather than stacking
+    // with it: it already implies a lab build, it carries the same sleep
+    // interval, and the 200x200 status line is the scarce resource — a drift
+    // badge, its ppm summary and the repeated hash are usually there too.
+    if (stats.experiment_arm)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "! EXP %u %ds",
+                      (unsigned)stats.experiment_arm, SLEEP_INTERVAL_S);
+    else if (debug_build)
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "! DEBUG %ds", SLEEP_INTERVAL_S);
     if (stats.dummy_sensor)
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/DUMMY" : "! DUMMY");

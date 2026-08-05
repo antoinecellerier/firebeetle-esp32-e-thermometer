@@ -72,6 +72,14 @@ struct __attribute__((packed)) HistoryDriftState {
   uint8_t  rsvd;
   int16_t  drift_ppm_hist[DRIFT_PPM_HIST_SIZE];
   uint16_t drift_win_min[DRIFT_PPM_HIST_SIZE];
+  // Build that wrote the most recent snapshot. The store header's git_hash is
+  // stamped once at store_format() and never rewritten, so on a device that has
+  // since been reflashed it names a build that may no longer exist on any
+  // branch — it says how the partition was created, not what produced the data.
+  // This rides in the drift block because that is the one part of the snapshot
+  // with a size descriptor and zero-fill on short reads, so appending here does
+  // not bump HS_FORMAT. Empty on snapshots written before this field existed.
+  char     git_hash[16];
 };
 
 // One clock-drift observation, journaled per successful resync (<=1/day).

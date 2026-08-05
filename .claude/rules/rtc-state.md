@@ -33,6 +33,13 @@ the end of a run, not during one.
 - A `RTC_HISTORY_VERSION` bump is **not** destructive to the flash archive: the
   snapshot stores the buffer geometry and zero-fills a shorter stored payload, so
   appending a field stays non-destructive. Keep it that way.
+- Appending is non-destructive **forwards only**. `base_read_header()` refuses a
+  stored payload *larger* than the running struct, so flashing older firmware
+  onto a device whose snapshot has the new field makes it reject that snapshot
+  and rebuild from the journal. Nothing is lost, but the panel and
+  `history.py` both report `base (none — journal only)` — which the
+  `/device-session` skill teaches you to read as a boot loop. On a deliberate
+  downgrade it isn't one.
 - The `self_addr` field in `historical_data` auto-detects linker address shifts.
 
 ## Adding a variable is not free

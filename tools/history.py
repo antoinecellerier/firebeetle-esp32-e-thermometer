@@ -51,6 +51,7 @@ BASE_HDR = struct.Struct("<IHHIIqIHH8HI")
 REC = struct.Struct("<BBHIhhhH")
 DRIFT_REC = struct.Struct("<BBHIiihhIIHH")
 DRIFT_STATE = struct.Struct("<iiiqHBB6h6H")
+DRIFT_STATE_HASH = struct.Struct("<16s")   # appended field, parsed separately
 
 
 def crc32(buf):
@@ -194,6 +195,14 @@ class Archive:
                 f[:7]))
             self.drift_state["ppm_hist"] = list(f[7:13])
             self.drift_state["win_min"] = list(f[13:19])
+            # Appended later than the rest of the block, so parse it separately
+            # against the stored size rather than widening DRIFT_STATE — that
+            # would make every pre-existing image fail the check above and lose
+            # its drift state entirely.
+            if b["sizeof_drift_state"] >= DRIFT_STATE.size + DRIFT_STATE_HASH.size:
+                raw, = DRIFT_STATE_HASH.unpack_from(
+                    self.blob, d_off + DRIFT_STATE.size)
+                self.drift_state["git_hash"] = cstr(raw)
         else:
             self.drift_state = None
 
@@ -222,6 +231,7 @@ class Archive:
                 f = DRIFT_REC.unpack_from(raw)
                 if crc16(raw[:DRIFT_REC.size - 2]) == f[11]:
                     self.drifts.append(dict(
+                        experiment_arm=f[1],
                         sync_time=f[3], drift_ms=f[4], window_s=f[5], ppm=f[6],
                         ambient_mean_x10=f[7], boot_count=f[8],
                         refresh_count=f[9], ambient_hours=f[10]))
@@ -251,11 +261,15 @@ class Archive:
         created = (_iso(h["created_at"]) if h["created_at"] > 1704067200
                    else "(before first NTP sync)")
         out = [f"device   {h['board']} {h['mac']} ({h['panel']}/{h['sensor']})",
-               f"built    {h['git_hash']}  store created {created}"]
+               f"formatted by {h['git_hash']}{_git_note(h['git_hash'])}"
+               f"  store created {created}"]
         if self.base:
             b = self.base
             out.append(f"base     seq {b['seq']} written {_iso(b['written_at'])} "
                        f"cursor 0x{b['journal_cursor']:06x}")
+            wrote = (self.drift_state or {}).get("git_hash")
+            if wrote:
+                out.append(f"last snapshot written by {wrote}{_git_note(wrote)}")
         else:
             out.append("base     (none — journal only)")
         out.append(f"records  {len(self.hourly)} hourly, {len(self.samples)} "
@@ -272,6 +286,34 @@ def _dedupe(rows):
     for r in rows:
         by_ts[r[0]] = r
     return [by_ts[k] for k in sorted(by_ts)]
+
+
+def _git_note(h):
+    """Flag a build stamp that git cannot vouch for.
+
+    The store header is stamped once at store_format() and never rewritten, so
+    it names whatever was flashed when the partition was created. If that commit
+    was later squashed or rebased away it survives only as a loose object, or not
+    at all — and reading it as "the build that produced this data" is how a
+    2026-08-05 harvest got attributed to a commit on no branch while the panel
+    was showing something else entirely. Best-effort: silent outside a repo.
+    """
+    if not h or h.endswith("-dirty"):
+        return ""
+    import subprocess
+    def git(*a):
+        return subprocess.run(("git",) + a, capture_output=True, text=True,
+                              cwd=os.path.dirname(os.path.abspath(__file__)))
+    try:
+        if git("rev-parse", "--git-dir").returncode:
+            return ""                                    # not a repo, say nothing
+        if git("rev-parse", "--verify", "--quiet", h + "^{commit}").returncode:
+            return "  (!! unknown to this repo)"
+        if not git("for-each-ref", "--contains", h).stdout.strip():
+            return "  (!! orphaned — no branch or tag contains it)"
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return ""
 
 
 def _iso(epoch):
@@ -449,7 +491,7 @@ def cmd_restore(args):
 
 DRIFT_CSV_HEADER = ["sync_time", "drift_s", "window_s", "ppm", "ambient_c",
                     "ambient_hours", "boot_count", "d_boot", "refresh_count",
-                    "d_refresh"]
+                    "d_refresh", "arm"]
 
 
 def _drift_rows(drifts, at=None):
@@ -458,6 +500,11 @@ def _drift_rows(drifts, at=None):
     boot_count and refresh_count are journaled absolute so the day-over-day
     deltas — the duty-cycle correlates — are derived here instead of costing an
     RTC variable on the device.
+
+    `arm` is EXPERIMENT_ARM as it stood when the sample was taken: 0 for a field
+    build, nonzero for a pinned-cadence bench arm. It is per-record rather than
+    per-archive because a reflash between arms wipes RTC but not the journal, so
+    one image routinely spans several.
     """
     prev = None
     for d in drifts:
@@ -469,7 +516,7 @@ def _drift_rows(drifts, at=None):
                else d["ambient_mean_x10"] / 10.0)
         yield [_iso(d["sync_time"]), d["drift_ms"] / 1000.0, d["window_s"],
                d["ppm"], amb, d["ambient_hours"], d["boot_count"], db,
-               d["refresh_count"], dr]
+               d["refresh_count"], dr, d.get("experiment_arm", 0)]
         prev = d
 
 

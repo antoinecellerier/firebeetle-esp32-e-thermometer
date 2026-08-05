@@ -86,6 +86,9 @@ struct DisplayStats {
   bool dummy_sensor;   // true if USE_DUMMY_SENSOR is defined
   bool mock_data;      // true if MOCK_DISPLAY_DATA is defined
   bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
+  uint8_t experiment_arm; // EXPERIMENT_ARM: nonzero means this device is running a
+                          // pinned-cadence bench arm, not field behaviour. Same value
+                          // is journaled per drift record, so screen and archive agree.
   bool usb_window;     // true while held awake for a USB host: the port is
                        // enumerated and the reading carries CPU self-heating
   int32_t clock_drift_ms;    // drift at last NTP resync (positive = clock ahead), 0 = no resync yet

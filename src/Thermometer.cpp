@@ -105,8 +105,13 @@ static void usb_service_window(void);
 #define TEMP_INIT_MIN  999.0f
 #define TEMP_INIT_MAX (-999.0f)
 
-// Minimum temperature change (C) to trigger a display refresh
+// Minimum temperature change (C) to trigger a display refresh.
+// Overridable so a bench build can decouple the refresh cadence from the room:
+// set it past any real swing and REFRESH_EVERY_N_WAKES becomes the only
+// temperature-independent repaint source.
+#ifndef DISPLAY_TEMP_DELTA
 #define DISPLAY_TEMP_DELTA 0.1f
+#endif
 
 RTC_DATA_ATTR RtcHistory historical_data;
 
@@ -345,6 +350,10 @@ static void drift_state_save(HistoryDriftState *d)
   d->rsvd = 0;
   memcpy(d->drift_ppm_hist, drift_ppm_hist, sizeof(drift_ppm_hist));
   memcpy(d->drift_win_min, drift_win_min, sizeof(drift_win_min));
+  memset(d->git_hash, 0, sizeof(d->git_hash));
+#ifdef GIT_HASH
+  snprintf(d->git_hash, sizeof(d->git_hash), "%s", GIT_HASH);
+#endif
 }
 
 // `trust_clock` gates only last_sync_time: it is the reference maybe_ntp_resync()
@@ -741,6 +750,7 @@ DisplayStats make_display_stats()
 #else
     false,
 #endif
+    EXPERIMENT_ARM,  // 0 in a field build; nonzero raises the ! EXP badge
 #ifdef HAS_USB_SERVICE_WINDOW
     s_usb_window_active,
 #else
@@ -1727,10 +1737,21 @@ static void wake_work(uint32_t battery_mv, float temp)
   const bool fault_heartbeat = !temp_trusted && !panel_shows_reading &&
                                previous_boot_count >= 0 &&
                                (boot_count - previous_boot_count) >= FAULT_REPAINT_WAKES;
+#ifdef REFRESH_EVERY_N_WAKES
+  // Bench builds only: repaint on a wake count rather than on temperature, so
+  // the refresh cadence stops tracking the room. Same shape as the fault
+  // heartbeat but unconditional — paired with a DISPLAY_TEMP_DELTA past any real
+  // swing, this becomes the sole repaint source and the cadence is exact.
+  const bool cadence_repaint = previous_boot_count >= 0 &&
+                               (boot_count - previous_boot_count) >= REFRESH_EVERY_N_WAKES;
+#else
+  const bool cadence_repaint = false;
+#endif
   bool should_refresh = periodic_display_clear(now, nowtm) ||
                         previous_boot_count < 0 ||   // nothing rendered yet this RTC epoch
                         temp_trusted != panel_shows_reading ||
                         fault_heartbeat ||
+                        cadence_repaint ||
                         (temp_trusted && fabsf(temp - previous_temp) >= DISPLAY_TEMP_DELTA);
 #ifdef HAS_USB_SERVICE_WINDOW
   // The window badge is a claim about right now — the port is held open, and the
