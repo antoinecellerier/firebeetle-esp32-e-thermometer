@@ -114,6 +114,16 @@ the artifacts vanish with no error — the flash just fails on missing files. Pa
 the same flags to every env in a batch, or finish the flash before building
 anything else.
 
+`build_cache_dir` (see `[platformio]`) makes recovering from a wipe cheap —
+measured on `dfrobot_firebeetle2_esp32e_debug`, rebuilding a deleted env
+directory drops from 110s to 47s with **zero** recompiles, the remainder being
+the cmake reconfigure and copying the objects back. It does not stop the wipe,
+so the hazard above is unchanged: what vanishes is still gone until rebuilt.
+
+`PLATFORMIO_BUILD_SRC_FLAGS` is the better tool for a bench flag that only
+`src/` reads — it keeps the framework objects out of the rebuild. It trips the
+same checksum, so it does not avoid the wipe.
+
 ## Environments
 
 Each carries a `custom_rig` naming the hardware it is built for, so the env is
