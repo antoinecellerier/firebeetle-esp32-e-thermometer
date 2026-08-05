@@ -21,7 +21,9 @@
 // To add a *panel* the project has never driven, seven places must agree:
 //   1. the menu below
 //   2. include/displays.h        — DISPLAY_HAS_RED / DISPLAY_ROTATION
-//   3. src/Display.cpp           — the GxEPD2 driver type and its include
+//   3. src/Display.cpp           — the GxEPD2 driver type and its include, plus
+//                                  EPD_BUSY_TIMEOUT_MS if the panel's GxEPD2
+//                                  constructor does not pass the usual 10s
 //   4. src/HistoryStore.cpp      — panel_name(), burned into the archive header
 //   5. scripts/generate_font.py  — the DISPLAYS dict (resolution)
 //   6. tools/sim/sim_main.cpp    — the displays[] table
@@ -54,6 +56,11 @@
 // Onboard status LED off. Required on the ESP32-E for now: Thermometer.cpp
 // includes Adafruit_NeoPixel.h and that library is not vendored, so the build
 // does not link with LEDs enabled.
+//
+// One path ignores this: epd_fault_blink() drives the LED anyway when the panel
+// stops answering. That fault is the only one the status line cannot report —
+// the panel is what broke — and release builds have no console, so the LED is
+// the whole signal. C6 boards only, for the vendoring reason above.
 //#define DISABLE_LEDS
 
 // Bench knobs are NOT rig properties — pass them as build flags instead:

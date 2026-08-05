@@ -98,7 +98,7 @@ static void usb_service_window(void);
 // RtcHistory, RTC_HISTORY_VERSION and the self_addr scheme live in
 // include/RtcHistory.h so HistoryStore.cpp can serialize the same layout.
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_STATE_VERSION   0xDA050007
+#define RTC_STATE_VERSION   0xDA050008
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -264,6 +264,15 @@ RTC_DATA_ATTR int previous_boot_count = -1;
 // Repaint occasionally so the fault stays legible, counted in wakes because that
 // is what the fault itself drives.
 #define FAULT_REPAINT_WAKES 30
+
+// Latched DisplayFault from the last refresh that ran. A panel that did not
+// answer will not answer faster next wake, and each doomed attempt burns a full
+// GxEPD2 busy timeout per wait (10s, 20s on the Z90) — so once this is set the
+// refresh is skipped and epd_fault_blink() carries the news instead. Cleared by
+// any reset that wipes RTC, which is what reseating a panel at the bench
+// involves anyway; the retry below covers a panel that came back on its own.
+RTC_DATA_ATTR uint8_t epd_fault = DISPLAY_FAULT_NONE;
+#define EPD_FAULT_RETRY_WAKES 30
 
 RTC_DATA_ATTR uint32_t max_battery_mv = 0;
 
@@ -1393,13 +1402,19 @@ bool vbus_present()
 #endif
 }
 
+// Outside the DISABLE_LEDS gate on purpose: epd_fault_blink() needs the pin even
+// on the rigs that keep the LED dark. GPIO15 is LED_BUILTIN on the XIAO (yellow)
+// and the status LED on the custom board (white 0603 through R8 1k); both are
+// active-high.
+#if defined(ARDUINO_XIAO_ESP32C6)
+#define STATUS_LED_PIN 15
+#endif
+
 #ifndef DISABLE_LEDS
 #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E)
   #include "Adafruit_NeoPixel.h"
   Adafruit_NeoPixel status_led(1, 5 /*data pin*/, NEO_GRB + NEO_KHZ800);
-#elif defined(ARDUINO_XIAO_ESP32C6)
-  #define STATUS_LED_PIN 15 // GPIO 15 (LED_BUILTIN), yellow, active-high
-#else
+#elif !defined(ARDUINO_XIAO_ESP32C6)
   #error "Unknown board type"
 #endif
 #endif
@@ -1452,6 +1467,43 @@ void clear_status_led()
 #else
   #error "Unknown board type"
 #endif
+#endif
+}
+
+// The panel-fault signal, and the only one this fault has.
+//
+// Deliberately NOT gated on DISABLE_LEDS. Every rig turns the LED off to save
+// power, but a board whose panel is dead cannot put a badge on the thing that
+// broke, and DISABLE_SERIAL removes the console from every release build — so
+// without this a misconfigured or unplugged panel is completely silent. Power
+// does not enter into it: this only runs on a board that is already not doing
+// its job, and it suspends the refreshes that dominate the budget.
+//
+// The ESP32-E is excluded rather than gated: its LED is a NeoPixel and
+// Adafruit_NeoPixel is not vendored under components/, so that board does not
+// link with LEDs enabled at all (include/rigs/firebeetle.h). Driving its WS2812
+// needs RMT or bit-banging — worth doing, not worth blocking this on.
+//
+// Three short and one long, repeated: a rhythm nothing else on this board
+// produces, so it reads as deliberate rather than as a flicker. ~5s per wake.
+#define EPD_FAULT_BLINK_GROUPS 3
+static void epd_fault_blink(uint8_t fault)
+{
+  LOGI("*** EPD FAULT: %s — panel not responding, refreshes suspended ***",
+       fault == DISPLAY_FAULT_BUSY_IDLE ? "BUSY never asserted (no panel?)"
+                                        : "BUSY stuck (panel absent, or rail off?)");
+#if defined(STATUS_LED_PIN)
+  gpio_out_init(STATUS_LED_PIN);
+  for (int group = 0; group < EPD_FAULT_BLINK_GROUPS; group++)
+  {
+    for (int i = 0; i < 3; i++)
+    {
+      gpio_set_level((gpio_num_t)STATUS_LED_PIN, 1); sleep_ms(120);
+      gpio_set_level((gpio_num_t)STATUS_LED_PIN, 0); sleep_ms(120);
+    }
+    gpio_set_level((gpio_num_t)STATUS_LED_PIN, 1); sleep_ms(600);
+    gpio_set_level((gpio_num_t)STATUS_LED_PIN, 0); sleep_ms(400);
+  }
 #endif
 }
 
@@ -1747,7 +1799,12 @@ static void wake_work(uint32_t battery_mv, float temp)
 #else
   const bool cadence_repaint = false;
 #endif
-  bool should_refresh = periodic_display_clear(now, nowtm) ||
+  // Named rather than inlined into the expression below: whether the panel was
+  // driven at all decides whether display_fault() has anything to say this wake.
+  // Left running even while a fault is latched — it is once a day, and its own
+  // attempt to drive the panel doubles as a retry.
+  const bool cleared = periodic_display_clear(now, nowtm);
+  bool should_refresh = cleared ||
                         previous_boot_count < 0 ||   // nothing rendered yet this RTC epoch
                         temp_trusted != panel_shows_reading ||
                         fault_heartbeat ||
@@ -1759,6 +1816,15 @@ static void wake_work(uint32_t battery_mv, float temp)
   // even when the temperature has not moved.
   should_refresh = should_refresh || (s_usb_window_active != s_panel_has_usb_badge);
 #endif
+
+  // A panel that is not answering costs a full GxEPD2 busy timeout per wait on
+  // every attempt, and there is nothing to put a frame on anyway. Retry on a slow
+  // cadence so a panel that came back — reseated FFC, rail restored — recovers
+  // without needing a reset.
+  const bool panel_retry_due = (boot_count % EPD_FAULT_RETRY_WAKES) == 0;
+  if (epd_fault != DISPLAY_FAULT_NONE && !panel_retry_due)
+    should_refresh = false;
+
   if (!should_refresh)
   {
     LOGI("temperature hasn't changed significantly, no need to refresh display");
@@ -1796,6 +1862,12 @@ static void wake_work(uint32_t battery_mv, float temp)
 #endif
   }
 
+  // Only a wake that actually drove the panel has evidence about it; one that
+  // skipped the refresh must leave the latch as it found it, or the fault would
+  // clear itself on the first quiet wake and the blink would stutter.
+  if (cleared || should_refresh)
+    epd_fault = display_fault();
+
   // Reload the coprocessor program on a fresh boot, and on any wake whose
   // coprocessor reading could not be used. InitializeUlp() is the only thing that
   // writes OSR_CONFIG and loads the program, so a sensor that lost power comes
@@ -1828,6 +1900,12 @@ static void wake_work(uint32_t battery_mv, float temp)
     sensor.InitializeUlp(cold_boot_reload);
     s_lp_loaded_this_boot = true;
   }
+
+  // Genuinely last: every measurement, record and reload above happens on its
+  // normal schedule first, so a board signalling a dead panel is still archiving
+  // temperature the whole time it blinks.
+  if (epd_fault != DISPLAY_FAULT_NONE)
+    epd_fault_blink(epd_fault);
 }
 
 #ifdef HAS_USB_SERVICE_WINDOW

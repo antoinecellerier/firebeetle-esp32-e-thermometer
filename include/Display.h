@@ -146,6 +146,24 @@ struct DisplayStats {
                                // ELF SHA256 — pairs the PC with the right ELF
 };
 
+// Panel health, inferred from the BUSY line during the last refresh.
+//
+// This is the one fault the status line cannot report, because the panel is what
+// broke — so it goes to the LED and the console instead. BUSY is also the only
+// evidence available: the DESPI-C02 wiring carries no MISO, so nothing about the
+// panel can be read back. It proves the controller is alive and clocking, NOT
+// that pixels changed — a damaged panel that still drives BUSY reads as healthy.
+enum DisplayFault : uint8_t {
+  DISPLAY_FAULT_NONE = 0,
+  DISPLAY_FAULT_BUSY_IDLE,   // BUSY never asserted: nothing is answering
+  DISPLAY_FAULT_BUSY_STUCK,  // BUSY never released: panel absent, or its rail is off
+};
+
+// Verdict on the refresh just performed. Meaningful only after one of the
+// display_* calls below has run; DISPLAY_FAULT_NONE before that.
+uint8_t display_fault();
+
+
 // Poll the panel's BUSY line with plain delays instead of light sleep. Light
 // sleep gates the USB PHY clock, and the port may not re-enumerate afterwards
 // without replugging the cable — so a refresh that happens while a USB host is

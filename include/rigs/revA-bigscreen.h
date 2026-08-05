@@ -7,7 +7,9 @@
 // has been flashed with it yet. Board 1 wears the 200x200 GDEY instead and
 // needs RIG=revA-smallscreen — the rev A boards share one env, so that is the
 // mismatch no cross-check here can catch.
-// Boards 2-4 assembled, MACs unread.
+// Boards 2-4 assembled. Board 2 is 98:88:e0:75:48:10 (read 2026-08-05 off its
+// USB-JTAG serial; the archive header records the EUI-64 form 98:88:e0:ff:fe:75,
+// see store_write_header()). Boards 3-4 unread.
 
 #define USE_576_T81
 #define USE_BMP58x

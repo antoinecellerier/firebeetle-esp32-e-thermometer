@@ -185,8 +185,84 @@ static void epd_pin_sleep_hold()
 
 static bool s_busy_wait_plain = false;
 
+// --- panel health ----------------------------------------------------------
+//
+// GxEPD2 gives callers nothing to check: _waitWhileBusy returns void, its
+// per-panel _busy_timeout is protected, and a timed-out wait only prints
+// "Busy Timeout!" to a Serial that release builds disable. So a panel that never
+// answers costs the full timeout on every wait, several waits per refresh,
+// forever — silently. The busy callback below is the one hook that sees it.
+//
+// Two signals, both taken across a whole display_* call:
+//
+//   busy slices == 0   BUSY never asserted. Exact, no threshold: GxEPD2 tests
+//                      the line before invoking the callback, so a refresh that
+//                      never calls it never saw the panel go busy at all.
+//   call ran too long  BUSY stayed asserted until GxEPD2 gave up on it.
+//
+// GxEPD2 keeps _busy_timeout protected, so mirror it. Read from each panel's
+// GxEPD2 constructor; every panel here uses 10s except the Z90.
+#if defined(USE_154_Z90)
+#define EPD_BUSY_TIMEOUT_MS 20000   // epd3c/GxEPD2_154_Z90c.cpp
+#else
+#define EPD_BUSY_TIMEOUT_MS 10000   // every other panel this project drives
+#endif
+
+// Two of the panel's own busy timeouts, i.e. "at least two waits gave up". A
+// single healthy wait cannot exceed the timeout — it would be a timeout — so
+// this fires only on a panel that failed to answer repeatedly.
+//
+// It must scale with the panel rather than be one global number, because the
+// **Z90 times out on every healthy refresh**: its full update takes ~21s against
+// its own 20s limit, which docs/notes.md records as benign and has done since
+// long before this check existed. A flat threshold tuned on the fast panels would
+// therefore suspend refreshes on a working FireBeetle, and cold e-paper is slower
+// still. Measured evidence for each case (2026-08-05 unless noted):
+//
+//   Z90   20s limit, ~21s healthy (notes.md, ESP32-E release)  -> 40s, 1.9x clear
+//   T81   10s limit, ~3.2s healthy (notes.md, XIAO C6 release) -> 20s, 6.3x clear
+//   M21   10s limit,  3.7s healthy (board 2, this rig)         -> 20s, 5.4x clear
+//
+//   no panel at all   91213ms / 9 timeouts (board 2)     -> caught on any panel
+//   wrong panel       21281ms / 2 timeouts (board 2)     -> caught at 2x, NOT at 30s
+//
+// That last row is why the multiplier is 2 and not 3: a 2.13" panel driven by the
+// T81's code answers seven of nine waits, so it lands at 21.3s — indistinguishable
+// from a healthy Z90 by duration alone, but not by "two timeouts on a 10s panel".
+// epd_health_end() logs the figures on every call, so a panel that behaves
+// differently from the table says so rather than being silently misjudged.
+#define EPD_REFRESH_STALL_MS (2 * EPD_BUSY_TIMEOUT_MS)
+
+static uint32_t s_busy_slices = 0;
+static uint32_t s_render_start_ms = 0;
+static uint8_t s_fault = DISPLAY_FAULT_NONE;
+
+static void epd_health_begin()
+{
+  s_busy_slices = 0;
+  s_render_start_ms = ms_now();
+}
+
+static void epd_health_end(const char *what)
+{
+  const uint32_t elapsed = ms_now() - s_render_start_ms;
+  if (s_busy_slices == 0)
+    s_fault = DISPLAY_FAULT_BUSY_IDLE;
+  else if (elapsed >= EPD_REFRESH_STALL_MS)
+    s_fault = DISPLAY_FAULT_BUSY_STUCK;
+  else
+    s_fault = DISPLAY_FAULT_NONE;
+
+  LOGI("EPD %s: %ums, %u busy slices%s", what, (unsigned)elapsed,
+       (unsigned)s_busy_slices,
+       s_fault == DISPLAY_FAULT_BUSY_IDLE  ? "  *** BUSY NEVER ASSERTED — no panel? ***"
+       : s_fault == DISPLAY_FAULT_BUSY_STUCK ? "  *** BUSY STUCK — panel absent or rail off? ***"
+                                             : "");
+}
+
 static void epd_busy_light_sleep(const void *)
 {
+  s_busy_slices++;
   if (s_busy_wait_plain)
   {
     // GxEPD2 re-reads BUSY between callbacks, so a short slice just paces the
@@ -216,6 +292,7 @@ static void epd_busy_light_sleep(const void *)
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
 }
 
+
 static void init_for_render(int boot_count)
 {
   LOGI("Initializing display");
@@ -242,16 +319,27 @@ void display_set_busy_wait_plain(bool plain)
 #endif
 }
 
+uint8_t display_fault()
+{
+#ifndef DISABLE_DISPLAY
+  return s_fault;
+#else
+  // No panel is wired on purpose, so there is nothing to be wrong with.
+  return DISPLAY_FAULT_NONE;
+#endif
+}
+
 void display_clear()
 {
 #ifndef DISABLE_DISPLAY
   epd_power_on();
+  epd_health_begin();
   epd_configure_pins();
   display.init(0 /* disable serial debug output */);
   display.clearScreen();
   display.hibernate();
   epd_power_off();
-  LOGI("Done");
+  epd_health_end("clear");
 #endif
 }
 
@@ -261,6 +349,7 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
 {
 #ifndef DISABLE_DISPLAY
   epd_power_on();
+  epd_health_begin();
   init_for_render(stats.boot_count);
 
   LOGI("Display dashboard (%dx%d)", display.width(), display.height());
@@ -278,6 +367,7 @@ void display_show_temperature(float temp, uint32_t battery_mv, bool low_battery,
   display.display();
   display.hibernate();
   epd_power_off();
+  epd_health_end("dashboard");
 #endif
 }
 
@@ -285,6 +375,7 @@ void display_show_pin27_diagnostic(int boot_count)
 {
 #ifndef DISABLE_DISPLAY
   epd_power_on();
+  epd_health_begin();
   init_for_render(boot_count);
   display.setFont(NULL);
   display.setTextSize(2);
@@ -294,6 +385,7 @@ void display_show_pin27_diagnostic(int boot_count)
   display.display();
   display.hibernate();
   epd_power_off();
+  epd_health_end("pin27");
 #endif
 }
 
@@ -302,11 +394,13 @@ void display_show_empty_battery(uint32_t battery_mv, time_t now,
 {
 #ifndef DISABLE_DISPLAY
   epd_power_on();
+  epd_health_begin();
   init_for_render(stats.boot_count);
   render_empty_battery(display, display.width(), display.height(),
                         battery_mv, now, stats);
   display.display();
   display.hibernate();
   epd_power_off();
+  epd_health_end("empty battery");
 #endif
 }
