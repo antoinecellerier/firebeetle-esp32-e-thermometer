@@ -114,6 +114,15 @@ the artifacts vanish with no error — the flash just fails on missing files. Pa
 the same flags to every env in a batch, or finish the flash before building
 anything else.
 
+`scripts/prune_build_cache.py` keeps that cache bounded: SCons never evicts,
+and every build pushes a fresh ~11MB `firmware.elf`. It ages entries out after
+30 days unused, gated on a stamp file so it walks the cache at most weekly —
+3.7µs on a gated build, ~50ms for a real pass over 12k entries. Age is a true
+LRU because SCons `utime()`s an entry whenever it retrieves one. It only ever
+touches files inside the 2-hex-char shard directories, which is what keeps the
+SConsign DB and `config` at the cache root out of reach; deleting the SConsign
+would cost every env its build state.
+
 `build_cache_dir` (see `[platformio]`) makes recovering from a wipe cheap —
 measured on `dfrobot_firebeetle2_esp32e_debug`, rebuilding a deleted env
 directory drops from 110s to 47s with **zero** recompiles, the remainder being
