@@ -83,9 +83,75 @@ on them; the custom rev A board adds one deliberately.
 |------|---------------|--------|-------|------|---------------|-------|
 | 2026-07-25 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `95c7b04`/`95de00c` (2026-07-03) | **21d** (badge said 7d) | −9559s (−2h39m) | **−5265ppm** (−0.53%, −7.6min/day) | 1d (clamped) | First resync with the drift badge on screen; clock running slow. Uptime 21d and the badge's 7d interval together mean the day-7 and day-14 attempts both failed — a success at day 7 would have re-armed to 1d (or 14d on negligible drift). So the window is the whole uptime, and the naive 7d reading (−15806ppm) is 3× too large. Ambient over the window swung 21–32°C (read off the device's own 30-day chart), so this rate is a temperature-weighted average, not a fixed-temperature measurement. |
 | 2026-07-26 | XIAO ESP32-C6 + BMP581 + Seeed ePaper hat (GDEW029I6FD), `1ed89a3` (2026-07-06), `seeed_xiao_esp32c6_epaper_release`, 400mAh pack | **19d22h47m** (uptime 19d23h less the drift; the clock was set once, at install) | **+780s** (+13min), ±60s | **+452ppm** (+0.045%, ≈ +39s/day), +418…+487ppm | 1d (never reached — see notes) | **First C6 datapoint, and not device-measured**: this build never got a successful resync to sample from, and with `DISABLE_SERIAL` and no `history` partition there was nothing else to read, so the figure comes from a **forced refresh** — panel `11:54` against `11:41` real, frame fresh, both clocks to the minute (hence ±60s → ±35ppm). Cross-checked against a photo taken 13min earlier: EXIF 11:30:17 (phone on network time, verified against laptop NTP within 50s) against a panel reading `11:40`, which at a constant +13min means that frame was ~3min stale — consistent with the 1-2min refresh cadence it was running while being carried upstairs (counters moved +3 boots/+3 refreshes in 4 LP ticks). The photo alone bounds drift at ≥+338ppm, since staleness can only *increase* it; the forced read lands above that, as it must. Clock **fast**, i.e. opposite in sign to the FireBeetle row above and ~12× smaller. Ambient was 21.5–24.5°C over the window (off the device's own 30-day chart) versus 21–32°C for the E, so thermal stability explains part of the magnitude gap but not the sign. Deployed in a basement with **no WiFi**: every resync attempt failed, so `resync_interval_s` sat at its 1d floor for 20 days (failures re-arm, they don't back off) and the footer read `s19d`. Had it had WiFi, +452ppm implies the interval settles where drift over the interval hits the 60s threshold — 60s/452ppm ≈ **1.5d** — so neither the 1d floor nor the 28d cap: day 1 sees 39s (<60s → doubles to 2d), 2d sees 78s (≥60s → targets ~1.5d), and it holds there. Note this build divides by the interval *setting* rather than the measured window, so the first resync after a failure run reads the rate 20× high and clamps the next interval to the 1d floor; master computes `target` from `last_drift_window_s` instead. |
+| 2026-07-29 .. 2026-08-04 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `44e56b6` (2026-07-06), 400mAh pack | **1d** × 5 observed resyncs | +96s .. +116s | **+1259ppm** window-weighted (+1111…+1343, ±12%) | 1d (pinned) | **Five samples, all transcribed off photographs** — this build predates the `history` partition (`8b57f33`, 2026-07-25), so the panel is the only record and there is nothing to harvest. Per-sample table and the reasoning that the displayed `/1d` really is the window: [below](#photo-transcribed-run-c6--despi-c02-2026-07-29--2026-08-04). Clock **fast**, same sign as the other C6 row above and ~2.8× larger; 4321mV flat across all five, so the pack is nowhere near its knee at 28d18h. |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
 device clock behind real time.
+
+### Photo-transcribed run: C6 + DESPI-C02, 2026-07-29 .. 2026-08-04
+
+XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `44e56b6` (2026-07-06),
+`seeed_xiao_esp32c6_release`, 400mAh pack, booted ~2026-07-06 22:40 (uptime
+28d18h at the last reading, consistent with the `Jul6'26` build stamp in the
+footer). Every column below is read off a photograph of the panel — no serial,
+no archive, and **no way to re-read any of it**, because the build predates the
+flash partition. Transcription errors are possible and unfalsifiable here.
+
+Capture times are EXIF `DateTimeOriginal` (+02:00, phone on network time) from
+the source frames, which is a different clock from the one being measured and
+therefore the useful one:
+
+| Captured (EXIF) | Source | Panel time | Frame age | Drift | ppm | `#boot` | `r` | `lp` | Uptime | `s` age | 24h chart range (eyeballed) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-07-29 12:19:56 | `DSC_5977` | 11:14 | ~67 min | +115s/1d | +1331 | 1572 | 1341 | 32652 | 22d13h | 12h | 23.7–26.3 °C |
+| 2026-07-30 06:34:40 | `DSC_5987` | 06:34 | ~0–1 min | +102s/1d | +1181 | 1640 | 1399 | 33820 | 23d8h  | 7h  | 24.8–27.3 °C |
+| 2026-07-31 13:07:48 | `DSC_6021` | 13:05 | ~4 min | +96s/1d  | +1111 | 1993 | 1749 | 35669 | 24d15h | 14h | 21.0–26.5 °C |
+| 2026-08-02 14:25:02 | `DSC_6092` | 13:59 | ~27 min | +116s/1d | +1343 | 2334 | 2085 | 38638 | 26d16h | 14h | 21.5–25.1 °C |
+| 2026-08-04 17:04:20 | `DSC_6108` | 16:42 | ~24 min | +115s/1d | +1331 | 2451 | 2188 | 41704 | 28d18h | 16h | 24.5–27.0 °C |
+
+**Frame age is derived, not read**: `staleness = drift_at_render − (panel −
+real)`, with `drift_at_render` prorated from the badge by the `s` age (a sample
+7h into a 1-day window has accrued ~7/24 of it). All five land in 0–67 min,
+i.e. under the hourly safety-net refresh, with one sitting right at that bound —
+an independent confirmation the safety net is the thing setting the ceiling.
+
+What the EXIF check can and cannot settle. `panel − real = drift − staleness`,
+and staleness is unsigned and up to an hour, so a photograph **bounds drift from
+below and nothing more** — it confirms sign and order of magnitude, never the
+badge's value. Here it does confirm both, on all five. It also settles the
+timezone question outright: on 2026-07-30 the panel read `06:34` against an EXIF
+`06:34:40`, so the device is on the same local time as the phone and the whole
+run is not a `MY_TZ` artefact.
+
+**The `/1d` is the interval setting, not a measured window** — this build is on
+the wrong side of the 2026-07-25 change described under [Reading a
+datapoint](#reading-a-datapoint). It is nevertheless the true window here, and
+the `s` column is what proves it: every reading is 7–16h old, so no attempt in
+the run failed, and a succeeding daily resync makes setting and window the same
+number. The ages are also self-consistent with a cadence anchored near 23:00–00:40
+local, which is what a 1-day interval re-armed at each success produces.
+
+The interval is pinned rather than adaptive: at +1331ppm the rule targets
+60s of drift, i.e. a 12.5h interval, which clamps back up to the 1-day floor.
+
+What the five points say, and don't:
+
+- **Dispersion is ±12%** by the badge's own metric (widest deviation from the
+  window-weighted mean). That lands just the wrong side of the ±10% line in
+  [Decision rules](#decision-rules-once-6-samples-exist) — at the 1-day resync
+  floor, a constant-ppm correction of +1259ppm would leave ~±150ppm ≈ 13s/day of
+  residual, against 60s of allowed error. So it would *work*, but only barely,
+  and only because this oscillator is 4× better than the FireBeetle's.
+- **No temperature signal, and none was recoverable.** The five 24h ranges span
+  21–27.3 °C with no monotone relation to rate (the highest and lowest rates sit
+  at 23.3 °C and 23.7 °C mean). But the chart window is offset from the drift
+  window by the sync age, the ranges are eyeballed off photos, and 5 points over
+  ~3 °C of mean ambient cannot resolve a tempco anyway. Not evidence of absence.
+- **`lp` is the clean number in the table.** It advances 1450–1457 per day across
+  all four gaps (1168/19.3h, 1849/30.5h, 2969/48.9h, 3066/50.7h) — a far tighter
+  figure than boots or refreshes, which swing 55–278/day on how volatile the room
+  was. That is the ULP tick, and it is the one counter here that is not
+  delta-triggered.
 
 ### Collection run started 2026-07-25
 
@@ -111,6 +177,47 @@ is read:
 Retrieve with `history.py backup --full` then `dump --drift`; the CSV already
 computes the day-over-day `d_boot` / `d_refresh` duty-cycle deltas the decision
 rules below ask for.
+
+#### Screen readings pending harvest (2026-08-05)
+
+Neither archive has been read yet. These are photographs, recorded here so the
+frames aren't the only copy — the archive is authoritative and supersedes them.
+EXIF `DateTimeOriginal` (+02:00) again; frame age is bounded rather than derived,
+because the 200x200 panel drops the `s` token so drift-at-render is unknown
+within its window.
+
+| Captured (EXIF) | Source | Rig | Panel | Frame age | Status line | Footer | Batt |
+|---|---|---|---|---|---|---|---|
+| 2026-08-02 14:25:28 | `DSC_6093` | FireBeetle, `44ba5ba` | 14:09 | 17–24 min | `! DRIFT +421s/1d` `+5063ppm n6 +-4%` | `#1820 r1295 lp0 7d16h w:ULP mx4.2V 44b` | 4052mV |
+| 2026-08-05 11:35:29 | `DSC_6111` | FireBeetle, `44ba5ba` | 11:30 | 6–13 min | `! DRIFT +450s/1d` `+5037ppm n6 +-4%` | `#2335 r1634 lp0 10d13h w:ULP mx4.2V 44b` | 4020mV |
+| 2026-08-05 11:35:01 | `DSC_6110` | C6 + Seeed ePaper hat, `431b7b0` | 11:17 | ~18 min | *no badge* | `#1846 r1797 lp13938 9d13h w:ULP mx4.3V 431b7b0 Jul26'26 s…` | 4.32V |
+
+Three things to check against the archive, in order of how much they matter:
+
+1. **The FireBeetle's sign has flipped.** −5265ppm over the window ending
+   2026-07-25, +5037ppm over the run that started the same day — same board, same
+   panel, same room, near-identical magnitude, opposite direction. This is not a
+   convention change: `last_drift_ms = (before_sync - after_sync) * 1000` has read
+   that way since `346d27f` (2026-04-05) and `git log -S` finds no edit to it. So
+   either the reconstructed −9559s/21d window in the first row is wrong, or the
+   error genuinely reverses — which the awake-vs-asleep mechanism below would
+   allow, since the 2026-07-25 reflash also changed the duty cycle. Six journaled
+   samples decide it; the first row's was never journaled at all.
+2. **`n6 +-4%` says the rate is stable enough to correct.** Six retained samples
+   within ±4% of +5050ppm is ~17s/day of residual against a 60s budget at the
+   1-day floor — inside the ±13% the [decision rules](#decision-rules-once-6-samples-exist)
+   ask for, where the first datapoint alone could say nothing. Confirm against
+   the uncapped journal before acting on it: the badge shows the last six.
+3. **The C6 hat shows no badge and no `! NOSYNC`.** Resyncs are landing and the
+   last one measured under 60s, i.e. under 694ppm at the 1-day floor — consistent
+   with the +452ppm measured on this board in the 2026-07-26 row above, and it
+   means the archive is where the actual number is. Uptime 9d13h puts its boot at
+   ~2026-07-26 22:00, matching the `431b7b0` flash in
+   [history-store-validation.md](history-store-validation.md).
+
+The FireBeetle panel reads *behind* real time in both frames (−16.5 and −5.5 min)
+even though its clock runs fast. That is staleness, not a contradiction, and it
+is the reason a photo cannot be used to check a drift figure — only to bound it.
 
 ### Reading a datapoint
 
