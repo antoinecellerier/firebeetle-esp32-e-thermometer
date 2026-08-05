@@ -2,9 +2,11 @@ PROJECT_ROOT := $(shell git -C $(dir $(lastword $(MAKEFILE_LIST))) rev-parse --s
 GFX_LIB := $(PROJECT_ROOT)/components/adafruit_gfx/upstream
 
 CXX := g++
-# GIT_HASH matches what pre_build_fonts.py injects into the firmware, so the
+# Same command scripts/gen_git_hash.py stamps the firmware with, so the
 # indicator line renders at its real width instead of the 0000000 fallback.
-GIT_HASH := $(shell git -C $(PROJECT_ROOT) rev-parse --short HEAD 2>/dev/null || echo unknown)
+# Passed as -D: include/git_hash.h yields to a value already defined, so the
+# simulator never picks up a device build's stamp.
+GIT_HASH := $(shell git -C $(PROJECT_ROOT) describe --always --dirty 2>/dev/null || echo unknown)
 CXXFLAGS := -std=c++17 -O2 -Wall -Wno-unused-parameter -DARDUINO=200 -DSLEEP_INTERVAL_S=5 -DARDUINO_DFROBOT_FIREBEETLE_2_ESP32E -DGIT_HASH='"$(GIT_HASH)"'
 
 INCLUDES := \

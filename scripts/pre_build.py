@@ -1,4 +1,4 @@
-"""PlatformIO pre-build script: select the rig, generate fonts, inject git hash."""
+"""PlatformIO pre-build script: select the rig, generate the fonts and git hash."""
 Import("env")
 
 import os
@@ -9,6 +9,7 @@ import sys
 project_dir = env.get("PROJECT_DIR", os.getcwd())
 scripts_dir = os.path.join(project_dir, "scripts")
 sys.path.insert(0, scripts_dir)
+import gen_git_hash
 import gen_rig_config
 import generate_font
 
@@ -63,12 +64,9 @@ if configured_size() != generated_size():
     args.append("--force")
 subprocess.check_call(args)
 
-# Inject short git commit hash as GIT_HASH define
-try:
-    git_hash = subprocess.check_output(
-        ["git", "describe", "--always", "--dirty"],
-        cwd=project_dir, text=True
-    ).strip()
-except Exception:
-    git_hash = "unknown"
-env.Append(CPPDEFINES=[("GIT_HASH", env.StringifyMacro(git_hash))])
+# The commit hash goes to a generated header, not a -D. As a define it is part
+# of every compile command's signature, so each new commit — and every
+# clean<->dirty flip — recompiles all ~1100 ESP-IDF component objects. Written
+# here for the same reason as the rig selector above: before SCons builds the
+# DAG, so its readers recompile in this build rather than the next one.
+print(f"Git hash: {gen_git_hash.write()}")

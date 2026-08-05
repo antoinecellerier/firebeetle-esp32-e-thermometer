@@ -46,9 +46,20 @@ if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../include/generated/rig_config.h)
     )
 endif()
 
+# Git stamp: PlatformIO refreshes it every run via scripts/pre_build.py.
+# Regenerated unconditionally here — unlike the rig and the fonts — because
+# leaving a stale file behind would silently stamp an idf.py build with
+# whatever hash the last PlatformIO build wrote. The write is idempotent, so an
+# unchanged hash does not touch the file. Under idf.py the stamp is as of the
+# last cmake configure. Not fatal on failure: the header's fallback is cosmetic.
+execute_process(
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/gen_git_hash.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+)
+
 # Generated fonts: PlatformIO builds refresh these every run via
-# scripts/pre_build.py (which also injects GIT_HASH); for plain idf.py
-# builds, generate them once here if missing.
+# scripts/pre_build.py; for plain idf.py builds, generate them once here
+# if missing.
 if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../include/generated/font_config.h)
     execute_process(
         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/generate_font.py --all

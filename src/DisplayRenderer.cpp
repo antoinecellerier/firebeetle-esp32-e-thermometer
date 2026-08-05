@@ -10,9 +10,7 @@
 #include "Sensor.hpp"   // TEMP_NO_PREVIOUS, the "no reading" sentinel
 #include "displays.h"  // DISPLAY_HAS_RED (panel tri-color capability)
 
-#ifndef GIT_HASH
-#define GIT_HASH "0000000"
-#endif
+#include "git_hash.h"
 
 #include <math.h>
 #include <stdarg.h>

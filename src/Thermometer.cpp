@@ -1,4 +1,5 @@
 #include "app_common.h"
+#include "git_hash.h"
 
 // needed for setenv and tzset :-/
 #undef __STRICT_ANSI__
@@ -359,10 +360,10 @@ static void drift_state_save(HistoryDriftState *d)
   d->rsvd = 0;
   memcpy(d->drift_ppm_hist, drift_ppm_hist, sizeof(drift_ppm_hist));
   memcpy(d->drift_win_min, drift_win_min, sizeof(drift_win_min));
+  // Zero first: snprintf leaves the bytes past the terminator untouched, and
+  // this struct is persisted.
   memset(d->git_hash, 0, sizeof(d->git_hash));
-#ifdef GIT_HASH
   snprintf(d->git_hash, sizeof(d->git_hash), "%s", GIT_HASH);
-#endif
 }
 
 // `trust_clock` gates only last_sync_time: it is the reference maybe_ntp_resync()

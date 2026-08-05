@@ -4,8 +4,9 @@ The tree is a standard ESP-IDF CMake project (`CMakeLists.txt` +
 `src/CMakeLists.txt` + `components/`) that PlatformIO drives. Both boards build
 `framework = espidf` on the official registry platform (`espressif32 @ ^7.0.1`,
 ESP-IDF 6.0.1) — no Arduino framework, no platform fork, no pinned zip URL.
-`idf.py -DIDF_TARGET=esp32c6 build` also works: fonts auto-generate at cmake
-configure time, and GIT_HASH shows its fallback value outside PlatformIO.
+`idf.py -DIDF_TARGET=esp32c6 build` also works: fonts and the GIT_HASH stamp
+auto-generate at cmake configure time, so outside PlatformIO the stamp is as of
+the last configure rather than the last build.
 
 CLAUDE.md keeps only the rules that destroy data or silently mis-build when
 violated. Everything here is the *why* behind them, plus the traps that cost a
@@ -169,6 +170,15 @@ and another env's finished `firmware.bin` survives. Varying
 `PLATFORMIO_BUILD_FLAGS` instead would delete every env's build directory (see
 above), and the LP core would not see the change at all — its sub-build
 inherits no `build_flags` and reads the selector by relative include.
+
+`include/generated/git_hash.h` exists for the same reason, and it is the more
+expensive lesson: as a `-D` on the global SCons environment the commit hash
+reached every ESP-IDF component's compile line, and SCons puts defines in the
+build signature. Every commit — and every clean/dirty flip, so the first edit
+after a commit and the revert after it — recompiled ~1100 framework objects.
+As a header only the three sources that read it rebuild.
+`include/git_hash.h` wraps it so `tools/sim` and `tools/hstest`, which pass
+their own `-DGIT_HASH`, keep winning.
 
 Each rig header ends in a cross-check that `#error`s when the rig and the env
 disagree, so `RIG=firebeetle pio run -e seeed_xiao_esp32c6_debug` fails at

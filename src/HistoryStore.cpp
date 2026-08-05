@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "app_common.h"
+#include "git_hash.h"
 
 #ifdef MOCK_DISPLAY_DATA
 // fill_mock_data() writes synthetic readings straight into historical_data.
@@ -361,9 +362,7 @@ static bool store_write_header(void)
   copy_str(h.board, sizeof(h.board), board_name());
   copy_str(h.panel, sizeof(h.panel), panel_name());
   copy_str(h.sensor, sizeof(h.sensor), sensor_name());
-#ifdef GIT_HASH
   copy_str(h.git_hash, sizeof(h.git_hash), GIT_HASH);
-#endif
   h.crc32 = crc32_of(&h, offsetof(HsStoreHeader, crc32));
 
   if (!part_write(HS_HDR_OFF, &h, sizeof(h)))
