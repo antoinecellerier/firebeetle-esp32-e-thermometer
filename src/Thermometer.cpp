@@ -921,6 +921,13 @@ static volatile bool s_wifi_stopping = false;
 // never succeed.
 static volatile int s_wifi_reason;
 
+// Was any configured network demonstrably present during this attempt — either
+// associated with, or seen in the scan? It separates "out of range" from "in
+// range but the link failed", and those want opposite retry policies: the first
+// should become rare, the second must keep trying. Per-wake, not RTC state: it
+// is evidence about now, not history.
+static bool s_wifi_net_seen;
+
 static bool wifi_reason_is_terminal(int reason)
 {
   switch (reason)
@@ -1088,6 +1095,7 @@ static bool wifi_try_net(uint8_t idx, uint32_t timeout_ms)
     if (bits & WIFI_CONNECTED_BIT)
     {
       wifi_last_net = idx;
+      s_wifi_net_seen = true;
       LOGI("WiFi: connected to '%s'", net.ssid);
       return true;
     }
@@ -1156,6 +1164,9 @@ static uint8_t wifi_scan_pick()
       if (recs[i].rssi > best_rssi) { best_rssi = recs[i].rssi; best = n; }
     }
 
+  if (best != WIFI_NET_NONE)
+    s_wifi_net_seen = true;
+
   if (best == WIFI_NET_NONE)
     LOGI("WiFi: scan %ums, %u APs, none of ours", (unsigned)scan_ms, (unsigned)take);
   else
@@ -1166,6 +1177,7 @@ static uint8_t wifi_scan_pick()
 
 static bool wifi_connect()
 {
+  s_wifi_net_seen = false;
   if (!wifi_is_configured())
     return false;
   if (!wifi_driver_start())
@@ -1296,6 +1308,37 @@ static bool ntp_bootstrap_due(void)
   return boot_count > 0 && ((uint32_t)boot_count % period) == 0;
 }
 
+// When to try again after a failed resync.
+//
+// Failures re-arm; without escalation a board that cannot reach its AP retries
+// forever at the interval floor, which is what a basement deployment does today.
+// But escalation must not touch a board that is *in range and failing* — the
+// XIAO rigs see periodic association/SNTP failures on their ceramic chip antenna
+// (docs/notes.md) and are recovering, so deferring them would be exactly wrong.
+// Hence the caller passes what it observed rather than just "it failed".
+//
+// resync_fail_count already exists for the badge; this is its second consumer,
+// and success clears it, so recovery needs no separate state.
+//
+// Two limits, binding on different devices rather than stacking. The shift
+// governs short-interval boards, the only ones that retry often enough to cost
+// anything: at the 1-day floor it gives 1, 2, 4, 8 days and stops. The absolute
+// ceiling only bites once resync_interval_s has adapted past ~3.5 days, where
+// escalation buys nothing anyway — it exists so a board that had reached the
+// 28-day interval before losing its AP defers 28 days, not the 224 the shift
+// alone would give. Collapsing them into one ceiling would *shorten* a 28-day
+// board's retry, making it try harder after a failure than when healthy.
+static time_t resync_retry_at(time_t now, bool network_absent)
+{
+  uint32_t shift = 0;
+  if (network_absent)
+    shift = resync_fail_count < 3 ? resync_fail_count : 3;
+  int64_t backed_off = (int64_t)resync_interval_s << shift;
+  if (backed_off > RESYNC_INTERVAL_MAX)
+    backed_off = RESYNC_INTERVAL_MAX;
+  return now + (time_t)backed_off;
+}
+
 // Attempt NTP resync if due. Measures clock drift and adjusts next interval.
 static void maybe_ntp_resync(time_t now)
 {
@@ -1337,9 +1380,11 @@ static void maybe_ntp_resync(time_t now)
   if (!wifi_connect())
   {
     resync_fail_count++;
-    LOGI("NTP resync: WiFi failed (%u in a row), deferring to next scheduled resync",
-         (unsigned)resync_fail_count);
-    next_resync_time = now + resync_interval_s;
+    const bool absent = !s_wifi_net_seen;
+    next_resync_time = resync_retry_at(now, absent);
+    LOGI("NTP resync: WiFi failed (%u in a row, network %s), retrying in %d s",
+         (unsigned)resync_fail_count, absent ? "absent" : "present but unusable",
+         (int)(next_resync_time - now));
     return;
   }
 
@@ -1356,7 +1401,9 @@ static void maybe_ntp_resync(time_t now)
     LOGI("NTP resync: sync failed (%u in a row), deferring to next scheduled resync",
          (unsigned)resync_fail_count);
     wifi_disconnect();
-    next_resync_time = now + resync_interval_s;
+    // No escalation: we associated, so the network is demonstrably there and a
+    // retry has a real chance. Only absence earns a longer wait.
+    next_resync_time = resync_retry_at(now, false);
     return;
   }
 

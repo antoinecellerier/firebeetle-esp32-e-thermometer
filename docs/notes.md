@@ -1248,6 +1248,25 @@ Ruled out on hardware first, so nobody retries them:
 Unique DHCP hostnames shipped anyway (`10481f7` onwards): it costs nothing and
 five identical `espressif` rows in a router's device list name nothing.
 
+### Failed resyncs now back off, but only on absence (2026-08-09)
+
+`docs/notes.md` above records that failed resyncs "re-arm with no backoff, so it
+stays pinned at 1 day forever". Fixed, with a distinction that matters more than
+the backoff itself: **a board out of range and a board with a bad link want
+opposite policies.** The basement deployment is doomed and should become rare; the
+XIAO rigs fail in range on their chip antenna (see the 2026-07-29 note) and are
+recovering, so deferring them would be the wrong response.
+
+Escalation therefore requires evidence of *absence* — the driver's own sweep
+finding the SSID on no channel **and** a full scan seeing none of the configured
+networks — not merely a failure. Verified on board 2: absent gives 60 s, 120 s,
+then flat at 8x the interval; present-but-unusable stays flat across seven
+consecutive failures. Estimated ~0.2-0.4 C/day settling to ~0.05 C/day on a
+permanently-offline board; unchanged on a flaky one.
+
+Note nothing is terminal — the spacing changes, the attempts do not stop, and one
+success clears the counter and restores the normal cadence.
+
 ### Deferred to the next PPK2 campaign
 
 Agreed 2026-08-09 to defer rather than drop. What to capture, so it does not have
