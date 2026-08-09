@@ -780,14 +780,50 @@ the *status* line, and arm 1's resync health is not panel-readable at all on tha
 rig — only the `! NOSYNC` badge is. Worth knowing before the day-14 read: the
 gate table above sends the reader to a footer that, on this panel, ends early.
 
-**Two items left open at this check**, both needing another look at the panels:
+**Gate 4 passes on all three.** Status lines read `! EXP 1 60s`, `! EXP 3 60s`,
+`! EXP 5 60s`, so every record from here is attributable.
 
-- **Gate 4 is unconfirmed on all three.** The `! EXP <arm> 60s` badge was not
-  transcribed. Its absence would mean the build carried no `EXPERIMENT_ARM` and
-  no record can be attributed — but the badge simply may not have been read.
-- **Arm 3's sync age is ambiguous.** The footer ends `Aug5'26 s4`, and `fmt_span()`
-  never emits a bare number, so the unit clipped or was dropped in transcription.
-  `s4h` is healthy; `s4d` means every 12 h resync has failed since the flash and
-  arm 3 holds only the contaminated first record. A `! NOSYNC xN 4d` badge on the
-  status line separates the two — and `resync_fail_count` backs the interval off
-  up to 8x, so four days of failure needs only a handful of attempts.
+**Arm 3's `s4` is `s4h`, and its resync is healthy.** The unit is off the edge of
+the 296x128 panel and cannot be read, but the arm carries **no `! NOSYNC`**, so
+`resync_fail_count == 0`. `s4d` would require the flash-time sync to be the last
+success, which means the attempt scheduled ~2026-08-06 01:00Z failed and the
+counter would be non-zero. The absence of a `! DRIFT` badge says the same thing
+independently: the badge fires at 60 s, and at this rig's +305 ppm a 4 d window
+would have accrued ~105 s and lit it, where a 12 h window accrues ~13 s.
+
+##### Arm 1's drift badge already answers the primary question
+
+`! DRIFT +222s/12h +5119ppm n6 ±1%`. The `/12h` is the first on-panel proof the
+`RESYNC_INTERVAL_MIN=43200` override took. `n6` is `DRIFT_PPM_HIST_SIZE`, so the
+ring is saturated and covers the last ~3 days — the contaminated first record has
+already aged out of it. Take `+5119` rather than back-computing from `+222s/12h`:
+the badge span is hour-resolution, which alone spans 4744–5139 ppm, while the
+aggregate is computed on-device from exact seconds. This file already established
+the badge is exact to the digit on this rig.
+
+**The duty-cycle reading of phase 1 does not survive.** Phase 1 fitted
+`ppm ≈ 5339 − 1.342 × wakes/day` over 84–332 wakes/day. Arm 1 now runs pinned at
+~1456 wakes/day, so that model predicts **+3385 ppm**. The rig reads **+5119 ppm**
+— a 1734 ppm miss, ~34x the badge's own ±1% spread, and the rate has instead
+barely moved from phase 1's +5066 ppm (+1.0%). Wake count went up 4.4x against
+the busiest phase-1 day and 17x against the quietest, and the rate did not
+follow. The extrapolation is far outside the fitted range and would not be worth
+much on its own, but no linear-ish model through phase 1's points survives a miss
+this size: this is what arm 1 was built to test, and at day 4 it reads negative.
+
+**One thing cuts the other way, and should not be tidied away.** The spread
+collapsed from ±4.5% (n=10, 1 d windows) to ±1% (n=6, 12 h windows). That is not
+a window-length artefact — shorter windows are the *noisier* estimator, so this
+should have widened. Under the duty-cycle reading, a pinned duty cycle giving a
+pinned rate is exactly the expected tightening. So the level says duty cycle is
+not the driver while the variance says it is. The reading that holds both: the
+phase-1 slope was fitting *estimator* noise that tracked wake count, not a
+physical dependence on it, and pinning the cadence removed the noise without
+touching the level.
+
+**The prediction that follows, recorded before the data exists.** If that reading
+is right, arm 1's residual ±1% (~±51 ppm) should correlate with the window's
+volatility covariate now that wakes/day is flat — testable at the day-14 harvest,
+which is what supplies per-window ambient and intra-hour spread. If the residual
+correlates with nothing, neither mechanism survives and it is oscillator noise.
+Arm 2 then asks the same question of refresh count with wakes still pinned.
