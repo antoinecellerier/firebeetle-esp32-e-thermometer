@@ -40,6 +40,23 @@ CONFIG_BOOTLOADER_SKIP_VALIDATE_IN_DEEP_SLEEP=y
 # NTP: primary + fallback server (esp_netif_sntp)
 CONFIG_LWIP_SNTP_MAX_SERVERS=2
 
+# Bind the DHCP-offered address without ARP-probing it first. Measured -1.08s on
+# every connect (DHCP 3920 -> 2841ms mean, board 2 2026-08-09); IDF's own Kconfig
+# documents the probe as costing 1-2s, and DHCP is ~90% of a 4s connect here.
+#
+# This is a deliberate RFC 2131 deviation (a client SHOULD probe), so the failure
+# it gives up on is worth naming: an address already in use by someone the DHCP
+# server doesn't know about — a static IP inside the pool, or a second DHCP
+# server on the same L2. DHCPNAK still covers server-side disagreement, and we
+# never enter the address-reuse path (CONFIG_LWIP_DHCP_RESTORE_LAST_IP stays off,
+# measured worthless and unsafe for a device whose lease is always long expired),
+# so the exposure is only what the server itself has wrong.
+#
+# Consequence to remember: a conflict presents as a healthy association whose
+# SNTP fails, i.e. a persistent "! NOSYNC" indistinguishable from a dead AP.
+# Suspect an IP conflict before the radio. See docs/notes.md.
+CONFIG_LWIP_DHCP_DOES_NOT_CHECK_OFFERED_IP=y
+
 # WiFi DPP (QR-code onboarding, shelved feature — was sdkconfig.custom)
 CONFIG_ESP_WIFI_DPP_SUPPORT=y
 

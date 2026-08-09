@@ -1080,3 +1080,96 @@ classifier reads as a non-HEALTHY step. Runs under `local/sweeps/`:
   cold/cell numbers come back kind.
 - Release builds keep the 2.51 V level, so deployed behavior is unchanged;
   the churn regime exists only under the probe build.
+
+## WiFi association and DHCP: where a resync's seconds actually go (2026-08-09)
+
+Rev A **board 2**, `thermometer_c6_debug`, `PLATFORMIO_BUILD_SRC_FLAGS="-DWIFI_SPIKE"`
+at `e557dd2-dirty`, USB-powered, ~2 m line-of-sight from the AP, target on channel 6
+at −53..−58 dBm. Throwaway `src/WifiSpike.cpp` harness, since deleted.
+
+**Durations only — no PPK2 pass was taken, so nothing here is a charge figure.**
+Comparisons against the 117 mC resync and ~1.5 C failed association above are
+therefore estimates. Time with the radio on is the proxy, and it is the term every
+option below moves.
+
+### Scan cost is fixed, and twice what was projected
+
+| `scan_time.active.max` | duration | APs seen |
+|---|---|---|
+| 120 ms (IDF default) | **2501 ms** (n=8, zero variance) | 6–14 |
+| 60 ms | **1801 ms** | 5–13 |
+| 40 ms | **1601 ms** | 7–10 |
+
+Fits `~1.2 s fixed + ~11 × active.max`. The projection from the IDF defaults (11
+channels × 120 ms ≈ 1.3 s) was **2× optimistic** — there is ~1.2 s of fixed cost the
+naive product misses. A second scan run back-to-back cost the same 2500 ms, so that
+fixed part belongs to the scan, not to driver start-up.
+
+**Scan presence is noisy.** Consecutive identical scans returned 5, 6, 7, 8, 9, 10,
+12, 13 and 14 APs. A configured network can be absent from any single scan, so an
+empty result is not proof it is gone — which is why `wifi_connect()` will not
+conclude "no network here" from one scan alone.
+
+### Association is cheap; DHCP is the whole cost
+
+Association: **~300 ms** (295–335, n=15), *identical* whether the channel is swept,
+pinned, or pinned together with the BSSID. Only the first connect after boot ever
+cost more (900–2350 ms, n=3). DHCP: **2.2–4.6 s**, i.e. ~90 % of a ~4 s connect.
+
+The design consequence: **caching a BSSID or a channel buys nothing.** What is worth
+remembering across a sleep is only *which network* worked, so the 2.5 s scan can be
+skipped — one RTC byte, not twelve.
+
+### Three DHCP knobs, measured
+
+| Change | DHCP mean | verdict |
+|---|---|---|
+| baseline | 3920 ms (n=8, 3323–4619) | — |
+| `CONFIG_LWIP_DHCP_DOES_NOT_CHECK_OFFERED_IP=y` | **2841 ms** (n=9, 2280–3386) | **−1.08 s, taken** |
+| `CONFIG_LWIP_DHCP_RESTORE_LAST_IP=y` | 2727 ms (n=9) | no effect, dropped |
+
+The ARP-check saving is a clean separation, not a mean shift: exactly one value
+overlaps the two distributions. It lands inside the "1 - 2 seconds" IDF's own Kconfig
+documents for that probe.
+
+**The cost of taking it, recorded so it is not rediscovered the hard way.** Without
+the probe the device binds whatever the DHCP server offers. `DHCPNAK` still covers
+what the *server* knows, and we never enter the address-reuse path, so the residual
+exposure is an address in use by someone the server does not know about: a static IP
+inside the pool, or a second DHCP server on the same L2. That presents as a **healthy
+association whose SNTP fails — a persistent `! NOSYNC` indistinguishable from a dead
+AP.** Suspect an IP conflict before suspecting the radio.
+
+`RESTORE_LAST_IP` was dropped for a second reason beyond measuring flat: resyncs run
+~1.5 days apart and up to 28, against typical 12–24 h leases, so a stored lease is
+essentially always expired and possibly reassigned. RFC 2131 also has the server stay
+*silent* rather than NAK when it has no record of the client, so the client waits out
+a timeout before falling back — a multi-second tail, on the option meant to save time.
+
+### IPv6 is slower than IPv4 here, not faster
+
+`CONFIG_LWIP_IPV6_AUTOCONFIG=y`, dual-stack, n=9. Timed to a **global** address:
+link-local forms early but cannot reach an NTP server, so timing it would flatter the
+result.
+
+| | mean | range |
+|---|---|---|
+| IPv6 link-local ready | 1.8 s | 1.3–2.5 s |
+| IPv6 **global** ready | **5.3 s** | 3.3–8.6 s |
+| IPv4 (DHCP) ready | **4.2 s** | 3.5–4.8 s |
+
+IPv6 won 3 of 9, all of them the first connect of a pass. Two reasons, neither
+removable: Duplicate Address Detection is the direct analogue of the ARP check and
+costs ~1.8 s on its own (worse than the 1.08 s just recovered), and the global address
+waits on a Router Advertisement — the 3.3–8.6 s spread is the *router's* jitter, an
+environment property, and more variable than DHCP. Not pursued.
+
+### Still unmeasured
+
+- **Charge** for any of the above. Every figure here is a duration.
+- The residual **~2.7 s of DHCP** after the ARP check is removed. It is a fixed cost
+  on any connection, so it does not discriminate between designs, but it is now the
+  largest single term in a resync and nobody has explained it.
+- Everything here is one AP in ideal conditions. Scan durations should transfer
+  (dwell is fixed regardless of what answers); **connect figures are best-case** and
+  the failure modes (association timeout, weak-link retransmits) were not exercised.
