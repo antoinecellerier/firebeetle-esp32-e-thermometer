@@ -48,6 +48,8 @@ RTC = `.rtc.data` + `.rtc.force_slow` (8KB budget shared with ULP, framework-ind
 | C | c6_release | 943648 | 22.5%** | 38164 | 117802 | 6428 | fork + Arduino layer gone |
 | D pure espidf (both) | esp32e_debug | 1017824 | 24.3%** | 37980 | 109199 | 6536 | Arduino layer gone; GxEPD2/GFX via arduino_shim |
 | D | esp32e_release | 1014240 | 24.2%** | 37980 | 109199 | 6536 | −124KB bin + −11.5KB DRAM vs B (Arduino) |
+| G multi-SSID WiFi (2026-08-09) | esp32e_release | 966704 | 24.4%*** | 52656 | 91163 | 6564 | **+5008 B vs the commit before** (57b050d). Rig `firebeetle` (200x200 Z90 + BMP390L), NOT the 920x680 config stages 0–F used — absolute DRAM/bin are not comparable to the rows above, the delta is. |
+| G | c6_release | 1061184 | 26.7%*** | 43524 | 109692 | 6472 | +5232 B. Rig `xiao-bigscreen`. Cost is the scan path (`esp_wifi_scan_*`) plus the network table; the RTC hint itself is 1 byte. |
 | D | c6_debug | 1075168 | 25.6%** | 39420 | 127554 | 6428 | display re-enabled (DISABLE_DISPLAY dropped) |
 | D | c6_release | 1071664 | 25.5%** | 39420 | 127554 | 6428 | |
 | F official platform | all four | ≈D | 25-27%*** | ≈D | ≈D | — | espressif32@~6.13.0 (IDF 5.5.3), sizes within noise of D |
