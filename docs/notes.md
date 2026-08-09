@@ -1164,6 +1164,48 @@ costs ~1.8 s on its own (worse than the 1.08 s just recovered), and the global a
 waits on a Router Advertisement — the 3.3–8.6 s spread is the *router's* jitter, an
 environment property, and more variable than DHCP. Not pursued.
 
+### The residual DHCP seconds are the router's, not ours (2026-08-09)
+
+Traced with `CONFIG_LWIP_DEBUG` + `CONFIG_LWIP_DHCP_DEBUG` + `CONFIG_LWIP_DEBUG_ESP_LOG`
+(lwIP routes to `ESP_LOG_DEBUG` under tag `lwip`, so `CONFIG_LOG_DEFAULT_LEVEL_DEBUG`
+is needed too; all four reverted after). Board 2, same firmware and build throughout —
+**only the DHCP server changed**:
+
+| Server | DISCOVER -> OFFER | REQUEST -> ACK | total |
+|---|---|---|---|
+| House AP (Freebox), n=3 | 19-30 ms | **2059-2426 ms** | ~2.1-2.4 s |
+| Phone hotspot, n=3 | 14-27 ms | **12-16 ms** | **~30 ms** |
+
+A factor of ~160 on one hop, with the same client. The delay is repeatable to ~10 ms
+rather than scattered, and the ACK arrives partway through a retry window rather than
+at a boundary, so it is not lost frames: **the server sits on the REQUEST for ~2 s**,
+consistent with it ARP-probing the address it is about to lease and waiting out its own
+timeout because the client has not bound it yet. The mirror image of the client-side
+check dropped in `62320af`.
+
+Two things this closes:
+
+- **The ~4 s connect is environment-dependent, not device-intrinsic**, and its driver
+  is the DHCP server's ACK latency. On a well-behaved server the whole exchange is
+  30 ms and a connect is ~330 ms. Quote it as an order of magnitude with the driver
+  named, never as a device figure.
+- **Why `CONFIG_LWIP_DHCP_RESTORE_LAST_IP` measured flat.** It skips DISCOVER -> OFFER,
+  which is worth ~20 ms; the ~2 s lives in REQUEST -> ACK, which it cannot skip. Two
+  independent measurements now agree, which is more than the original null result
+  deserved on its own.
+
+Ruled out along the way, so nobody retries them:
+
+- **WiFi power save.** `esp_wifi_set_ps(WIFI_PS_NONE)` changed nothing (2426 ms ->
+  2067/2059 ms, inside the spread). The buffered-broadcast-until-DTIM theory is dead.
+- **lwIP's fine timer.** `DHCP_FINE_TIMER_MSECS` is hardcoded 500 ms in `dhcp.h` and
+  was the leading hypothesis — wrong. It only sets the 500/1000/2000 ms retry backoff
+  that *follows* the server's silence; it is not the cause.
+
+No firmware change can recover this. The site-side fix worth trying is a **static DHCP
+reservation for the device on the router**, which keeps DHCP (so the multi-network
+behaviour still works elsewhere) and may skip the probe for a known lease. Untested.
+
 ### Deferred to the next PPK2 campaign
 
 Agreed 2026-08-09 to defer rather than drop. What to capture, so it does not have
