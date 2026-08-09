@@ -15,6 +15,12 @@ panic-loops at ~600ms — looking like a huge sleep floor on the PPK2, with a
 stale e-paper frame (old GIT_HASH/time) as the tell — is the right env flashed
 to the wrong physical board.
 
+**Redact network names.** Real SSIDs never go in this file, even quoted from a
+serial log: write `<house-ap>`, `<hotspot>` and so on. Credentials live only in
+the gitignored `include/local-secrets.h`, and an SSID is one half of them.
+Signal strengths, channels, BSSIDs and disconnect reasons are what the entries
+need, and none of those identify a network to a passer-by.
+
 ## Plan
 
 Device-side steps from the implementation plan. Host-side equivalents already
