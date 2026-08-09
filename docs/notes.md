@@ -1164,6 +1164,30 @@ costs ~1.8 s on its own (worse than the 1.08 s just recovered), and the global a
 waits on a Router Advertisement — the 3.3–8.6 s spread is the *router's* jitter, an
 environment property, and more variable than DHCP. Not pursued.
 
+### Deferred to the next PPK2 campaign
+
+Agreed 2026-08-09 to defer rather than drop. What to capture, so it does not have
+to be re-derived:
+
+1. **One successful resync end to end** on the rig being measured, bracketed with
+   `--from/--to` after locating it with `--profile 500` (the WiFi exchange carries
+   no D0/D1 marker). Gives the post-ARP-check resync charge directly, and settles
+   whether the 117 mC/1.8 s figure from the XIAO ePaper rig transfers — it and the
+   ~4.2 s connect measured on board 2 reconcile only if that rig's DHCP was
+   ARP-check-dominated, which is a reading, not a measurement.
+2. **One resync with the AP powered down**, for the failure tail. Pre-change this
+   was a 15 s association timeout (~1.5 C, ESP32-E); it should now be a fast fail
+   plus one 2.5 s scan. Estimated ~7x cheaper and **entirely unverified**; it is
+   the largest claimed win of the 2026-08-09 WiFi work.
+3. **One scan in isolation** (2501 ms at default dwell), to turn the duration
+   table above into charge and fix the mC-per-second-of-radio constant that every
+   estimate here leans on.
+
+Until then the budget impact stands at: healthy network **-50 to -70 mC/day
+estimated** (~2% of a 2.12 C/day budget, since the resync term is only 3.5% of
+it), failure path **~1.5 C -> ~0.2 C estimated**. Both derived from measured
+durations times a measured 65-80 mA, never integrated.
+
 ### Still unmeasured
 
 - **Charge** for any of the above. Every figure here is a duration.
