@@ -718,7 +718,7 @@ the arm, so the expensive checks are the cheap ones:
 |---|---|---|
 | footer `#N` ÷ uptime-days | **≈1440/day** | much lower → `ULP_ALWAYS_WAKE` did not take |
 | footer `rN` ÷ uptime-days | **≈24/day** (+1/day for the daily clear) | much higher → `DISPLAY_TEMP_DELTA` did not take |
-| **`#N` ÷ `rN`** | **≈60** | anything else — this is the tell, and needs no arithmetic on elapsed time |
+| **`#N` ÷ `rN`** | **≈58** (1440 ÷ 25, the daily clear included) | anything else — this is the tell, and needs no arithmetic on elapsed time |
 | status line | `! EXP 1 60s` | absent → the build carried no `EXPERIMENT_ARM`, so gate 4 fails too |
 
 The ratio is the one to read: it is dimensionless, valid at any uptime, and both
@@ -731,3 +731,63 @@ On the two vanilla arms (3 and 5) there is nothing to check — their counters a
 *supposed* to track the room. Their footer ratio is the baseline being measured:
 the FireBeetle's own pre-experiment run sat near 0.7 refreshes per wake, against
 the pinned 1-in-60 here.
+
+#### Panel gate check, 2026-08-09 (day 4, not day 2)
+
+Source: operator transcription of the three panels, no harvest, no reset. Uptime
+is read to the hour, so every rate below is a range over the hour the footer
+does not resolve — `4d3h` means uptime ∈ [4.125, 4.167) d.
+
+| | Arm 1 (`1ea3cd7`) | Arm 3 (`2fa3750`) | Arm 5 (`f5e1749`) |
+|---|---|---|---|
+| footer | `#6039 r104 lp0 4d3h w:ULP mx4.2V` | `#563 r550 lp6092 4d4h w:ULP` | `#718 r708 lp6100 4d3h w:ULP` |
+| wakes/day | **1449–1464** (target 1440) | 134–135 | 172–174 |
+| mean wake interval | **59.0–59.6 s** (target 60) | 10.7 min | 8.3 min |
+| refreshes/day | **25.0–25.2** (target 24+1) | 131–132 | 170–172 |
+| `#` ÷ `r` | **58.07** (target 57.6) | 1.02 | 1.01 |
+| LP samples/day | — (FSM, see below) | 1448–1462 | 1464–1479 |
+
+**Arm 1 passes gates 1 and 2.** Both overrides took: the wake cadence is pinned
+to the timer and no longer tracks the room, and the repaint count is one per 60
+wakes plus the daily clear, which is what only `DISPLAY_TEMP_DELTA=999.0f` can
+produce. The ratio lands at 58.07 against the 57.6 the two overrides imply — the
+match is close enough that no third mechanism is needed to explain it.
+
+The ~1.5% wake surplus over 1440/day is the E's own fast clock, not extra wakes:
+its sleep timer is derived from the +5066 ppm oscillator measured in phase 1, so
+a 60 s programmed sleep elapses in 59.7 s of real time, and the resync keeps
+`now` — hence uptime — on real time. Predicted 59.7 s against 59.0–59.6 s read.
+
+**`lp0` on arm 1 is structural, not a fault.** `lp_wake_count` is populated only
+under `SOC_LP_CORE_SUPPORTED` (`src/Thermometer.cpp`), so the ULP FSM boards read
+zero forever. The FireBeetle's sampling liveness has to come from `#N` instead.
+
+**No `e<n>` or `u<n>` tokens on any of the three**, so zero LP errors across the
+6092 + 6100 LP wakes the two C6 rigs logged, and no ULP reload.
+
+**The vanilla controls refresh on ~98% of their wakes**, not the ~70% the
+FireBeetle's pre-experiment run showed. That is the baseline arm 3 exists to
+establish, so it is data rather than a fault, but it does put arm 5 at ~171
+repaints/day. Multiplying that by the 45 mC/refresh measured 2026-07-03 gives
+~7.7 C/day from repaints alone — *derived from two measurements, not measured
+here*, and at the top of the single-digit band `docs/notes.md` records.
+
+**The 200x200 footer cannot show the date or the sync age.** Confirmed against
+`tools/mock_200x200_exp.png`: Org_01 advances 6 px/char, the zone leaves ~198 px,
+so the line clips just past `mx4.2V` and `render_status_indicators()` re-emits the
+hash as a badge (`src/DisplayRenderer.cpp`). So `1ea3cd7` on arm 1 was read off
+the *status* line, and arm 1's resync health is not panel-readable at all on that
+rig — only the `! NOSYNC` badge is. Worth knowing before the day-14 read: the
+gate table above sends the reader to a footer that, on this panel, ends early.
+
+**Two items left open at this check**, both needing another look at the panels:
+
+- **Gate 4 is unconfirmed on all three.** The `! EXP <arm> 60s` badge was not
+  transcribed. Its absence would mean the build carried no `EXPERIMENT_ARM` and
+  no record can be attributed — but the badge simply may not have been read.
+- **Arm 3's sync age is ambiguous.** The footer ends `Aug5'26 s4`, and `fmt_span()`
+  never emits a bare number, so the unit clipped or was dropped in transcription.
+  `s4h` is healthy; `s4d` means every 12 h resync has failed since the flash and
+  arm 3 holds only the contaminated first record. A `! NOSYNC xN 4d` badge on the
+  status line separates the two — and `resync_fail_count` backs the interval off
+  up to 8x, so four days of failure needs only a handful of attempts.
