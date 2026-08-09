@@ -34,19 +34,18 @@ facts that do damage when unknown:
 - **esptool and `history.py` enter download mode, which resets the chip and wipes
   RTC** (`rst:0x1 POWERON_RESET`) — destroying the boot counters, in-progress
   hour and drift window you may be measuring.
-- **A base snapshot's existence proves a full boot->render->sleep cycle.**
-  `base (none — journal only)` after a settle window means boot loop, not
-  "hasn't slept yet".
+- **A base snapshot's existence proves a full boot->render->sleep cycle.** `base
+  (none — journal only)` after a settle window means boot loop, not "hasn't slept yet".
 - **`EPD_POWER_GATE` fails silently.** On any on-device anomaly, enumerate
   physical causes (jumpers, probe orientation, panel rail) first.
 
 ## Numbers are measured, not guessed
 
-- Estimates here have a poor track record — off by 3-10x both ways, once shipping
-  a watchdog boot-loop. **Label any figure you did not measure as an estimate**,
-  and **give every number a source you can point at**: a capture, a log line, a
-  timestamp. Never recorded? Say so — an unknown is data, an invented one is a
-  lie a logbook will hand back as fact, and that applies to prose as much as docs.
+- Estimates here have a poor track record — off by 3-10x both ways, once shipping a
+  watchdog boot-loop. **Label any figure you did not measure as an estimate**, and
+  **give every number a source you can point at**: a capture, a log line, a timestamp.
+  Never recorded? Say so, in prose as much as in docs — an unknown is data, an
+  invented one is a lie a logbook hands back as fact.
 - **With hardware attached this is a gate**: instrument new deadline-bound paths
   (task watchdog, EPD busy wait, battery budget) with `ms_now()` and measure
   before committing. Without the board, mark it unmeasured, as `docs/notes.md` does.
@@ -73,7 +72,8 @@ works too. Rationale, traps and the env list: `docs/build-system.md`. Two rules
 worth carrying everywhere: **`history` is pinned at flash offset 0x10000** (moving
 its start orphans years of archive), and **sensor/display selection lives in a
 tracked rig header** (`include/rigs/`, per env via `custom_rig`; options in
-`_template.h`). `include/local-secrets.h` is gitignored credentials only.
+`_template.h`). `include/local-secrets.h` is gitignored credentials only; an SSID
+is half a credential, so **redact network names** from tracked files and commits.
 
 ## Subsystem rules
 
