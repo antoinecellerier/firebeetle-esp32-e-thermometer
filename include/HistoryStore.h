@@ -114,6 +114,12 @@ uint8_t history_store_fault(void);
 uint16_t history_store_flash_format(void);  // on-flash format for FOREIGN_FORMAT
 
 // True when the store is usable (partition present and initialized).
+// Board family, e.g. "thermometer_c6". Lives here because the archive header
+// stamps it (and bounds it to 24 bytes), but it is board identity rather than
+// archive state — the DHCP hostname uses it too, so the router's device list
+// and a harvested image can never name the same board differently.
+const char *history_store_board_name(void);
+
 bool history_store_available(void);
 
 // Rebuild `out` (and `drift`, if non-null) from the newest base snapshot plus

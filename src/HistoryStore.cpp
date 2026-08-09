@@ -253,7 +253,7 @@ static bool part_erase(uint32_t off, size_t len)
 
 // --- identity ---------------------------------------------------------------
 
-static const char *board_name(void)
+const char *history_store_board_name(void)
 {
 #if defined(THERMOMETER_C6_BOARD)
   return "thermometer_c6";
@@ -359,7 +359,7 @@ static bool store_write_header(void)
   esp_chip_info(&ci);
   h.chip_model = (uint8_t)ci.model;
   h.chip_revision = (uint8_t)ci.revision;
-  copy_str(h.board, sizeof(h.board), board_name());
+  copy_str(h.board, sizeof(h.board), history_store_board_name());
   copy_str(h.panel, sizeof(h.panel), panel_name());
   copy_str(h.sensor, sizeof(h.sensor), sensor_name());
   copy_str(h.git_hash, sizeof(h.git_hash), GIT_HASH);

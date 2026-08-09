@@ -19,6 +19,7 @@
 #endif
 #ifndef DISABLE_WIFI
 #include "esp_wifi.h"
+#include "esp_mac.h"   // esp_efuse_mac_get_default, for the DHCP hostname
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
 #include "esp_event.h"
@@ -1012,6 +1013,31 @@ static bool wifi_driver_start()
   static esp_netif_t *sta_netif = nullptr;
   if (!sta_netif)
     sta_netif = esp_netif_create_default_wifi_sta();
+  if (sta_netif)
+  {
+    // Every ESP-IDF device ships DHCP hostname "espressif"
+    // (CONFIG_LWIP_LOCAL_HOSTNAME), so a household with several becomes
+    // espressif, espressif1, espressif2... in the router's device list and no
+    // row identifies anything. The MAC is the one identifier that is per-board,
+    // needs no configuration, and survives a rig change or a reflash.
+    // Set before the DHCP client starts, which is at association.
+    static char hostname[32];
+    uint8_t mac[6] = {};
+    // The STA MAC, not esp_efuse_mac_get_default(): the latter returns the
+    // EUI-64 base whose last three bytes are the ff:fe padding plus one shared
+    // OUI byte, so every board here would answer to the same name — measured,
+    // it produced "thermometer-c6-fffe75" on a board whose STA MAC ends 75:48:10.
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(hostname, sizeof(hostname), "%s-%02x%02x%02x",
+             history_store_board_name(), mac[3], mac[4], mac[5]);
+    // Underscores are legal in the archive header but not in a hostname
+    // (RFC 1123 allows letters, digits and hyphens), and resolvers differ on
+    // how forgiving they are.
+    for (char *p = hostname; *p; p++)
+      if (*p == '_') *p = '-';
+    esp_netif_set_hostname(sta_netif, hostname);
+    LOGI("WiFi: DHCP hostname %s", hostname);
+  }
   if (!sta_netif)
   {
     LOGI("WiFi setup failed: no STA netif");

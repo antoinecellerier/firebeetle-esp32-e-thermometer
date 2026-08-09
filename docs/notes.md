@@ -1206,6 +1206,48 @@ No firmware change can recover this. The site-side fix worth trying is a **stati
 reservation for the device on the router**, which keeps DHCP (so the multi-network
 behaviour still works elsewhere) and may skip the probe for a known lease. Untested.
 
+### The fix is a static DHCP lease, on the router (2026-08-09)
+
+Same board and build, only the router's lease type changed:
+
+| Lease | REQUEST -> ACK | total DHCP |
+|---|---|---|
+| dynamic | 2059, 2067, 2309, 2426, 2541 ms | ~2.4 s |
+| **static (`bail statique`, Freebox OS 4.12)** | **12, 13, 15, 27, 36 ms** | **~49 ms** |
+
+**~2.3 s of radio-on removed from every connect.** The whole connect drops from
+~2.7 s (0.3 s association + 2.4 s DHCP) to ~0.35 s. At the 65-80 mA of a live
+radio that is **~150-190 mC per resync, ~0.1 C/day at the ~1.5-day cadence —
+estimated**, durations times a measured current, never integrated. That is larger
+than the NTP term the budget currently carries, and larger than the ARP-check win
+in `62320af`. **Give every deployed board a static lease.**
+
+Mechanism, consistent with dnsmasq (which the Freebox ships, FS#18142): a
+`dhcp-host` entry short-circuits address selection and skips the probe. Note the
+probe cost lands at REQUEST here, where stock dnsmasq only pings at DISCOVER — so
+Free's build differs, or the delay is in their own naming/lease layer rather than
+in dnsmasq proper. Unresolved, and it no longer matters for the budget.
+
+Ruled out on hardware first, so nobody retries them:
+
+- **WiFi power save.** `esp_wifi_set_ps(WIFI_PS_NONE)` changed nothing.
+- **lwIP's fine timer.** `DHCP_FINE_TIMER_MSECS` is hardcoded 500 ms in `dhcp.h`
+  and was the leading hypothesis — wrong. It only sets the 500/1000/2000 ms retry
+  backoff that *follows* the server's silence.
+- **Duplicate DHCP hostnames.** Every ESP-IDF device ships `espressif`
+  (`CONFIG_LWIP_LOCAL_HOSTNAME`), and this LAN had five, which the Freebox had
+  disambiguated to `espressif1..4` — a tempting cause, since the `.home` DNS/DHCP
+  coupling is new in firmware 4.11.1 (FS#4079, closed 2026-05-20). Setting a
+  unique hostname changed nothing, and the router UI confirmed the new name had
+  actually registered, so this is a real negative rather than a test that missed.
+- **A server-side ARP probe before ACK**, my own hypothesis. RFC 2131 4.3.1 says
+  servers SHOULD NOT check at ACK time, and dnsmasq's `do_icmp_ping` is called
+  only under `case DHCPDISCOVER`. Disfavoured on the reading, though the static
+  lease result means *something* probe-shaped was happening.
+
+Unique DHCP hostnames shipped anyway (`10481f7` onwards): it costs nothing and
+five identical `espressif` rows in a router's device list name nothing.
+
 ### Deferred to the next PPK2 campaign
 
 Agreed 2026-08-09 to defer rather than drop. What to capture, so it does not have
