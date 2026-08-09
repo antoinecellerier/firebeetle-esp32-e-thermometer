@@ -1266,6 +1266,17 @@ to be re-derived:
 3. **One scan in isolation** (2501 ms at default dwell), to turn the duration
    table above into charge and fix the mC-per-second-of-radio constant that every
    estimate here leans on.
+4. **A resync with and without a static DHCP lease**, on the same rig and network.
+   Highest value of the four, because it also resolves a contradiction the budget
+   currently rests on: the NTP term is 117 mC over **1.8 s** (XIAO ePaper rig,
+   2026-07-26), which is shorter than the **2.4 s** of DHCP delay measured on this
+   network on 2026-08-09. Both cannot describe the same network. Either that rig
+   never paid this penalty — so boards behind this router are running worse than
+   the 2.12 C/day table says — or the 1.8 s bracket missed part of the exchange,
+   in which case the NTP term has been understated since it was written. The
+   static-lease saving is ~150-190 mC/resync either way; what is unresolved is
+   what fraction of the budget it represents (~5% conservative, ~10% under the
+   second reading).
 
 Until then the budget impact stands at: healthy network **-50 to -70 mC/day
 estimated** (~2% of a 2.12 C/day budget, since the resync term is only 3.5% of
