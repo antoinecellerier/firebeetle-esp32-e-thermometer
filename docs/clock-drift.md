@@ -667,9 +667,14 @@ of a boot loop.
 
 | Rig | Arm | Hash | Cadence | Ends |
 |---|---|---|---|---|
-| FireBeetle 2 E + BMP390L + GDEH0154Z90 | **1** | `1ea3cd7` | pinned: 1440 wakes/day, repaint every 60th (24/day) | day 14 → arm 2, repaint every 5th (288/day) |
-| XIAO C6 + Seeed hat (GDEW029I6FD) | **3** | `2fa3750` | vanilla, establishing a baseline correlation it never had | day 14 → arm 4, pinned |
+| FireBeetle 2 E + BMP390L + GDEH0154Z90 | **1** | `1ea3cd7` | pinned: 1440 wakes/day, repaint every 60th (24/day) | harvest → arm 2, repaint every 5th (288/day) |
+| XIAO C6 + Seeed hat (GDEW029I6FD) | **3** | `2fa3750` | vanilla, establishing a baseline correlation it never had | harvest → arm 4, pinned |
 | XIAO C6 + DESPI-C02 + GDEH0576T81 | **5** | `f5e1749` | vanilla control, unchanged throughout | — |
+
+**The harvest and crossover are one session, scheduled 2026-08-20** — day 15 from
+the flash, not the day 14 this section was drafted around. Harvesting costs a
+reset and the in-progress window either way, so the two arms that change cadence
+do it in the same session that reads them out. "Day 14" below means that session.
 
 All three pinned to a 12 h resync (`RESYNC_INTERVAL_MIN=43200`) for ~2 samples/day.
 The three hashes are docs-only apart; the firmware is identical (see
