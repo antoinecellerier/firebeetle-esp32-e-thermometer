@@ -5,9 +5,16 @@
 // rig header instead: see include/rigs/_template.h for the list of options, and
 // platformio.ini's custom_rig for how one is selected.
 
-// WiFi configuration
-#define MY_WIFI_SSID ""
-#define MY_WIFI_PASSWORD ""
+// WiFi networks, in any order. The device scans and joins the strongest one it
+// recognises, then remembers which worked so later resyncs skip the scan
+// (~2.5s of radio each, measured 2026-08-09). One entry is fine; an empty SSID
+// means "no WiFi configured". For several networks, backslash-continue:
+//
+//   #define MY_WIFI_NETWORKS(X)  \
+//     X("home",  "password1")    \
+//     X("cabin", "password2")
+#define MY_WIFI_NETWORKS(X) \
+  X("", "")
 
 // Example TZ formats are available at https://github.com/esp8266/Arduino/blob/master/cores/esp8266/TZ.h
 // The default value is set for Paris time zone with day light saving time

@@ -99,7 +99,7 @@ static void usb_service_window(void);
 // RtcHistory, RTC_HISTORY_VERSION and the self_addr scheme live in
 // include/RtcHistory.h so HistoryStore.cpp can serialize the same layout.
 // Bump RTC_STATE_VERSION when changing operational state variables below.
-#define RTC_STATE_VERSION   0xDA050008
+#define RTC_STATE_VERSION   0xDA050009
 
 // Initial min/max temperature sentinels (float).
 // Any real reading will replace these on first comparison.
@@ -326,6 +326,16 @@ RTC_DATA_ATTR uint8_t drift_ppm_count = 0;
 RTC_DATA_ATTR bool wifi_ok = false;
 RTC_DATA_ATTR bool ntp_synced = false;
 RTC_DATA_ATTR bool last_sensor_ok = true;
+
+// Which configured network worked last, so a resync can go straight at it and
+// skip the scan — 2501ms of radio at the IDF default dwell, measured on board 2
+// (2026-08-09), against a ~300ms association. Deliberately not a BSSID or a
+// channel: pinning either measured no faster than letting the driver find the
+// SSID, and leaving them free lets it pick a better AP in a multi-AP network.
+// A hint, not state: losing it to a panic or a reflash costs one extra scan,
+// which is why it is not mirrored to the flash archive.
+#define WIFI_NET_NONE 0xFF
+RTC_DATA_ATTR uint8_t wifi_last_net = WIFI_NET_NONE;
 // This wake only, so deliberately not RTC state: "the coprocessor handed up a
 // reading we could not use". It is the sole trigger for the recovery reload
 // below — every route to a coprocessor problem sets it, and a stale RTC flag in
@@ -861,22 +871,82 @@ void get_time(time_t *now, struct tm *nowtm)
 
 #ifndef DISABLE_WIFI
 // Connect to WiFi with timeout. Returns true on success.
+//
+// Two tiers, because a scan is expensive and an association is not (measured on
+// board 2, 2026-08-09): a scan is 2501ms of radio at the IDF default dwell,
+// while associating to a named SSID is ~300ms whether or not the channel and
+// BSSID are pinned. So the cheap path is not a cleverer association — it is not
+// scanning at all. wifi_last_net remembers which network worked, and only a
+// miss pays for a scan.
+//
+// What this must never become is a loop over the credential list: each failed
+// association is a full WIFI_TIMEOUT_MS of radio (~1.5C, docs/notes.md), so N
+// networks tried blindly is N times that. The scan exists to make sure exactly
+// one association is attempted.
 static const uint32_t WIFI_TIMEOUT_MS = 15000;
+// A hint that no longer holds should cost little before falling through to the
+// scan. Generous against a measured ~300ms association + ~3-4s DHCP.
+static const uint32_t WIFI_HINT_TIMEOUT_MS = 8000;
+// Enough for a dense band: 14 APs was the busiest scan seen on the bench. The
+// driver reports how many it found regardless, so an overflow is visible in the
+// log rather than silent.
+#define WIFI_SCAN_MAX_AP 32
+
+struct WifiNetwork { const char *ssid; const char *pass; };
+#define WIFI_NET_ENTRY(s, p) { s, p },
+static const WifiNetwork s_wifi_networks[] = { MY_WIFI_NETWORKS(WIFI_NET_ENTRY) };
+#undef WIFI_NET_ENTRY
+static const uint8_t s_wifi_net_count =
+    (uint8_t)(sizeof(s_wifi_networks) / sizeof(s_wifi_networks[0]));
+
+// An entry with an empty SSID is a placeholder, not a network — that is how
+// local-secrets-example.h ships, and how "no WiFi here" is expressed.
+static bool wifi_is_configured()
+{
+  for (uint8_t i = 0; i < s_wifi_net_count; i++)
+    if (s_wifi_networks[i].ssid[0])
+      return true;
+  return false;
+}
 
 static EventGroupHandle_t s_wifi_events;
 static esp_event_handler_instance_t s_wifi_handler, s_ip_handler;
 static volatile bool s_wifi_stopping = false;
 #define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAILED_BIT    BIT1
 
+// Why the disconnect happened, so the caller can tell "that AP is not here"
+// from "those credentials are wrong" — retrying the second burns radio and can
+// never succeed.
+static volatile int s_wifi_reason;
+
+static bool wifi_reason_is_terminal(int reason)
+{
+  switch (reason)
+  {
+    case WIFI_REASON_AUTH_FAIL:
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_NO_AP_FOUND:
+    case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
+    case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD:
+    case WIFI_REASON_NO_AP_FOUND_IN_RSSI_THRESHOLD:
+      return true;
+    default:
+      return false;  // transient: worth the retry the caller's budget allows
+  }
+}
+
+// No esp_wifi_connect() on STA_START: nothing is configured yet at that point,
+// and a station that is connecting makes esp_wifi_scan_start() return
+// ESP_ERR_WIFI_STATE, which would break the scan tier outright.
 static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
-  if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START)
-    esp_wifi_connect();
-  else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED)
+  if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED)
   {
-    // Keep retrying until the timeout in wifi_connect() expires
+    s_wifi_reason = ((wifi_event_sta_disconnected_t *)data)->reason;
     if (!s_wifi_stopping)
-      esp_wifi_connect();
+      xEventGroupSetBits(s_wifi_events, WIFI_FAILED_BIT);
   }
   else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP)
     xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);
@@ -903,7 +973,9 @@ static void wifi_disconnect()
   s_wifi_stopping = false;
 }
 
-static bool wifi_connect()
+// Bring the driver up without choosing a network: the credential goes in later,
+// once a tier has decided which one.
+static bool wifi_driver_start()
 {
   esp_err_t err = nvs_flash_init(); // esp_wifi_init() requires NVS
   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -957,25 +1029,161 @@ static bool wifi_connect()
   WIFI_TRY(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
                                                &wifi_event_handler, nullptr, &s_ip_handler));
 
-  wifi_config_t wcfg = {};
-  strncpy((char *)wcfg.sta.ssid, MY_WIFI_SSID, sizeof(wcfg.sta.ssid) - 1);
-  strncpy((char *)wcfg.sta.password, MY_WIFI_PASSWORD, sizeof(wcfg.sta.password) - 1);
   WIFI_TRY(esp_wifi_set_storage(WIFI_STORAGE_RAM)); // reconfigured every boot; skip NVS writes
   WIFI_TRY(esp_wifi_set_mode(WIFI_MODE_STA));
-  WIFI_TRY(esp_wifi_set_config(WIFI_IF_STA, &wcfg));
   WIFI_TRY(esp_wifi_start());
 #undef WIFI_TRY
-
-  LOGI("Waiting for WiFi");
-  EventBits_t bits = xEventGroupWaitBits(s_wifi_events, WIFI_CONNECTED_BIT,
-                                         pdFALSE, pdFALSE, pdMS_TO_TICKS(WIFI_TIMEOUT_MS));
-  if (!(bits & WIFI_CONNECTED_BIT))
-  {
-    LOGI("WiFi connection timed out after %u ms", (unsigned)WIFI_TIMEOUT_MS);
-    wifi_disconnect();
-    return false;
-  }
   return true;
+}
+
+// One network, to GOT_IP. Leaves the station idle on failure, so a scan can
+// follow — esp_wifi_scan_start() refuses while the station is connecting.
+static bool wifi_try_net(uint8_t idx, uint32_t timeout_ms)
+{
+  const WifiNetwork &net = s_wifi_networks[idx];
+  wifi_config_t wcfg = {};
+  strncpy((char *)wcfg.sta.ssid, net.ssid, sizeof(wcfg.sta.ssid) - 1);
+  strncpy((char *)wcfg.sta.password, net.pass, sizeof(wcfg.sta.password) - 1);
+  if (esp_wifi_set_config(WIFI_IF_STA, &wcfg) != ESP_OK)
+    return false;
+
+  const uint32_t deadline = ms_now() + timeout_ms;
+  for (;;)
+  {
+    xEventGroupClearBits(s_wifi_events, WIFI_CONNECTED_BIT | WIFI_FAILED_BIT);
+    s_wifi_reason = 0;
+    esp_wifi_connect();  // attempts once; retrying is on us (esp_wifi.h)
+
+    const uint32_t now = ms_now();
+    const uint32_t left = (now < deadline) ? (deadline - now) : 0;
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_events,
+                                           WIFI_CONNECTED_BIT | WIFI_FAILED_BIT,
+                                           pdFALSE, pdFALSE, pdMS_TO_TICKS(left));
+    if (bits & WIFI_CONNECTED_BIT)
+    {
+      wifi_last_net = idx;
+      LOGI("WiFi: connected to '%s'", net.ssid);
+      return true;
+    }
+    if (!(bits & WIFI_FAILED_BIT))
+    {
+      LOGI("WiFi: '%s' timed out after %ums", net.ssid, (unsigned)timeout_ms);
+      break;
+    }
+    if (wifi_reason_is_terminal(s_wifi_reason))
+    {
+      // Worth shouting about: wrong credentials look exactly like a missing AP
+      // on the panel, and no amount of retrying fixes them.
+      LOGI("WiFi: '%s' refused us (reason %d)%s", net.ssid, s_wifi_reason,
+           (s_wifi_reason == WIFI_REASON_AUTH_FAIL ||
+            s_wifi_reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT)
+               ? " — check the password in local-secrets.h" : "");
+      break;
+    }
+    if (ms_now() >= deadline)
+    {
+      LOGI("WiFi: '%s' gave up after %ums (last reason %d)", net.ssid,
+           (unsigned)timeout_ms, s_wifi_reason);
+      break;
+    }
+    LOGI("WiFi: '%s' disconnected (reason %d), retrying", net.ssid, s_wifi_reason);
+  }
+
+  esp_wifi_disconnect();
+  return false;
+}
+
+// One scan, then the strongest configured network in it. WIFI_NET_NONE if none
+// of ours showed up.
+static uint8_t wifi_scan_pick()
+{
+  wifi_scan_config_t sc = {};
+  sc.scan_type = WIFI_SCAN_TYPE_ACTIVE;
+
+  const uint32_t t0 = ms_now();
+  esp_err_t err = esp_wifi_scan_start(&sc, true);
+  const uint32_t scan_ms = ms_now() - t0;
+  if (err != ESP_OK)
+  {
+    LOGI("WiFi: scan failed after %ums (%s)", (unsigned)scan_ms, esp_err_to_name(err));
+    return WIFI_NET_NONE;
+  }
+
+  uint16_t found = 0;
+  esp_wifi_scan_get_ap_num(&found);
+  uint16_t take = (found > WIFI_SCAN_MAX_AP) ? WIFI_SCAN_MAX_AP : found;
+  static wifi_ap_record_t recs[WIFI_SCAN_MAX_AP];
+  // These records are heap-allocated by the driver and only these two calls
+  // free them — a scan whose results go unread leaks until the next deinit.
+  if (take)
+    esp_wifi_scan_get_ap_records(&take, recs);
+  else
+    esp_wifi_clear_ap_list();
+
+  uint8_t best = WIFI_NET_NONE;
+  int8_t best_rssi = INT8_MIN;
+  for (uint16_t i = 0; i < take; i++)
+    for (uint8_t n = 0; n < s_wifi_net_count; n++)
+    {
+      if (!s_wifi_networks[n].ssid[0]) continue;
+      if (strcmp((const char *)recs[i].ssid, s_wifi_networks[n].ssid) != 0) continue;
+      if (recs[i].rssi > best_rssi) { best_rssi = recs[i].rssi; best = n; }
+    }
+
+  if (best == WIFI_NET_NONE)
+    LOGI("WiFi: scan %ums, %u APs, none of ours", (unsigned)scan_ms, (unsigned)take);
+  else
+    LOGI("WiFi: scan %ums, %u APs, best '%s' at %d dBm", (unsigned)scan_ms,
+         (unsigned)take, s_wifi_networks[best].ssid, (int)best_rssi);
+  return best;
+}
+
+static bool wifi_connect()
+{
+  if (!wifi_is_configured())
+    return false;
+  if (!wifi_driver_start())
+    return false;
+
+  const uint32_t started = ms_now();
+
+  // Tier 0: whatever worked last, no scan.
+  if (wifi_last_net < s_wifi_net_count && s_wifi_networks[wifi_last_net].ssid[0])
+  {
+    if (wifi_try_net(wifi_last_net, WIFI_HINT_TIMEOUT_MS))
+      return true;
+    LOGI("WiFi: '%s' did not answer; falling back to a scan",
+         s_wifi_networks[wifi_last_net].ssid);
+  }
+
+  // Tier 1: one scan, one association.
+  uint8_t pick = wifi_scan_pick();
+
+  // Tier 2: nothing of ours in the scan. Scans are noisy here — consecutive
+  // identical scans returned between 5 and 14 APs (2026-08-09) — so an empty
+  // result is not proof a network is gone. With a single network configured,
+  // try it anyway: that is exactly what the firmware did before this change, so
+  // it cannot regress, and it costs one association rather than N. With several,
+  // guessing is the expensive pattern this design exists to avoid; leave
+  // wifi_last_net alone so the next wake still opens with tier 0.
+  if (pick == WIFI_NET_NONE)
+  {
+    if (s_wifi_net_count != 1 || wifi_last_net == 0)
+    {
+      wifi_disconnect();
+      return false;
+    }
+    LOGI("WiFi: scan found nothing; trying the only configured network anyway");
+    pick = 0;
+  }
+
+  const uint32_t elapsed = ms_now() - started;
+  const uint32_t left = (elapsed < WIFI_TIMEOUT_MS) ? (WIFI_TIMEOUT_MS - elapsed) : 1000;
+  if (wifi_try_net(pick, left))
+    return true;
+
+  wifi_disconnect();
+  return false;
 }
 
 // One-shot SNTP sync: fresh instance, wait for a genuinely new time response.
@@ -1639,12 +1847,12 @@ void on_first_boot()
   set_status_led(rgb(255, 255, 0));
   sleep_ms(100);
 #else
-  #if !(defined(MY_WIFI_SSID) && defined(MY_WIFI_PASSWORD))
-    #error "MY_WIFI_SSID and/or MY_WIFI_PASSWORD are not defined. See local-secrets.h to fix."
+  #if !defined(MY_WIFI_NETWORKS)
+    #error "MY_WIFI_NETWORKS is not defined. See local-secrets.h (and local-secrets-example.h) to fix."
   #endif
-  if (*MY_WIFI_SSID == 0)
+  if (!wifi_is_configured())
   {
-    LOGI("Missing WiFi SSID. Will assume network connectivity isn't possible. See local-secrets.h to fix.");
+    LOGI("No WiFi network configured. Will assume network connectivity isn't possible. See local-secrets.h to fix.");
     return;
   }
 
@@ -2126,6 +2334,7 @@ static void reset_rtc_state()
   wifi_ok = false;
   ntp_synced = false;
   last_sensor_ok = true;
+  wifi_last_net = WIFI_NET_NONE;
 #ifdef HAS_USB_SERVICE_WINDOW
   usb_observe_left = USB_WINDOW_OBSERVE_CYCLES;
   usb_host_seen = false;
