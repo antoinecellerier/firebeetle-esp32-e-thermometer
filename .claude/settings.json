@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(/**/*local-secrets-password*)"
+    ]
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "c=$(jq -r '.tool_input.command // empty'); case \"$c\" in *local-secrets-password*|*local-secrets\\**) echo 'Blocked: names local-secrets-password.h (the WiFi password), or a glob that expands onto it. The build reads that header itself; local-secrets.h is fine to read and edit.' >&2; exit 2;; esac; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

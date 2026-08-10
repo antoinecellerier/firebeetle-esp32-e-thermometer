@@ -1,1 +1,2 @@
-local-secrets.h
+local-secrets*.h
+!local-secrets-example.h
