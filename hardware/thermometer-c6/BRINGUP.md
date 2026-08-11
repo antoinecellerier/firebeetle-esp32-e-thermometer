@@ -295,6 +295,19 @@ a different panel at once. What that unblocks, and the one thing it does not:
       at PON vs mid-drive on the same refresh, and T81 vs a 200×200 panel on the
       same board and bridges. Measure *after* the LUT question is settled — a
       colder waveform loads the charge pump differently.
+      **DONE 2026-08-11 at the pre-regulation rails, and the answer is no sag.**
+      Measured at **PREVGH (C5) +20.031 V** and **PREVGL (C11) −19.380 V**, means
+      repeating to 20 mV / 73 mV across 4-5 refreshes, held flat for the whole
+      ~3.03 s drive of the **LUT 235 waveform** — the heaviest this panel can be
+      given, and the reason the cold arm was used rather than a room-temperature
+      one. Factory JP2 0.47Ω + JP5 10µH, nothing reworked. Full numbers and the
+      shape (step to +19.885 V, climb to +20.08 V within ~300 ms, then flat) in
+      `docs/notes.md`. **This is what the rev B deletion of L2/R15/R16 was
+      gated on**; with three controller families also working on the universal
+      config, JP3+JP6 is margin nothing has needed. Two limits: measured *ahead
+      of* the panel's internal regulation, so C1/C2 themselves are still
+      formally unmeasured; and 10 Hz sees nothing under ~100 ms, so "no sag"
+      means none on a 100 ms timescale.
 - [ ] EPD_VCC ramp with the R24/C28 soft-start on a scope (no brownout at
       gate-on). [README PPK2 items]
 - [x] **3V3 sag during the ~465mA refresh peak** — measured via the BOD

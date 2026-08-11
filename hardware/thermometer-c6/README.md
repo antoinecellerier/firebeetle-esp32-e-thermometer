@@ -503,6 +503,16 @@ assembly-price page. The order dialog remains ground truth at order time.
   Opportunity cost: the board loses the GDEH0576T81-datasheet booster
   option (47µH + 2.2Ω RESE) and the 3Ω SSD16xx leg — fine iff the panel
   choice is final; the copper jumpers keep a hand-solder escape hatch.
+  **The evidence this was waiting on landed 2026-08-11: no sag.** PREVGH
+  (C5) +20.031 V and PREVGL (C11) −19.380 V, means repeating to 20 mV and
+  73 mV across refreshes, both flat for the whole ~3.03 s drive of the
+  **LUT 235 waveform** — the heaviest the T81 can be given — on the factory
+  JP2/JP5 bridges with nothing reworked. A pump short of the load would
+  decay across that window; neither rail does. With GDEM0154I61,
+  GDEY0213M21 and now the T81 all working on the universal config, the
+  datasheet pair is margin nothing has needed. Numbers and the two limits
+  (measured ahead of the panel's internal regulation; 10 Hz sees nothing
+  under ~100 ms) in `../../docs/notes.md`.
 - **MBR0530 → B5819W (C8598) confirmed-Basic swap: −~€2.75/order.** Same
   SOD-123 package, 40V/1A vs 30V/0.5A. Verified 2026-07-23 via the JLC
   part API: **Basic tier, 621k stock, $0.029** (MBR0530 C5204746 confirmed
