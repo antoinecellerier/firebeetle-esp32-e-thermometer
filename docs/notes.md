@@ -1415,3 +1415,50 @@ Deployed on battery there is no host and no charger, so the offset should mostly
 vanish — but "should" is doing work there, and the Phase 3 self-heat item still
 has no equilibrium number. `vbus_present()` (`src/Thermometer.cpp:1670`) already
 exists and is the obvious gate. Decide it with a number, not with this paragraph.
+
+## First power figures for the deployment configuration (2026-08-11)
+
+Rev A **board 2** + BMP581 + GDEH0576T81, `thermometer_c6_release`, rig
+`revA-bigscreen`, build `2f22620`, **no build flags** — production-identical.
+PPK2 sourcing **4200 mV at J1** through the Dupont-into-JST harness, `JP1`
+untouched, battery out, USB out. So these are `@4V2 bat` figures with Q6 and the
+MCP73831 VBAT-pin leakage inside the measurement by construction.
+
+**No `-DPPK2_DEBUG`, deliberately.** With no digital leads there is nothing to
+read the markers, while `ppk2_selftest()` costs ~40 ms of awake time on every
+boot (ungated) and the archive flush adds a 3×50 ms D1 preamble — several
+percent of a wake, on the very figures being recorded. `ppk2.py` fell back to
+current-derived regions and said so. The contrast makes that harmless here:
+~20 µA asleep against ~16 mA awake and ~50 mA through the boot. The cost is that
+the **~0.04 mC journal append cannot be separated from the refresh** without D1;
+that still needs a marker session.
+
+### Capture 1 — 600 s, board still shedding USB heat
+
+| Quantity | Value | n |
+|---|---|---|
+| Wake + refresh | **35.93 mC** over 2.250 s (35.76–36.15, spread 1.1%) | 7 |
+| Sleep floor | ~21.3 µA (19.5–22.3) — **not settled** | 8 |
+| Power-on boot | **583.0 mC** over 11.751 s | 1 |
+
+The awake spans are 2.250 s against a ~1.94 s panel refresh measured the same
+day, so the render is ~86% of the wake and the remaining ~0.3 s covers the
+sensor read, the archive and startup.
+
+**Every 60 s LP poll woke the CPU and rendered.** The two 117.8 s sleeps are the
+only polls where the 0.1 °C threshold was not met. That is the interesting
+result, and it is about cadence rather than about any single event: while the
+room (or the board) is moving through 0.1 °C per minute, this rig spends
+**35.93 mC per minute**. Sustained for an hour that is **~2.15 C** — measured
+per-event cost at an observed cadence, extrapolated across the hour, against a
+whole-day budget of ~2.0 C on board 1. An hour of thermal transient can cost a
+day. This is the empirical case for rate-limiting refreshes during noisy periods,
+which had been sitting on the pending list as a good idea with nothing behind it.
+
+**583 mC to cold-boot** is ~16 full refreshes in one event, and nothing in this
+logbook had a number for it. It is paid on true power loss — a battery swap, or
+a PPK2 output that has been off — not on any wake, so it does not enter the daily
+budget. It does mean a bench habit of power-cycling between captures is not free.
+
+Still open after this capture: a **settled** floor, and a **non-refresh wake**
+charge — every wake here rendered, so there is no sample of one yet.
