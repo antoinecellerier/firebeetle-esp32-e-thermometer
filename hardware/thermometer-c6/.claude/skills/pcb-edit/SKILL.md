@@ -105,7 +105,7 @@ x, y = rel(pad.GetPosition())    # nm -> board-mm, origin removed
 `generator/pcb.py` env interface: `PCB_NO_ROUTES=1` (authored copper only),
 `PCB_OUT_DIR=<dir>` (render target), `FAB_STAMP="<hash> <date>"` (silk stamp).
 
-Toolchain present: `kicad-cli` 10.0.4, the `pcbnew` python module, `inkscape`,
+Toolchain present: `kicad-cli` 10.x, the `pcbnew` python module, `inkscape`,
 `convert`/`magick`, `freecad`/`freecadcmd` (lowercase), `pdftoppm`, `gs`.
 Absent: `rsvg-convert`, `openscad`, `zip` (use `python3 -m zipfile`).
 
@@ -129,7 +129,12 @@ board renders.
 
 ## Reviewing visual changes
 
-After a silk or placement change: `make pdf`, then crop each zone with
-`pdftoppm -r 200 -png -x/-y/-W/-H` (px = mm × 200/25.4; origins and sizes are in
-`layout.ZONES`), Read the PNGs, and iterate until clean. A render you have not
-looked at is not a review.
+Silk and placement are **board** properties, so render the board: `make pcb-img`.
+Crop from board coordinates, Read the PNGs, and iterate until clean.
+
+`make pdf` is the *schematic* export, and `layout.ZONES` are schematic sheet
+zones — that recipe (`pdftoppm -r 200 -png -x/-y/-W/-H`, px = mm × 200/25.4,
+origins and sizes from `layout.ZONES`) reviews a schematic change, not a silk or
+placement one.
+
+Either way: a render you have not looked at is not a review.

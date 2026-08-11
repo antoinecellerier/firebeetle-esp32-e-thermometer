@@ -107,6 +107,11 @@ with re-routing +3V3's elbow to free XTAL (high-confidence 12→11), one cluster
 per `make route`, the workflow the NE-gate harvest already used.
 
 ## Reproduce
+
+`make route` is retired — it aborts on the `HAND_ROUTED` sentinel. Reproducing
+this needs `FORCE_REROUTE=1`, which **overwrites `generator/pcb_routes.py`**,
+i.e. destroys the board's copper. Throwaway worktree only.
+
 ```
 make route                                    # greedy baseline: 12, byte-identical
 python3 generator/pathfind.py --iters 40      # Stage 1 (authored immovable)

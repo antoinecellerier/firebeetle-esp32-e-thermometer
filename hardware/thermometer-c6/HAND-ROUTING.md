@@ -2,7 +2,10 @@
 
 The generated `thermometer-c6.kicad_pcb` is never hand-edited. All GUI work
 happens on a copy; results flow back into `generator/pcb_layout.py` and are
-re-rendered. Worklist: `out/stragglers.txt` (12 terminals as of 2026-07-11).
+re-rendered. Worklist: whatever `verify/drc_summary.py --gate` and
+`verify/hand_diff.py` report. (It used to be `out/stragglers.txt`, but that file
+is written only by the retired `make route`, and the board has been
+0-unconnected since the J4 fanout harvest.)
 
 **Division of labour:** steps 1–2 (and 4's GUI half) are the human part.
 Steps 3, 5, 6 and the PLACE mirroring are mechanical — tell Claude which
@@ -43,15 +46,16 @@ since that means un-harvested GUI edits; `make hand FORCE=1` discards them.
 
 ## 2. Route in the GUI
 
-- Targets: the terminals in `out/stragglers.txt`. Ignore GND ratsnest —
+- Targets: whatever the gate reports unrouted. Ignore GND ratsnest —
   it waits for the M6 pour.
 - Route the NE-gate cluster (`EPD_CS`/`EPD_DC`/`EPD_RST`/`EPD_BUSY`/
   `~EPD_VPP`) in one sitting: the five contend for the same gate, partial
   harvests there invalidate each other.
-- You may rip and re-route existing *routed* copper freely (it is
-  regenerated every `make route` anyway). Treat *authored* copper as
-  expensive to move (see `verify/net.py NET` — authored islands are listed
-  with their `pcb_layout.py` line numbers).
+- You may rip and re-route existing copper, but nothing regenerates it: since
+  M5 `pcb_routes.py` **is** the copper, so anything you rip has to come back
+  through the step 3 harvest. Treat *authored* copper as expensive to move (see
+  `verify/net.py NET` — authored islands are listed with their `pcb_layout.py`
+  line numbers).
 
 ## 3. Harvest tracks/vias back into the generator
 
