@@ -1,6 +1,6 @@
 A low power FireBeetle ESP32-E based thermometer with an ePaper display
 
-![Assembled first prototype](docs/first-prototype.jpg)
+<img src="docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg" width="600" />
 
 See [docs/wiring.md](docs/wiring.md) for wiring information.
 
@@ -83,3 +83,15 @@ The DESPI-C02's boost converter leaks ~534 µA in deep sleep, which an FDN340P P
 ## Battery
 - Current builds: PR502535 single-cell LiPo pouch, 400 mAh https://www.gotronic.fr/art-accu-lipo-3-7-vcc-400-mah-pr502535-5812.htm
 - Original prototype: RS Pro 18650 26H Li-ion, 2600 mAh https://fr.rs-online.com/web/p/batteries-taille-speciale/1449406/
+
+## Prototypes in action
+
+### 2026 - ultra low power prototypes
+Seed Xiao C6, BMP581, GDEH0576T81 & 400mAH battery
+
+![Seeed Xiao C6, BMP581 & GDEH0576T81 (2026)](docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg)
+
+### 2021 - first prototype
+Firebeetle ESP32-E, DS18B20, GDEW0213M21 & 2600mAh battery
+
+![Assembled first prototype (2021)](docs/first-prototype.jpg)
