@@ -1892,9 +1892,13 @@ stands.
 
 Textbook case of the rule in CLAUDE.md — a true average of the wrong thing.
 The 15 s resync override exists to make resyncs frequent enough to measure, and
-it silently changed *which DHCP path they take*. **Untested**, and cheap to
-settle: read the Freebox's lease duration, then capture one resync after a gap
-longer than it.
+it silently changed *which DHCP path they take*.
+
+**Settled from configuration, 2026-08-11: the Freebox lease is 12 hours.** The
+resync cadence starts at 1.5 days and adapts toward 28
+(`RESYNC_INTERVAL_MIN`/`MAX`), so the lease has always expired before the board
+reconnects. The full-DHCP path is not merely the common case in deployment, it
+is effectively the only one, and no 12-hour capture is needed to say so.
 
 Three caveats, because the headline rests on a rate:
 
