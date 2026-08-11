@@ -55,36 +55,36 @@ For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran
   interface with the Good Display booster on-board and P-FET-gated, USB-C charging,
   an LDO 3.3 V rail, a GPIO-switched battery divider and a 32.768 kHz crystal.
   Schematic, PCB and rationale: [hardware/thermometer-c6/](hardware/thermometer-c6/README.md)
-- Firebeetle ESP32-E https://wiki.dfrobot.com/FireBeetle_Board_ESP32_E_SKU_DFR0654
+- Seeed Studio XIAO ESP32-C6 https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/ **start with this**
+- (Early 2021 prototype) Firebeetle ESP32-E https://wiki.dfrobot.com/FireBeetle_Board_ESP32_E_SKU_DFR0654
   - ESP32 datasheet https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf
   - ESP32-WROOM-32E datasheet  https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32e_esp32-wroom-32ue_datasheet_en.pdf
   - TP4056 battery charger IC (onboard) https://dlnmh9ip6v2uc.cloudfront.net/datasheets/Prototyping/TP4056.pdf https://www.best-microcontroller-projects.com/tp4056.html
-- Seeed Studio XIAO ESP32-C6 https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/
 
 - ESP32 getting started https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html
 - ESP32 power consumption https://diyi0t.com/reduce-the-esp32-power-consumption/
 
 ## Temperature sensor (multiple options)
-- DS18B20-PAR OneWire interface
-  - datasheet https://datasheets.maximintegrated.com/en/ds/DS18B20-PAR.pdf
 - BMP390L I2C interface:
   - datasheet https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp390-ds002.pdf
   - breakout board https://wiki.dfrobot.com/Fermion_BMP390L_Digital_Barometric_Pressure_Sensor_SKU_SEN0423
 - BMP581 / BMP585 I2C interface (Bosch next-gen pressure sensors, ~0.5 µA deep-standby)
-  - BMP581 https://www.bosch-sensortec.com/products/pressure-sensors/bmp581/
+  - BMP581 https://www.bosch-sensortec.com/products/pressure-sensors/bmp581/ **start with this**
   - BMP585 https://www.bosch-sensortec.com/products/pressure-sensors/bmp585/
   - Fermion breakouts: SEN0667 (BMP581) https://wiki.dfrobot.com/sen0667/ , SEN0666 (BMP585) https://wiki.dfrobot.com/sen0666/
+- (Early 2021 prototype) DS18B20-PAR OneWire interface
+  - datasheet https://datasheets.maximintegrated.com/en/ds/DS18B20-PAR.pdf
 
 ## Display (multiple options)
-- Adafruit 1.54" Tri-Color eInk / ePaper 200x200 Display with SRAM - SSD1681 Driver
-https://www.adafruit.com/product/4868
-https://learn.adafruit.com/adafruit-1-54-eink-display-breakouts?view=all
-  - uses Good Display GDEH0154Z90 https://www.good-display.com/product/285.html
 - Good Display GDEW0154M09 black and white, 200x200, 1.54" fast full refresh https://www.good-display.com/product/206.html
 - Good Display GDEW0213M21 black and white, 212x104, 2.13" DES screen https://www.good-display.com/product/354.html
 - Good Display GDEW029I6FD black and white flex, 296x128, 2.9" (UC8151D, partial updates) https://www.good-display.com/product/209.html
 - Good Display GDEM0154I61 black and white flex, 200x200, 1.54" (driven via GDEY0154D67 SSD1681 driver) https://www.good-display.com/product/535.html
-- Good Display GDEH0576T81 black and white, 920x680, 5.76" HD (SSD2677, partial updates) https://www.good-display.com/product/702.html
+- Good Display GDEH0576T81 black and white, 920x680, 5.76" HD (SSD2677, partial updates) https://www.good-display.com/product/702.html **start with this**
+- (Early 2021 prototype) Adafruit 1.54" Tri-Color eInk / ePaper 200x200 Display with SRAM - SSD1681 Driver
+https://www.adafruit.com/product/4868
+https://learn.adafruit.com/adafruit-1-54-eink-display-breakouts?view=all
+  - uses Good Display GDEH0154Z90 https://www.good-display.com/product/285.html
 
 Good Display panels are driven through one of two adapters (same Good Display reference booster on both — panel compatibility notes in [docs/wiring.md](docs/wiring.md)):
 - Good Display DESPI-C02 (switchable RESE 0.47/3 Ω) https://www.good-display.com/product/516.html
