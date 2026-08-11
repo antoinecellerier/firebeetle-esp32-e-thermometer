@@ -907,7 +907,10 @@ Caveats that now outweigh the electronics:
 - **Usable window**: the 3800/3700 mV thresholds are buck-era and at face
   value strand ~25% of capacity; the Phase 3 sag measurement re-deriving
   them toward ~3.4–3.5 V is effectively a +30% battery-life lever in a
-  config constant.
+  config constant. **Done 2026-07-31 (`1e1048e`)**: the BOD probe measured
+  ~300 mV droop at the refresh peak and the custom board's thresholds are
+  now 3550/3500 mV. The XIAO keeps 3800/3700 — different rail, different
+  cliff.
 - **LEDs**: `DISABLE_LEDS` was deliberately left off (wake blinks = the
   only observability with serial dark), so every wake-tier charge above
   includes LED burn; the floor does not (LED dark in sleep). When the
