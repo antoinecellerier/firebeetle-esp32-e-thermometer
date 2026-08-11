@@ -69,9 +69,11 @@ For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran
   - datasheet https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp390-ds002.pdf
   - breakout board https://wiki.dfrobot.com/Fermion_BMP390L_Digital_Barometric_Pressure_Sensor_SKU_SEN0423
 - BMP581 / BMP585 I2C interface (Bosch next-gen pressure sensors, ~0.5 µA deep-standby)
-  - BMP581 https://www.bosch-sensortec.com/products/pressure-sensors/bmp581/ **start with this**
+  - BMP581 https://www.bosch-sensortec.com/products/pressure-sensors/bmp581/
   - BMP585 https://www.bosch-sensortec.com/products/pressure-sensors/bmp585/
-  - Fermion breakouts: SEN0667 (BMP581) https://wiki.dfrobot.com/sen0667/ , SEN0666 (BMP585) https://wiki.dfrobot.com/sen0666/
+  - Fermion breakouts:
+    - SEN0667 (BMP581) https://wiki.dfrobot.com/sen0667/ **start with this**
+    - SEN0666 (BMP585) https://wiki.dfrobot.com/sen0666/
 - (Early 2021 prototype) DS18B20-PAR OneWire interface
   - datasheet https://datasheets.maximintegrated.com/en/ds/DS18B20-PAR.pdf
 
@@ -88,7 +90,7 @@ https://learn.adafruit.com/adafruit-1-54-eink-display-breakouts?view=all
 
 Good Display panels are driven through one of two adapters (same Good Display reference booster on both — panel compatibility notes in [docs/wiring.md](docs/wiring.md)):
 - Good Display DESPI-C02 (switchable RESE 0.47/3 Ω) https://www.good-display.com/product/516.html
-- Seeed ePaper Driver Board for XIAO (fixed RESE 0.47 Ω, ETA9740 charger — see gotcha above) https://www.seeedstudio.com/ePaper-breakout-Board-for-XIAO-V2-p-6374.html — wiki: https://wiki.seeedstudio.com/xiao_eink_expansion_board_v2/
+- Seeed ePaper Driver Board for XIAO (fixed RESE 0.47 Ω, ETA9740 charger — see gotcha above) https://www.seeedstudio.com/ePaper-breakout-Board-for-XIAO-V2-p-6374.html — wiki: https://wiki.seeedstudio.com/xiao_eink_expansion_board_v2/ **start with this**
 
 The DESPI-C02's boost converter leaks ~534 µA in deep sleep, which an FDN340P P-channel MOSFET on the adapter's 3.3 V line eliminates; the Seeed board's ungated standby measured only ~9 µA, so it runs without a gate.
 
