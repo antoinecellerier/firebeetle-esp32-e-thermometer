@@ -86,11 +86,20 @@ struct DisplayStats {
   bool dummy_sensor;   // true if USE_DUMMY_SENSOR is defined
   bool mock_data;      // true if MOCK_DISPLAY_DATA is defined
   bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
+  // The three flags below make the DEBUG badge decodable. power_efficient is a
+  // disjunction — serial on, short sleep, PPK2, a resync override, a refresh
+  // override — and a bare "! DEBUG" cannot say which fired. Sleep shows as the
+  // badge's own <n>s, these three carry tokens, so a suffix-free "! DEBUG 60s"
+  // can only mean serial. Each names a term big enough to invalidate a
+  // harvested figure on its own.
   bool ppk2_instrumented; // PPK2_DEBUG: the build drives marker GPIOs, and pays
                           // for them — an ungated ~40ms selftest every boot plus
-                          // a 3x50ms preamble on archive flushes. Every charge
-                          // figure it produces is inflated, so it gets its own
-                          // badge rather than hiding inside the generic DEBUG one.
+                          // a 3x50ms preamble on archive flushes.
+  bool resync_overridden; // RESYNC_INTERVAL_MIN: 1.5-4.5 C per attempt on a
+                          // cadence measured in minutes rather than days.
+  bool refresh_overridden; // REFRESH_EVERY_N_WAKES / DISPLAY_TEMP_DELTA: the
+                           // repaint cadence no longer tracks the room, and a
+                           // refresh is the dominant event on a typical day.
   uint8_t experiment_arm; // EXPERIMENT_ARM: nonzero means this device is running a
                           // pinned-cadence bench arm, not field behaviour. Same value
                           // is journaled per drift record, so screen and archive agree.

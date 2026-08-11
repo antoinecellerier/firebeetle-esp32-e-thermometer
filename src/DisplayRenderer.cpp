@@ -1192,12 +1192,17 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/DUMMY" : "! DUMMY");
     if (stats.mock_data)
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/MOCK" : "! MOCK");
-    // Distinct from the generic DEBUG flag because it says something the others
-    // do not: this build's own instrumentation is on the trace. A capture
-    // harvested from it reads high, so a photo of the panel has to be able to
-    // disqualify the number.
+    // The three below name which term of power_efficient fired. Without them a
+    // bare "! DEBUG 60s" covers everything from "serial is on" to "this build
+    // resyncs every 15 minutes", and a photo of the panel cannot tell a
+    // harvested figure apart from a field one. With them, sleep shows as <n>s
+    // and a suffix-free badge can only mean serial.
     if (stats.ppk2_instrumented)
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/PPK2" : "! PPK2");
+    if (stats.resync_overridden)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/RESYNC" : "! RESYNC");
+    if (stats.refresh_overridden)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/REFRESH" : "! REFRESH");
     if (pos)
       snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
   }

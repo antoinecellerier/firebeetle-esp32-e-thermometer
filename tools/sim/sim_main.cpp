@@ -230,6 +230,24 @@ int main(int argc, char **argv)
                       now, &nowtm, ppk2_stats);
     save_and_convert(cfg.name, "_ppk2", canvas);
 
+    // Scenario 7d: every lab flag at once, on the drift base. Not a build
+    // anyone would flash — it is the width test. The lab token can never be
+    // dropped to the overflow marker, so it is the one thing that can push the
+    // rest of the status line off a 200x200, and adding flags to it is exactly
+    // what makes that possible. If this renders, no realistic combination bites.
+    canvas.fillScreen(0xFFFF);
+    DisplayStats labmax_stats = drift_stats;
+    labmax_stats.power_efficient = false;
+    labmax_stats.ppk2_instrumented = true;
+    labmax_stats.resync_overridden = true;
+    labmax_stats.refresh_overridden = true;
+    labmax_stats.dummy_sensor = true;
+    labmax_stats.mock_data = true;
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, labmax_stats);
+    save_and_convert(cfg.name, "_labmax", canvas);
+
     // Scenario 8: resync failing right now — two attempts lost in a row, so
     // the clock has been free-running since it was last set 14d ago.
     canvas.fillScreen(0xFFFF);
