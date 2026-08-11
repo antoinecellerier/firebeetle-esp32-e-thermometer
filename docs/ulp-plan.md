@@ -1,5 +1,12 @@
 # ULP Power Optimisation Plan
 
+> **Implemented — and Phase 2's hardware RTC I2C path was not the one taken.**
+> The ESP32-E ships HULP bit-bang I2C on GPIO0/GPIO4; the C6 uses its LP core
+> with hardware LP I2C. The "Open questions / things to verify before starting"
+> at the end are all answered by the shipped code. Kept as the pre-implementation
+> record — for what runs today see [`.claude/rules/ulp.md`](../.claude/rules/ulp.md),
+> and for what it cost, the power logbook in [`docs/notes.md`](notes.md).
+
 ## Motivation
 
 From the first 8.5-day run (notes.md), average consumption was ~12.6 mA, broken down as:

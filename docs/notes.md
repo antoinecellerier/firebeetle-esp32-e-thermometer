@@ -227,7 +227,7 @@ Setup: Bare XIAO ESP32C6, no BMP390L connected. USB CDC OFF. LP core running in 
 - 1-minute average: ~90 µA (dominated by HP wakeups every 30s)
 - In production with BMP390L I2C mode + 60s LP timer, HP wakes only on ≥0.1°C temp change
 
-### Pending: BMP390L mode testing
+### Pending: BMP390L mode testing (never done — the C6 shipped on BMP58x)
 - Awaiting soldering station to connect BMP390L to C6 board
 - Switch `ulp/lp_core_main.c` from `#define LP_CORE_IDLE` to BMP390L I2C mode
 - Verify LP I2C reads work (GPIO6=SDA, GPIO7=SCL, LP_I2C_NUM_0)
@@ -235,6 +235,12 @@ Setup: Bare XIAO ESP32C6, no BMP390L connected. USB CDC OFF. LP core running in 
 - Tune TEMP_DELTA_THRESHOLD (currently 20 ≈ 0.1°C) and SLEEP_INTERVAL_S (60s for production)
 
 ## Pending: BMP58x mode testing (April 2026)
+
+> **Superseded — hardware validation happened 2026-04-21** (the measured section
+> at the end of this block), then again post-migration in the July sections
+> below. The unticked boxes here were either answered there or absorbed into the
+> 2026-07-26 budget; the ESP32-E comparison figures predate the FDN340P gate.
+> Kept as the record of what was asked before the board was wired.
 
 Current C6 production setup uses BMP58x (BMP581/BMP585) via LP core, not BMP390L.
 Code complete; hardware validation queued.

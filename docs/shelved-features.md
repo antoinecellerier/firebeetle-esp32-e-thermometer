@@ -1,5 +1,11 @@
 # Shelved feature branches
 
+> **All of this predates the ESP-IDF migration.** The branch below was built on
+> the retired pioarduino platform fork, so its build requirements describe a
+> toolchain the project no longer has — reviving it means re-porting to
+> `framework=espidf` first. For the credential-storage half of the problem, the
+> current design is [`docs/wifi-provisioning.md`](wifi-provisioning.md).
+
 ## `feature/dpp-provisioning` — Wi-Fi Easy Connect (DPP)
 
 QR-code-based WiFi provisioning: on first boot with no credentials, the device

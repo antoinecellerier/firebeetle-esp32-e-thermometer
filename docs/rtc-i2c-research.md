@@ -1,5 +1,10 @@
 # ESP32 RTC I2C + ULP Coprocessor: Hardware Research
 
+> **Outcome: the hardware RTC I2C controller was abandoned.** The ESP32-E ships
+> HULP's bit-bang I2C instead — Step 3 of the "Recommended Fix Sequence" below.
+> The register-level findings still describe the silicon accurately; the fix
+> sequence describes a path not taken.
+
 Research document for debugging ULP I2C communication with BMP390L sensor.
 All findings sourced from manufacturer datasheets, SDK headers, and reference
 implementations. Sources cited inline.

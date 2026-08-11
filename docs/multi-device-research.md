@@ -1,5 +1,9 @@
 # Multi-device temperature reporting — research notes
 
+> **Status: research only, never implemented.** No multi-device code exists. The
+> protocol comparison below is a paper exercise against the firmware as it stood
+> when written.
+
 Goal: multiple ESP32 sensor nodes in different rooms / outside, reporting to the
 FireBeetle ESP32-E (with EPD) as central display.
 
