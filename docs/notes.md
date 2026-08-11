@@ -1859,3 +1859,44 @@ retries on association. A phone hotspot's DHCP is not the house router's, so
 with it the 1.8 s vs 2.4 s NTP contradiction) is untouched. Redo the successful
 resync on the home AP; it needs no cached path, just a second resync, so it can
 ride along with any later session.
+
+### Static DHCP lease, integrated at last (2026-08-11)
+
+Deferred item 4, closed. Same board, build and rig as the captures above
+(`cdf9365`, house AP, PPK2 @4V2 at J1), **only the Freebox lease type changed**;
+operator confirmed the dynamic run took an address from the dynamic range, so a
+stale lease cannot have made the two runs identical.
+
+| | n | charge | duration | vs static |
+|---|---|---|---|---|
+| **static lease** | 10 | 248.3 mC (sd 48.3) | 5.45 s | — |
+| dynamic, fast path | 5 | 277.4 mC (sd 25.4) | 5.97 s | +29 mC |
+| **dynamic, full DHCP** | 2 | **399.0 mC** | **9.00 s** | **+151 mC** |
+| cold boot | 1 each | 433.8 -> 627.9 mC | 6.75 -> 11.75 s | +194 mC |
+
+**The estimate had the mechanism right and the frequency wrong.** The
+~150-190 mC/resync figure matches the full-DHCP events exactly (+150.7 mC), and
+their 2.25 s duration excess matches the 2.06-2.54 s server stall traced with
+lwIP debug on 2026-08-09 — an independent confirmation, by integration rather
+than by duration x current. But **only 2 of 7 dynamic resyncs took that path**;
+the rest reconnected without a full exchange at +29 mC. So the average saving is
+**+64 mC/resync**, not +150-190.
+
+Budget impact therefore **~0.04 C/day at the ~1.5-day cadence, ~2% of 2.12 C/day**
+— half the ~0.1 C/day previously carried. **Still worth doing**: no downside, and
+it removes the worst case rather than just the mean.
+
+Three caveats, because the headline rests on a rate:
+
+- **n=2 on the expensive path.** The 29% share is a small-sample estimate of the
+  very thing the average depends on; it could plausibly be 15% or 50%.
+- The naive A-vs-B mean difference is +63.9 mC at **2.3 sigma** — marginal alone.
+  The bimodal split is what makes it interpretable, and it was found *in* the
+  data, so it wants confirming rather than trusting.
+- Resyncs are intrinsically variable (sd 48 mC on the static arm, 19% CV), which
+  is why n=10 was needed to see a ~64 mC effect at all.
+
+**A successful resync on the deployment network is 248 mC** (static lease,
+n=10). That supersedes the 117 mC/1.8 s XIAO ePaper figure for anything behind
+this router, and resolves the 1.8 s vs 2.4 s contradiction in the obvious
+direction: that rig never paid this server's stall.
