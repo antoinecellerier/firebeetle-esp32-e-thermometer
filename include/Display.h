@@ -2,6 +2,7 @@
 
 #include <time.h>
 #include <stdint.h>
+#include "device-config.h"          // USE_*, which PANEL_HAS_LUT_TEMPERATURE tests
 
 // A single temperature reading with timestamp, for the 24h sparkline.
 // uint32_t (not time_t) + packed = 6 bytes per entry, so 320 entries fit in
@@ -88,10 +89,10 @@ struct DisplayStats {
   bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
   // The three flags below make the DEBUG badge decodable. power_efficient is a
   // disjunction — serial on, short sleep, PPK2, a resync override, a refresh
-  // override — and a bare "! DEBUG" cannot say which fired. Sleep shows as the
-  // badge's own <n>s, these three carry tokens, so a suffix-free "! DEBUG 60s"
-  // can only mean serial. Each names a term big enough to invalidate a
-  // harvested figure on its own.
+  // override, a pinned waveform — and a bare "! DEBUG" cannot say which fired.
+  // Sleep shows as the badge's own <n>s, the rest carry tokens, so a
+  // suffix-free "! DEBUG 60s" can only mean serial. Each names a term big
+  // enough to invalidate a harvested figure on its own.
   bool ppk2_instrumented; // PPK2_DEBUG: the build drives marker GPIOs, and pays
                           // for them — an ungated ~40ms selftest every boot plus
                           // a 3x50ms preamble on archive flushes.
@@ -100,6 +101,10 @@ struct DisplayStats {
   bool refresh_overridden; // REFRESH_EVERY_N_WAKES / DISPLAY_TEMP_DELTA: the
                            // repaint cadence no longer tracks the room, and a
                            // refresh is the dominant event on a typical day.
+  bool lut_overridden; // FORCE_LUT_TEMPERATURE: the waveform is pinned to a
+                       // temperature the room is not at. Worth ~2x the panel's
+                       // busy time between the coldest and warmest bands, so it
+                       // moves both refresh duration and refresh charge.
   uint8_t experiment_arm; // EXPERIMENT_ARM: nonzero means this device is running a
                           // pinned-cadence bench arm, not field behaviour. Same value
                           // is journaled per drift record, so screen and archive agree.

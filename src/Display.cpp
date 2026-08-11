@@ -450,6 +450,17 @@ uint8_t display_fault()
 #endif
 }
 
+// PANEL_HAS_LUT_TEMPERATURE is decided in Display.h, which is included before
+// the USE_* selection arrives. Re-test it here, where every include has been
+// seen: if the two disagree the calls below silently become no-ops and the
+// panel keeps the driver's fallback — which looks correct at room temperature
+// and wrong only in the cold, so nothing would ever surface it. Measured, not
+// hypothetical: it is how the first build of this failed.
+#if defined(USE_576_T81) && !defined(DISABLE_PANEL_LUT_TEMPERATURE) \
+    && !defined(PANEL_HAS_LUT_TEMPERATURE)
+#error "PANEL_HAS_LUT_TEMPERATURE is unset for the T81 — Display.h saw no USE_* selection (include order)"
+#endif
+
 void display_set_lut_temperature(float celsius)
 {
 #if !defined(DISABLE_DISPLAY) && defined(PANEL_HAS_LUT_TEMPERATURE)
