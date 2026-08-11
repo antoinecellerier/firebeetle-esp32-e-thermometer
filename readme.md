@@ -49,13 +49,15 @@ For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran
 
 # Hardware
 
+Looking to replicate this? Easy to start with options are tagged **[start with this]** below.
+
 ## Controller boards
 - thermometer-c6 — the custom board this project builds towards, replacing the
   dev-board rigs below: ESP32-C6-MINI-1 + BMP581, a universal 24-pin FPC panel
   interface with the Good Display booster on-board and P-FET-gated, USB-C charging,
   an LDO 3.3 V rail, a GPIO-switched battery divider and a 32.768 kHz crystal.
   Schematic, PCB and rationale: [hardware/thermometer-c6/](hardware/thermometer-c6/README.md)
-- Seeed Studio XIAO ESP32-C6 https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/ **start with this**
+- Seeed Studio XIAO ESP32-C6 https://wiki.seeedstudio.com/xiao_esp32c6_getting_started/ **[start with this]**
 - (Early 2021 prototype) Firebeetle ESP32-E https://wiki.dfrobot.com/FireBeetle_Board_ESP32_E_SKU_DFR0654
   - ESP32 datasheet https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf
   - ESP32-WROOM-32E datasheet  https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32e_esp32-wroom-32ue_datasheet_en.pdf
@@ -72,7 +74,7 @@ For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran
   - BMP581 https://www.bosch-sensortec.com/products/pressure-sensors/bmp581/
   - BMP585 https://www.bosch-sensortec.com/products/pressure-sensors/bmp585/
   - Fermion breakouts:
-    - SEN0667 (BMP581) https://wiki.dfrobot.com/sen0667/ **start with this**
+    - SEN0667 (BMP581) https://wiki.dfrobot.com/sen0667/ **[start with this]**
     - SEN0666 (BMP585) https://wiki.dfrobot.com/sen0666/
 - (Early 2021 prototype) DS18B20-PAR OneWire interface
   - datasheet https://datasheets.maximintegrated.com/en/ds/DS18B20-PAR.pdf
@@ -82,7 +84,7 @@ For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran
 - Good Display GDEW0213M21 black and white, 212x104, 2.13" DES screen https://www.good-display.com/product/354.html
 - Good Display GDEW029I6FD black and white flex, 296x128, 2.9" (UC8151D, partial updates) https://www.good-display.com/product/209.html
 - Good Display GDEM0154I61 black and white flex, 200x200, 1.54" (driven via GDEY0154D67 SSD1681 driver) https://www.good-display.com/product/535.html
-- Good Display GDEH0576T81 black and white, 920x680, 5.76" HD (SSD2677, partial updates) https://www.good-display.com/product/702.html **start with this**
+- Good Display GDEH0576T81 black and white, 920x680, 5.76" HD (SSD2677, partial updates) https://www.good-display.com/product/702.html **[start with this]**
 - (Early 2021 prototype) Adafruit 1.54" Tri-Color eInk / ePaper 200x200 Display with SRAM - SSD1681 Driver
 https://www.adafruit.com/product/4868
 https://learn.adafruit.com/adafruit-1-54-eink-display-breakouts?view=all
@@ -90,7 +92,7 @@ https://learn.adafruit.com/adafruit-1-54-eink-display-breakouts?view=all
 
 Good Display panels are driven through one of two adapters (same Good Display reference booster on both — panel compatibility notes in [docs/wiring.md](docs/wiring.md)):
 - Good Display DESPI-C02 (switchable RESE 0.47/3 Ω) https://www.good-display.com/product/516.html
-- Seeed ePaper Driver Board for XIAO (fixed RESE 0.47 Ω, ETA9740 charger — see gotcha above) https://www.seeedstudio.com/ePaper-breakout-Board-for-XIAO-V2-p-6374.html — wiki: https://wiki.seeedstudio.com/xiao_eink_expansion_board_v2/ **start with this**
+- Seeed ePaper Driver Board for XIAO (fixed RESE 0.47 Ω, ETA9740 charger — see gotcha above) https://www.seeedstudio.com/ePaper-breakout-Board-for-XIAO-V2-p-6374.html — wiki: https://wiki.seeedstudio.com/xiao_eink_expansion_board_v2/ **[start with this]**
 
 The DESPI-C02's boost converter leaks ~534 µA in deep sleep, which an FDN340P P-channel MOSFET on the adapter's 3.3 V line eliminates; the Seeed board's ungated standby measured only ~9 µA, so it runs without a gate.
 
@@ -99,7 +101,7 @@ The DESPI-C02's boost converter leaks ~534 µA in deep sleep, which an FDN340P P
 - AO3400A N-channel MOSFET (SOT-23) — switches the XIAO C6 battery voltage divider so it doesn't draw ~10 µA continuously
 
 ## Battery
-- Current builds: PR502535 single-cell LiPo pouch, 400 mAh https://www.gotronic.fr/art-accu-lipo-3-7-vcc-400-mah-pr502535-5812.htm
+- Current builds: PR502535 single-cell LiPo pouch, 400 mAh https://www.gotronic.fr/art-accu-lipo-3-7-vcc-400-mah-pr502535-5812.htm **[start with this or equivalent]**
 - Original prototype: RS Pro 18650 26H Li-ion, 2600 mAh https://fr.rs-online.com/web/p/batteries-taille-speciale/1449406/
 
 ## Prototypes in action
