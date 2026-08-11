@@ -16,6 +16,12 @@ Figures are config-specific — panel, sensor, and board all matter.
 | Firebeetle ESP32-E + BMP390L sensor + GDEH0154Z90 ePaper via DESPI-C02 (FDN340P power gate) | 19–20 µA | ULP bit-bang I2C every 5 s, avg ≈0 | ~112 mC (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
 | XIAO ESP32-C6 + BMP581 sensor + GDEH0576T81 ePaper via DESPI-C02 (FDN340P power gate) | 15.5–16 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC (was ~93–95 mC before light sleep) |
 | XIAO ESP32-C6 + BMP581 sensor + GDEW029I6FD ePaper via Seeed XIAO ePaper Driver Board (no power gate) | ~25 µA (+~9 µA ungated shield standby) | LP core I2C every 60 s: ~1 mA × 3 ms | ~12.2 mC |
+| **thermometer-c6 rev A** + BMP581 sensor + GDEM0154I61 ePaper (on-board gated booster) | 18.3 µA † | LP core I2C every 60 s | ~24.3 mC † |
+
+† Measured at **4.2 V into the battery input**, through the reverse-battery FET and
+the charger — the full deployment path, not a 3.3 V rail like the rows above, so it
+is not directly comparable to them. The refresh figure includes LED wake blinks,
+which were deliberately left on for observability.
 
 The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display
 refresh is the dominant event on a typical day. At one refresh per hour it adds
@@ -39,6 +45,11 @@ For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran
 # Hardware
 
 ## Controller boards
+- **thermometer-c6** — the custom board this project builds towards, replacing the
+  dev-board rigs below: ESP32-C6-MINI-1 + BMP581, a universal 24-pin FPC panel
+  interface with the Good Display booster on-board and P-FET-gated, USB-C charging,
+  an LDO 3.3 V rail, a GPIO-switched battery divider and a 32.768 kHz crystal.
+  Schematic, PCB and rationale: [hardware/thermometer-c6/](hardware/thermometer-c6/README.md)
 - Firebeetle ESP32-E https://wiki.dfrobot.com/FireBeetle_Board_ESP32_E_SKU_DFR0654
   - ESP32 datasheet https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf
   - ESP32-WROOM-32E datasheet  https://www.espressif.com/sites/default/files/documentation/esp32-wroom-32e_esp32-wroom-32ue_datasheet_en.pdf
