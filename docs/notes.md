@@ -1716,3 +1716,45 @@ stops refreshing shows a stale frame, which on a thermometer is indistinguishabl
 from a working one. `DISPLAY_FAULT_BUSY_IDLE` plus the LED pattern is what made
 it an event rather than a silence, and `BUSY_IDLE` rather than `BUSY_STUCK`
 distinguished "never woke" from "hung".
+
+## The boost rails do not sag under the worst-case waveform (2026-08-11)
+
+Board 2 + T81, `thermometer_c6_debug` at `1531d1d`,
+`-DFORCE_LUT_TEMPERATURE=8 -DREFRESH_EVERY_N_WAKES=1 -DDISPLAY_TEMP_DELTA=99`,
+i.e. LUT 235 — the **longest drive phase this panel can produce**, ~3.03 s
+against ~1.93 s at 241, and so the heaviest demand available. Factory bridge
+config: JP2 0.47 Ω + JP5 10 µH, nothing reworked. UT61E+ logging at 10.1 Hz via
+`dmm-tools`, black lead on GND, autorange.
+
+| rail | pad | plateau mean | spread across refreshes | p-p within a plateau |
+|---|---|---|---|---|
+| PREVGH | C5 | **+20.031 V** | 20 mV (n=4) | ~200 mV |
+| PREVGL | C11 | **−19.380 V** | 73 mV (n=5) | 183-350 mV |
+
+**The shape is the result, not the magnitude.** PREVGH steps to +19.885 V,
+climbs to ~+20.08 V within ~300 ms and holds flat for the remaining ~2.6 s;
+PREVGL does the same to −19.47 V. A pump that could not meet the load would
+decay across the window. Neither does, at the worst waveform. Between refreshes
+the rails fall away slowly (PREVGL still at −6 to −11 V several seconds later),
+which is the gated panel plus 4.7 µF discharging.
+
+**This is the evidence the rev B deletion of L2/R15/R16 was waiting on**
+(`hardware/thermometer-c6/README.md`, rev B candidates): the universal config
+delivers full, stable rails on the deployment panel at its heaviest waveform,
+and three controller families now work on it unmodified. The datasheet pair
+(JP3 2.2 Ω + JP6 47 µH) is margin nothing has needed.
+
+Two limits to carry with it:
+
+- **Measured at PREVGH/PREVGL, not VGH/VGL.** These are the boost and inverting
+  pump outputs *ahead of* the panel's internal regulation, which is the better
+  place to catch a weak supply — but C1/C2 remain formally unmeasured.
+- **10 Hz sees nothing under ~100 ms.** A dip at drive onset would be invisible.
+  Sustained sag is what the datasheet config exists to prevent, and there is
+  none, but "no sag" here means none on a 100 ms timescale.
+
+The ~200 mV within-plateau spread is ripple and range resolution rather than
+drift — the mean repeats to 20 mV across separate refreshes. Unrelated to the
+sag question but still live: C1/C2 are 4.7 µF **25 V** parts sitting near 20 V
+for seconds at a time, deep into Class II derating, and did not get the 50 V
+upgrade that C17/PREVGH received in `e6828d8`.
