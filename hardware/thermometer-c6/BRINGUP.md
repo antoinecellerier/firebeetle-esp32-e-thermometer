@@ -126,13 +126,19 @@ board 5. Board 1 is the first-article board for Phases 0–2.
       + contact mates with J1's `+`-marked pad. Shell orientation also
       matches the existing devices' pigtails.
 
-**Phase 0 complete on board 1 (2026-07-29).** Boards 2–4 still owe the
-quick per-board pass after first-article Phases 0–2. Note board 2 has since
-been powered, flashed and run repeatedly as the bench board (2026-08-05 and
-2026-08-09, `docs/history-store-validation.md`) **without that pass being
-recorded** — so either it happened undocumented or it was skipped in practice.
-Boards 3 and 4 are genuinely untouched, and board 4's flagged U5 placement skew
-is still waiting on the Phase 2 BMP581 detect.
+**Phase 0 complete on board 1 (2026-07-29).**
+
+**Board 2 skipped the pre-flash steps entirely, deliberately** — board 1 had
+passed cleanly, so the first article was taken as evidence for the batch rather
+than each board being re-proven. It worked on first power and has been the bench
+board since (2026-08-05 and 2026-08-09, `docs/history-store-validation.md`).
+That is the precedent for boards 3–4: a clean first article earns the rest of
+the batch a straight-to-flash.
+
+**Board 4 is the exception to that.** Its U5 placement skew was flagged at
+X-ray, which is exactly the kind of per-board defect the first article cannot
+speak for — run it through the Phase 2 BMP581 detect early rather than
+discovering it as a sensor fault later.
 
 ## Phase 1 — first power (battery + panel absent)
 
