@@ -2,7 +2,7 @@ A low power ESP32 based thermometer with an ePaper display
 
 <img src="docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg" width="600" />
 
-See [docs/wiring.md](docs/wiring.md) for wiring information.
+See [docs/wiring.md](docs/wiring.md) for prototype wiring information and [hardware/thermometer-c6/](hardware/thermometer-c6/README.md) for the custom board.
 
 # Power consumption
 

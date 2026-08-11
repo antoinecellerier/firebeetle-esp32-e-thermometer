@@ -172,9 +172,11 @@ MTMS
 3V3
 BOOT
 
+![Seeed Xiao C6, BMP581 & GDEH0576T81 (2026)](docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg)
+
 # Seeed ePaper Driver Board for XIAO vs DESPI-C02 (compatibility notes)
 
-Researched 2026-07-04, not yet hardware-tested. The Seeed board
+Researched 2026-07-04. The Seeed board
 ([wiki](https://wiki.seeedstudio.com/xiao_eink_expansion_board_v2/), schematic in
 `hardware/Seeed ePaper Driver Board for XIAO SCH v1.0.pdf`) is a faithful copy of
 Good Display's reference booster, so Good Display panels are what it's implicitly
