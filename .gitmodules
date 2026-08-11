@@ -5,9 +5,9 @@
 	ignore = untracked
 [submodule "components/gxepd2/upstream"]
 	path = components/gxepd2/upstream
-	url = https://github.com/antoinecellerier/GxEPD2
+	url = https://github.com/ZinggJM/GxEPD2
 	shallow = true
-	branch = add-gdeh0576t81-support
+	branch = master
 [submodule "components/hulp/upstream"]
 	path = components/hulp/upstream
 	url = https://github.com/antoinecellerier/HULP

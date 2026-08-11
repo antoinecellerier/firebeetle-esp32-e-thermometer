@@ -1,5 +1,5 @@
-# GxEPD2 from the pinned upstream submodule (fork with GDEH0576T81 support,
-# no local copy). All panel headers ship (GxEPD2_BW.h includes every one), but
+# GxEPD2 from the pinned upstream submodule (no local copy). All panel headers
+# ship (GxEPD2_BW.h includes every one), but
 # only the base driver + the panels selectable in local-secrets.h compile —
 # add the matching .cpp here when enabling a new USE_* panel.
 if(NOT EXISTS ${COMPONENT_DIR}/upstream/src/GxEPD2_EPD.cpp)
@@ -13,7 +13,7 @@ set(srcs
     "upstream/src/epd/GxEPD2_290_I6FD.cpp"
     "upstream/src/epd3c/GxEPD2_154_Z90c.cpp"
     "upstream/src/gdey/GxEPD2_154_GDEY0154D67.cpp"
-    "upstream/src/gdem/GxEPD2_576_GDEH0576T81.cpp"
+    "upstream/src/gdeh/GxEPD2_576_GDEH0576T81.cpp"
 )
 
 idf_component_register(

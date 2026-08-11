@@ -15,7 +15,11 @@
 
 #if defined(USE_576_T81)
 #define DISPLAY_HAS_RED  0
-#define DISPLAY_ROTATION 0
+// 2, not 0: the panel's own scan/shift direction (PSR) puts the FPC-relative
+// origin diagonally opposite where the dashboard wants it, so the frame lands
+// 180° out. setRotation is a GFX coordinate transform, so correcting it here is
+// free — no extra buffer, no extra refresh time (measured: unchanged ms/slices).
+#define DISPLAY_ROTATION 2
 #elif defined(USE_290_I6FD)
 #define DISPLAY_HAS_RED  0
 #define DISPLAY_ROTATION 1
