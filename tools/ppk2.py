@@ -1244,12 +1244,23 @@ def decode_raw(args):
     calibration off an attached PPK2, which then needs --mode to match how the
     capture was taken, since the conversion is mode-dependent.
     """
-    cached = _cache_read(args.path, max(1, args.decimate or 1))
+    # Same choice the capture path makes, for the same reason: decoding is what
+    # runs out of memory, and an hour of raw is 360M samples. Deriving it here
+    # rather than trusting `--decimate` fixes two failures that looked unrelated.
+    # A bare `raw` used to decode undecimated and needed ~10 GB — it is the one
+    # command likely to be pointed at the largest file on disk. And because the
+    # cache is keyed on N, it also missed the cache the capture had just written,
+    # so the reward for surviving was a ten-minute re-decode of data already on
+    # disk. File size is exact here (4 bytes/sample), where the capture path can
+    # only estimate from --seconds.
+    dec_n = _choose_decimation(os.path.getsize(args.path) // 4, args.decimate)
+
+    cached = _cache_read(args.path, dec_n)
     if cached is not None:
         samples, digital_raw = cached
-        dt = max(1, args.decimate or 1) / PPK2_SAMPLE_HZ
+        dt = dec_n / PPK2_SAMPLE_HZ
         print(f"decoded from cache: {len(samples)} points ({len(samples)*dt:.1f} s)"
-              + (f", decimated {args.decimate}x" if (args.decimate or 1) > 1 else ""))
+              + (f", decimated {dec_n}x" if dec_n > 1 else ""))
         return _trace_from_samples(samples, digital_raw, None, dt)
 
     side = args.path + ".json"
@@ -1269,7 +1280,7 @@ def decode_raw(args):
               f"conversion; pass --mode/--vdd if the capture differed")
     samples = array("f")
     digital_raw = []
-    dec = _Decimator(args.decimate or 1)
+    dec = _Decimator(dec_n)
     done = 0
     with open(args.path, "rb") as fh:
         while True:
