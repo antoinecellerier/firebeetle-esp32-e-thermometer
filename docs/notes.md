@@ -748,7 +748,9 @@ numbers across; every term below except one is now measured on this rig.
   ([`docs/clock-drift.md`](clock-drift.md)), and the adaptive rule converges where drift over the
   interval hits the 60 s threshold. Where there is no WiFi it is worse than
   projected, not better: failed attempts re-arm with no backoff, so it stays pinned
-  at 1 day forever. This weakens the quantitative case for the FC-135 crystal on
+  at 1 day forever — **fixed 2026-08-09 (`2fccb5f`)**: failures now escalate the
+  retry interval, but only when the network is absent. This weakens the
+  quantitative case for the FC-135 crystal on
   `thermometer_c6` — the stock RC already buys ~1.5 days.
 - **One-time archive format: ~2.2 s / ~76 mC.** Derived by differencing two boots
   that differ only in whether the archive had to format — not measured directly, and
