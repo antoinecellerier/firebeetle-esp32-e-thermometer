@@ -1659,25 +1659,32 @@ exists for. Fixed by including `device-config.h` from `Display.h`, plus an
 guard and the panel selection disagree. Flash grew 342 B, which is the code
 being compiled rather than optimised away.
 
-### Open: the second refresh fails with nothing on J1
+### The second refresh failed because the patch dropped a delay the panel needs
 
-Reproduced at both LUTs, so it is not the waveform: render 1 completes normally,
-render 2 returns in ~790 ms with **0 busy slices**, and `DISPLAY_FAULT_BUSY_IDLE`
-latches with refreshes suspended (the LED pattern and `! NOSCR` carry it — the
-degradation is visible, as designed).
+The first form of `setTemperature()` returned early when an external value was
+set, skipping `_writeCommand(0x40); delay(5); _readData();` — not just a dropped
+readback but **5 ms and a command removed from the middle of `_InitDisplay()`**,
+between `0xE9` (PST) and the `0xE0`/`0xE6`/`0xA5` LUT activation. The first
+refresh after a reset still worked; every later one found the panel
+unresponsive, BUSY never asserting. Not power-related: it reproduced identically
+with a battery fitted and USB in.
 
-Conditions: USB only, **no battery, J1 open** (the PPK2 harness had been pulled;
-it was unpowered with its output off before that, so J1 was an open circuit
-either way). The same cadence flags ran 21-25 consecutive renders earlier the
-same day **with a battery fitted**.
+Controls, board 2 + T81, battery + USB:
 
-Hypothesis, **not yet confirmed**: the panel rail. `revA-bigscreen.h:23` sets
-`EPD_POWER_GATE`, so the rail is switched off every sleep and must come back
-each wake, and the gate-on inrush measured today is 571 mA for ~70 µs — the
-largest current the board draws. With no battery the only source is a
-current-limited USB path (`hardware/thermometer-c6/README.md:33`: without load
-sharing, no-battery USB operation is capped at the 100 mA charge current), so
-the first refresh runs on charged bulk caps and the next finds them flat.
-`BUSY_IDLE` rather than `BUSY_STUCK` says the panel never woke, not that it
-hung. Test: refit the battery and re-run. If it still faults, the cause is the
-2026-08-11 LUT change and bisects against `3c91183` in one flash.
+| build | renders | faults |
+|---|---|---|
+| `-DDISABLE_PANEL_LUT_TEMPERATURE` (calls compiled out) | **20** | **0** |
+| `-DFORCE_LUT_TEMPERATURE=25` or `=-5` (first patch) | 1 | latched on the 2nd |
+| `-DFORCE_LUT_TEMPERATURE=-5` (corrected patch) | **20** | **0**, at 443 slices |
+
+Fixed by keeping the read and its delay unconditionally and substituting only
+the value, which also shrank the patch: `_get_lut_temperature()` now differs
+from stock by three lines and the command sequence on the wire is identical.
+**An e-paper init sequence's delays are part of the protocol — removing a read
+removes its timing too.**
+
+The fault was diagnosable in minutes only because it was visible: a panel that
+stops refreshing shows a stale frame, which on a thermometer is indistinguishable
+from a working one. `DISPLAY_FAULT_BUSY_IDLE` plus the LED pattern is what made
+it an event rather than a silence, and `BUSY_IDLE` rather than `BUSY_STUCK`
+distinguished "never woke" from "hung".
