@@ -64,6 +64,8 @@ import sys
 import time
 from array import array
 
+import numpy as np
+
 import artifacts
 
 # The PPK2 samples at a fixed 100 kSps. ppk2_api does not expose this, so it is
@@ -1130,29 +1132,84 @@ class _Decimator:
                 self.cnt = 0
 
 
+class _NpDecimator:
+    """Vectorized _Decimator. Same contract: mean per group of n, per-channel
+    majority on the logic lanes, raw peak tracked before averaging, and a
+    trailing partial group carried rather than emitted.
+
+    numpy sums pairwise where the reference accumulates sequentially, so the
+    means are not guaranteed identical to the last ULP. In practice they are:
+    the float32 output absorbs the difference, and tools/test_ppk2_decode.py
+    measures max rel = 0 against the reference on every capture to hand. Treat
+    that as measured rather than guaranteed — it is the one place in this
+    pipeline where a difference would be legitimate.
+    """
+
+    def __init__(self, n):
+        self.n = max(1, int(n))
+        self.peak = 0.0
+        self._vbuf = np.empty(0, dtype=np.float64)
+        self._bbuf = np.empty(0, dtype=np.uint8)
+
+    def feed(self, vals, bits, out_samples, out_bits):
+        if vals.size:
+            self.peak = max(self.peak, float(vals.max()))
+        if self._vbuf.size:
+            vals = np.concatenate((self._vbuf, vals))
+            bits = np.concatenate((self._bbuf, bits))
+        n = self.n
+        if n == 1:
+            out_samples.frombytes(vals.astype(np.float32).tobytes())
+            out_bits.extend(bits.tolist())
+            self._vbuf = np.empty(0, dtype=np.float64)
+            self._bbuf = np.empty(0, dtype=np.uint8)
+            return
+        k = vals.size // n
+        keep = k * n
+        self._vbuf, self._bbuf = vals[keep:].copy(), bits[keep:].copy()
+        if not k:
+            return
+        out_samples.frombytes(
+            vals[:keep].reshape(k, n).mean(axis=1).astype(np.float32).tobytes())
+        b = bits[:keep].reshape(k, n)
+        half = n // 2
+        mask = np.zeros(k, dtype=np.uint8)
+        for c in range(8):
+            mask |= (((b >> c) & 1).sum(axis=1) > half).astype(np.uint8) << c
+        out_bits.extend(mask.tolist())
+
+
 def _trace_from_samples(samples, digital_raw, ppk, dt=None):
-    if digital_raw and ppk is not None:
-        chans = ppk.digital_channels(digital_raw)
-    elif digital_raw:
-        # From cache: bits already unpacked per channel by the writer's encoding.
-        chans = [[(b >> c) & 1 for b in digital_raw] for c in range(8)]
-    else:
-        chans = []
-    digital = {i: array("b", chans[i]) for i in range(len(chans)) if any(chans[i])}
-    t_arr, cum = array("d"), array("d")
-    acc, power_on, prev = 0.0, None, None
+    """Build a Trace. Vectorized: this runs over every decoded point, and at
+    20M of them the per-sample Python version was the bulk of a decode and
+    allocated two array("d") of 160 MB each on top of the samples.
+
+    Both sources of digital data unpack the same way here — ppk2_api's own
+    digital_channels() is an 8x per-sample append loop and produces exactly this.
+    """
     if dt is None:
         dt = 1.0 / PPK2_SAMPLE_HZ
-    for i in range(len(samples)):
-        ua = samples[i]
-        if prev is not None:
-            acc += 0.5 * (prev + ua) * dt
-        t_arr.append(i * dt)
-        cum.append(acc)
-        if power_on is None and ua > POWER_ON_UA:
-            power_on = i
-        prev = ua
-    return Trace(t_arr, samples, cum, digital, power_on or 0)
+    cur = np.frombuffer(samples, dtype=np.float32).astype(np.float64)
+
+    digital = {}
+    if digital_raw:
+        bits = np.asarray(digital_raw, dtype=np.uint8)
+        for c in range(8):
+            lane = (bits >> c) & 1
+            if lane.any():
+                digital[c] = lane.astype(np.int8)
+
+    t_arr = np.arange(cur.size, dtype=np.float64) * dt
+    if cur.size:
+        # Trapezoid, cumulative: cum[0] = 0 and cum[i] = cum[i-1] + mean*dt.
+        cum = np.empty(cur.size, dtype=np.float64)
+        cum[0] = 0.0
+        np.cumsum(0.5 * (cur[:-1] + cur[1:]) * dt, out=cum[1:])
+    else:
+        cum = np.empty(0, dtype=np.float64)
+    hot = np.flatnonzero(cur > POWER_ON_UA)
+    power_on = int(hot[0]) if hot.size else 0
+    return Trace(t_arr, cur, cum, digital, power_on)
 
 
 def _offline_decoder(meta):
@@ -1187,6 +1244,202 @@ def _offline_decoder(meta):
     d.after_spike = 0
     d.remainder = {"sequence": b"", "len": 0}
     return d
+
+
+def _ema_seed(x, alpha):
+    """EMA state after consuming `x`, with the unknown initial condition decayed.
+
+    The residual weight on whatever the filter held before `x` is
+    (1-alpha)**len(x); at alpha=0.06 and 512 samples that is ~2e-14, i.e. below
+    float64 resolution for these magnitudes. So a replay can start anywhere as
+    long as it is handed a long enough run-up.
+    """
+    w = (1.0 - alpha) ** np.arange(len(x) - 1, -1, -1)
+    return float(alpha * np.dot(w, x))
+
+
+# Run-up handed to each sequential replay so its EMA state is converged, and the
+# window kept after a range change to cover the library's after_spike countdown
+# (spike_filter_samples=3, plus slack).
+_REPLAY_SEED = 512
+_REPLAY_TAIL = 8
+
+
+class _NpDecoder:
+    """Vectorized stand-in for ppk2_api's get_samples(). Exact, not approximate.
+
+    The conversion is a per-sample polynomial and would vectorize trivially, but
+    get_adc_result() also carries a spike filter: two IIR rolling averages plus
+    prev_range/after_spike state, where the output is *replaced* by a rolling
+    average for a few samples after every measurement-range change. That is a
+    sequential recurrence, and pretending otherwise would quietly change every
+    number this project has recorded.
+
+    So: vectorize the polynomial for all samples, then find the range changes
+    and replay only those neighbourhoods through the reference algorithm. The
+    changes cluster tightly — measured on a wake-spanning chunk, 6559 changes
+    merge into 6 regions covering 1.5% of samples, because the ranges churn
+    during a wake and are silent through the sleep that dominates a capture.
+
+    Parameters come off the constructed ppk2_api decoder rather than being
+    re-derived, so quirks are inherited rather than guessed at (MEAS_LOGIC's
+    mask arrives as a negative int, which a naive numpy `&` would reject).
+    """
+
+    def __init__(self, ppk):
+        self.ppk = ppk
+        keys = [str(i) for i in range(5)]
+        m = ppk.modifiers
+        self.O = np.array([m["O"][k] for k in keys], dtype=np.float64)
+        self.R = np.array([m["R"][k] for k in keys], dtype=np.float64)
+        self.GS = np.array([m["GS"][k] for k in keys], dtype=np.float64)
+        self.GI = np.array([m["GI"][k] for k in keys], dtype=np.float64)
+        self.S = np.array([m["S"][k] for k in keys], dtype=np.float64)
+        self.I = np.array([m["I"][k] for k in keys], dtype=np.float64)
+        self.UG = np.array([m["UG"][k] for k in keys], dtype=np.float64)
+        self.adc_mult = ppk.adc_mult
+        self.vdd = ppk.current_vdd / 1000.0
+        self.adc_mask = ppk.MEAS_ADC["mask"] & 0xFFFFFFFF
+        self.rng_mask = ppk.MEAS_RANGE["mask"] & 0xFFFFFFFF
+        self.log_mask = ppk.MEAS_LOGIC["mask"] & 0xFFFFFFFF
+        self.a1 = ppk.spike_filter_alpha
+        self.a4 = ppk.spike_filter_alpha5
+        self.nspike = ppk.spike_filter_samples
+        # Filter state carried across chunks, exactly as the library carries it.
+        self.rolling_avg = None
+        self.rolling_avg4 = None
+        self.prev_range = None
+        self.after_spike = 0
+        self.consecutive = 0
+        self._tail = b""          # bytes left over from an unaligned chunk
+
+    def feed(self, buf):
+        """Decode a chunk. Returns (currents_uA float64, logic_bits uint8)."""
+        if self._tail:
+            buf = self._tail + buf
+        n_whole = len(buf) // 4
+        self._tail = buf[n_whole * 4:]
+        if not n_whole:
+            return np.empty(0), np.empty(0, dtype=np.uint8)
+
+        v = np.frombuffer(buf, dtype="<u4", count=n_whole)
+        rng = np.minimum((v & self.rng_mask) >> 14, 4).astype(np.intp)
+        adc_result = ((v & self.adc_mask) * 4).astype(np.float64)
+        bits = (((v & self.log_mask) >> 24)).astype(np.uint8)
+
+        rwg = (adc_result - self.O[rng]) * (self.adc_mult / self.R[rng])
+        adc = self.UG[rng] * (rwg * (self.GS[rng] * rwg + self.GI[rng])
+                              + (self.S[rng] * self.vdd + self.I[rng]))
+
+        # The reference feeds its rolling averages the *polynomial* value and
+        # only ever substitutes into what it returns, so the filter must read a
+        # pristine copy. Sharing one array let an earlier region's substituted
+        # output leak into a later region's run-up.
+        self._apply_spike_filter(adc, adc.copy(), rng)
+        return adc * 1e6, bits
+
+    def _regions(self, rng, n):
+        """Merged [start, end) windows that need sequential replay."""
+        chg = np.flatnonzero(rng[1:] != rng[:-1]) + 1
+        # A change straddling the chunk boundary is invisible to an intra-chunk
+        # diff, but the filter sees it: prev_range is carried, so sample 0 can
+        # itself be a range change.
+        if self.prev_range is not None and str(int(rng[0])) != self.prev_range:
+            chg = np.concatenate(([0], chg))
+        if not chg.size:
+            return []
+        starts = np.maximum(chg - _REPLAY_SEED, 0)
+        ends = np.minimum(chg + _REPLAY_TAIL, n)
+        merged = [[int(starts[0]), int(ends[0])]]
+        for s, e in zip(starts[1:], ends[1:]):
+            # Merge on proximity, not just overlap: two regions closer than a
+            # run-up apart share filter history, and replaying them separately
+            # would re-seed the second from the middle of the first's burst.
+            if s <= merged[-1][1] + _REPLAY_SEED:
+                merged[-1][1] = max(merged[-1][1], int(e))
+            else:
+                merged.append([int(s), int(e)])
+        return merged
+
+    def _apply_spike_filter(self, adc, raw, rng):
+        """Overwrite `adc` in place wherever the reference filter would differ.
+
+        `raw` is the untouched polynomial, which is what the rolling averages
+        consume; `adc` is the output being substituted into.
+        """
+        n = adc.size
+        regions = self._regions(rng, n)
+        # A chunk boundary is itself a discontinuity in carried state: if the
+        # first region starts too close to the front to hold a run-up, replay
+        # from 0 using the state carried in, which is exact rather than seeded.
+        if regions and regions[0][0] < _REPLAY_SEED:
+            regions[0][0] = 0
+        for start, end in regions:
+            self._replay(adc, raw, rng, start, end)
+        if not n:
+            return
+        # Advance the carried state to the end of the chunk. Re-seeding from the
+        # tail is only legitimate across a *quiet* stretch: inside a burst the
+        # reference rolls its averages back (rolling_avg = prev_rolling_avg when
+        # range 4 arrives with consecutive < 2), which is not an EMA of anything,
+        # so no run-up reproduces it. When the last replay reached the end of the
+        # chunk, the boundary is inside a burst and the exact state _replay left
+        # is the only correct answer — keep it.
+        if regions and regions[-1][1] >= n:
+            return
+        tail = raw[max(0, n - _REPLAY_SEED):]
+        self.rolling_avg = _ema_seed(tail, self.a1)
+        self.rolling_avg4 = _ema_seed(tail, self.a4)
+        self.prev_range = str(int(rng[-1]))
+        # after_spike has necessarily counted out across a quiet tail.
+        # `consecutive` is left alone: the reference only ever reads it inside a
+        # window, and entering one via a range change resets it first.
+        self.after_spike = 0
+
+    def _replay(self, adc, raw, rng, start, end):
+        """The reference recurrence, verbatim, over one window."""
+        if start == 0 and self.rolling_avg is not None:
+            ra, ra4 = self.rolling_avg, self.rolling_avg4
+            prev_range, after_spike = self.prev_range, self.after_spike
+            consecutive = self.consecutive
+        else:
+            run_up = raw[max(0, start - _REPLAY_SEED):start]
+            if run_up.size:
+                ra = _ema_seed(run_up, self.a1)
+                ra4 = _ema_seed(run_up, self.a4)
+            else:
+                ra = ra4 = None
+            # No range change inside the run-up, by construction of _regions.
+            prev_range = str(int(rng[start])) if start else None
+            after_spike = 0
+            consecutive = 0
+
+        for i in range(start, end):
+            value = raw[i]
+            cur = str(int(rng[i]))
+            prev_ra, prev_ra4 = ra, ra4
+            ra = value if ra is None else self.a1 * value + (1 - self.a1) * ra
+            ra4 = value if ra4 is None else self.a4 * value + (1 - self.a4) * ra4
+            if prev_range is None:
+                prev_range = cur
+            if prev_range != cur or after_spike > 0:
+                if prev_range != cur:
+                    consecutive = 0
+                    after_spike = self.nspike
+                else:
+                    consecutive += 1
+                if cur == "4":
+                    if consecutive < 2:
+                        ra, ra4 = prev_ra, prev_ra4
+                    value = ra4
+                else:
+                    value = ra
+                after_spike -= 1
+            prev_range = cur
+            adc[i] = value
+        self.rolling_avg, self.rolling_avg4 = ra, ra4
+        self.prev_range, self.after_spike = prev_range, after_spike
+        self.consecutive = consecutive
 
 
 def _cache_paths(raw_path, n):
@@ -1280,14 +1533,18 @@ def decode_raw(args):
               f"conversion; pass --mode/--vdd if the capture differed")
     samples = array("f")
     digital_raw = []
-    dec = _Decimator(dec_n)
+    npd = _NpDecoder(ppk)
+    dec = _NpDecimator(dec_n)
     done = 0
+    # 16 MB rather than 1: the vectorized path pays a fixed numpy overhead per
+    # call, and the intermediates are a handful of float64 arrays over 4M
+    # samples, so the working set stays well under the decimated result.
     with open(args.path, "rb") as fh:
         while True:
-            b = fh.read(1 << 20)
+            b = fh.read(16 << 20)
             if not b:
                 break
-            sm, dg = ppk.get_samples(b)
+            sm, dg = npd.feed(b)
             dec.feed(sm, dg, samples, digital_raw)
             done += len(b)
     dt = dec.n / PPK2_SAMPLE_HZ

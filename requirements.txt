@@ -1,0 +1,15 @@
+# Host tooling for tools/*.py. The firmware toolchain is PlatformIO's and is
+# not listed here.
+#
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# esptool is also vendored inside PlatformIO, but tools/history.py drives the
+# flash directly and needs its own.
+
+esptool==5.3.1
+ppk2-api==0.9.2
+pyserial==3.5
+
+# ppk2.py's sample decoder. Not optional: the pure-Python path converts one
+# sample at a time, which is ~12 minutes for an hour of capture at 100 kSps.
+numpy>=2.0
