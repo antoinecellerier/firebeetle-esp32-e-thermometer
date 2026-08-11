@@ -28,7 +28,10 @@ Sensor drivers have three compile paths — ULP FSM, LP core, no-ULP — see
 
 That is why `ulp/lp_core_main.c` is wrapped in `#ifdef __riscv`: on ESP32-E the
 FSM pass preprocesses it to nothing, and HULP builds the FSM program at runtime
-instead. A new file in `ulp/` needs the same guard or it breaks the other board.
+instead. A new file in `ulp/` needs the same guard or it breaks the other board —
+**and an entry in `src/CMakeLists.txt`**, whose `ulp_sources` names its files
+explicitly. PlatformIO globs the directory, `idf.py` does not, so a file added
+without that entry builds under one and silently vanishes under the other.
 
 The LP core dispatcher derives its sensor from the `USE_*` macros via a relative
 `#include "../include/generated/rig_config.h"` — the LP sub-build inherits
@@ -36,7 +39,7 @@ neither `build_flags` nor `build_src_flags`, so config it must see cannot be a
 `-D` at all.
 
 It compiles with **`-DIS_ULP_COCPU` and no board macros at all**
-(`IDFULPProject.cmake:107,159`), which is why the rig headers' env cross-checks
+(IDF's `IDFULPProject.cmake`), which is why the rig headers' env cross-checks
 are wrapped in `#if !defined(IS_ULP_COCPU)`. Drop that guard and every C6 build
 fails.
 

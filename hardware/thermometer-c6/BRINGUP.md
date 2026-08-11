@@ -127,7 +127,12 @@ board 5. Board 1 is the first-article board for Phases 0–2.
       matches the existing devices' pigtails.
 
 **Phase 0 complete on board 1 (2026-07-29).** Boards 2–4 still owe the
-quick per-board pass after first-article Phases 0–2.
+quick per-board pass after first-article Phases 0–2. Note board 2 has since
+been powered, flashed and run repeatedly as the bench board (2026-08-05 and
+2026-08-09, `docs/history-store-validation.md`) **without that pass being
+recorded** — so either it happened undocumented or it was skipped in practice.
+Boards 3 and 4 are genuinely untouched, and board 4's flagged U5 placement skew
+is still waiting on the Phase 2 BMP581 detect.
 
 ## Phase 1 — first power (battery + panel absent)
 

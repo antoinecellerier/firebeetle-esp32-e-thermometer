@@ -19,6 +19,32 @@ the `out/hand/` working copy). Provenance:
 - Harvested wholesale into `generator/pcb_routes.py` (see the HAND_ROUTED
   sentinel there and HAND-ROUTING.md for the round-trip workflow).
 
+## hand-routed-2026-07-14-rotations-widths.kicad_pcb
+
+GUI board after the user's **rotation/alignment pass on 11 R/C parts** and the
+reroute that followed (`ccc9546`): the SE storage-cap row shifted east, the SW
+sensor column aligned with its +3V3 pads facing west, C13 turned horizontal
+clear of H2. 0 unconnected. Harvested wholesale, then a trace-width audit
+normalised the signal nets (+3V3 sensor branch, EPD_RST, XTAL_32K_N and
+EPD_GDR 0.2→0.25mm; EN/VBUS/EPD_RESE deliberately left mixed where a tight
+parallel run or a clearance fix blocked it).
+
+Board still 49×36 here: shrinking the outline re-fragments the hand-tuned GND
+pour, which is what the next snapshot deals with.
+
+## hand-routed-2026-07-14-48x35-gnd-solved.kicad_pcb
+
+GUI board after **reclaiming the 48×35 outline** — the east and south strips
+added at M5 given back (`06161f6`). The shrink re-fragmented the GND pour into
+three opens (C12.2, U3.2, and an F↔B split); the user hand-closed them, and the
+harvest took 56 GND tracks and 44 stitch vias wholesale. Gate: unconnected 0,
+REAL=0 (2 dangling GND stubs deferred), `check_pcb` OK.
+
+This is the snapshot `verify/gnd_islands.py` was written against. GND was
+connected but **low-redundancy** at this point — two sub-planes of ~49 and ~38
+pads each hanging off a single 0.15mm neck, which is what the 07-15 and 07-16
+SPOF rounds below then hardened.
+
 ## hand-routed-2026-07-15-gnd-spof-fixes.kicad_pcb
 
 Intermediate GUI snapshot (mtime 00:37) captured mid GND-hardening — single-via
@@ -236,11 +262,32 @@ J4-mouth-east / J3-mouth-north guards; `gnd_islands` connected (6 single-via
 SPOF ties, 3 narrow necks — unchanged). **Silk is now 0 violations at full
 severity** — the e567982 rework holds and this round's four edits added none.
 
+## hand-routed-2026-07-20-corner-round-usb-reroute.kicad_pcb
+
+The last hand-routing snapshot before the order (`a93ffa9`) — the completed
+corner-round and USB reroute pass, harvested whole-board: signal copper into
+`pcb_routes.py`, GND polylines and stitch vias into `pcb_layout.py`, plus the
+button-row move (SW1/SW2 +1.4 east, R7 +2.1, C23/C24 west onto a 2.5mm pitch)
+and the RST/BOOT/back-footer silk that went with it. **Fully routed: 0
+unconnected, DRC REAL=0 and DEFERRED=0 at full severity.**
+
+Two generator fixes the harvest forced out, both round-trip precision bugs:
+mm→nm conversion now rounds rather than truncating (`pcbnew.FromMM` truncates,
+so an nm-exact vertex came back a nanometre light every render, and harvesting
+at µm on top of that turned an exactly 0.2000mm EPD_VCC/DBG_TX clearance into a
+DRC error); and the new west GND spur drops to the y7.17 lane from x3.6 rather
+than diagonally off the stitch.
+
 ## order-2026-07-20/ — the rev A production order (FIRST ORDER)
 
 The exact files uploaded to JLCPCB, kept verbatim. This is the only record of
 what was physically built, so nothing here is regenerated — `make fab` at any
 later commit produces a different stamp and would not describe these boards.
+
+Two subdirectories were added after this section was first written, both with
+their own READMEs: `jlc-production-files/` (JLC's CAM output and SMT previews,
+plus the independent 75-placement verification) and `xray/` (the first-article
+X-ray frames and the script that annotates them).
 
 - `thermometer-c6-gerbers-3ed40fe-2026-07-20.zip` — 12 members (9 gerbers +
   drill + drill map + job). sha256

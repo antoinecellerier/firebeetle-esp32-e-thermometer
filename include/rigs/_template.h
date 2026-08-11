@@ -73,7 +73,7 @@
 // defined at once — so assert on their absence too, not just on the target.
 //
 // The LP core sub-build compiles with -DIS_ULP_COCPU and nothing else (no board
-// macros at all: IDFULPProject.cmake:107,159), so the guard below is required or
+// macros at all: IDF's IDFULPProject.cmake), so the guard below is required or
 // every C6 build breaks.
 #if !defined(IS_ULP_COCPU)
 #if !defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32E) && !defined(ARDUINO_XIAO_ESP32C6)

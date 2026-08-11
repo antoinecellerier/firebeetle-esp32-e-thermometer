@@ -11,9 +11,10 @@ charging, LDO power tree. Design driven by the PPK2 measurement campaign in
 passed bring-up Phases 0–2 on 2026-07-29 ([`BRINGUP.md`](BRINGUP.md)): first
 render, LP-core survival, and a measured 18.3µA @ 4.2V deployment-path sleep
 floor over a full field interval (docs/notes.md 2026-07-29) — vs 21.7µA at
-the same 4.2V on the XIAO buck rig, validating the LDO tree. Current work:
-[`BRINGUP.md`](BRINGUP.md) Phase 3 first-article measurements + the boards
-2–4 sweep. The board is 48×35mm
+the same 4.2V on the XIAO buck rig, validating the LDO tree. Next hardware
+phase: [`BRINGUP.md`](BRINGUP.md) Phase 3 + the boards 2–4 sweep — gated on
+board 1 coming off its battery soak (running since 2026-07-31; harvest before
+resetting it). Board 2 is the bench scratch board meanwhile. The board is 48×35mm
 2-layer, hand-routed, DRC-clean at full severity; fab export is `make fab`
 (gerbers/drill + CPL/BOM zip, git-hash+date stamped, gated by
 `verify/check_fab.py`); pre-order schematic sign-off (requirements proven
@@ -285,8 +286,9 @@ against circuit.py (anonymous `~` nets matched by pin set).
 - Bring-up Phases 0–2 — **DONE** on board 1 (2026-07-29,
   [`BRINGUP.md`](BRINGUP.md)); measured numbers in the
   [`docs/notes.md`](../../docs/notes.md) power logbook.
-- **CURRENT**: [`BRINGUP.md`](BRINGUP.md) Phase 3 first-article measurements
-  + the quick Phase 0–1 sweep on boards 2–4.
+- **NEXT** (hardware): [`BRINGUP.md`](BRINGUP.md) Phase 3 first-article
+  measurements + the quick Phase 0–1 sweep on boards 2–4. Board 1 has been on
+  battery soak since 2026-07-31 and most of Phase 3 waits on it.
 
 ## Routed-copper census (rev A final vs the pre-connector-fix board)
 

@@ -51,7 +51,7 @@ for f in "$@"; do
   d=$(dirname "$f")
   # <area>/.claude/skills/<name>/SKILL.md -> commands run from <area>, any depth
   a=$(printf '%s' "$d" | sed 's#/\.claude/skills/[^/]*$##')
-  grep -ohE '`[a-zA-Z0-9_./-]+\.(md|py|c|h|cpp|csv|ini|json|dru)`' "$f" | tr -d '`' | sort -u \
+  grep -ohE '`[a-zA-Z0-9_./-]+\.(md|py|c|h|hpp|cpp|csv|ini|json|dru|txt|cmake)`' "$f" | tr -d '`' | sort -u \
     | while read -r p; do case "$p" in */*)
         test -e "$d/$p" || test -e "$a/$p" || test -e "$p" || echo "MISSING $p  (in $f)";; esac; done
 done
