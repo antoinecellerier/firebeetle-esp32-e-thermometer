@@ -1694,6 +1694,63 @@ per-step sidecars (replay cannot recompute the sub-bin half from a decimated
 cache), and prints the bracket to bisect. All 11 steps were recovered from the
 raw captures; only step 11's live raw peak was lost, with its sidecar.
 
+## BOD probe at SEL_3: no brownout anywhere in 4.2–3.6 V, and the run missed the range that mattered (2026-08-11)
+
+`local/sweeps/ppk2-sweep-20260811-232201/`. Rail `reva-j1`, no battery, USB out,
+`thermometer_c6_bod_probe` at SEL_3 (~3.10 V trip), `2541adc-dirty`,
+`-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI`. 11 steps, invoked as
+`--mv 4200,3600,3000` to skip the 100 mV descent, since this board's regime map
+had already been taken the same evening.
+
+**`bootloops: 0` at all eleven steps.** With the trip raised to ~3.10 V the board
+never brownout-reset anywhere between 4.2 and 3.6 V. The refresh completed at
+every step in that range (65–86 mC, 3.2–3.7 s awake).
+
+The reported edge — lowest HEALTHY 3610 mV, first non-healthy 3600 mV — **is not
+a droop edge and should not be quoted as one.** The 3600 mV linear step was
+DEGRADED on the strength of a **single 51.9 mA storm**, with 17/18 blips,
+`bootloops: 0` and a completed refresh; the same voltage re-run as `confirm-lo`
+came back HEALTHY with 0 storms, which the tool flagged itself
+(`anomaly: bistable`). One non-reproducing event, not a cliff.
+
+**The sparse voltage list is what turned that outlier into an edge.** With only
+4200/3600/3000 probed, the first DEGRADED anchored the bisect, and all six bisect
+probes were spent between 3.6 and 4.2 V — a range the run then proved healthy
+six times over. A 100 mV descent would have put 3500/3400/3300 next to it and
+shown the 3600 result for the outlier it was. The redundancy that distinguishes
+an outlier from an edge is exactly what the shortcut traded away; on a rig where
+a step costs ~112 s, that trade is not worth it near a suspected edge.
+
+So the SEL_3 edge is **below 3.6 V and unmeasured**. 3.00 V is in the known dead
+regime (4799 µA, no liveness at the expected cadence), so it brackets to
+3.6–3.0 V. Re-run wants `--start 3600 --stop 3000 --step 100` with
+`--confirm-edge 2` for the bistability.
+
+What the run does establish:
+
+| VIN | floor | peak | refresh |
+|---|---|---|---|
+| 4.20 V | 20.15 µA | 607 mA | 65.3 mC / 3.2 s |
+| 3.90 V | 20.79 µA | 496 mA | 66.3 mC / 3.2 s |
+| 3.75 V | 21.24 µA | 466 mA | 66.8 mC / 3.2 s |
+| 3.60 V | 21.79 µA | 432 mA | 72.8 mC / 3.2 s |
+| 3.00 V | 4799 µA | 465 mA | dead regime |
+
+Floor rises monotonically 20.15 → 21.79 µA over 4.20 → 3.60 V, the same shape as
+board 1's 19 → 30 µA over 3.38 → 3.32 V but far gentler this far above the cliff.
+These are `thermometer_c6_bod_probe` (debug lineage) figures, so the 20.15 µA at
+4.2 V sits above the 19.05 µA release floor as expected — not comparable to the
+deployment number.
+
+**The SEL_2 result remains the stronger droop evidence** and is untouched by this:
+at ~3.27 V the board boot-loops at 4.23 V input, always at the render. Taken
+together — SEL_2 trips at 4.23 V, SEL_3 does not trip down to 3.6 V — the rail
+minimum during a T81 refresh sits between the two trip estimates across that
+whole input range, which is a wide bracket but a real one. Deriving a droop
+figure of the form `edge − trip` needs the edge this run did not find, and that
+formula only holds where the regulator is in dropout and the rail tracks the
+input, which at 4.23 V it is not.
+
 ## The host-supplied LUT temperature reaches the panel (2026-08-11)
 
 Board 2 + T81, `thermometer_c6_debug` at `3c91183-dirty`, rig `revA-bigscreen`,
