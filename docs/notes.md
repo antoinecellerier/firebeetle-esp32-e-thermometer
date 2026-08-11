@@ -1624,3 +1624,60 @@ It now rewrites `summary.json` and `report.md`, inherits `peak_ma` from the
 per-step sidecars (replay cannot recompute the sub-bin half from a decimated
 cache), and prints the bracket to bisect. All 11 steps were recovered from the
 raw captures; only step 11's live raw peak was lost, with its sidecar.
+
+## The host-supplied LUT temperature reaches the panel (2026-08-11)
+
+Board 2 + T81, `thermometer_c6_debug` at `3c91183-dirty`, rig `revA-bigscreen`,
+`-DFORCE_LUT_TEMPERATURE=<C> -DREFRESH_EVERY_N_WAKES=1 -DDISPLAY_TEMP_DELTA=99`.
+The force flag exists because indoors no band boundary is reachable naturally,
+and it deliberately bypasses the VBUS gate so the check can run on USB for its
+serial. It raises `! LUT` on the panel.
+
+| forced | LUT code | busy slices | independent A/B earlier the same day |
+|---|---|---|---|
+| −5 °C | 232 | **443** | 445.62 (sd 0.50) |
+| 25 °C | 241 | **228** | 228.25 (sd 0.44) |
+
+Both land on figures obtained by a separate route (fork vs upstream vs pinned
+control), so the value is reaching the waveform selection. Slices repeat to
+0.05%, which is why two samples settle it.
+
+### The first build of this did nothing at all, and looked fine doing it
+
+The first attempt measured **228 slices at a forced −5 °C** — the 241 waveform,
+i.e. no effect. `Display.cpp` includes `Display.h` before `app_common.h`, and
+the `PANEL_HAS_LUT_TEMPERATURE` guard sat in `Display.h`, so it was evaluated
+while `USE_576_T81` was still undefined. Both entry points compiled to empty
+stubs and the build was clean. `displays.h` already documents the rule it broke:
+*"Include AFTER app_common.h, which supplies the USE_* selection."*
+
+**This would never have surfaced in the field.** At room temperature the
+driver's fallback of 241 is the correct code, so the panel looks right; the
+feature would have been missing only in the cold, which is the sole condition it
+exists for. Fixed by including `device-config.h` from `Display.h`, plus an
+`#error` in `Display.cpp` — evaluated after every include — that fires if the
+guard and the panel selection disagree. Flash grew 342 B, which is the code
+being compiled rather than optimised away.
+
+### Open: the second refresh fails with nothing on J1
+
+Reproduced at both LUTs, so it is not the waveform: render 1 completes normally,
+render 2 returns in ~790 ms with **0 busy slices**, and `DISPLAY_FAULT_BUSY_IDLE`
+latches with refreshes suspended (the LED pattern and `! NOSCR` carry it — the
+degradation is visible, as designed).
+
+Conditions: USB only, **no battery, J1 open** (the PPK2 harness had been pulled;
+it was unpowered with its output off before that, so J1 was an open circuit
+either way). The same cadence flags ran 21-25 consecutive renders earlier the
+same day **with a battery fitted**.
+
+Hypothesis, **not yet confirmed**: the panel rail. `revA-bigscreen.h:23` sets
+`EPD_POWER_GATE`, so the rail is switched off every sleep and must come back
+each wake, and the gate-on inrush measured today is 571 mA for ~70 µs — the
+largest current the board draws. With no battery the only source is a
+current-limited USB path (`hardware/thermometer-c6/README.md:33`: without load
+sharing, no-battery USB operation is capped at the 100 mA charge current), so
+the first refresh runs on charged bulk caps and the next finds them flat.
+`BUSY_IDLE` rather than `BUSY_STUCK` says the panel never woke, not that it
+hung. Test: refit the battery and re-run. If it still faults, the cause is the
+2026-08-11 LUT change and bisects against `3c91183` in one flash.
