@@ -292,6 +292,21 @@ a different panel at once. What that unblocks, and the one thing it does not:
   reaches the *sustained* rails (VGH/VGL through a multi-second refresh) but not
   the millisecond transients.
 
+**2026-08-12: bench access is closing — boards 2 and 4 are on the ten-day soak,
+board 3 is flashed and starts this evening**, all on one release build
+(`753afbc` on 3 and 4, `11cd8dd` on board 2; the commits between are
+documentation only, so the firmware is identical). **Board 3 is the last board
+reachable on USB** — anything below that needs a cable and not a PPK2 has until
+this evening. After that, board 2 carried the whole campaign and anything still
+marked open waits for a board to come off, not merely for time. What that costs,
+concretely: the
+**FPC-in/out floor pair** — the ~2 h capture that would explain why board 2's
+floor reads 19.05 µA against board 1's 18.3 µA — was rigged and ready and was
+traded for the soak start. The gap is open, and neither figure has a concurrent
+ambient reading, so it is not yet even established as a board-to-board
+difference rather than a thermal one. Everything needing a scope, a fridge or a
+reference thermometer is in the same queue.
+
 - [ ] **VGH/VGL reach spec during refresh with JP2+JP5** (0.47Ω/10µH
       universal config). GDEH0576T81's datasheet config is 2.2Ω/47µH =
       JP3+JP6 — that's the on-board fallback if VGH sags.

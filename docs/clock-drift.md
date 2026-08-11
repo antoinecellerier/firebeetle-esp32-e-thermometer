@@ -84,23 +84,58 @@ on them; the custom rev A board adds one deliberately.
 in this file comes from a crystal-less rig (+5066 / +305 / +1259ppm). These are
 the runs that put a number on it.
 
-| Board | MAC | Build | Started |
-|---|---|---|---|
-| 3 | `98:88:e0:75:47:94` | `thermometer_c6_release`, rig `revA-bigscreen`, git `753afbc`, no flags | 2026-08-12 evening |
-| 4 | `10:bd:a3:a8:d3:64` | identical — same hash, byte-for-byte | 2026-08-12 |
+| Board | MAC | Build | Started | Placement |
+|---|---|---|---|---|
+| 4 | `10:bd:a3:a8:d3:64` | `thermometer_c6_release`, rig `revA-bigscreen`, git `753afbc`, no flags | 2026-08-12, 3996mV | **paired, ~10cm** |
+| 2 | `98:88:e0:75:48:10` | same env/rig/flags, git `11cd8dd` | 2026-08-11 22:49Z, 3998mV | **paired, ~10cm** |
+| 3 | `98:88:e0:75:47:94` | identical to board 4, same hash byte-for-byte | **not yet — evening of 2026-08-12** | apart |
 
-Both boards: GDEH0576T81, 400mAh pack, `esptool erase_flash` immediately before
+**Board 3 is flashed and verified but has not started.** It is the only board
+still reachable on USB; once it starts, the fleet is sealed.
+
+All three: GDEH0576T81, 400mAh pack, `esptool erase_flash` immediately before
 flashing so the archive starts empty and the first base snapshot is unambiguous.
-Board 4 confirmed a complete cycle on battery before release (`#2 r2 lp1 w:ULP`,
-3996mV). Both have a static DHCP lease, so resyncs take the fast path and the
-NTP term is consistent between them.
+All have a static DHCP lease, so resyncs take the fast path and the NTP term is
+consistent between them. Boards 2 and 4 each confirmed a complete cycle on
+battery before being left alone — board 4 `#2 r2 lp1 w:ULP` at 3996mV, board 2 a
+ULP-woken refresh at **3998mV on its second render (4004mV on the first)**. Take
+the second reading as t=0: the first is taken seconds off the charger and carries
+surface charge, and the 6mV step between two renders is that decaying, not the
+pack discharging.
 
-Two things this pair gives that a single board cannot. **Boards 3 and 4 run the
-same firmware in different places**, so a difference in refresh cadence is the
-room and not the build — the cadence row in the `docs/notes.md` budget is
-currently transferred from the XIAO runs and is its weakest term. And **two
-independent crystals** bound part-to-part spread, which matters because a single
-arm cannot tell a good FC-135 from a lucky one.
+**The arms do not share a t=0**, so compare rates and not elapsed drift: board 3
+starts roughly a day behind the pair, and the adaptive resync interval means its
+sample count will lag by more than that day alone implies.
+
+**Board 2's hash differs but its firmware does not.** It was flashed after the
+BOD probe released the rig, by which time three documentation-only commits had
+landed; `git diff 753afbc..11cd8dd -- src include ulp components platformio.ini
+sdkconfig.defaults*` is empty, so the only difference on the wire is the string
+the panel prints. Read the three arms as one build.
+
+**The placement column is the experimental design, not an incidental detail.**
+Boards 2 and 4 sit ~10cm apart and board 3 goes elsewhere, which makes this a
+controlled pair plus a treatment rather than three parallel arms:
+
+- **2 vs 4 — same room, same firmware.** Any difference between them is
+  part-to-part: crystal spread, BMP581 spread, board spread. This is the control
+  the earlier arms never had, and it is what tells a good FC-135 from a lucky
+  one. A single arm reporting ~20ppm would be unfalsifiable.
+- **3 vs the pair — same firmware, different room.** With 2/4 establishing how
+  much of a gap is board-to-board, a gap *beyond* that is the room. This is the
+  only way to get at the refresh-cadence term, which the `docs/notes.md` budget
+  currently transfers from the XIAO runs and which is its weakest number:
+  refreshes are delta-triggered, so cadence measures how volatile the room is.
+- **2 and 4 also run two calibrated sensors in the same air for ten days**, which
+  nothing in this project has ever done. Their hourly records should overlay; the
+  residual is BMP581 part-to-part agreement in situ, free, from the same journals.
+  Mutual heating is not a confound — each board sleeps at ~90µW.
+
+One asymmetry to carry: board 2 has by far the most bench history of the fleet —
+every power figure in the T81 budget was measured on it, through a brownout
+bootloop and a full sweep to 3.0V. If it diverges from 4, the co-location means
+the room is already excluded, and the first hypothesis should be a board the
+campaign quietly damaged rather than ordinary spread.
 
 Harvest from the journal (`tools/history.py`), not from the badge — the badge
 shows the last window only, and the 2026-08-05 harvest found ten samples where
