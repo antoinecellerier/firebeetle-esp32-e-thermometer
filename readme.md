@@ -1,4 +1,4 @@
-A low power FireBeetle ESP32-E based thermometer with an ePaper display
+A low power ESP32 based thermometer with an ePaper display
 
 <img src="docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg" width="600" />
 
