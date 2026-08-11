@@ -85,7 +85,7 @@ Path-scoped, loaded when their files are touched — read before editing:
 `.claude/rules/rtc-state.md` (RTC memory, version bumps).
 The custom PCB has its own `hardware/thermometer-c6/CLAUDE.md`: `.kicad_sch`,
 `.kicad_pcb` and `.kicad_dru` are all generated — never hand-edit them; `make
-check` gates everything. Next phase there: `BRINGUP.md` (rev A ordered, inbound).
+check` gates everything. Current phase there: `BRINGUP.md` Phase 3 (rev A in hand).
 
 ## Code conventions
 
@@ -109,13 +109,13 @@ pure framework=espidf on stock platform, drop fork".
 
 ## IMPORTANT: Revert debug changes before committing
 
-Check for and revert temporary debug state before any cleanup or feature commit:
-test `#define`s (`LP_CORE_IDLE`, `MOCK_DISPLAY_DATA`, `PPK2_DEBUG`,
-`HISTORY_BASE_EVERY_WAKE`, `USB_WINDOW_OBSERVE_CYCLES`, `RESYNC_INTERVAL_MIN`,
-`BATTERY_SHUTDOWN_DISABLED`, `EXPERIMENT_ARM` + the cadence overrides it tags:
-`REFRESH_EVERY_N_WAKES`, `DISPLAY_TEMP_DELTA`, `ULP_ALWAYS_WAKE`, delta
-thresholds), build_src_flags, test values. **Get them off the device too** — flash
-wear, a flat pack, a panel gone blind. Bench builds show `! EXP` and tag `arm`.
+Revert temporary debug state before any cleanup or feature commit — working-tree
+`#define` edits (`git diff`) and flag-based ones (`build_src_flags`,
+`PLATFORMIO_BUILD_SRC_FLAGS`). Enumerating them here went stale twice; read the
+`#ifdef`s under `src/ include/ ulp/` instead, past the `USE_`/`CONFIG_`/board
+macros. `LP_CORE_IDLE` is uncomment-in-place, not a `-D`. **Get them off the
+device too** — flash wear, a flat pack, a panel gone blind. Bench builds show
+`! EXP` and tag `arm`.
 
 ## Workflow preferences
 
