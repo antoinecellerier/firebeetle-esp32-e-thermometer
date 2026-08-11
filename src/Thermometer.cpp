@@ -779,6 +779,11 @@ DisplayStats make_display_stats()
 #else
     false,
 #endif
+#ifdef PPK2_DEBUG
+    true,
+#else
+    false,
+#endif
     EXPERIMENT_ARM,  // 0 in a field build; nonzero raises the ! EXP badge
 #ifdef HAS_USB_SERVICE_WINDOW
     s_usb_window_active,

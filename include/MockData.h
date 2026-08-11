@@ -224,6 +224,7 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.dummy_sensor = true;
   stats.mock_data = true;
   stats.power_efficient = false;
+  stats.ppk2_instrumented = false;
   stats.usb_window = false;
   stats.clock_drift_ms = 0;
   stats.drift_window_s = 0;

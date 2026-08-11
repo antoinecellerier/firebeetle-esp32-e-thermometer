@@ -1192,6 +1192,12 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/DUMMY" : "! DUMMY");
     if (stats.mock_data)
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/MOCK" : "! MOCK");
+    // Distinct from the generic DEBUG flag because it says something the others
+    // do not: this build's own instrumentation is on the trace. A capture
+    // harvested from it reads high, so a photo of the panel has to be able to
+    // disqualify the number.
+    if (stats.ppk2_instrumented)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/PPK2" : "! PPK2");
     if (pos)
       snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
   }

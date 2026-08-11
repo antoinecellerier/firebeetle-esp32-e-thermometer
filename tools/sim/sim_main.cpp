@@ -214,6 +214,22 @@ int main(int argc, char **argv)
                       now, &nowtm, exp_stats);
     save_and_convert(cfg.name, "_exp", canvas);
 
+    // Scenario 7c: a PPK2-instrumented build. Same worst-case status line as
+    // 7b and for the same reason, but this badge answers a different question:
+    // not "is the cadence field behaviour" but "is this build's own
+    // instrumentation on the trace". It is, and it costs an ungated ~40ms
+    // selftest per boot plus a 3x50ms preamble on archive flushes, so any
+    // charge figure harvested from such a build reads high. A photo of the
+    // panel has to be enough to disqualify the number.
+    canvas.fillScreen(0xFFFF);
+    DisplayStats ppk2_stats = drift_stats;
+    ppk2_stats.ppk2_instrumented = true;
+    ppk2_stats.power_efficient = false;   // PPK2_DEBUG always forces this
+    render_dashboard(canvas, cfg.w, cfg.h,
+                      22.3f, 3842, false,
+                      now, &nowtm, ppk2_stats);
+    save_and_convert(cfg.name, "_ppk2", canvas);
+
     // Scenario 8: resync failing right now — two attempts lost in a row, so
     // the clock has been free-running since it was last set 14d ago.
     canvas.fillScreen(0xFFFF);

@@ -86,6 +86,11 @@ struct DisplayStats {
   bool dummy_sensor;   // true if USE_DUMMY_SENSOR is defined
   bool mock_data;      // true if MOCK_DISPLAY_DATA is defined
   bool power_efficient; // true if build has no debug power drains (serial off, long sleep, no PPK2)
+  bool ppk2_instrumented; // PPK2_DEBUG: the build drives marker GPIOs, and pays
+                          // for them — an ungated ~40ms selftest every boot plus
+                          // a 3x50ms preamble on archive flushes. Every charge
+                          // figure it produces is inflated, so it gets its own
+                          // badge rather than hiding inside the generic DEBUG one.
   uint8_t experiment_arm; // EXPERIMENT_ARM: nonzero means this device is running a
                           // pinned-cadence bench arm, not field behaviour. Same value
                           // is journaled per drift record, so screen and archive agree.
