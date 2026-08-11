@@ -43,8 +43,8 @@ The layout is determined by aspect ratio: `landscape = (width > height * 1.5)`.
 - **Info bar**: embedded at bottom of temp zone (compact Org_01 font)
 - **Footer**: bottom 10px, full width
 
-When content height < 100px (e.g. 212x104), the big font downgrades from
-FreeSansBold24pt to FreeSansBold18pt.
+The temperature font is sized from this zone's dimensions, not picked by a
+height threshold — see Typography.
 
 ### Stacked (200x200, 920x680)
 
@@ -82,13 +82,22 @@ Stacked zone proportions (small display, remaining < 400px):
 ## Typography
 
 All text is rendered at `setTextSize(1)` -- no integer scaling, no aliasing artifacts.
-Font selection is based on display dimensions:
+
+The temperature font is **generated per panel**, not chosen from this table.
+`scripts/generate_font.py` recomputes the point size from the temperature zone's
+own dimensions — height constraint fills ~80% of the zone at ~1.4px per pt, width
+constraint fits `XX.X C` at ~4.8px per pt, whichever is smaller, capped at 80pt by
+`GFXglyph`'s `int8_t yOffset`. It emits `include/generated/font_config.h`, and the
+renderer looks the panel up in it via `get_temp_font(w, h)`. Sizes that land on a
+library font (9/12/18/24pt) reuse it; the rest are generated. So the point size for
+a given panel is whatever the generator last computed — read `font_config.h`, don't
+assume. `tools/sim` runs the generator with `--all` so one binary carries every
+panel's font.
+
+Everything else comes from this table:
 
 | Element | Font | Condition |
 |---|---|---|
-| Temperature | FreeSansBold80pt (~140px digits) | `min(w,h) >= 400` (920x680) |
-| Temperature | FreeSansBold24pt (~35px digits) | default (296x128, 200x200) |
-| Temperature | FreeSansBold18pt (~26px digits) | landscape with content_h < 100 (212x104) |
 | "C" suffix | Same font as temperature digits | always matches the big font |
 | Sparkline Y labels | FreeSans12pt | large zones (chart_h >= 100) |
 | Sparkline Y labels | TomThumb | small zones |
@@ -98,9 +107,10 @@ Font selection is based on display dimensions:
 | Monthly Y labels | TomThumb | small zones |
 | Monthly X labels | FreeSans9pt | large zones |
 | Monthly X labels | TomThumb | small zones |
-| Info bar (battery, time) | FreeSans9pt | normal/large (w >= 160) |
+| Info bar (battery, time) | FreeSans12pt | large (w >= 600) |
+| Info bar (battery, time) | FreeSans9pt | normal (160 <= w < 600) |
 | Info bar (battery, time) | Org_01 | compact (w < 160, landscape embed) |
-| Footer | FreeSans9pt | large (w >= 600) |
+| Footer | FreeSans12pt | large (zone w >= 600) |
 | Footer | Org_01 | small |
 
 ## Data Points
@@ -144,23 +154,40 @@ Font selection is based on display dimensions:
 - Three tiers based on zone width:
   - **Compact** (w < 160, landscape embed): 12px wide icon, voltage as "X.XXV", Org_01 font
   - **Normal** (160 <= w < 600): 18px wide icon, voltage as "NNNNmV", FreeSans9pt
-  - **Large** (w >= 600): 28px wide icon, voltage as "NNNNmV", FreeSans9pt
-- Current time HH:MM right-aligned
+  - **Large** (w >= 600): 28px wide icon, voltage as "NNNNmV", FreeSans12pt
+- Date and time right-aligned, longest variant that fits the space left by the
+  battery text: `Mon D YYYY  HH:MM`, then `Mon D  HH:MM`, then `HH:MM` alone.
+  The date is skipped entirely pre-NTP (year < 2024), so a bogus clock never
+  prints a bogus date.
 - Icon and text vertically centered in zone
 - Low battery: icon and voltage drawn in EPD_RED (falls back to black on non-3-color panels)
 
 ### Footer
 - Separated from content by 1px horizontal line
-- Unified format across all display sizes:
-  `#N rN Nd w:X mxV.VV DateN'YY`
+- Same field set on every display size. `build_footer_text()` is the source of
+  truth — it has gained fields more than once, so read it rather than trusting a
+  format string here. In emission order:
   - `#N` -- boot count
   - `rN` -- display refresh count
+  - `lpN` -- LP core wake count (always present; structurally 0 on ULP FSM boards,
+    which don't populate it)
+  - `eN` -- LP error count, omitted when zero
+  - `uN` -- ULP reinit count, omitted unless > 1
   - `Nd` or `NdMh` -- uptime in days (hours appended only when non-zero)
-  - `w:X` -- wake cause (ULP, TMR, or ?)
+  - `w:X` -- wake cause: `ULP`, `TMR`, `USB`, or `?`. An unmapped cause prints the
+    raw bitmap as `?<hex>` so a new wake source is identifiable off the panel
   - `mxV.VV` -- max battery voltage ever seen (as `mx%.1fV`)
-  - `b27:N` -- bad pin27 count (omitted when zero)
-  - `DateN'YY` -- first boot date as "MonDD'YY" (e.g. "Mar10'25"), omitted if NTP not yet synced
-- FreeSans9pt on large displays (w >= 600), Org_01 on small
+  - `b27:N` -- bad pin27 count, omitted when zero
+  - the git hash of the build
+  - first boot date as `MonDD'YY`, omitted until NTP has synced
+  - `sN` -- age since the last successful NTP sync (`45m`/`7h`/`21d`), which is how
+    a silently failing resync shows up
+- Narrow footers clip. `render_status_indicators()` measures the footer up to and
+  including the hash, and re-emits the hash as a badge when that already overflows
+  the zone — so the build stays identifiable even when the tail is cut. On 200x200
+  the line ends around `mx`, which means the date and sync age are **not**
+  panel-readable there; don't send a reader to the footer for them.
+- FreeSans12pt when the footer zone is >= 600 wide, Org_01 otherwise
 
 ## Mock Data
 
@@ -190,22 +217,25 @@ src/
   Thermometer.cpp      -- RTC history management, data collection
 
 tools/sim/
-  sim_main.cpp         -- Host simulator using GFXcanvas1
+  sim_main.cpp         -- Host simulator, renders into a GFXcanvas16
   Makefile             -- Builds render_display binary
-  stubs/               -- Minimal Arduino.h/Print.h for host compilation
+  stubs/               -- Host-side shims (Arduino.h/Print.h, the Adafruit bus
+                          headers, and a generated/ that pins the rig)
 ```
 
 `render_dashboard()` in `DisplayRenderer.cpp` is the single entry point. It takes an
 `Adafruit_GFX&` reference, computes the layout via `compute_layout()`, then calls each
-zone renderer in sequence: `render_temperature`, `render_sparkline`, `render_monthly_bars`,
-`render_info`, `render_footer`. The device passes the GxEPD2 display object; the simulator
-passes a GFXcanvas1. Same rendering code, pixel-perfect output.
+zone renderer in sequence: `render_temperature`, `render_status_indicators`,
+`render_sparkline`, `render_monthly_chart`, `render_info`, `render_footer`. The device
+passes the GxEPD2 display object; the simulator passes a GFXcanvas16 — 16-bit so the
+tri-color red path is visible. Same rendering code, pixel-perfect output.
 
 Individual zone renderers are also declared in `DisplayRenderer.h` for direct testing.
 
 ## RTC Memory Budget
 
-`sizeof(time_t)` is 8 bytes on both ESP32 (Xtensa) and ESP32-C6 (RISC-V) with ESP-IDF 5.x / pioarduino.
+`sizeof(time_t)` is 8 bytes on both ESP32 (Xtensa) and ESP32-C6 (RISC-V), which is
+why the sparkline stores its own timestamp rather than a `time_t`.
 
 **TempReading** = `uint32_t` (unix time, good until 2106) + `int16_t`, packed:
 - Both platforms: 4 + 2 = 6 bytes per entry — 320 entries in the same 1920
@@ -226,22 +256,15 @@ verifies this automatically.
 
 **BMP390LCalib** = 3 x `float` = 12 bytes.
 
-| Data | Size (64-bit time_t) |
-|---|---|
-| temp_history[320] (TempReading, packed) | 1920 bytes |
-| hourly_history[720] (HourlyEntry) | 4320 bytes |
-| bmp390l_calib (BMP390LCalib) | 12 bytes |
-| Scalars: boot_count, display_refresh_count, previous_boot_count (3x int) | 12 bytes |
-| first_boot_time, next_clear_time (2x time_t) | 16 bytes |
-| previous_temp, min_temp_since_boot, max_temp_since_boot (3x float) | 12 bytes |
-| max_battery_mv, bad_pin27_count (2x uint32_t) | 8 bytes |
-| temp_history_count (uint16_t) | 2 bytes |
-| hourly_history_count, hourly_history_idx (2x uint16_t) | 4 bytes |
-| hourly_latest_time (time_t) | 8 bytes |
-| Hour accumulator: current_hour_start (time_t), sum_x10 (int32_t), sample_count (uint16_t), min_x10/max_x10 (2x int16_t) | 20 bytes |
-| Status flags: wifi_ok, ntp_synced, last_sensor_ok (3x bool) | 3 bytes |
-| rtc_layout_version (uint32_t) | 4 bytes |
-| **Total** | **~6341 bytes** |
+The two buffers dominate and are fixed by their own geometry: `temp_history[320]`
+at 6 bytes each is 1920 bytes, `hourly_history[720]` at 6 bytes each is 4320. The
+rest is scalars, and there are enough of them now — drift telemetry, crash
+forensics, USB-window state — that enumerating them here only produces a total that
+disagrees with the binary.
 
-Tight fit in the 8KB RTC slow memory (which is shared with the ULP program and its data).
-The hourly_history[720] alone is 4320 bytes.
+**For the actual figure, read the RTC column of `docs/footprint.md`**: it is measured
+from `firmware.elf` per stage and per board, so it cannot silently drift. Adding an
+`RTC_DATA_ATTR` variable is not free — it shifts `historical_data` and eats
+`ULP_DATA_BASE` headroom, which has run tight on ESP32-E. `post_build_check_rtc.py`
+prints the remaining margin on every build; `.claude/rules/rtc-state.md` has the rules
+for changing any of it.
