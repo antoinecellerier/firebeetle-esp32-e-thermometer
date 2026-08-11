@@ -1874,17 +1874,27 @@ stale lease cannot have made the two runs identical.
 | **dynamic, full DHCP** | 2 | **399.0 mC** | **9.00 s** | **+151 mC** |
 | cold boot | 1 each | 433.8 -> 627.9 mC | 6.75 -> 11.75 s | +194 mC |
 
-**The estimate had the mechanism right and the frequency wrong.** The
-~150-190 mC/resync figure matches the full-DHCP events exactly (+150.7 mC), and
-their 2.25 s duration excess matches the 2.06-2.54 s server stall traced with
-lwIP debug on 2026-08-09 — an independent confirmation, by integration rather
-than by duration x current. But **only 2 of 7 dynamic resyncs took that path**;
-the rest reconnected without a full exchange at +29 mC. So the average saving is
-**+64 mC/resync**, not +150-190.
+**The estimate matches the full-DHCP events exactly** (+150.7 mC), and their
+2.25 s duration excess matches the 2.06-2.54 s server stall traced with lwIP
+debug on 2026-08-09 — an independent confirmation, by integration rather than by
+duration x current.
 
-Budget impact therefore **~0.04 C/day at the ~1.5-day cadence, ~2% of 2.12 C/day**
-— half the ~0.1 C/day previously carried. **Still worth doing**: no downside, and
-it removes the worst case rather than just the mean.
+**Do not use the +64 mC average across all seven: it is a bench artifact.** Only
+2 of 7 dynamic resyncs paid the stall, but the other five were **15 seconds
+apart**, so the address was still leased to that MAC in the server's own table
+and the REQUEST was a renewal needing no ARP probe. That is a property of the
+override cadence, not of the firmware. **At the deployment cadence of ~1.5 days
+the lease has expired, the address may have been reassigned and the server's ARP
+cache is long gone, so a deployed board should take the full-DHCP path nearly
+every time.** The deployment-relevant saving is therefore **~150 mC/resync**,
+close to the original estimate, and the ~0.1 C/day the budget already carried
+stands.
+
+Textbook case of the rule in CLAUDE.md — a true average of the wrong thing.
+The 15 s resync override exists to make resyncs frequent enough to measure, and
+it silently changed *which DHCP path they take*. **Untested**, and cheap to
+settle: read the Freebox's lease duration, then capture one resync after a gap
+longer than it.
 
 Three caveats, because the headline rests on a rate:
 
