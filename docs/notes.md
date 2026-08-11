@@ -468,8 +468,9 @@ so these numbers exclude it.
   not a wiring problem; the average is the meaningful number.
 - Evidence: xiao-seeed-esp32c6-seeed-epd-board-GDEW029I6FD-screen-refresh.png
   / -deep-sleep-floor.png / -1min-overview.png.
-- Still open (see docs/wiring.md checklist): ETA9740 quiescent via the JST
-  battery path, ETA9740 leakage when battery-direct on the XIAO BAT pads.
+- Still open at the time: ETA9740 quiescent via the JST battery path, ETA9740
+  leakage when battery-direct on the XIAO BAT pads. Both measured the same day —
+  the two subsections below.
 
 ### Battery path via shield JST (ETA9740) — measured, ruled out (2026-07-05)
 
@@ -609,8 +610,10 @@ band — 3700 mV shutdown stands.
   ~8.5 µA (switching, PSM) brackets the measured floors.
 - Firmware gap: C6 `read_battery_level()` is stubbed (returns 4321) and
   low/no-battery thresholds (3200/3000 mV) sit below where the hardware
-  already misbehaves — needs a real VBAT read + ~3500 mV shutdown threshold
-  on this board. Shield leaves no free ADC pin (see wiring.md checklist).
+  already misbehaves — needs a real VBAT read + a shutdown threshold above the
+  cliff. **Thresholds done** (3800/3700 mV, `431ea30`); the stub is what
+  survives. No *header* pin is left for a divider with the shield fitted, but
+  the underside MTMS/MTDI pads are ADC-capable and free — `docs/wiring.md`.
 - ETA9740 leakage in this config: none observed — the 22 µA @ 4.2 V floor
   with the shield attached matches the rail baseline within buck efficiency.
 - Evidence: xiao-c6-bat-pads-4V2-floor(-zoom).png, -3V8-floor.png,

@@ -201,11 +201,26 @@ booster / degraded image — out of spec). Per the DESPI-C02 spec
 
 Naming is not a reliable guide (two GDEW panels need 3Ω) — check the
 panel datasheet's peripheral/reference circuit page for the RESE value
-before plugging in. GDEH0154Z90 (our tricolor 1.54") is in the GDEH/SSD1681
-family, so likely the 3Ω group — verify before using it on the Seeed board.
+before plugging in.
 
-**Extras on the Seeed board (not compatibility-relevant):** ETA9740 battery
-charger (0.5A) + JST-PH battery connector + power switch.
+Our panels, against that fixed 0.47Ω:
+
+| Panel | Wants | On the Seeed board |
+|---|---|---|
+| GDEW029I6FD | 0.47Ω | fine — verified working 2026-07-05, first flash |
+| GDEH0154Z90 | 3Ω (GDEH/SSD1681) | mismatched |
+| GDEH0576T81 | 2.2Ω + 47µH inductor | out of spec (board is 0.47Ω + 10µH), untested |
+
+**Don't use the JST battery connector.** The board carries an ETA9740 charger
+(0.5A) + JST-PH + power switch, and that path was measured and ruled out —
+solder the cell to the XIAO's underside BAT pads instead, leave the JST empty
+and the switch off (`docs/notes.md`, 2026-07-05). The switch does **not**
+isolate the ETA9740 from VDD_5V: its OUT pin is hardwired to the XIAO 5V pin,
+so the IC powers up whenever USB is plugged in, whatever the switch position.
+
+The board has no power gate (3V3 is hardwired to the booster and FPC), unlike
+the DESPI-C02 which needs one. Measured, it doesn't want one either — its
+ungated standby is single-digit µA, not the DESPI's ~534µA.
 
 **Fixed pin mapping** (firmware must match; DESPI-C02 wiring is free-form):
 
@@ -218,70 +233,42 @@ charger (0.5A) + JST-PH battery connector + power switch.
 | SCK    | D8       |
 | MOSI   | D10      |
 
-Note this conflicts with our C6 battery-divider use of D0/D1 below. With this
-board plugged in plus LP I2C on D4/D5, no ADC-capable pin (A0–A5 = GPIO0–5)
-remains free for a battery divider.
+This takes D0/D1, which the C6 battery divider above uses. Nothing ADC-capable
+is left on the header — but the **underside pads are**: C6 ADC1 covers
+GPIO0–6, so MTMS (GPIO4, ADC1_CH4) and MTDI (GPIO5, ADC1_CH5) are both free
+here, since LP I2C sits on the other two pads (MTCK/MTDO = GPIO6/7).
 
-## To verify before/when trying the Seeed board (2026-07-04)
+So a battery divider is still possible on this board: sense on the MTDI pad,
+AO3400A gate on D4 or D5 (free header pins), wired as the 100k/100k
+GPIO-switched divider above. Not built. Firmware thresholds are board-split in
+`Thermometer.cpp`; the XIAO's are 3800/3700 mV, finalised by the 2026-07-05
+fine sweep — 3.7V is the lowest verified-healthy point and 3.6V is already
+inside the buck's sag band.
 
-- [x] RESE for each Good Display panel we'd use: check the datasheet's
-      peripheral circuit page. GDEH0154Z90 is likely the 3Ω group (SSD1681);
-      board is fixed 0.47Ω. If mismatched, test whether refresh quality is
-      acceptable anyway.
-      → GDEW029I6FD (0.47Ω family) verified working 2026-07-05, first flash.
-      GDEH0576T81 datasheet wants RESE 2.2Ω + 47µH inductor — out of spec on
-      this board (0.47Ω + 10µH), untested.
-- [x] Battery via the board's JST (ETA9740 path): PPK2 the sleep floor —
-      boost-IC quiescent + double conversion (BAT→5V boost→XIAO LDO→3V3) may
-      dominate our ~16µA C6 floor.
-      → Measured 2026-07-05: ~499µA floor (load-detect pulses every ~2s),
-      refresh 17.13mC vs 12.21mC at the rail (~75-80% conversion efficiency).
-      RULED OUT for deployment — go battery-direct on XIAO BAT pads. notes.md.
-- [x] Battery direct on XIAO BAT pads instead: measure ETA9740 leakage with
-      its JST empty + switch off; if significant, leave the 5V header pin
-      unconnected between XIAO and shield (ETA9740 OUT ties to 5V rail).
-      → Measured 2026-07-05: no observable leakage — 22µA @ 4.2V floor
-      matches the rail baseline through the XIAO's SGM6029C buck (~90%
-      efficient). THIS IS THE DEPLOYMENT CONFIG, but usable only down to
-      ~3.6-3.7V: the 3V3 rail is a pure buck, so at VBAT ≤3.5V it enters
-      dropout pathology (30Hz/480µA bootstrap sawtooth at 3.3V, rail-sag +
-      0.88A burst storms at 3.5V). Needs real VBAT sensing + ~3.5V shutdown
-      in firmware (C6 battery read is still stubbed). See notes.md sweep.
-- [x] Panel/booster quiescent: board has no power gate (3V3 hardwired to
-      booster/FPC). Check for DESPI-C02-style ~500µA draw; fix would be
-      interposing the FDN340P on the single 3V3 pin (bent pin or cut trace).
-      → Measured 2026-07-05 (I6FD): floor ~25.1µA vs 15.8µA gated-DESPI
-      baseline = +~9.3µA ungated standby. No ~500µA problem; gate mod
-      probably not worth it. See notes.md.
-- [x] If battery monitoring is needed with this board: check whether any
-      underside pads (MTDI/MTMS) are ADC-capable — D0/D1 are taken by RST/CS.
-      → YES: C6 ADC1 = GPIO0-6, so MTMS = GPIO4 = ADC1_CH4 and MTDI =
-      GPIO5 = ADC1_CH5, both free in the shield config (LP I2C is GPIO6/7).
-      Plan: GPIO-switched 100k/100k divider (see above), sense on GPIO5
-      (MTDI pad), AO3400A gate on D4 or D5 (free header pins). Firmware
-      thresholds are board-split in Thermometer.cpp; the XIAO's are
-      3800/3700 mV, finalised by the 2026-07-05 fine sweep — 3.7V is the
-      lowest verified-healthy point and 3.6V is already inside the sag band.
-- [x] Reliable 3-way power comparison, same screen setup (C6 + BMP581 +
-      Seeed board + GDEW029I6FD, release build) across all three power
-      configs: (1) PPK2 3.3V into the 3V3 rail (done 2026-07-05, ~25.1µA /
-      12.21mC = 40.3mJ), (2) PPK2 as battery at the shield JST — ETA9740
-      boost + XIAO buck double conversion (done: ~327-500µA floor, ruled
-      out), (3) PPK2 as battery on the XIAO BAT pads, JST empty, switch off
-      (done: 22µA @ 4.2V, winner — see BAT-pads voltage sweep in notes.md).
-      Record source voltage with every figure and compare in mJ, not mC —
-      different node voltages. COMPLETE 2026-07-05.
-- [ ] Buck-cliff follow-ups (voltage map itself is complete, notes.md):
-      (a) overnight soak at 3.70V with hourly refreshes — storm statistics
-      behind the 3700mV shutdown rest on one clean minute so far;
-      (b) cold test ~0°C at 3.6/3.7V — the sag edge is a VTH effect and
-      VTH rises when cold, so the 3.545V edge likely shifts UP in winter;
-      (c) one refresh on the real cell at ~3.75V OCV — battery ESR +
-      protection-PCB drop make effective VIN lower than the stiff PPK2.
-- [ ] Confirm the power switch (CN6) is in series between the battery JST and
-      the ETA9740 BAT pin: continuity check across JST+ and the IC side in
-      both switch positions (schematic doesn't label common vs throws).
-      Note: switch off does NOT isolate the ETA9740 from VDD_5V — its OUT pin
-      is hardwired to the XIAO 5V pin, so the IC powers up whenever USB is
-      plugged in, regardless of switch position.
+## What was measured on this board
+
+The 2026-07-04 verification list is closed. All of it — the ETA9740 JST path,
+the battery-direct BAT-pads sweep and its buck-dropout regime map, the ungated
+booster standby, and the three-way rail/JST/BAT-pads comparison — is in
+[`docs/notes.md`](notes.md), 2026-07-05, with the source voltage recorded per
+figure. The conclusions that change how you wire the thing are already above.
+
+Two cautions from it worth carrying here:
+
+- **Compare in mJ, not mC.** These three configs meter at different node
+  voltages, so charge alone makes the wrong one look cheapest.
+- **The buck's usable window ends around 3.6–3.7V**, which is a firmware
+  threshold, not a wiring choice. Below it the XIAO's rail sags and wakes
+  collapse into brownout storms.
+
+Still open, both on the custom board rather than this one: a cold (~0°C) run
+and a refresh on a real cell, which together decide the final shutdown
+threshold — [`hardware/thermometer-c6/BRINGUP.md`](../hardware/thermometer-c6/BRINGUP.md)
+Phase 3.
+
+# Custom board (thermometer-c6 rev A)
+
+Not covered here — this file is the dev-board prototype wiring. The rev A pin
+map, jumper tables and bench procedures live in
+[`hardware/thermometer-c6/README.md`](../hardware/thermometer-c6/README.md).
 

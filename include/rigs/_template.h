@@ -29,7 +29,8 @@
 //   6. tools/sim/sim_main.cpp    — the displays[] table
 //   7. components/gxepd2/CMakeLists.txt — the panel .cpp, or the link fails on a
 //      missing vtable that names nothing useful
-// Wiring for panels and sensors is in docs/wiring.md.
+// Wiring for panels and sensors is in docs/wiring.md for the dev-board rigs, and
+// in hardware/thermometer-c6/README.md for the custom board.
 
 // --- Panel (exactly one) ---------------------------------------------------
 //#define USE_154_Z90   // Tri-Color 200x200 1.54" (GDEH0154Z90) with 15s full refresh
