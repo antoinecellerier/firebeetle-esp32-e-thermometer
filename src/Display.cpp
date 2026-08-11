@@ -1,4 +1,5 @@
 #include "Display.h"
+#include <math.h>                   // lroundf, for the LUT temperature
 #include "app_common.h"
 #include "displays.h"               // DISPLAY_HAS_RED / DISPLAY_ROTATION
 
@@ -446,6 +447,25 @@ uint8_t display_fault()
 #else
   // No panel is wired on purpose, so there is nothing to be wrong with.
   return DISPLAY_FAULT_NONE;
+#endif
+}
+
+void display_set_lut_temperature(float celsius)
+{
+#if !defined(DISABLE_DISPLAY) && defined(PANEL_HAS_LUT_TEMPERATURE)
+  // Clamp before narrowing: a wrapped int8_t lands in a plausible band.
+  if (!(celsius > -128.0f)) celsius = -128.0f;   // also catches NaN
+  if (celsius > 127.0f) celsius = 127.0f;
+  display.epd2.setTemperature((int8_t)lroundf(celsius));
+#else
+  (void)celsius;
+#endif
+}
+
+void display_clear_lut_temperature()
+{
+#if !defined(DISABLE_DISPLAY) && defined(PANEL_HAS_LUT_TEMPERATURE)
+  display.epd2.clearTemperature();
 #endif
 }
 

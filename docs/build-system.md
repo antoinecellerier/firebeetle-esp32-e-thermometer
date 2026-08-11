@@ -35,6 +35,18 @@ Only the panels a rig header can select are compiled. **Add the panel
 `.cpp` to `components/gxepd2/CMakeLists.txt` when enabling a new `USE_*` panel**,
 or the link fails with a missing vtable rather than anything that names the panel.
 
+`components/gxepd2/upstream` tracks
+[`antoinecellerier/GxEPD2`](https://github.com/antoinecellerier/GxEPD2) branch
+`t81-set-lut-temperature`: **stock upstream plus one additive commit** adding
+`setTemperature()` to the T81 driver, so the host can choose the waveform LUT
+instead of the driver reading a controller temperature it cannot get over
+hardware SPI (`docs/notes.md`, 2026-08-11). Nothing else diverges — the 2026-08-11
+migration that retired the old three-commit fork stands, and this rebases onto
+any future upstream. **To build against stock upstream instead**, check the
+submodule out at `origin/master` and pass `-DDISABLE_PANEL_LUT_TEMPERATURE`;
+`display_set_lut_temperature()` then compiles to nothing and the panel keeps the
+driver's fixed 20..30 °C fallback (verified 2026-08-11).
+
 `components/hulp` (the ESP32-E ULP FSM library) registers empty on other targets.
 
 ## sdkconfig

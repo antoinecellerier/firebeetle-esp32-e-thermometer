@@ -190,6 +190,20 @@ void display_probe_readback(const char *when);
 // which only ever run on USB power.
 void display_set_busy_wait_plain(bool plain);
 
+// setTemperature() is a patch carried on the GxEPD2 submodule. Build with
+// -DDISABLE_PANEL_LUT_TEMPERATURE against stock upstream; the calls below then
+// compile to nothing and the panel keeps the driver's fixed 20..30 C fallback.
+#if defined(USE_576_T81) && !defined(DISABLE_PANEL_LUT_TEMPERATURE)
+#define PANEL_HAS_LUT_TEMPERATURE 1
+#endif
+
+// Ambient temperature for the panel's waveform LUT, in degrees Celsius. Sticks
+// until changed. A no-op on every panel but the T81: the others select the LUT
+// from the controller's own sensor, which the T81's driver cannot read under
+// hardware SPI (docs/notes.md, 2026-08-11).
+void display_set_lut_temperature(float celsius);
+void display_clear_lut_temperature();
+
 // Clear the e-paper to white and hibernate.
 void display_clear();
 

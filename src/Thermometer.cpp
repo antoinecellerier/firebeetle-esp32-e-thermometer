@@ -2152,6 +2152,21 @@ static void wake_work(uint32_t battery_mv, float temp)
     // rescued by a direct read after the coprocessor failed still gets a badge.
     last_sensor_ok = last_sensor_ok && temp_trusted;
 
+    // Drive the panel from the temperature we actually measured. Left alone the
+    // driver uses a fixed 20..30 C value, because it can only obtain a real one
+    // over SW SPI; a waveform that assumes ~25 C under-drives cold glass and
+    // ghosts. This is not a summer-only concern — an unheated room in winter
+    // reaches the 232/235 bands, two below the fallback.
+    //
+    // Not on USB: the board reads several degrees warm on host power (32.6 vs
+    // ~26 C ambient, 2026-08-11), enough to cross a band boundary. Holding the
+    // fallback there also keeps the LUT fixed across bench comparisons, instead
+    // of drifting with how long the cable has been plugged in.
+    if (temp_trusted && !vbus_present())
+      display_set_lut_temperature(temp);
+    else
+      display_clear_lut_temperature();
+
     PPK2_DISPLAY_HIGH();
     display_show_temperature(temp_trusted ? temp : TEMP_NO_PREVIOUS,
                              battery_mv, battery_mv < low_battery_mv,

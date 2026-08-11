@@ -5,9 +5,9 @@
 	ignore = untracked
 [submodule "components/gxepd2/upstream"]
 	path = components/gxepd2/upstream
-	url = https://github.com/ZinggJM/GxEPD2
+	url = https://github.com/antoinecellerier/GxEPD2
 	shallow = true
-	branch = master
+	branch = t81-set-lut-temperature
 [submodule "components/hulp/upstream"]
 	path = components/hulp/upstream
 	url = https://github.com/antoinecellerier/HULP
