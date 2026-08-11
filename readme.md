@@ -6,46 +6,51 @@ See [docs/wiring.md](docs/wiring.md) for prototype wiring information and [hardw
 
 # Power consumption
 
-Measured with a Nordic PPK2 (July 2026, pure ESP-IDF firmware with light sleep
-during panel refreshes, no app re-validation on deep-sleep wakes, -Os);
-full traces and methodology in [docs/notes.md](docs/notes.md).
-Figures are config-specific — panel, sensor, and board all matter.
+Measured with a Nordic PPK2 on pure ESP-IDF firmware; full traces, dates and
+methodology in [docs/notes.md](docs/notes.md). Figures are config-specific —
+panel, sensor and board all matter.
 
-| Setup | Deep-sleep floor | Sensor wake | Display refresh |
-|-------|-----------------|-------------|-----------------|
-| Firebeetle ESP32-E + BMP390L sensor + GDEH0154Z90 ePaper via DESPI-C02 (FDN340P power gate) | 19–20 µA | ULP bit-bang I2C every 5 s, avg ≈0 | ~112 mC (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
-| XIAO ESP32-C6 + BMP581 sensor + GDEH0576T81 ePaper via DESPI-C02 (FDN340P power gate) | 15.5–16 µA | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC (was ~93–95 mC before light sleep) |
-| XIAO ESP32-C6 + BMP581 sensor + GDEW029I6FD ePaper via Seeed XIAO ePaper Driver Board (no power gate) | ~25 µA (+~9 µA ungated shield standby) | LP core I2C every 60 s: ~1 mA × 3 ms | ~12.2 mC |
-| **thermometer-c6 rev A** + BMP581 sensor + GDEM0154I61 ePaper (on-board gated booster) | 18.3 µA † | LP core I2C every 60 s | ~24.3 mC † |
+**Read the node tag on every figure.** `@3V3 rail` is the load alone, with the
+board's input tree bypassed; `@4V2 bat` is the whole deployment path, regulator
+and charger leakage included. They are not interchangeable, and the battery
+figure is not simply the larger one.
 
-† Measured at **4.2 V into the battery input**, through the reverse-battery FET and
-the charger — the full deployment path, not a 3.3 V rail like the rows above, so it
-is not directly comparable to them. The refresh figure includes LED wake blinks,
-which were deliberately left on for observability.
+| Setup | Deep-sleep floor | Sensor wake | Wake + refresh |
+|-------|-----------------|-------------|----------------|
+| Firebeetle ESP32-E + BMP390L + GDEH0154Z90 via DESPI-C02 (FDN340P gate) | 19–20 µA `@3V3 rail` | ULP bit-bang I2C every 5 s, avg ≈0 | ~112 mC `@3V3 rail` (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
+| XIAO ESP32-C6 + BMP581 + GDEH0576T81 via DESPI-C02 (FDN340P gate) | 15.5–16 µA `@3V3 rail` | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC `@3V3 rail` (was ~93–95 mC before light sleep) |
+| XIAO ESP32-C6 + BMP581 + GDEW029I6FD via Seeed ePaper Driver Board (no gate) | ~25 µA `@3V3 rail`<br>**21.7 µA `@4V2 bat`** | LP core I2C every 60 s: ~1 mA × 3 ms | 12.2 mC `@3V3 rail`<br>**10.05 mC `@4V2 bat`** |
+| thermometer-c6 rev A + BMP581 + GDEM0154I61 (on-board gated booster) | **18.3 µA `@4V2 bat`** | LP core I2C every 60 s | **~24.3 mC `@4V2 bat`** |
+
+A buck draws *less* current at 4.2 V than its load does at 3.3 V, which is why
+~25 µA at the rail reads 21.7 µA at the battery (~90 % efficient). An LDO runs
+the other way, ~1.15× the charge for the same work — so the custom board beating
+the XIAO by 3 µA at the same 4.2 V is a real win, not a topology artefact. Its
+wake figures include LED blinks, left on for observability. Blank cells are
+unmeasured, not zero; both are on the PPK2 backlog.
 
 The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display
-refresh is the dominant event on a typical day. At one refresh per hour it adds
-~13 µA (C6/5.76"), ~31 µA (Z90), or ~3.4 µA (2.9" I6FD) to the sleep floor, putting long-term averages
-in the **~16–51 µA band depending on rig and refresh cadence** — load-only
-runtime of roughly **1–3 years on a 400 mAh LiPo**. At this current level LiPo
-self-discharge (a few %/month ≈ 15–25 µA equivalent) is comparable to the load
-itself, so **expected runtime is on the order of a year** — to be confirmed
-against real long-run measurements. A 2600 mAh 18650 sits near the
-self-discharge floor and is expected to age out before the load meaningfully
-drains it.
+refresh is the dominant event on a typical day. At one refresh per hour that puts
+long-term averages in the **~16–51 µA band depending on rig and refresh cadence**
+— load-only runtime of roughly **1–3 years on a 400 mAh LiPo**. But at this
+current level LiPo self-discharge (a few %/month ≈ 15–25 µA equivalent) rivals
+the load itself, so **expected runtime is on the order of a year**, and a
+2600 mAh 18650 will age out before the load meaningfully drains it. Not yet
+confirmed against a full-length run.
 
-Four gotchas worth surfacing:
-- **DESPI-C02 ePaper adapter** leaks ~534 µA from its boost converter even with the panel hibernated. A P-channel MOSFET (FDN340P) on its 3.3 V line eliminates it.
-- **XIAO ESP32-C6 battery operation has a hard floor at ~3.6 V**: its 3.3 V rail is a pure buck (SGM6029C), which below VOUT + ~245 mV starves its bootstrap and lets the rail sag ~a VTH below VBAT — deep sleep survives, but wakes collapse into 0.5–0.9 A brownout-restart storms. Firmware shuts down at 3.7 V (~12–15% of Li-ion capacity abandoned); full regime map in [docs/notes.md](docs/notes.md). LiFePO₄ cells (3.2 V nominal) are unusable on this board.
-- **Don't use the Seeed ePaper Driver Board's JST battery connector**: its ETA9740 charger/boost idles at ~330–500 µA with 20–80 mA load-detect pulses every ~2 s (~20× the whole system's sleep floor — a 400 mAh cell dies in ~7 weeks doing nothing), and it double-converts BAT→5 V→3.3 V. Solder the battery to the XIAO's underside BAT pads instead and leave the JST empty with the board's power switch off.
-- **XIAO C6 USB Serial/JTAG** stayed on in deep sleep under the Arduino-era firmware (~20 mA, needing `ARDUINO_USB_CDC_ON_BOOT=0` gymnastics); the pure-IDF firmware's USB-Serial-JTAG console (`CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG`) doesn't hold the port active — confirmed on the PPK2 (15.5–16 µA deep sleep).
+Two gotchas worth surfacing (the adapter-leakage ones are under Hardware below):
+- **XIAO ESP32-C6 battery operation has a hard floor at ~3.6 V**: its 3.3 V rail is a pure buck (SGM6029C), which below VOUT + ~245 mV starves its bootstrap and lets the rail sag ~a VTH below VBAT — deep sleep survives, but wakes collapse into 0.5–0.9 A brownout-restart storms. Firmware shuts down at 3.7 V (~12–15 % of Li-ion capacity abandoned); full regime map in [docs/notes.md](docs/notes.md). LiFePO₄ cells (3.2 V nominal) are unusable on this board. The custom board uses an LDO and shuts down at 3.5 V instead.
+- **Don't use the Seeed ePaper Driver Board's JST battery connector**: its ETA9740 charger/boost idles at ~330–500 µA — ~20× the whole system's sleep floor, flattening a 400 mAh cell in ~7 weeks doing nothing — and it double-converts BAT→5 V→3.3 V. Solder the battery to the XIAO's underside BAT pads instead, JST empty, switch off.
+
+The Arduino-era ~20 mA deep-sleep USB CDC gotcha is gone: the pure-IDF
+USB-Serial-JTAG console doesn't hold the port active.
 
 For context: the original 2021 prototype (wake + refresh every 60 s, no ULP) ran a 2600 mAh cell flat in 8.5 days at ~12.6 mA average — the ULP/LP-core redesign is ~700× more efficient.
 
 # Hardware
 
 ## Controller boards
-- **thermometer-c6** — the custom board this project builds towards, replacing the
+- thermometer-c6 — the custom board this project builds towards, replacing the
   dev-board rigs below: ESP32-C6-MINI-1 + BMP581, a universal 24-pin FPC panel
   interface with the Good Display booster on-board and P-FET-gated, USB-C charging,
   an LDO 3.3 V rail, a GPIO-switched battery divider and a 32.768 kHz crystal.
