@@ -765,7 +765,7 @@ def classify_step(tr, cfg):
     if len(blips) >= 3:
         cadence_ok = (0.5 * cfg["blip_period_s"] <= res["blip_median_s"]
                       <= 1.5 * cfg["blip_period_s"])
-    res["alive"] = count_ok and cadence_ok
+    res["alive"] = bool(count_ok and cadence_ok)
 
     i0, i1 = tr.index_at(boot_end), len(tr)
     if i1 - i0 > 2:
@@ -1969,11 +1969,50 @@ def _md_row(res):
     return "| " + " | ".join(cells) + " |"
 
 
+def _json_default(o):
+    """Last resort for numpy scalars on the way out to JSON.
+
+    A sweep is unattended and hours long, and its results only become durable
+    when they are written, so a type that json cannot encode does not cost a
+    field — it costs the run. np.bool_ is the sharp edge: it does not subclass
+    bool (np.float64 does subclass float, which is why leaks stay invisible
+    until the one step whose result is False). Callers should still hand over
+    plain Python types; this exists so that forgetting cannot destroy captures.
+    """
+    item = getattr(o, "item", None)
+    if item is not None:
+        return item()
+    raise TypeError(f"Object of type {o.__class__.__name__} "
+                    f"is not JSON serializable")
+
+
+def _linear_edge(linear):
+    """Topmost HEALTHY -> non-HEALTHY transition, with ordering anomalies.
+
+    Anomalies are reported rather than resolved: a recovery below a failure
+    means the regime map is not monotonic, and which crossing counts as "the"
+    edge is then a judgement the reader has to make with the notes in hand.
+    """
+    anomalies = []
+    hi = lo = None
+    for a, b in zip(linear, linear[1:]):
+        if a["label"] == "HEALTHY" and b["label"] != "HEALTHY":
+            if hi is None:
+                hi, lo = a["mv"], b["mv"]
+            else:
+                anomalies.append(f"additional healthy->unhealthy "
+                                 f"transition {a['mv']}->{b['mv']} mV")
+        elif a["label"] != "HEALTHY" and b["label"] == "HEALTHY":
+            anomalies.append(f"recovery below a failure: {b['mv']} mV "
+                             f"HEALTHY under {a['mv']} mV {a['label']}")
+    return hi, lo, anomalies
+
+
 def _write_outputs(plan, steps, status, edge):
     out_dir = plan["out_dir"]
     with open(os.path.join(out_dir, "summary.json"), "w") as fh:
         json.dump({"status": status, "plan": plan, "edge": edge,
-                   "steps": steps}, fh, indent=1)
+                   "steps": steps}, fh, indent=1, default=_json_default)
     lines = [f"# Battery-floor sweep — rail {plan['rail']} — {plan['date']}", ""]
     lines.append(f"- status: **{status}**")
     lines.append(f"- connection: {RAILS[plan['rail']]['check']}")
@@ -2079,9 +2118,33 @@ def _classify_file(args):
 
 
 def _replay_dir(args):
+    """Reclassify a sweep directory from its raw captures, and rewrite outputs.
+
+    This is the recovery path when a run dies mid-flight: the captures are the
+    expensive part and they are already on disk, so a replay should leave the
+    directory in the state a completed run would have. Two things replay cannot
+    reproduce and therefore inherits from the per-step sidecars instead:
+    `peak_ma`, whose sub-bin half only exists in the live decimator, and the
+    plan. The bisect is not replayable at all — it needs the hardware — so the
+    edge here is only what the steps on disk bracket.
+    """
     names = sorted(n for n in os.listdir(args.replay) if n.endswith("mv.bin"))
     if not names:
         sys.exit(f"no step-*.bin captures in {args.replay!r}")
+    live = {}
+    for n in os.listdir(args.replay):
+        if not n.endswith(".step.json"):
+            continue
+        try:
+            with open(os.path.join(args.replay, n)) as fh:
+                d = json.load(fh)
+        except (OSError, ValueError):
+            print(f"  {n}: unreadable (partial write?), live peak lost")
+            continue
+        if d.get("capture"):
+            live[d["capture"]] = d
+
+    steps = []
     for name in names:
         path = os.path.join(args.replay, name)
         with open(path + ".json") as fh:
@@ -2094,7 +2157,49 @@ def _replay_dir(args):
                                 mode="source", decimate=args.decimate)
         res = classify_step(decode_raw(ns), cfg)
         res["phase"] = "replay"
+        res["capture"] = name
+        prev = live.get(name)
+        if prev and prev.get("peak_ma"):
+            res["peak_ma"] = max(res["peak_ma"] or 0.0, prev["peak_ma"])
+        steps.append(res)
         print(_step_row(res))
+
+    if not steps:
+        return 1
+    plan = None
+    try:
+        with open(os.path.join(args.replay, "summary.json")) as fh:
+            plan = json.load(fh).get("plan")
+    except (OSError, ValueError):
+        pass
+    if plan is None:
+        cfg = steps[0]
+        plan = {"rail": args.rail or "?", "dwell_s": cfg.get("dwell_s"),
+                "boot_s": args.boot_window, "off_s": args.off_seconds,
+                "decimate": args.decimate, "blip_period_s": args.blip_period,
+                "power_cycle": not args.no_power_cycle,
+                "date": "(recovered)", "git": _git_describe(),
+                "build_note": args.build_note}
+        print("  summary.json was unreadable — plan reconstructed from args")
+    plan["out_dir"] = os.path.abspath(args.replay)
+    if args.rail:                      # an explicit flag beats a recovered plan
+        plan["rail"] = args.rail
+    if plan.get("rail") not in RAILS:
+        sys.exit(f"rail {plan.get('rail')!r} not recoverable from "
+                 f"{args.replay!r} — pass --rail")
+
+    linear = [s for s in steps if s["mv"] is not None]
+    linear.sort(key=lambda s: -s["mv"])
+    hi, lo, anomalies = _linear_edge(linear)
+    edge = ({"lowest_healthy_mv": hi, "first_unhealthy_mv": lo,
+             "anomalies": anomalies} if hi is not None else
+            {"lowest_healthy_mv": linear[-1]["mv"] if linear else None,
+             "first_unhealthy_mv": None, "anomalies": anomalies})
+    _write_outputs(plan, steps, "replayed (no bisect — needs hardware)", edge)
+    print(f"\nrewrote summary.json + report.md in {args.replay}")
+    if hi is not None:
+        print(f"edge brackets {lo}..{hi} mV — bisect it with "
+              f"`sweep --rail {plan['rail']} --mv {hi},{lo}`")
     return 0
 
 
@@ -2184,7 +2289,7 @@ def run_sweep(args):
         print(_step_row(res))
         with open(os.path.join(out_dir, f"step{seq:02d}-{mv}mv.step.json"),
                   "w") as fh:
-            json.dump(res, fh, indent=1)
+            json.dump(res, fh, indent=1, default=_json_default)
         _write_outputs(plan, steps, "running", edge)
         if res["peak_ma"] and res["peak_ma"] > abort_ma:
             res["label"] = "OVERCURRENT"
@@ -2207,19 +2312,7 @@ def run_sweep(args):
                         f"(BATTERY_SHUTDOWN_DISABLED? blip period?) or panel "
                         f"suspect. Not descending.")
 
-            anomalies = []
-            hi = lo = None
-            for a, b in zip(linear, linear[1:]):
-                if a["label"] == "HEALTHY" and b["label"] != "HEALTHY":
-                    if hi is None:
-                        hi, lo = a["mv"], b["mv"]
-                    else:
-                        anomalies.append(f"additional healthy->unhealthy "
-                                         f"transition {a['mv']}->{b['mv']} mV")
-                elif a["label"] != "HEALTHY" and b["label"] == "HEALTHY":
-                    anomalies.append(f"recovery below a failure: {b['mv']} mV "
-                                     f"HEALTHY under {a['mv']} mV "
-                                     f"{a['label']}")
+            hi, lo, anomalies = _linear_edge(linear)
 
             if hi is None:
                 edge = {"lowest_healthy_mv": mv_list[-1],
