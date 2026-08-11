@@ -1804,3 +1804,58 @@ Also from this capture: floor 19.2-19.7 µA across the settled sleeps, consisten
 with the 19.05 µA settled figure; and a cold boot at **549.9 mC / 12.25 s**,
 which falls inside the previously recorded 487.8-810.5 mC spread and does not
 narrow it.
+
+## WiFi resync charge, measured at last (2026-08-11)
+
+First integrated WiFi figures in the project — everything before this was
+duration x 65-80 mA. Board 2 + T81, PPK2 source at J1 @4V2, no battery.
+`thermometer_c6_debug` at `6a1f872` with `-DPPK2_DEBUG -DRESYNC_INTERVAL_MIN=15
+-DDISABLE_DISPLAY` (display off so the radio term is not tangled with a
+refresh), archive erased first so the stored `resync_interval_s` could not
+defeat the override. 420 s, `local/captures/reva-j1-wifi-hotspot.bin`.
+
+**AP was a phone hotspot**, the only configured network, so that it could be
+switched off mid-capture without touching the house. Digital leads not
+connected, so regions are current-derived.
+
+| event | charge | duration | n |
+|---|---|---|---|
+| plain CPU wake, no radio | **16.36 mC** (sd 0.047) | 0.75-1.0 s | 15 |
+| successful resync, cached path | **321 mC** (244-422) | 4.0-8.8 s | 4 |
+| boot + scan + first resync | 506 mC | 7.50 s | 1 |
+| **AP vanished mid-attempt** | **939.9 mC** | **33.25 s** | 1 |
+| **failed resync, AP known absent** | **450.3 mC** | ~5.9 s | 2 |
+
+### The ~7x failure-path claim was optimistic by about 2x
+
+`docs/notes.md`'s deferred item 2 called the failure path "~7x cheaper and
+**entirely unverified**… the largest claimed win of the 2026-08-09 WiFi work",
+against a pre-change ~1.5 C association timeout. Measured: **0.45 C**, i.e.
+**~3.3x cheaper**. Real and worth having, but not 7x. Caveat on the ratio, not
+the measurement: the 1.5 C baseline is an ESP32-E figure, so it mixes boards.
+
+### The worst case is worse than either estimate, and was not in the budget
+
+The attempt that straddled the hotspot going down — AP present when the
+association started, gone before it completed — cost **939.9 mC over 33.25 s**,
+twice a clean failure and 2.9x a successful resync. That is the realistic field
+failure, and nothing in the budget accounts for it. **n=1**, so it needs
+repeating before it is leaned on.
+
+### The backoff is what actually bounds the cost
+
+After three failures there were **zero further resync attempts in the remaining
+126 s** — only plain 16.36 mC wakes, with the sleep windows lengthening. So the
+failure cost is bounded by the backoff, not by the per-attempt charge, which
+matters far more to a battery than the per-attempt number does. This is the
+half of the 2026-08-09 work that measures well.
+
+### What this does not settle
+
+Successful-resync charge spans 244-422 mC (n=4) and **that spread is the
+hotspot, not the firmware** — the serial log shows reason-2 and reason-205
+retries on association. A phone hotspot's DHCP is not the house router's, so
+**this number does not transfer** and deferred item 4 (the static-lease A/B, and
+with it the 1.8 s vs 2.4 s NTP contradiction) is untouched. Redo the successful
+resync on the home AP; it needs no cached path, just a second resync, so it can
+ride along with any later session.
