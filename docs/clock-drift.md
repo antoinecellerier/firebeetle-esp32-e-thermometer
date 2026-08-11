@@ -77,6 +77,36 @@ good enough to need no correction climbs back to the 28d cap in five resyncs.
 Neither stock board carries a 32.768kHz crystal, so `EXT_CRYS` is not an option
 on them; the custom rev A board adds one deliberately.
 
+### The FC-135 arms, started 2026-08-12 — t=0 record
+
+**The ~20ppm row above has never been measured.** It is what
+`CONFIG_RTC_CLK_SRC_EXT_CRYS` and the FC-135's spec imply, and every observation
+in this file comes from a crystal-less rig (+5066 / +305 / +1259ppm). These are
+the runs that put a number on it.
+
+| Board | MAC | Build | Started |
+|---|---|---|---|
+| 3 | `98:88:e0:75:47:94` | `thermometer_c6_release`, rig `revA-bigscreen`, git `753afbc`, no flags | 2026-08-12 evening |
+| 4 | `10:bd:a3:a8:d3:64` | identical — same hash, byte-for-byte | 2026-08-12 |
+
+Both boards: GDEH0576T81, 400mAh pack, `esptool erase_flash` immediately before
+flashing so the archive starts empty and the first base snapshot is unambiguous.
+Board 4 confirmed a complete cycle on battery before release (`#2 r2 lp1 w:ULP`,
+3996mV). Both have a static DHCP lease, so resyncs take the fast path and the
+NTP term is consistent between them.
+
+Two things this pair gives that a single board cannot. **Boards 3 and 4 run the
+same firmware in different places**, so a difference in refresh cadence is the
+room and not the build — the cadence row in the `docs/notes.md` budget is
+currently transferred from the XIAO runs and is its weakest term. And **two
+independent crystals** bound part-to-part spread, which matters because a single
+arm cannot tell a good FC-135 from a lucky one.
+
+Harvest from the journal (`tools/history.py`), not from the badge — the badge
+shows the last window only, and the 2026-08-05 harvest found ten samples where
+the badge said six. Do not attach USB mid-soak: it enters download mode and
+wipes the RTC drift window.
+
 ## Observations
 
 | Date | Board / build | Window | Drift | Rate | Next interval | Notes |
