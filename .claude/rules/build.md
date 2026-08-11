@@ -52,6 +52,14 @@ two `seeed_xiao_esp32c6`-based families take different rigs.
   the authored defaults tells you what was chosen on purpose.** Don't quote a
   generated value as a project decision — several are IDF defaults that follow
   from another selection (worked example in `docs/build-system.md`).
+- **`sdkconfig.<env>` is generated once and then wins over the defaults.** Later
+  edits to `sdkconfig.defaults*` are **silently ignored** — the build succeeds,
+  flashes and runs with the old value. `rm sdkconfig.<env>` to force a
+  regeneration (which triggers a full rebuild). Verify the value actually
+  reached the image before trusting a result:
+  `grep -o '"<CONFIG_NAME>": [a-z0-9]*' .pio/build/<env>/config/sdkconfig.json`.
+  This bit a brownout-level change on 2026-08-11: the reflash reported SUCCESS
+  and the board kept the level being changed away from.
 - libc is pinned to newlib (`CONFIG_LIBC_NEWLIB`) deliberately. Don't switch to
   picolibc while PlatformIO drives the LP-core sub-build.
 
