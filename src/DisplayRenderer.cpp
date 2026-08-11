@@ -1203,6 +1203,8 @@ static void render_status_indicators(Adafruit_GFX &gfx, const Layout &L,
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/RESYNC" : "! RESYNC");
     if (stats.refresh_overridden)
       pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/REFRESH" : "! REFRESH");
+    if (stats.lut_overridden)
+      pos += snprintf(lab + pos, IND_TOKEN_LEN - pos, "%s", pos ? "/LUT" : "! LUT");
     if (pos)
       snprintf(tok[ntok++], IND_TOKEN_LEN, "%s", lab);
   }

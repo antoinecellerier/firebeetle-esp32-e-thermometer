@@ -774,7 +774,8 @@ DisplayStats make_display_stats()
     // refresh is the dominant event on a typical day.
 #if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG) \
     && !defined(RESYNC_INTERVAL_OVERRIDDEN) \
-    && !defined(REFRESH_EVERY_N_WAKES) && !defined(DISPLAY_TEMP_DELTA_OVERRIDDEN)
+    && !defined(REFRESH_EVERY_N_WAKES) && !defined(DISPLAY_TEMP_DELTA_OVERRIDDEN) \
+    && !defined(FORCE_LUT_TEMPERATURE)
     true,
 #else
     false,
@@ -790,6 +791,11 @@ DisplayStats make_display_stats()
     false,
 #endif
 #if defined(REFRESH_EVERY_N_WAKES) || defined(DISPLAY_TEMP_DELTA_OVERRIDDEN)
+    true,
+#else
+    false,
+#endif
+#ifdef FORCE_LUT_TEMPERATURE
     true,
 #else
     false,
@@ -2152,6 +2158,13 @@ static void wake_work(uint32_t battery_mv, float temp)
     // rescued by a direct read after the coprocessor failed still gets a badge.
     last_sensor_ok = last_sensor_ok && temp_trusted;
 
+#ifdef FORCE_LUT_TEMPERATURE
+    // Bench override: pin the waveform to a band the room is not in, which is
+    // the only way to prove the value reaches the panel — indoors no boundary
+    // is reachable naturally. Deliberately ignores the VBUS gate below, since
+    // the check wants USB for its serial. Raises "! LUT".
+    display_set_lut_temperature(FORCE_LUT_TEMPERATURE);
+#else
     // Drive the panel from the temperature we actually measured. Left alone the
     // driver uses a fixed 20..30 C value, because it can only obtain a real one
     // over SW SPI; a waveform that assumes ~25 C under-drives cold glass and
@@ -2166,6 +2179,7 @@ static void wake_work(uint32_t battery_mv, float temp)
       display_set_lut_temperature(temp);
     else
       display_clear_lut_temperature();
+#endif
 
     PPK2_DISPLAY_HIGH();
     display_show_temperature(temp_trusted ? temp : TEMP_NO_PREVIOUS,

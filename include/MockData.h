@@ -227,6 +227,7 @@ inline DisplayStats mock_make_stats(time_t now,
   stats.ppk2_instrumented = false;
   stats.resync_overridden = false;
   stats.refresh_overridden = false;
+  stats.lut_overridden = false;
   stats.usb_window = false;
   stats.clock_drift_ms = 0;
   stats.drift_window_s = 0;

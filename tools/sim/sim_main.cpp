@@ -240,6 +240,7 @@ int main(int argc, char **argv)
     labmax_stats.power_efficient = false;
     labmax_stats.ppk2_instrumented = true;
     labmax_stats.resync_overridden = true;
+    labmax_stats.lut_overridden = true;
     labmax_stats.refresh_overridden = true;
     labmax_stats.dummy_sensor = true;
     labmax_stats.mock_data = true;
