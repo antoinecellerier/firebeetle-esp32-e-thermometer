@@ -11,11 +11,18 @@ charging, LDO power tree. Design driven by the PPK2 measurement campaign in
 passed bring-up Phases 0–2 on 2026-07-29 ([`BRINGUP.md`](BRINGUP.md)): first
 render, LP-core survival, and a measured 18.3µA @ 4.2V deployment-path sleep
 floor over a full field interval (docs/notes.md 2026-07-29) — vs 21.7µA at
-the same 4.2V on the XIAO buck rig, validating the LDO tree. Next hardware
-phase: [`BRINGUP.md`](BRINGUP.md) Phase 3, gated on board 1 coming off its
-battery soak (running since 2026-07-31; harvest before resetting it). Board 2
+the same 4.2V on the XIAO buck rig, validating the LDO tree. **Phase 3 is under
+way on board 2, not board 1**: the GDEH0576T81 panels arrived 2026-08-11 and
+board 2 took one plus a battery, so the phase is no longer gated on board 1
+leaving its soak (still running since 2026-07-31; harvest before resetting it).
+Closed on board 2 that day: the deployment configuration's power figures
+(19.05µA floor, 36.77mC wake+refresh `@4V2 bat`), the boost rails under the
+heaviest waveform the panel can be given (no sag — this is the evidence the
+rev B bridge deletion was waiting on), the VBAT_ADC point (−24mV at 4.2V, 2mV
+from board 1), the battery-floor sweep, and the WiFi resync charges. Board 2
 went straight to flash on the strength of board 1's pass, worked first time,
-and is the bench board; boards 3–4 are still in the bag. The board is 48×35mm
+and is both the bench board and now the Phase 3 vehicle; boards 3–4 are still
+in the bag. The board is 48×35mm
 2-layer, hand-routed, DRC-clean at full severity; fab export is `make fab`
 (gerbers/drill + CPL/BOM zip, git-hash+date stamped, gated by
 `verify/check_fab.py`); pre-order schematic sign-off (requirements proven
