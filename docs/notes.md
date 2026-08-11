@@ -1536,9 +1536,14 @@ board design at the same input voltage:
 | second transient | 524.3 mA | 471.9 mA |
 | 1 ms-mean refresh peak | 67-155 mA | 87-138 mA |
 
-Fresh-boot edge: **HEALTHY down to 3400 mV, DEGRADED at 3300 mV**, so the cliff
-sits in the same place as board 1's measured 3317-3320 mV. The bisect did not
-run (see the crash below), so 3400/3300 is a bracket, not the cliff.
+Fresh-boot edge: **lowest HEALTHY 3320 mV, first unhealthy 3310 mV, no
+anomalies** — bisected in a second run (`ppk2-sweep-20260811-200817`) after the
+first died at step 11, with 3320 re-confirmed HEALTHY on the re-run. Board 1 +
+GDEM0154I61 measured **3320/3310** on the same instrument and **3318/3317** on
+its finer pass. **The panel does not move the cliff.** Below the edge the
+failure is the familiar one, not a refresh brownout: at 3310 mV the sleep breaks
+into 1906 sub-50 ms events at ~21 Hz, at 3300 mV 6892 events at ~77 Hz, with the
+floor going 25.9 → 45.8 → 224.5 µA across 3320/3310/3300.
 
 Refresh charge is the most repeatable thing in the run — 70.25 / 70.32 /
 70.54 mC over 3.287 / 3.285 / 3.285 s across the top three steps, 0.4% and
