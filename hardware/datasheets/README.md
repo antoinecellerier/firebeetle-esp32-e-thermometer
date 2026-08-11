@@ -31,7 +31,7 @@ happens, is the controller driving that same pin back.
 |---|---|---|---|
 | UC8151D | `SDIN`, single | **measured working** on board 2 | `0x70` REV → `LUT_REV` from OTP `0x001` |
 | SSD1681 | `SDA`, single; 4-wire read procedure documented | expected working | **`0x38`: 10-byte User ID in OTP** |
-| SSD2677 | `SDA`, single | **untested** — no read procedure documented at module level | unknown |
+| SSD2677 | `SDA`, single | **returns 0 over hardware SPI** (2026-08-11, board 2 + T81); panel capability still untested | unknown |
 
 An earlier version of this table called the T81 doubtful "because the FPC carries
 no SDO". That was wrong: `SSD1677.pdf` names `SDI`/`SDO` as separate **chip**
@@ -45,11 +45,24 @@ GDEM0154I61 behind the GDEY0154D67 driver), so a User ID is the only thing that
 tells them apart — resolution cannot, and resolution can in any case only
 falsify a match, never confirm one.
 
-The T81 is the one that matters and the one nobody has asked: it is the
-deployment panel, and if it does answer, its `_Init_Full` temperature read stops
-returning 0 and stops selecting the coldest waveform on a warm panel. That is a
-firmware fix, not a board change — see [`../thermometer-c6/README.md`](../thermometer-c6/README.md),
-Rev B candidates, which is now a question rather than a candidate.
+**The T81 read is now known to return 0 on this rig — but that is a verdict on
+the host, not on the panel.** GxEPD2's `_readData()` samples the data line from
+software and is documented to work only in bit-banged mode; this build runs
+hardware SPI, so nothing samples the line at all. Measured indirectly on
+2026-08-11: `_Init_Full` selected the ≤5 °C waveform on a ~26 °C panel, which is
+the `temp == 0` path and no other. So the panel has still never been asked; it
+has only never been listened to.
+
+That no longer costs anything, which is why the row above stops short of a
+board-level conclusion. The waveform consequence is fixed twice over in firmware
+— upstream guards the failed read with a 20–30 °C default (worth −48.4 % of panel
+busy time, `../../docs/notes.md`), and feeding the BMP581 reading in is strictly
+better than any readback: calibrated, ambient rather than a self-heating die, and
+write-only so it needs no SPI-mode juggling. What a successful probe would still
+buy is a cross-check of the controller's own sensor and an `SSD2677` row here
+that says something. It is diagnostics now, not a fix, and it was never a board
+change — see [`../thermometer-c6/README.md`](../thermometer-c6/README.md), Rev B
+candidates.
 
 ## Caveats before trusting any of this
 

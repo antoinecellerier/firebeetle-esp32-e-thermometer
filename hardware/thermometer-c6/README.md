@@ -187,7 +187,14 @@ U5 by default. Re-verify stock at order time like everything else).
 
 DESPI-C02 §4.5 requires an FPC socket with "contact at up side or both
 side" — hence the dual-contact FPC-05FB (the bottom-contact-only
-FPC-05F-24PH20 C2856805 must NOT be substituted). J4 uses the hand-drawn
+FPC-05F-24PH20 C2856805 must NOT be substituted). **Rev B anti-regression
+note — this became a measured requirement on 2026-08-11, not a paper one.**
+The GDEH0576T81's FPC carries its contacts on the REAR face (away from the
+screen); every other panel bench-tested here — GDEM0154I61, GDEY0213M21,
+GDEH0154Z90, GDEW029I6FD — has them on the FRONT. A single-side socket would
+therefore have worked on every panel used during bring-up and failed on the
+one panel this board is being built for. It is exactly the line item a
+cost-down pass reads as unnecessary margin; it is not. J4 uses the hand-drawn
 `local:XUNPU_FPC-05FB-24PH20` footprint, transcribed from the XUNPU
 FPC-05FB-NPH20 manufacture drawing (pads 0.3×1.2 @0.5mm, tabs 2.0×1.8 at
 ±7.3/+1.625 center-to-center) and cross-checked against the EasyEDA/JLC
@@ -336,12 +343,17 @@ of a board that is otherwise order-ready.
   panel here, none of which exposes an SDO either. Its module datasheet calls that
   pin an input and documents no read procedure, which was equally true of the M21
   before the M21 answered. **Probe a T81 before concluding anything.**
-  Why it matters beyond diagnostics: `GxEPD2_576_GDEH0576T81::_Init_Full` reads
-  the controller temperature to choose a waveform LUT, and today reads 0 — the
-  coldest compensation on a room-temperature panel. If that is a wiring limit
-  rather than a firmware one, the fixes are 3-wire mode (a 9-bit protocol GxEPD2's
-  4-wire path does not implement) or an SDO on the FPC, and only then is this a
-  board change. Firmware probe: `display_probe_readback()` behind `EPD_PROBE`.
+  **It has never been asked, only never listened to.** `_Init_Full` reads the
+  controller temperature to pick a waveform LUT and gets 0, but GxEPD2's
+  `_readData()` samples the line in software and works only in bit-banged mode,
+  and this build runs hardware SPI — so no wiring conclusion follows from the 0.
+  **This stopped being a board question on 2026-08-11.** The LUT consequence is
+  fixed in firmware (upstream's guarded 20–30 °C fallback, then the BMP581 value
+  fed in directly), and feeding a calibrated ambient reading beats any readback
+  of a self-heating die — so neither 3-wire mode (a 9-bit protocol GxEPD2's
+  4-wire path does not implement) nor an SDO on the FPC buys anything a rev B
+  should pay for. A probe is now worth running for the cross-check alone:
+  `display_probe_readback()` behind `EPD_PROBE`.
   **What is readable is narrow, and per-controller.** On the UC8151 only three
   registers answer — `0x70` REV, `0x71` FLG, `0x40` temperature — and they answer
   identically before and after GxEPD2's init. `0x61` TRES and `0x00` PSR **float**,

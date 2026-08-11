@@ -264,10 +264,37 @@ jumper table; the T81 stays on the soak rig for now. Flash log in
 
 ## Phase 3 — first-article measurements (one board, PPK2 + scope)
 
+**2026-08-11: the deployment panel arrived and Phase 3 is no longer gated on
+board 1 leaving its soak.** Four GDEH0576T81 landed; one went onto board 2,
+which until then had run panel-less since 2026-08-05. It worked on the factory
+bridges (JP2 0.47Ω + JP5 10µH) with no rework — the third controller family to
+do so. **`rev A + BMP581 + GDEH0576T81` had never been measured before today**:
+every battery-life claim for the product substituted both a different board and
+a different panel at once. What that unblocks, and the one thing it does not:
+
+- Every item below can now be run on the real configuration rather than on the
+  200×200 stand-in. Board 1 keeps soaking, untouched.
+- The **first T81 refresh figures ever taken at the correct waveform**. Until
+  2026-08-11 the panel was driven with its ≤5 °C LUT at room temperature (a
+  GxEPD2 fork bug, fixed by moving to stock upstream). Every earlier T81 number
+  in this project, including the readme's ~45 mC, is at the wrong LUT and does
+  not carry over — see `../../docs/notes.md`.
+- **Not** unblocked: the scope items. A 10 Hz multimeter is available, which
+  reaches the *sustained* rails (VGH/VGL through a multi-second refresh) but not
+  the millisecond transients.
+
 - [ ] **VGH/VGL reach spec during refresh with JP2+JP5** (0.47Ω/10µH
       universal config). GDEH0576T81's datasheet config is 2.2Ω/47µH =
       JP3+JP6 — that's the on-board fallback if VGH sags.
       [REVIEW-KICAD-HAPPY ○]
+      Partly reachable without a scope: VGH/VGL land on **C2/C1** (4.7µF/25V to
+      GND, README pin table) as SMD pads, and are held for the duration of a
+      driving phase, so 10 Hz logging gets tens of samples across a T81 refresh.
+      The comparisons that need no external reference (the firmware sends no PWR
+      `0x01`, so these are module OTP defaults and nothing publishes them): VGH
+      at PON vs mid-drive on the same refresh, and T81 vs a 200×200 panel on the
+      same board and bridges. Measure *after* the LUT question is settled — a
+      colder waveform loads the charge pump differently.
 - [ ] EPD_VCC ramp with the R24/C28 soft-start on a scope (no brownout at
       gate-on). [README PPK2 items]
 - [x] **3V3 sag during the ~465mA refresh peak** — measured via the BOD
@@ -306,6 +333,16 @@ jumper table; the T81 stays on the soak rig for now. Flash log in
       3.0V spec min. Candidate thresholds **3550/3450mV** — decide after
       the cold + real-cell checks above; the droop number argues the
       conservative end (~3500–3550 shutdown).
+      **Caveat, and why this is being re-run 2026-08-11: every number in this
+      item is the 200×200 panel's.** The ~425mA peak, the ~300mV droop and the
+      3550/3500 constants derived from them were all taken on board 1 wearing a
+      GDEM0154I61. The T81 is 21× the pixel count; its peak is bigger and has
+      never been measured. If it droops further, the shipped threshold is wrong
+      in the **unsafe** direction — it would let the rail cross the BOD trip on
+      a refresh before the firmware ever decides to shut down. Board 2 + T81
+      sweep started 19:26Z (`local/sweeps/ppk2-sweep-20260811-192621/`), BOD
+      probe to follow; compare the fresh-boot cliff and the topmost failing
+      step against the board 1 figures above.
 - [ ] Boost transient current vs the Si1308EDL 610mA ILIM at refresh start.
       [SCHEMATIC-VERIFICATION]
 - [ ] 32k crystal **cold start**: power-on from fridge-cold (ESR rises when
