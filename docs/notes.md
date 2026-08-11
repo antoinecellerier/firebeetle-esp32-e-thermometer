@@ -1633,14 +1633,42 @@ The force flag exists because indoors no band boundary is reachable naturally,
 and it deliberately bypasses the VBUS gate so the check can run on USB for its
 serial. It raises `! LUT` on the panel.
 
-| forced | LUT code | busy slices | independent A/B earlier the same day |
-|---|---|---|---|
-| −5 °C | 232 | **443** | 445.62 (sd 0.50) |
-| 25 °C | 241 | **228** | 228.25 (sd 0.44) |
+| forced | LUT code | band | busy slices | ms | vs 241 |
+|---|---|---|---|---|---|
+| −5 °C | 232 | ≤5 °C | 443 | 3012 | 1.94x |
+| 8 °C | 235 | ≤10 °C | 447 | 3030 | 1.96x |
+| 15 °C | 238 | ≤20 °C | 238 | 1989 | 1.04x |
+| 25 °C | 241 | ≤30 °C | 228 | 1935 | 1.00x |
+| 40 °C | 244 | ≤127 °C | 225 | 1925 | 0.99x |
 
-Both land on figures obtained by a separate route (fork vs upstream vs pinned
-control), so the value is reaching the waveform selection. Slices repeat to
-0.05%, which is why two samples settle it.
+All five reachable codes, 7-19 renders each, no faults. 232 and 241 also match
+figures obtained by a separate route the same day (445.62 sd 0.50, and 228.25 sd
+0.44), so the value is demonstrably reaching the waveform selection. A sixth
+code, 242, is unreachable through `setTemperature()` — it needs temp > 127,
+which `int8_t` cannot express.
+
+### Refresh cost is a cliff at 10 °C, not a gradient
+
+The five codes are two regimes, not a curve: **warm** (238/241/244) at 225-238
+slices and ~1.93-1.99 s, all within 6% of each other, and **cold** (232/235) at
+443-447 slices and ~3.01-3.03 s. The step is ~1.95x and it lands on the ≤10 °C
+band boundary.
+
+Two consequences for planning. First, **every refresh figure this project has
+recorded is a 241 number taken at ~25 °C**, so an unheated-space deployment
+should be budgeted at ~1.95x on what is already the dominant power term. Second,
+below the cliff it is flat — 0 °C costs no more than 8 °C — so the budget needs
+two numbers rather than a temperature curve: 1.0x above 10 °C, 1.95x below.
+
+The awkward case is a room sitting *at* ~10 °C, which is the realistic winter
+figure for an uninhabited location: it crosses the boundary repeatedly and the
+same room then produces refreshes at either cost depending on the hour. Not a
+seasonal drift, a switch.
+
+**Durations and slice counts, not charge.** Charge tracking duration assumes
+comparable average current across waveforms, which is plausible and unmeasured.
+One PPK2 capture at 232 against the existing 36.77 mC / 2.250 s at 241 settles
+it; queued with the BOD probe session rather than run separately.
 
 ### The first build of this did nothing at all, and looked fine doing it
 
