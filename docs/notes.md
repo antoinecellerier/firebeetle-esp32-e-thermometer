@@ -744,7 +744,11 @@ numbers across; every term below except one is now measured on this rig.
   21.5-24.5 °C. The cadence is delta-triggered so it measures the room, not the
   device: **treat 10-50/day as the operating range**, the E rig's 48/day being the
   volatile end. Same run gives ~20 non-refresh CPU wakes/day and 31 wakes total.
-- **Resync interval: ~1.5 days**, not the 1-day floor. The C6's RC drifts +452 ppm
+- **Resync interval: ~1.5 days**, not the 1-day floor. (Superseded: this rig's rate
+  was re-measured from its own journal on 2026-08-05 at **+305 ppm**, and the interval
+  hunts a 1.7–3.5 d band rather than settling at 1.5 d — `docs/clock-drift.md`. The
+  +452 ppm below was a forced-refresh panel read, not device-measured.)
+  The C6's RC drifts +452 ppm
   ([`docs/clock-drift.md`](clock-drift.md)), and the adaptive rule converges where drift over the
   interval hits the 60 s threshold. Where there is no WiFi it is worse than
   projected, not better: failed attempts re-arm with no backoff, so it stays pinned

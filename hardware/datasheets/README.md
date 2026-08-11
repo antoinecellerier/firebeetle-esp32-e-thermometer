@@ -1,10 +1,11 @@
 # Panel datasheets
 
 Module- and controller-level docs for the e-paper panels the rigs drive. They
-live here rather than under `thermometer-c6/` because the panels are shared
-across every rig — FireBeetle, XIAO, the Seeed hat and the custom board.
-(`thermometer-c6/datasheets/` holds that board's own parts, including
-`SSD1677.pdf`, the nearest public relative of the T81's SSD2677.)
+live here rather than under `../thermometer-c6/` because the panels are shared
+across every rig — FireBeetle, XIAO, the Seeed hat and the custom board. That
+board keeps its own parts' datasheets beside it, but **untracked** — including
+the SSD1677 doc referenced below, which is not in the repo and has to be fetched
+again from Solomon Systech.
 
 | File | Panel | Controller | Rig |
 |---|---|---|---|
@@ -14,9 +15,8 @@ across every rig — FireBeetle, XIAO, the Seeed hat and the custom board.
 | `GDEH0576T81.pdf` | 920x680 | SSD2677 | `revA-bigscreen`, `xiao-bigscreen` |
 | `UC8151D.pdf` | — | UC8151D chip-level | the two UC8151 panels above |
 
-No chip-level SSD2677 doc; `thermometer-c6/datasheets/SSD1677.pdf` is a relative,
-not the part, and taking its pinout for the module's cost a wrong conclusion once
-(below).
+No chip-level SSD2677 doc. The SSD1677 datasheet is a relative, not the part, and
+taking its pinout for the module's cost a wrong conclusion once (below).
 
 ## What they settle: panel readback
 
@@ -48,8 +48,8 @@ falsify a match, never confirm one.
 The T81 is the one that matters and the one nobody has asked: it is the
 deployment panel, and if it does answer, its `_Init_Full` temperature read stops
 returning 0 and stops selecting the coldest waveform on a warm panel. That is a
-firmware fix, not a board change — see `thermometer-c6/README.md`, Rev B
-candidates, which is now a question rather than a candidate.
+firmware fix, not a board change — see [`../thermometer-c6/README.md`](../thermometer-c6/README.md),
+Rev B candidates, which is now a question rather than a candidate.
 
 ## Caveats before trusting any of this
 

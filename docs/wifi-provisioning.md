@@ -44,8 +44,8 @@ Plain NVS is target-agnostic and needs no partition work. *Verified:*
 
 - `nvs` already exists at `0x9000`/`0x6000` (24 KB) — `partitions.csv:15`.
 - That table is shared by every environment: `board_build.partitions` is declared once
-  in `[env]` at `platformio.ini:39`, and no env, board JSON or CMake overrides it. Seven
-  envs, two targets (`esp32` for the two FireBeetle envs, `esp32c6` for the rest).
+  in `[env]` at `platformio.ini:39`, and no env, board JSON or CMake overrides it. Every
+  env, two targets (`esp32` for the two FireBeetle envs, `esp32c6` for the rest).
 - `CONFIG_PARTITION_TABLE_CUSTOM=y` is already set — `sdkconfig.defaults:18-22`.
 - The partition is already live: `nvs_flash_init()` runs at `src/Thermometer.cpp:988`
   because `esp_wifi_init()` requires it, and `nvs_flash` is already a component
@@ -230,8 +230,8 @@ clear  [--port] --force
 ```
 
 **Reuse rather than duplicate:** generalise `history.history_partition()` (`:73`) into
-`partition(name)`, keeping the old name as a wrapper — it has two callers,
-`scripts/upload_gate.py:106` and `tools/hstest/check_sample.py`. Reuse
+`partition(name)`, keeping the old name as a wrapper — its only caller outside
+`history.py` is `scripts/upload_gate.py`. Reuse
 `history._resolve_port()` (`:336`, and its never-cache-the-port discipline),
 `history._connect()` (`:352`), the `finally: hard_reset + close` block (`:417-428`), and
 `upload_gate.read_device_header()` for a pre-write identity check that skips out loud

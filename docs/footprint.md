@@ -19,9 +19,10 @@ Arduino (baseline) → pure ESP-IDF, both boards, stock platform, no fork:
 - **Build times**: env-switch invalidation eliminated (167s/~2400 files → 3–4s/0);
   same-env no-op 19–30s → 3–4s; one-time ~5min IDF-from-source per clean checkout.
 
-All rows measured with the then-active local-secrets.h config (USE_576_T81 920x680 +
-USE_BMP58x) — other panel/sensor selections shift absolute sizes by tens of KB
-(font bitmaps dominate app .rodata). The Flash% denominator varies by era: 1280KB
+Rows through stage F were measured with the 920x680 + BMP58x config, hand-selected in
+`local-secrets.h` as it worked then; later rows name their own rig, which the env now
+carries via `custom_rig`. The distinction matters: other panel/sensor selections shift
+absolute sizes by tens of KB (font bitmaps dominate app .rodata). The Flash% denominator varies by era: 1280KB
 app0 (baseline/A/B), 4MB board flash (** rows — see *** correction), 3968KB
 partitions.csv slot (F2). `.bin bytes` is the only apples-to-apples column.
 

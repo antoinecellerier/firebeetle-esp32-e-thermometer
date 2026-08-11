@@ -11,8 +11,14 @@ Status 2026-07-06: items 1, 2, 4, 5, 6 applied same day (LP mode now derives
 from local-secrets.h via relative include; HAS_ULP_SUPPORT moved to
 app_common.h; CPU-freq/ULP-enable hoisted to common sdkconfig.defaults; ULP
 loader tail extracted as ulp_load_program(); .ignore added; dead test/
-removed). Item 3 (hardware/) deliberately deferred — still needs a
-track-vs-ignore decision.
+removed). Item 3 (hardware/) deliberately deferred at the time; **resolved
+since — `hardware/` is tracked**, KiCad sources and all, with its own
+`.gitignore` for generated output.
+
+Everything below is a snapshot of the tree on 2026-07-06 and has not been
+maintained since. Several "Verified fine" entries describe a build that has
+moved on — script names, the `extends` workaround, env and sdkconfig counts,
+line numbers. Read it for the reasoning, not for current fact.
 
 ### 1. LP-core sensor selection can silently disagree with local-secrets.h
 `ulp/lp_core_main.c:20` hardcodes `#define LP_CORE_BMP58X` because the ULP

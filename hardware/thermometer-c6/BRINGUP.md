@@ -196,7 +196,7 @@ extra flags, `USE_BMP58x` + `DISABLE_DISPLAY` + LEDs enabled (no panel on
 the board yet). Bring-up panel is the **GDEM0154I61** (`USE_154_GDEY`) —
 the as-shipped JP2 0.47Ω + JP5 10µH are its correct config per the README
 jumper table; the T81 stays on the soak rig for now. Flash log in
-docs/history-store-validation.md.
+[`docs/history-store-validation.md`](../../docs/history-store-validation.md).
 
 - [x] Flash over USB; serial monitor up.
       2026-07-29 board 1: flashed at 3b42d3a; boot log captured via

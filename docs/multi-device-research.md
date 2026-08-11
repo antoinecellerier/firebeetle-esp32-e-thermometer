@@ -131,7 +131,10 @@ BLE 4.2 — useful for outdoor sensors.
 ## What's already in place
 
 - **WiFi + NTP**: working, with adaptive drift tracking (1-28 day resync interval)
-- **BLE stack**: compiled into firmware (Bluedroid, GATT server/client) but no app code
+- **BLE stack**: **not** compiled in — no `CONFIG_BT_*` in any tracked
+  `sdkconfig.defaults`. Bluedroid came with the Arduino core, which the ESP-IDF
+  migration removed, so every BLE option costed below has to add the stack and its
+  DRAM as well
 - **Deep sleep flow**: wake → read sensor → update display → sleep, with ULP monitoring
 - **RTC persistence**: 24h sparkline + 30-day hourly history survives deep sleep
 - **Clock drift tracking**: `drift_ppm` calculated from NTP resync — can inform rendezvous accuracy
