@@ -111,7 +111,12 @@ static void usb_service_window(void);
 // Overridable so a bench build can decouple the refresh cadence from the room:
 // set it past any real swing and REFRESH_EVERY_N_WAKES becomes the only
 // temperature-independent repaint source.
-#ifndef DISPLAY_TEMP_DELTA
+#ifdef DISPLAY_TEMP_DELTA
+// Already defined means a build override is in force. Flagged so the panel can
+// say so: refresh cadence is the dominant term in the power budget, and a build
+// that decouples it from the room renders identically to production.
+#define DISPLAY_TEMP_DELTA_OVERRIDDEN 1
+#else
 #define DISPLAY_TEMP_DELTA 0.1f
 #endif
 
@@ -761,12 +766,15 @@ DisplayStats make_display_stats()
     false,
 #endif
     // power_efficient: true only when serial is off, sleep interval is
-    // production-length, and no debug instrumentation. A resync override counts:
-    // it can spend 1.5-4.5 C per attempt on a minutes-long cadence, and without
-    // it here the panel renders identically to production — so a photo or a
-    // harvested capture could not tell the two apart.
+    // production-length, and no debug instrumentation. Overrides that move a
+    // large power term count, because without them here the panel renders
+    // identically to production — so a photo or a harvested capture could not
+    // tell the two apart. A resync override can spend 1.5-4.5 C per attempt on
+    // a minutes-long cadence; the refresh-cadence pair is larger still, since a
+    // refresh is the dominant event on a typical day.
 #if defined(DISABLE_SERIAL) && SLEEP_INTERVAL_S >= 60 && !defined(PPK2_DEBUG) \
-    && !defined(RESYNC_INTERVAL_OVERRIDDEN)
+    && !defined(RESYNC_INTERVAL_OVERRIDDEN) \
+    && !defined(REFRESH_EVERY_N_WAKES) && !defined(DISPLAY_TEMP_DELTA_OVERRIDDEN)
     true,
 #else
     false,
