@@ -1462,3 +1462,54 @@ budget. It does mean a bench habit of power-cycling between captures is not free
 
 Still open after this capture: a **settled** floor, and a **non-refresh wake**
 charge — every wake here rendered, so there is no sample of one yet.
+
+### Capture 2 — 3600 s, thermally settled, USB cable attached device-side
+
+| Quantity | Value | Window / n |
+|---|---|---|
+| **Settled floor** | **19.05 µA** | 3039.7 s continuous (50.7 min) |
+| **Non-refresh wake** | **7.97 mC** | 0.500 s, n=1 |
+| Wake + refresh | 36.77 mC | 2.250 s, n=5 |
+| Power-on boot | 810.5 mC | 18.25 s, n=1 |
+
+The non-refresh wake landed at t=78 s, before the room had moved: the CPU woke
+and declined to repaint. Against board 1's 7.74 mC / 0.500 s that is the same
+duration and 3% on charge, from a different board with `DISABLE_LEDS` — a good
+independent check on both numbers.
+
+Sleeps *following* a refresh read 21.3–21.5 µA against 19.0–19.2 µA elsewhere,
+so there is a settling tail after the panel is driven. The long window is the
+clean figure; a floor averaged over a few post-refresh minutes would read ~10%
+high, which is worth knowing before quoting a short capture.
+
+### Capture 3 — 1200 s, cable removed: the cable costs nothing
+
+Same conditions with the USB cable unplugged from the board (host end was
+already out in capture 2, so VBUS was low in both and `vbus_present()` false).
+
+**Settled floor 19.06 µA over 919.5 s, against 19.05 µA with the cable — 0.01 µA,
+0.05% apart.** The cable is not on the floor: no leakage through D2 SS14 and the
+66k VBUS pulldowns that this can resolve. Take **~19.05 µA `@4V2 bat`** as the
+deployment floor, confirmed on two independent windows.
+
+**This capture came back 2.4% short on samples** (97.6 kSps of 100) because a
+memory-hungry decode was running on the host and starving the serial reads — an
+acquisition fault, nothing to do with the board. Region *means* survive that
+(randomly dropped samples leave the average of what arrived unbiased, which is
+why the floor comparison above stands), but region *charge* under-reports, so
+this capture's 36.36 mC refresh is not usable and capture 2's 36.77 mC stands.
+The cause is fixed in `a28b06b`.
+
+### The cold boot does not reproduce, and it is not scatter
+
+Three power-on events, same build, same board: **583.0 mC / 11.75 s**,
+**810.5 mC / 18.25 s**, **487.8 mC / 9.50 s**. The durations differ by 2x, so
+these are not three measurements of one quantity — the boot is doing different
+amounts of work each time.
+
+Hypothesis, untested: this is WiFi. The release build has the radio enabled and
+a cold boot with no valid time triggers an NTP bootstrap, which would add
+seconds. If so the spread is the resync term appearing in the boot figure, which
+is the same quantity the four deferred WiFi captures exist to measure. **Do not
+average these three.** A power-on happens on battery swap, not on any wake, so
+none of it enters the daily budget either way.
