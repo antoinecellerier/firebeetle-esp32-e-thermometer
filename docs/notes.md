@@ -1492,6 +1492,42 @@ already out in capture 2, so VBUS was low in both and `vbus_present()` false).
 66k VBUS pulldowns that this can resolve. Take **~19.05 µA `@4V2 bat`** as the
 deployment floor, confirmed on two independent windows.
 
+#### The 4% floor gap against board 1 is unresolved, and no temperature was logged
+
+Board 1 measured **18.3 µA**, board 2 measures **19.05 µA** — 0.75 µA / 4% apart.
+Same board revision, same `thermometer_c6_release` with no flags, same `@4V2 bat`
+node at J1, and the two rig headers differ only in the panel selection and
+comments, so the build does not explain it.
+
+**Neither figure carries a temperature measured while it was being taken.** Board
+1's entry is tagged 27 °C and board 2's session has an operator reference of
+~26 °C, but that reading was taken hours earlier during a USB-powered session,
+not during the captures. Leakage is the temperature-sensitive part of a floor
+this small, so a 1 °C difference between two non-concurrent readings settles
+nothing in either direction — **do not read the 26/27 °C pair as ruling
+temperature in or out.**
+
+Two things do constrain it. The captures were not USB-heated: capture 1 is
+discarded precisely because the board was still shedding USB heat (~21.3 µA
+unsettled), capture 2 had the host end out and capture 3 the cable off entirely,
+and the two settled windows agree to 0.05% with capture 3 the later of them. And
+a sleeping board dissipates ~90 µW, so at equilibrium it sits at ambient — the
++6.5 °C self-heat measured on this board (32.57 °C sensor against ~26 °C ambient)
+applies **only while VBUS is in**, which is also why the board's own sensor is
+not a usable ambient reference during any USB session.
+
+So the candidates are board-to-board spread, ambient drift between sessions, and
+the panel. The panel *should* be irrelevant — `EPD_POWER_GATE` cuts its rail in
+deep sleep — but the 24 FPC lines still run to driver GPIOs, and anything driven
+or floating into the panel's ESD structures conducts whatever the rail gate does.
+The T81 has a much larger array behind those pins than the 200×200.
+
+**The experiment that separates them: floor captures on board 2 with the FPC
+plugged and unplugged, back to back in one session.** Same board, same chip,
+same build, same ambient — the panel term falls out with no board-to-board and no
+thermal confound. A two-board comparison can do neither, and it also costs board
+1's soak. Log an ambient reading with each. Not yet run.
+
 **This capture came back 2.4% short on samples** (97.6 kSps of 100) because a
 memory-hungry decode was running on the host and starving the serial reads — an
 acquisition fault, nothing to do with the board. Region *means* survive that
@@ -1513,6 +1549,39 @@ seconds. If so the spread is the resync term appearing in the boot figure, which
 is the same quantity the four deferred WiFi captures exist to measure. **Do not
 average these three.** A power-on happens on battery swap, not on any wake, so
 none of it enters the daily budget either way.
+
+### Budget as measured 2026-08-11 (thermometer-c6 board 2 + T81, the deployment config)
+
+Same structure as board 1's 2026-07-29 table above so the two compare line by
+line. Charges measured on this board on the corrected waveform, `@4V2 bat`;
+**cadences are transferred, not measured** — a delta-driven cadence measures the
+room, not the board.
+
+| Term | C/day | Share (stable) | Basis |
+|---|---|---|---|
+| Sleep floor, 19.05 µA (incl. LP polls @60 s) | 1.65 | **~71%** | measured, two independent windows (3039.7 s and 919.5 s) agreeing to 0.05%; no concurrent temperature logged |
+| Refreshes, 10.8–50/day × 36.77 mC | 0.40–1.84 | 17% | charge measured n=5; cadence transferred from the XIAO runs |
+| Non-refresh CPU wakes, ~20/day × 7.97 mC | 0.16 | 7% | charge measured n=1; rate from the XIAO 20-day run |
+| NTP resync, ~150–190 mC at a ~1.5-day cadence | ~0.10 | 4% | measured 2026-08-11, no longer a duration × 65–80 mA estimate |
+| Archive (journal + base + ring erase) | ~0.005 | <1% | journal append still unmeasured — needs a D1 marker session |
+| **Total** | **~2.3 stable → ~3.8 volatile** | | **~380–620 days on 400 mAh at full capacity** |
+
+Against board 1's ~2.0 → ~3.0 C/day with the 200×200 panel: **the deployment
+panel costs ~15% more per day at a quiet cadence and ~25% more at a busy one.**
+Much less than the 21× pixel count would suggest, because the floor still
+dominates at 71% and the refresh charge only went 24.3 → 36.77 mC.
+
+Three caveats carry over unchanged from board 1's table and one is new:
+
+- **Pack self-discharge is not in the table** and at 1–2%/month on a 400 mAh
+  pouch is 0.5–1.0 C/day equivalent — it rivals the floor.
+- **Usable window**: the 3550/3500 mV thresholds were derived from board 1's
+  200×200 BOD probe. The 2026-08-11 SEL_2/SEL_3 result says the T81 crosses the
+  ~3.27 V trip at 4.23 V input where board 1 needed ≤3.57 V, so **that
+  derivation does not transfer** and the day-count above assumes a usable
+  window that is itself under revision.
+- The cadence rows are the wide ones, and they are transferred estimates. The
+  soak is what replaces them with this board's own numbers.
 
 ## Board 2 + T81: battery-floor sweep, and what "peak" meant all along (2026-08-11)
 

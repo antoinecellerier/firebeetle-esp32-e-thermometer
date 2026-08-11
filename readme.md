@@ -21,10 +21,12 @@ figure is not simply the larger one.
 | XIAO ESP32-C6 + BMP581 + GDEH0576T81 via DESPI-C02 (FDN340P gate) | 15.5–16 µA `@3V3 rail` | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC `@3V3 rail` — **superseded, re-measure** (see below) |
 | XIAO ESP32-C6 + BMP581 + GDEW029I6FD via Seeed ePaper Driver Board (no gate) | ~25 µA `@3V3 rail`<br>**21.7 µA `@4V2 bat`** | LP core I2C every 60 s: ~1 mA × 3 ms | 12.2 mC `@3V3 rail`<br>**10.05 mC `@4V2 bat`** |
 | thermometer-c6 rev A + BMP581 + GDEM0154I61 (on-board gated booster) | **18.3 µA `@4V2 bat`** | LP core I2C every 60 s | **~24.3 mC `@4V2 bat`** |
+| thermometer-c6 rev A + BMP581 + GDEH0576T81 (on-board gated booster) | **19.05 µA `@4V2 bat`** | LP core I2C every 60 s | **36.77 mC `@4V2 bat`** |
 
-The GDEH0576T81 refresh figures are **superseded as of 2026-08-11**: they were
-taken while the panel ran its coldest waveform LUT, and the fix cut panel busy
-time by 48%. Charge not yet re-measured — [docs/notes.md](docs/notes.md).
+The XIAO's GDEH0576T81 figure is **superseded**: it was taken while the panel ran
+its coldest waveform LUT, which cost 48% of panel busy time. The last row is the
+deployment configuration on the corrected waveform — daily budget and derivation
+in [docs/notes.md](docs/notes.md).
 
 A buck draws *less* current at 4.2 V than its load does at 3.3 V, which is why
 ~25 µA at the rail reads 21.7 µA at the battery (~90 % efficient). An LDO runs
@@ -36,7 +38,9 @@ unmeasured, not zero; both are on the PPK2 backlog.
 The main CPU only wakes on a ≥0.1 °C delta or a safety-net tick, so a display
 refresh is the dominant event on a typical day. At one refresh per hour that puts
 long-term averages in the **~16–51 µA band depending on rig and refresh cadence**
-— load-only runtime of roughly **1–3 years on a 400 mAh LiPo**. But at this
+— load-only runtime of roughly **1–3 years on a 400 mAh LiPo**, with the
+deployment configuration measured at the bottom of that band (~2.3–3.8 C/day,
+~380–620 days; derivation in [docs/notes.md](docs/notes.md)). But at this
 current level LiPo self-discharge (a few %/month ≈ 15–25 µA equivalent) rivals
 the load itself, so **expected runtime is on the order of a year**, and a
 2600 mAh 18650 will age out before the load meaningfully drains it. Not yet

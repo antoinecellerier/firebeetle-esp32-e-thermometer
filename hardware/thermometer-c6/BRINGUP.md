@@ -373,7 +373,15 @@ a different panel at once. What that unblocks, and the one thing it does not:
       path (first hardware test of the threshold logic; revive on USB).
       First datapoint 2026-07-29: −22mV at 4.2V. Boards 2–4 get a
       single-point check (~4.0V) during their sweep — the curve fit is
-      shared but the 1% divider stack is per-board (±40mV worst case). While looking at this trace, also check
+      shared but the 1% divider stack is per-board (±40mV worst case).
+      **Board 2 done 2026-08-11: −24mV at 4.2V** — panel read 4176mV under
+      a 4200mV PPK2 source at J1, taken during the SEL_3 BOD sweep, no
+      extra rig time. 2mV from board 1, i.e. an order of magnitude inside
+      the ±40mV worst case, so the shared curve fit transfers and boards
+      3–4 are unlikely to need individual calibration. Both figures are
+      read on a rendered frame through the same Dupont-into-JST harness,
+      so any harness IR drop at the ~15mA read current is common to both.
+      The across-3.5–4.2V half of this item is still open. While looking at this trace, also check
       whether the settle wait shows as a visible chunk of a non-refresh
       wake. Analysis 2026-07-22 (deferred pending these numbers): the read
       runs only on CPU wakes, so the blocking 5ms costs ~0.075mC (5ms ×
