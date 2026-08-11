@@ -172,7 +172,7 @@ MTMS
 3V3
 BOOT
 
-![Seeed Xiao C6, BMP581 & GDEH0576T81 (2026)](docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg)
+![Seeed Xiao C6, BMP581 & GDEH0576T81 (2026)](seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg)
 
 # Seeed ePaper Driver Board for XIAO vs DESPI-C02 (compatibility notes)
 
