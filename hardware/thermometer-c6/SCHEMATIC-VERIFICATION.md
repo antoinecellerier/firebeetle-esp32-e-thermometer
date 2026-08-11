@@ -59,11 +59,15 @@ device datasheet (a wrong symbol passes every automated check at once).
    hold 3.3V at the 465mA EPD peak — right at the 3.7V cutoff.
    **First-article bench item**: measure 3V3 sag at 3.7V supply during
    refresh (feeds the planned cutoff re-derivation).
+   **Closed 2026-07-31**: BOD probe measured ~300mV droop at the peak; cutoff
+   re-derived to 3550/3500mV (`1e1048e`).
 4. **Boost transient vs 610mA ILIM**: pulsed inductor current could brush
    the LDO limit. **First-article bench item** (PPK2 peak capture).
 5. **Physical FPC cable pin-1 orientation** — logically proven pin-for-pin;
    dual-contact part removes the flip failure mode; end-for-end cable fold
-   is only checkable against the real panel. **ORDERING.md §2b preview walk.**
+   is only checkable against the real panel. **Closed on hardware**: BRINGUP
+   Phase 0 continuity, all 24 nets to the right adapter pins, then board 1's
+   first render.
 6. **Crystal 20pF load assumes ~2.5pF stray** — correct nominal; cold-start
    already a first-article item (7pF FC-135 variant is the fallback).
 7. **`datasheets/XUNPU_FPC-05FB-NPH20.pdf` was corrupted** (circular xref)

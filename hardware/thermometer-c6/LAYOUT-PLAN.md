@@ -1,7 +1,12 @@
-# thermometer-c6 — next phase: PCB layout → JLCPCB order
+# thermometer-c6 — PCB layout → JLCPCB order (completed phase; historical)
 
-Self-contained instructions for a FRESH session (no prior conversation
-context needed).
+**Both phases closed.** The PCB was finished and ordered 2026-07-20; the boards
+landed 2026-07-29 and board 1 is in service. Kept as the record of how the
+layout was planned and what was decided. The live checklist is
+[`BRINGUP.md`](BRINGUP.md).
+
+Written as self-contained instructions for a fresh session, which is why it
+still reads in the imperative.
 
 ## 0. What this is / current state
 
@@ -58,12 +63,19 @@ How this project works (do not break it):
 Decisions already made by the user (do not re-ask): indoor-only charging
 0–45°C (goes on silkscreen), BMP581/585 populate-exactly-one, JP5 10µH
 default / JP6 47µH (pair with JP3 2.2Ω for GDEH0576T81), 100mA charge
-current, ~400–500mAh pouch, target fab JLCPCB with economy assembly.
+current, ~400–500mAh pouch, target fab JLCPCB. (Assembly tier: **Standard**, not
+economy — ENIG and POFV each disable economy and U1 + U5 are Standard-only
+parts. Settled in [`ORDERING.md`](ORDERING.md) §3; the draft above assumed
+economy before that was known.)
 
 Deliverables this phase: `thermometer-c6.kicad_pcb`, JLCPCB fab zip
 (gerbers+drill), assembly BOM + CPL CSVs, updated README + this file.
 
 ## 1. Pre-layout tasks
+
+**All three done.** The XUNPU footprint is committed in `local.pretty/` and
+hardware-verified on board 1; the outline came out 48×35mm with R2.2 corners;
+the Makefile has `drc` and `fab`.
 
 1. **Draw the XUNPU FPC-05FB-24PH20 footprint** (`local.pretty/`) from the
    XUNPU drawing (LCSC C2856831 datasheet). The schematic currently points
@@ -362,6 +374,13 @@ preview walk, and archiving — lives in **[`ORDERING.md`](ORDERING.md)**
 
 ## 6. First-article bench checklist (PPK2)
 
+**Superseded by [`BRINGUP.md`](BRINGUP.md)**, which is the checklist that was
+actually run and carries the results. This draft is kept for the reasoning
+behind each item; where the two disagree, BRINGUP wins. In particular item 1
+was done through J1 rather than J2, and item 5's two open questions are both
+answered — C29 is populated, and the threshold was re-derived to 3550/3500 mV
+from a measured ~300 mV refresh-peak droop, not the ~3.4–3.5 V guessed here.
+
 1. Smoke: bench-supply via J2 (VBAT side), current-limited 50mA, no panel.
 2. Sleep floor vs the 15.5–19µA dev-rig baselines; hunt surprises (SS14
    reverse leakage at temperature — swap to PMEG6010 class if hot floor
@@ -377,6 +396,11 @@ preview walk, and archiving — lives in **[`ORDERING.md`](ORDERING.md)**
 7. Reverse-battery test on a sacrificial JST pigtail (it should just block).
 
 ## 7. Firmware follow-ups (tracked, not this phase)
+
+The first two shipped: `THERMOMETER_C6_BOARD` carries the pin map, and
+`read_battery_level()` has a real implementation on this board (board 1 logged
+4178mV against 4200mV sourced). The `4321` stub survives only on the stock XIAO,
+which has no divider.
 
 - New board define: pins per README map (EPD 18–23, gate 14, LED 15,
   divider 2/3, VBUS sense 4, 32k crystal sdkconfig, BMP58x INT config

@@ -104,6 +104,12 @@ Run-1-recommended value swaps).
 
 ## Process / tooling finding (not a board defect)
 
+> **Resolved `5e5cf42`.** The `fab` target's DRC gate now runs through
+> `drc_summary.py --gate-fab`, and `fab:` depends on `check` rather than raw
+> `drc` — the first of the two fixes proposed below. The J3 waiver's cause was
+> separately removed by the 2026-07-20 datum respin, so `WAIVED=0`. The fab
+> package that was ordered came from `3ed40fe`, not `e567982`.
+
 **`make fab` is blocked at e567982.** Its `drc` prerequisite runs raw
 `kicad-cli pcb drc` (no J3 waiver) and halts on the 2 J3 `copper_edge_clearance`
 violations that the project's own `verify/drc_summary.py --gate` correctly
@@ -127,7 +133,7 @@ or to expected consequences of the three already-approved value swaps. The board
 gate (`drc_summary --gate` REAL=0, gnd_islands connected, 101/76 parity) passes.
 The one actionable item is the **`make fab` gate blockage** above — a build-tool
 gap that must be closed before a fresh e567982 fab package can be exported for
-ordering.
+ordering. *(Closed `5e5cf42`; the order shipped from `3ed40fe`.)*
 
 ---
 
@@ -294,7 +300,7 @@ TE-001 "11%" is nominal-only: 11 test points cover every power rail (VBAT, VSYS 
 LCSC-only audit gives no lifecycle status by construction (see Not Performed); the stock sweep in Component Summary stands in for order-time risk.
 
 ### Ordering Notes
-2-layer, ENIG, POFV via covering, 1.6mm, JLC economy assembly (all settled in ORDERING.md); top-side stencil only; JLC order-number token authored on back silk; rotation checklist in `out/fab/rotation-checklist.md` still needs the human JLC-preview walk.
+2-layer, ENIG, POFV via covering, 1.6mm, JLC economy assembly (all settled in ORDERING.md); top-side stencil only; JLC order-number token authored on back silk; rotation checklist in `out/fab/rotation-checklist.md` still needs the human JLC-preview walk. *(Superseded before the order: the assembly tier is **Standard** — ENIG and POFV each disable economy — and the back-silk order-number token was deleted 2026-07-20 (`3ed40fe`) once JLC confirmed the service is discontinued. The preview walk was done before paying.)*
 
 ## False Positives / Reviewer Overrides
 
@@ -332,3 +338,5 @@ LCSC-only audit gives no lifecycle status by construction (see Not Performed); t
 ## Final verdict / readiness
 
 **READY TO ORDER.** No critical findings; the fab package is internally consistent, datasheet-verified, and DRC/DFM-clean for the selected JLC options. Post-review the safe in-place fixes were applied and the package regenerated + re-gated (`make fab` at e6828d8, `check_fab` 55/55): 4.7µF caps upgraded to 50V, D7 symbol made unidirectional, README refreshed; the U5/U6 fit-one silk guard was confirmed already present. The remaining ○ items are all bring-up/first-article measurements, not board changes: FPC pin-1 continuity check, VGH-reaches-spec with JP2+JP5 (fallback JP3+JP6), cold-start the 32k crystal (R9 provision if marginal), warm-floor measurement (D2 leakage), and keep low-battery shutdown ≥3.6V pending the refresh-peak measurement. The only pre-order human step is the JLC upload-preview walk with `out/fab/rotation-checklist.md` against the e6828d8 zip.
+
+*(What actually happened: the order shipped from `3ed40fe`, two respins later than the zip named here. Of the ○ items, FPC pin-1 continuity passed on board 1 and the shutdown threshold was re-derived **below** 3.6V — see the status table above. VGH-at-spec, 32k cold start and the warm floor are still open in `BRINGUP.md` Phase 3.)*

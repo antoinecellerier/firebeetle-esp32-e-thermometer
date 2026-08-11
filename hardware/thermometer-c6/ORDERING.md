@@ -36,8 +36,10 @@ this file is the human procedure around it. Settled fab decisions live in
       `generator/pcb_layout.py` rather than shipped as a stale artifact whose
       only two outcomes were "silently scrubbed" or "printed literally".
 
-## 2b. Open confirmations with JLCPCB support — ASK BEFORE PAYING
-##     (drafted 2026-07-18 for the first order; resolve via chat, then tick)
+## 2b. Confirmations raised for the 2026-07-20 order — all resolved
+##     (drafted 2026-07-18; the order was paid 2026-07-20 and the boards landed
+##     2026-07-29. Dispositions actually taken: `archive/README.md`, "Known
+##     items carried into the order")
 
 - [x] **JLCJLCJLCJLC token under "Remove Mark" — RESOLVED 2026-07-20, token
       DELETED.** Support's answer was that the order-number-at-a-specified-
@@ -45,7 +47,7 @@ this file is the human procedure around it. Settled fab decisions live in
       its job — leaving it risked only the literal string printing on back
       silk. The `SILK` entry was removed from `generator/pcb_layout.py`; the
       board now ships with no order mark. Nothing left to confirm.
-- [ ] **J4 GEOMETRY + ROUTING DONE — PREVIEW RE-WALK STILL OPEN (respin
+- [x] **J4 GEOMETRY + ROUTING DONE (respin
       2026-07-19, depth corrected 2026-07-20).** Numeric STEP analysis
       (`out/j4-proof/` + the manufacturer drawing
       `datasheets/XUNPU_FPC-05FB-NPH20.pdf`) proved the FPC-05FB's SMT tails
@@ -60,12 +62,14 @@ this file is the human procedure around it. Settled fab decisions live in
       LINE/AXIS2_PLACEMENT_3D entities owning no geometry; VERTEX_POINT-only
       gives 5.40, matching the XUNPU drawing exactly — `out/j3-land/` §7.)
       The 24-pin fanout is **re-routed and complete**: 0 unconnected, DRC
-      REAL=0 DEFERRED=0 WAIVED=0 at full severity. **Still to do before
-      paying:** the J4 CPL rotation delta was reset to 0 (unverified), so
-      re-walk the JLC preview for J4. JLC's preview model showed the true
-      orientation all along (tails with actuator); the land pattern was the
-      error.
-- [ ] **J3 DATUM + LAND + ROUTING DONE — PREVIEW RE-WALK STILL OPEN
+      REAL=0 DEFERRED=0 WAIVED=0 at full severity. JLC's preview model showed
+      the true orientation all along (tails with actuator); the land pattern was
+      the error.
+      **Resolved:** the CPL rotation delta stayed `0`/`confidence: low` and was
+      covered by Confirm Parts Placement + the DFM gate rather than a preview
+      re-walk (`archive/README.md`). J4 pin-1 and mouth-east are now
+      hardware-verified on board 1 by continuity (`BRINGUP.md` Phase 0).
+- [x] **J3 DATUM + LAND + ROUTING DONE
       (respins 2026-07-19 + 2026-07-20).** The 2026-07-19 pass (`out/j3-proof/`)
       fixed the ORIENTATION: the old rot-0 placement sat the HRO USB-C mouth
       facing SOUTH into the board with the solder tails at the north edge — an
@@ -128,13 +132,18 @@ this file is the human procedure around it. Settled fab decisions live in
       Keep the J3 clause in the PCBA Remark (§3) and Confirm Parts Placement
       = Yes anyway — they cost nothing and leave a paper trail, and the
       remark explicitly asks them NOT to silently adjust the placement.
-      **Still to do before paying:** the J3 CPL *rotation* delta is 0 and
-      still **unverified** — confirm mouth-north/pin-1 in the preview.
-- [ ] **D1 CPL DELTA RESET (respin 2026-07-20).** The mouth-north J3 USB
-      reroute re-placed D1 (status LED) rot 90 → 180, voiding its 2026-07-18
+      **Resolved:** the rotation delta stayed `0`/`confidence: low`, covered by
+      Confirm Parts Placement + the DFM gate (`archive/README.md`). The
+      X-rays show J3's 0.5mm row resolving individually with no bridging, and
+      board 1 enumerates over USB.
+- [x] **D1 CPL DELTA RESET (respin 2026-07-20).** The mouth-north J3 USB
+      reroute re-placed D1 (**CHG** LED) rot 90 → 180, voiding its 2026-07-18
       LED_0603 preview verification; its CPL delta was reset to 0 (unverified)
-      via a `REF_ROTATION_OVERRIDES["D1"]` entry. Re-walk the JLC preview for
-      D1 alongside J3 and J4 before paying.
+      via a `REF_ROTATION_OVERRIDES["D1"]` entry.
+      **Resolved without a re-walk:** its `0` was directly preview-verified
+      2026-07-18 (cathode cue S), and a rotation delta corrects a
+      footprint↔library convention offset, so it is independent of the
+      placement change that voided the annotation (`archive/README.md`).
 - [ ] **Feeder count:** Feeders Loading fee bills 17 × ~€2.75 while the BOM
       has 16 Extended lines — ask which parts are counted (≈€2.75 delta).
 

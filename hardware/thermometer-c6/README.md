@@ -111,8 +111,8 @@ not on J5** (it's the SW2 button only); only EN is exposed here.
 ## Charging rule (product decision, 2026-07-07)
 
 **Charge indoors only (0–45°C).** The MCP73831 has no thermistor input;
-charging LiPo below 0°C plates lithium. The board will get a silkscreen
-note at layout. Related: don't leave USB permanently attached — the
+charging LiPo below 0°C plates lithium. The board carries this on back silk
+(`CHARGE INDOORS 0-45°C`). Related: don't leave USB permanently attached — the
 charger float-cycles the cell between ~3.95V and 4.2V indefinitely.
 Firmware should also refuse to advertise "charge OK" below 0°C using the
 BMP58x temperature (belt and braces; it cannot stop the charger).

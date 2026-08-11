@@ -15,7 +15,7 @@ break: pin 1 = battery side (VBAT_RAW), pin 2 = system side (VBAT — the
 charger output node, *not* VSYS). VSYS has no TP or header — probe D2's
 cathode (band/west) pad, Q1's source, or C1/C2.
 
-## 2026-07-27 — JLC first-article X-rays (pre-arrival; boards ETA 2026-07-30)
+## 2026-07-27 — JLC first-article X-rays (taken pre-arrival; boards landed 2026-07-29)
 
 Four frames in [`archive/order-2026-07-20/xray/`](archive/order-2026-07-20/xray/),
 one per assembled board — distinct solder micro-features per frame prove they
@@ -340,12 +340,20 @@ docs/history-store-validation.md.
       flagged rather than filed into the hourly ring.
       Cheap A/B for the U1-proximity term without a respin: build one of boards
       2–4 with U6 BMP585 instead of U5 and repeat (b).
-- [ ] **USB flash-service window** (`fc9e72c`, untested on hardware). Plug a
+- [x] **USB flash-service window** (`fc9e72c`). Plug a
       host into a sleeping board: expect a near-instant GPIO4 wake (measure
       plug→boot), `w:USB` in the footer, `! USB` on the panel, and the by-id
       port appearing **and staying**. Then `pio run -e thermometer_c6_debug -t
       upload` with nothing touched, twice back to back — the second proves the
       cycle converges rather than needing a button again.
+      2026-07-30 board 1: **PASS** — `! USB` on panel, port continuously
+      enumerated (45s/45s vs ~1s-on/4s-off asleep), **two back-to-back
+      hands-free reflashes at ~18s each**, board returning to the running app.
+      Two further flashes went through the window on 2026-07-30 and 2026-07-31.
+      **The wake is not reliably near-instant**: the host probe is
+      timing-marginal against Linux USB autosuspend, and a slow boot made the
+      first probe find no SOF and log `charger, not a bus` — the window opened
+      ~50s later on the re-probe. Seen again 2026-07-31.
       - [ ] Dumb 5V charger (no host): no rewake loop (the GPIO wake is armed
             only on VBUS-low), and the ~3s host probe appears on the PPK2 once
             per USB_WINDOW_PROBE_SKIP_WAKES wakes, not on every one. Note the
@@ -354,21 +362,28 @@ docs/history-store-validation.md.
             one — that is what keeps the port reachable.
       - [ ] Unplug mid-window: exit inside ~300ms, one badge-clearing refresh,
             then deep sleep; replug wakes instantly again.
-      - [ ] **Sleep floor with GPIO4 armed** vs the 18.7µA baseline. Expected
+      - [x] **Sleep floor with GPIO4 armed** vs the 18.7µA baseline. Expected
             unchanged (R23 holds the pad at 0V, and the internal pulldown is
             disabled by `CONFIG_ESP_SLEEP_GPIO_ENABLE_INTERNAL_RESISTORS=n`),
             but this measurement is the proof, not the reasoning.
+            2026-07-30 (notes.md): **no measurable cost** — matched against the
+            settled 18.3µA floor to 0.04µA at equal elapsed time. The capture
+            never settled, so it cannot bound the cost below ~0.1µA; nothing in
+            the data justifies the controlled interleave that would.
       - [ ] Force a refresh while the window is open: the port must survive it
             (plain busy-wait instead of light sleep). Confirm a later
             battery refresh still shows the light-sleep slices.
-      - [ ] `-DUSB_WINDOW_OBSERVE_CYCLES=2`: exactly two real sleep cycles
+      - [x] `-DUSB_WINDOW_OBSERVE_CYCLES=2`: exactly two real sleep cycles
             (port drops each time), then the port comes back and stays. Reflash
             and confirm it repeats without touching the cable.
+            2026-07-30 board 1: exactly two real deep sleeps then the window,
+            logging `USB host attached, but this sleep is an observe cycle`.
       - [ ] ≥2h parked on a host: hourly ring keeps filling, NTP resyncs on
             schedule, no TWDT. Watch for one benign extra wake on the first
             real sleep after a long window (a latched LP wake request); log it
             either way.
 
-Afterwards: update the shutdown thresholds in Thermometer.cpp if re-derived,
-append the floor/refresh numbers to the docs/notes.md power logbook, and file
-any part swaps (D2, crystal variant) as rev B candidates.
+Thresholds and floor/refresh numbers are done (`1e1048e`, 2026-07-31; notes.md).
+Still owed afterwards: file any part swaps (D2, crystal variant) as rev B
+candidates, and run the cold + real-cell BOD probes that decide whether shutdown
+may drop from 3500 to 3450 mV.
