@@ -29,8 +29,8 @@ rig — panel, sensor, power gate, LEDs — so there is nothing to edit and noth
 to restore afterwards. Check which rig an env means, and what that rig is:
 
 ```bash
-grep -A1 '^\[env:' platformio.ini | grep -B1 custom_rig   # env -> rig
-head -6 include/rigs/<rig>.h                              # rig -> hardware, MAC, port
+grep -A2 '^\[env:' platformio.ini | grep -B2 custom_rig   # env -> rig
+sed -n '/^\/\//p' include/rigs/<rig>.h                    # rig -> hardware, MAC, port
 ```
 
 A rig that disagrees with its env is a compile error, so the surviving hazard is
@@ -38,6 +38,14 @@ narrower than it used to be: **right env, wrong physical board**. Boards sharing
 one env (the custom rev A boards) are the case to watch. That still panic-loops
 at ~600ms and looks like a huge sleep floor on the PPK2; the tell is a stale
 e-paper frame — old `GIT_HASH`, old time.
+
+`scripts/upload_gate.py` now catches the panel half of that before writing: it
+reads the board's own archive header back and refuses a flash whose panel
+disagrees. It costs one esptool connect and skips itself, out loud, when the
+answer would not be decisive — no archive yet, unreadable header, no port. When
+it refuses and you meant it, `ALLOW_RIG_CHANGE=1` proceeds (a deliberate panel
+swap); `SKIP_BOARD_CHECK=1` skips the read entirely. A wrong *sensor* or board
+macro still gets through — that frame renders and says `! SENSOR` on itself.
 
 `RIG=<name>` overrides for a bench swap. It leaves no state behind: the next
 plain `pio run` is back on the env's own rig.
@@ -87,7 +95,7 @@ the board by `/dev/serial/by-id/*Espressif*`.
 ```
 
 Extra flags go through the environment, and they change what the panel shows.
-Every macro on CLAUDE.md's revert list is read only under `src/`, so use
+Nearly every macro on CLAUDE.md's revert list is read only under `src/`, so use
 `PLATFORMIO_BUILD_SRC_FLAGS` — `PLATFORMIO_BUILD_FLAGS` lands on the global
 SCons env and rebuilds all ~1100 IDF component objects as well:
 
@@ -97,6 +105,13 @@ PLATFORMIO_BUILD_SRC_FLAGS="-DPPK2_DEBUG -DDISABLE_SERIAL" ~/.platformio/penv/bi
 
 Either variable is part of the project checksum, so changing it still deletes
 every env's build directory — finish a flash before building anything else.
+
+**`LP_CORE_IDLE` is the exception, and it fails silently.** It lives in
+`ulp/lp_core_main.c`, and the LP sub-build inherits neither `build_flags` nor
+`build_src_flags` (`.claude/rules/ulp.md`), so passing it as a `-D` does nothing
+at all — the build succeeds, the LP core keeps reading the sensor, and the power
+figure is of the wrong thing. Uncomment the `#define` in that file instead, and
+put it back afterwards.
 
 **`pio run -t upload` resets the board on exit, so the boot banner is usually
 already gone by the time you attach.** To capture it, upload with the reset
