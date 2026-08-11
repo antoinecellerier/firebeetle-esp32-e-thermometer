@@ -223,8 +223,8 @@ docs/history-store-validation.md.
       cycles on battery-path power, no spurious shutdown. Remaining
       direct check (optional): DMM J5 pin 6 (VBUS_SENSE divider) — a
       clean DC level with USB in, 0V without.
-- [x] Status LED on GPIO15 works (needs DISABLE_LEDS commented out in
-      local-secrets.h for the test).
+- [x] Status LED on GPIO15 works (needs a rig whose header leaves
+      `DISABLE_LEDS` undefined — see `include/rigs/`).
       2026-07-29 board 1: observed lighting on a wake.
 - [ ] Panel attached (power off first): full refresh renders; BUSY
       light-sleep path works; EPD_VCC returns to 0V after hibernate and the

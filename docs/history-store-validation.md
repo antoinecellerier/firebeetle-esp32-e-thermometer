@@ -114,9 +114,8 @@ by `hstest --inject` must be erased before a real measurement run, or the
 fabricated drift sample joins the retained ring and the first genuine
 measurement is computed against an invented `last_sync_time`.
 
-Note `include/local-secrets.h` is switched to this rig (`USE_154_Z90` +
-`USE_BMP390L`); switch it back before building for the C6, and remember a
-mismatched panel/sensor config panic-loops rather than erroring cleanly.
+Rig: `firebeetle` (Z90 + BMP390L). This run predates `custom_rig`, so at the time
+it was selected by hand-editing `include/local-secrets.h`.
 
 ## When the archive stops recording
 
