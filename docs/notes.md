@@ -1314,6 +1314,29 @@ estimated** (~2% of a 2.12 C/day budget, since the resync term is only 3.5% of
 it), failure path **~1.5 C -> ~0.2 C estimated**. Both derived from measured
 durations times a measured 65-80 mA, never integrated.
 
+### Also deferred: the two missing battery-node rigs (added 2026-08-11)
+
+Only two of the four rigs have ever been metered at their battery input; the
+other two exist solely as 3.3 V-rail figures, which measure the load with the
+input tree bypassed and so cannot be compared against a deployment figure. The
+readme's power table now shows both gaps explicitly.
+
+5. **FireBeetle 2 ESP32-E + BMP390L + Z90**, at 4.2 V into the battery input
+   through the TP4056 path — a floor over whole wake-to-wake cycles, plus one
+   wake+refresh. Its 19-20 µA and ~112 mC are rail figures, and the node is not
+   even stated for the July runs (the March section says only "PPK2 on VCC");
+   3300 mV appears once, in the 2026-07-25 archive session. **Gated on the rig
+   being free** — it is running drift arm 1 and a reset destroys the in-progress
+   window.
+6. **XIAO C6 + DESPI-C02 + GDEH0576T81**, at 4.2 V on the soldered BAT pads, the
+   same way the ePaper-hat rig was done 2026-07-26. The entire battery-side XIAO
+   characterisation used the *shield* rig, so this one — the T81 deployment
+   config — has no battery figure at all.
+
+Both would also give the RT9080's rail-to-battery factor a measured comparator.
+The **~1.15x LDO input-charge factor** used for thermometer-c6 is the reciprocal
+of the XIAO's measured ~90% buck efficiency, not a measurement of that board.
+
 ### Still unmeasured
 
 - **Charge** for any of the above. Every figure here is a duration.
