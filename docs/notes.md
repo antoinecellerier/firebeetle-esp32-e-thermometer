@@ -1352,3 +1352,66 @@ of the XIAO's measured ~90% buck efficiency, not a measurement of that board.
 - Everything here is one AP in ideal conditions. Scan durations should transfer
   (dwell is fixed regardless of what answers); **connect figures are best-case** and
   the failure modes (association timeout, weak-link retransmits) were not exercised.
+
+## The T81 was running its coldest waveform, and that was half the refresh (2026-08-11)
+
+Rev A **board 2** + GDEH0576T81, `thermometer_c6_debug`, rig `revA-bigscreen`,
+`PLATFORMIO_BUILD_SRC_FLAGS="-DREFRESH_EVERY_N_WAKES=1 -DDISPLAY_TEMP_DELTA=99"`,
+USB-powered with a charging pack, ambient ~26 °C. **Durations and busy-slice
+counts only — no PPK2 pass was taken, so nothing here is a charge figure.**
+
+`GxEPD2_576_GDEH0576T81::_Init_Full()` picks a waveform LUT from the controller's
+internal sensor: `_writeCommand(0x40)` then `_readData()`. That read only works
+under software SPI and returns **0** with hardware SPI, which is what we use. The
+fork we carried then fell through `if (temp <= 5) return 232` and forced `0xE8`,
+the ≤5 °C compensation, on a 26 °C panel. Stock upstream guards the same failed
+read — `if (temp == 0) return 241` — and lands on the 20–30 °C value.
+
+| driver | LUT | busy slices (sd) | steady-state ms | n |
+|---|---|---|---|---|
+| fork `1509966` | `0xE8` | 445.62 (0.50) | ~3075 | 21 |
+| upstream `de82887`, **LUT pinned to `0xE8`** | `0xE8` | 442.67 (0.48) | ~3005 | 21 |
+| upstream `de82887` | `0xF1` | 228.25 (0.44) | ~1935 | 24 |
+
+The middle row is a deliberate one-line bench control, and it carries the
+result: **the two implementations agree to 0.66% of slices**, so essentially
+none of the 445→228 drop is upstream's code. It is all LUT selection —
+**−48.4% of panel busy time**, paid on every full refresh since the T81 was
+first driven. Reported means for wall time were 3098/3034/1960 ms; those include
+the first post-reset render, which runs ~500 ms long, hence the steady-state
+column instead.
+
+`REFRESH_EVERY_N_WAKES=1` with `DISPLAY_TEMP_DELTA` past any real swing is what
+makes n=21–25 available in three minutes: the repaint stops tracking the room, so
+the cadence is exact rather than delta-triggered.
+
+**What this invalidates.** Every T81 refresh figure in this file and in the readme
+was measured on the fork, i.e. at `0xE8` — including the ~45 mC `@3V3 rail` XIAO +
+DESPI-C02 row, whose rig uses the same driver. They do not carry over. Charge
+does **not** scale from busy time on its own (the refresh current is not uniform
+across the waveform), so no replacement number is quoted until one is integrated.
+
+**What it does not change yet.** The LUT is currently a *constant* `241` — the
+read fails unconditionally, so refresh duration is temperature-independent in
+firmware, and figures taken now stay comparable without recording ambient. That
+stops being true the moment the sensor feeds LUT selection.
+
+### Feeding it the real temperature: the self-heat trap
+
+The board carries a calibrated BMP581 millimetres from the glass, so the obvious
+next step is to skip the broken read and write the value we already have —
+`_Init_Full` already *forces* temperature (`0xE0`=`0x02` TSFIX, then `0xE6`), so
+the read only decides what to force. No bit-banging, no readback, write-only
+commands under hardware SPI.
+
+The trap is that the sensor is not a clean proxy for glass temperature. Measured
+the same session: **32.57 °C sensor against ~26 °C ambient** while USB-powered
+with a charging pack — a ~6.5 °C offset, which crosses the 30 °C band boundary
+and would select `244` where the room wants `241`. Erring *cold* is safe but
+slow; erring *warm* under-drives the panel and risks ghosting, so the error that
+self-heat introduces points the wrong way.
+
+Deployed on battery there is no host and no charger, so the offset should mostly
+vanish — but "should" is doing work there, and the Phase 3 self-heat item still
+has no equilibrium number. `vbus_present()` (`src/Thermometer.cpp:1670`) already
+exists and is the obvious gate. Decide it with a number, not with this paragraph.

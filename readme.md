@@ -18,9 +18,13 @@ figure is not simply the larger one.
 | Setup | Deep-sleep floor | Sensor wake | Wake + refresh |
 |-------|-----------------|-------------|----------------|
 | Firebeetle ESP32-E + BMP390L + GDEH0154Z90 via DESPI-C02 (FDN340P gate) | 19–20 µA `@3V3 rail` | ULP bit-bang I2C every 5 s, avg ≈0 | ~112 mC `@3V3 rail` (was ~600 mC before light sleep — the Z90's ~21 s refresh used to spin-wait) |
-| XIAO ESP32-C6 + BMP581 + GDEH0576T81 via DESPI-C02 (FDN340P gate) | 15.5–16 µA `@3V3 rail` | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC `@3V3 rail` (was ~93–95 mC before light sleep) |
+| XIAO ESP32-C6 + BMP581 + GDEH0576T81 via DESPI-C02 (FDN340P gate) | 15.5–16 µA `@3V3 rail` | LP core I2C every 60 s: ~1 mA × 3 ms | ~45 mC `@3V3 rail` — **superseded, re-measure** (see below) |
 | XIAO ESP32-C6 + BMP581 + GDEW029I6FD via Seeed ePaper Driver Board (no gate) | ~25 µA `@3V3 rail`<br>**21.7 µA `@4V2 bat`** | LP core I2C every 60 s: ~1 mA × 3 ms | 12.2 mC `@3V3 rail`<br>**10.05 mC `@4V2 bat`** |
 | thermometer-c6 rev A + BMP581 + GDEM0154I61 (on-board gated booster) | **18.3 µA `@4V2 bat`** | LP core I2C every 60 s | **~24.3 mC `@4V2 bat`** |
+
+The GDEH0576T81 refresh figures are **superseded as of 2026-08-11**: they were
+taken while the panel ran its coldest waveform LUT, and the fix cut panel busy
+time by 48%. Charge not yet re-measured — [docs/notes.md](docs/notes.md).
 
 A buck draws *less* current at 4.2 V than its load does at 3.3 V, which is why
 ~25 µA at the rail reads 21.7 µA at the battery (~90 % efficient). An LDO runs
