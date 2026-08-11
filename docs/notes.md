@@ -1655,10 +1655,11 @@ slices and ~1.93-1.99 s, all within 6% of each other, and **cold** (232/235) at
 band boundary.
 
 Two consequences for planning. First, **every refresh figure this project has
-recorded is a 241 number taken at ~25 °C**, so an unheated-space deployment
-should be budgeted at ~1.95x on what is already the dominant power term. Second,
-below the cliff it is flat — 0 °C costs no more than 8 °C — so the budget needs
-two numbers rather than a temperature curve: 1.0x above 10 °C, 1.95x below.
+recorded is a 241 number taken at ~25 °C**, so an unheated-space deployment pays
+more on what is already the dominant power term — **+14% measured**, see below;
+the 1.95x slice ratio is *not* the cost multiplier. Second, below the cliff it is
+flat — 0 °C costs no more than 8 °C — so the budget needs two numbers rather than
+a temperature curve.
 
 The awkward case is a room sitting *at* ~10 °C, which is the realistic winter
 figure for an uninhabited location: it crosses the boundary repeatedly and the
@@ -1758,3 +1759,48 @@ drift — the mean repeats to 20 mV across separate refreshes. Unrelated to the
 sag question but still live: C1/C2 are 4.7 µF **25 V** parts sitting near 20 V
 for seconds at a time, deep into Class II derating, and did not get the 50 V
 upgrade that C17/PREVGH received in `e6828d8`.
+
+## The cold waveform costs +14% of charge, not +95% (2026-08-11)
+
+The measurement the LUT work was missing. Board 2 + T81, PPK2 source at J1
+(`reva-j1`) @4V2, no battery, USB out. `thermometer_c6_release` at `13c231d`
+with `-DFORCE_LUT_TEMPERATURE=8 -DREFRESH_EVERY_N_WAKES=1
+-DDISPLAY_TEMP_DELTA=99` — release, no `PPK2_DEBUG`, deliberately matching the
+baseline's conditions. 660 s, `local/captures/reva-j1-t81-lut235.bin`.
+
+| | LUT 241 | LUT 235 | ratio |
+|---|---|---|---|
+| wake+refresh charge | 36.77 mC (n=5) | **41.98 mC** (sd 0.48, n=7) | **1.14x** |
+| wake+refresh duration | 2.250 s | 3.393 s | 1.51x |
+| average current | 16.34 mA | **12.37 mA** | 0.76x |
+
+The 241 baseline was taken earlier the same day on the same env and node, before
+1b existed, so the driver was on its fixed fallback — a valid comparison by
+construction rather than by arrangement.
+
+**Charge does not follow duration.** The cold waveform runs half again as long
+and draws **24% less average current**, so it costs **+14%**, against the +57%
+that duration-scaling predicted. An unheated-space deployment therefore pays
+about a seventh more on the refresh term, not twice as much.
+
+### Slices, time and charge give three different ratios
+
+Worth carrying beyond this panel, because all three were available and only one
+is the answer:
+
+| proxy | LUT 235 vs 241 |
+|---|---|
+| busy slices | 1.96x |
+| wall-clock render ms | 1.57x |
+| **charge** | **1.14x** |
+
+Busy slices repeat to 0.05% and are the sharpest instrument here for detecting
+*whether* a waveform changed — they caught the LUT reaching the panel, and they
+caught the silent no-op. They are a **poor proxy for energy**: a colder waveform
+is more, shorter busy periods rather than proportionally longer ones, so the
+slice count overstates the cost by ~1.7x. Do not convert slices to power.
+
+Also from this capture: floor 19.2-19.7 µA across the settled sleeps, consistent
+with the 19.05 µA settled figure; and a cold boot at **549.9 mC / 12.25 s**,
+which falls inside the previously recorded 487.8-810.5 mC spread and does not
+narrow it.
