@@ -1513,3 +1513,109 @@ seconds. If so the spread is the resync term appearing in the boot figure, which
 is the same quantity the four deferred WiFi captures exist to measure. **Do not
 average these three.** A power-on happens on battery swap, not on any wake, so
 none of it enters the daily budget either way.
+
+## Board 2 + T81: battery-floor sweep, and what "peak" meant all along (2026-08-11)
+
+Rig: PPK2 source at J1 (`reva-j1`), no battery, USB out. Build
+`thermometer_c6_debug` at `ccfde51` with
+`PLATFORMIO_BUILD_SRC_FLAGS="-DBATTERY_SHUTDOWN_DISABLED -DDISABLE_WIFI"`, rig
+`revA-bigscreen`. 90 s dwell, 20 s boot window, fresh power-cycle per step.
+Artifacts: `local/sweeps/ppk2-sweep-20260811-192621/`.
+
+Reason for the re-run: every droop number behind the shipped 3550/3500 mV
+shutdown constants was taken on board 1 wearing the 200x200 GDEM0154I61, and the
+T81 is 21x the pixel count. The concern was that a bigger panel droops further
+and makes the shipped threshold wrong in the unsafe direction.
+
+**It does not. The T81's peak is lower than the small panel's**, on the same
+board design at the same input voltage:
+
+| | board 1 + GDEM0154I61 | board 2 + T81 |
+|---|---|---|
+| raw peak @ 4.2 V | 667.4 mA | **571.4 mA** |
+| second transient | 524.3 mA | 471.9 mA |
+| 1 ms-mean refresh peak | 67-155 mA | 87-138 mA |
+
+Fresh-boot edge: **HEALTHY down to 3400 mV, DEGRADED at 3300 mV**, so the cliff
+sits in the same place as board 1's measured 3317-3320 mV. The bisect did not
+run (see the crash below), so 3400/3300 is a bracket, not the cliff.
+
+Refresh charge is the most repeatable thing in the run — 70.25 / 70.32 /
+70.54 mC over 3.287 / 3.285 / 3.285 s across the top three steps, 0.4% and
+0.06%. It climbs to 82.5 mC by 3.3 V, which is the boost drawing constant power
+against a falling input, as expected. **These are debug-build figures** (serial
+live, 5 s cadence) and are not comparable to the 36.77 mC release baseline
+measured earlier the same day; they are a consistency check, not a deployment
+number.
+
+### The "~425-465 mA refresh peak" is a 70-330 us transient, not a load
+
+This is the correction the re-run turned up, and it applies to board 1's numbers
+as much as board 2's. `classify_step` reports `peak_ma` as
+`max(1 ms-bin peak, decimator raw 100 kSps peak)` (`tools/ppk2.py`), and the
+decimator keeps only the value — never the timestamp — so the number the
+threshold derivation leans on had no event attached to it. Timestamped from the
+raw captures:
+
+| | start | width | peak | charge |
+|---|---|---|---|---|
+| board 2 + T81 | 2.00428 s | 330 us | 471.9 mA | <= 0.16 uC |
+| board 2 + T81 | 2.78669 s | 70 us | 571.4 mA | <= 0.04 uC |
+| board 1 + 200x200 | 2.00215 s | 300 us | 524.3 mA | <= 0.16 uC |
+| board 1 + 200x200 | 2.79031 s | 90 us | 667.4 mA | <= 0.06 uC |
+
+Both boards, both panels: **two transients per boot at the same two
+timestamps**, so these are board/firmware events, not panel events. The rise is
+inside one 10 us sample and the decay is exponential — the signature of charging
+a capacitance, not of a load being switched on. The charge is ~0.16 uC against a
+refresh's 70000 uC, six orders of magnitude down, so it is invisible in any
+energy budget. Sustained refresh current is the 1 ms-mean figure, 87-138 mA.
+
+`SCHEMATIC-VERIFICATION.md` reasons that the RT9080 "needs VIN >= ~3.71 V to
+hold 3.3 V at the 465 mA EPD peak". **An LDO dropout argument needs a sustained
+current, and this one is not sustained** — a 70 us pulse is supplied by the
+local bulk capacitance, not by the regulator.
+
+### The failure below the edge is not a refresh brownout either
+
+Checked against the 2026-07-30 BOD-probe captures (brownout raised to ~3.27 V,
+`ppk2-sweep-20260730-233220`), which straddle that run's 3590/3580 mV edge. The
+two boot transients are **the same on both sides** — 437-466 mA / 280 us and
+270-322 mA / 60-80 us at 3590 (HEALTHY), 3580, 3550 and 3500 (all DEGRADED). The
+board is not dying at the current peak.
+
+What changes across the edge is the whole-window charge, 84-87 mC healthy vs
+458-462 mC degraded, and the classifier's note is "no liveness at the expected
+cadence". Bucketed at 1 s, the degraded steps sit at a flat ~9.94 mA mean with
+~90 mA maxima from t=4 s to the end of the window, and `bootloops=0` — a
+continuous churn, not a reset loop and not a boot loop. That is the same failure
+the non-BOD sweep described below its own edge ("the sleep is what breaks,
+~104 uA / ~55 Hz oscillation").
+
+**What this does and does not change.** The shipped 3550/3500 mV thresholds stay
+safe: they sit above the measured edge on both boards and both panels, and the
+~300 mV droop was measured directly rather than derived from a current, so it
+stands as a measurement. What does not survive is the *mechanism* recorded for
+it. Before rev B trades margin on the strength of that reasoning, the open
+question is why raising the brownout level moved the edge 270 mV if the refresh
+peak is not what crosses it — a series drop between J1 and the LDO input would
+do it, and has never been measured. Do not spend parts on this until it is.
+
+### Two tool bugs, one of which cost the run
+
+The sweep crashed at step 11 (3200 mV) with `TypeError: Object of type bool is
+not JSON serializable`. `expected` became `np.float64` when the trace went
+numpy in `ccfde51`, so `live >= 0.5 * expected` yields `np.bool_` — which
+`and` returns *only when it is the falsy operand*. Every HEALTHY step therefore
+serialized fine, and the first step with zero blips killed the run and truncated
+`summary.json` on the way out. `np.bool_` does not subclass `bool`, whereas
+`np.float64` does subclass `float`, which is why the float leaks stayed
+invisible. Fixed by coercing at the assignment, plus a `default=` hook on the
+result writers so a future leak cannot destroy captures.
+
+The second bug is why the crash cost anything at all: `sweep --replay` printed
+its reclassification and wrote nothing, so the recovery path did not recover.
+It now rewrites `summary.json` and `report.md`, inherits `peak_ma` from the
+per-step sidecars (replay cannot recompute the sub-bin half from a decimated
+cache), and prints the bracket to bisect. All 11 steps were recovered from the
+raw captures; only step 11's live raw peak was lost, with its sidecar.
