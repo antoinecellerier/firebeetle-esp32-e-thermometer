@@ -346,6 +346,16 @@ a different panel at once. What that unblocks, and the one thing it does not:
       ≤1–2mV wide; render never failed down to 3.31V, the sleep is what
       breaks (~104µA / ~55Hz oscillation below the edge); floor rises
       19→30µA over 3.38→3.32V.
+      **BOD probe re-run on board 2 + T81, 2026-08-12** (notes.md): SEL_2
+      is unusable here — it boot-loops at 4.23V input, always at the
+      render — so the run used **SEL_3 (~3.10V)**. Edge solid at 3600mV,
+      **bistable at 3550**, dead at 3540, so droop ≈ **450–500mV** against
+      board 1's ~300mV: the T81 pulls the rail ~150–200mV deeper. **The
+      shipped 3550/3500mV thresholds nevertheless hold** — at the shipped
+      brownout level this board and panel are HEALTHY at 3.50V with the
+      functional cliff at ~3.3V, the same place board 1 found it, so the
+      panel changes the rail excursion without changing where the board
+      stops working. Cold remains the open gate on 3500 vs 3450.
       **BOD probe DONE 2026-07-30** (notes.md BOD subsection): the rail
       crosses the ~3.27V trip when VIN ≤ ~3.57V (stochastic 3.56–3.59,
       deterministic churn ≤3.55) → **total droop at the ~425mA peak

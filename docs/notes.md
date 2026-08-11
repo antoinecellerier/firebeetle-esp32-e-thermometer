@@ -1576,10 +1576,12 @@ Three caveats carry over unchanged from board 1's table and one is new:
 - **Pack self-discharge is not in the table** and at 1–2%/month on a 400 mAh
   pouch is 0.5–1.0 C/day equivalent — it rivals the floor.
 - **Usable window**: the 3550/3500 mV thresholds were derived from board 1's
-  200×200 BOD probe. The 2026-08-11 SEL_2/SEL_3 result says the T81 crosses the
-  ~3.27 V trip at 4.23 V input where board 1 needed ≤3.57 V, so **that
-  derivation does not transfer** and the day-count above assumes a usable
-  window that is itself under revision.
+  200×200 BOD probe, and the T81 does droop ~150–200 mV deeper. **They still
+  hold** — at the shipped brownout level this board and panel measured HEALTHY
+  at 3.50 V with the functional cliff at ~3.3 V, the same place board 1 found
+  it. The day-count above does not need revising on this account. What is *not*
+  settled is the cold case: the second gate on 3500 vs 3450 mV is a fridge run,
+  still unmeasured.
 - The cadence rows are the wide ones, and they are transferred estimates. The
   soak is what replaces them with this board's own numbers.
 
@@ -1750,6 +1752,57 @@ whole input range, which is a wide bracket but a real one. Deriving a droop
 figure of the form `edge − trip` needs the edge this run did not find, and that
 formula only holds where the regulator is in dropout and the rail tracks the
 input, which at 4.23 V it is not.
+
+### The edge, found: 3600 solid / 3550 bistable / 3540 dead — and the shipped thresholds survive it
+
+`local/sweeps/ppk2-sweep-20260811-235828/`, same rig and build, re-run over
+`--start 3600 --stop 3000 --step 100 --confirm-edge 2` after the sparse list
+misfired. Fourteen steps.
+
+| VIN | floor | regime | refresh |
+|---|---|---|---|
+| 3.60 V | 21.64 µA | HEALTHY, 18/18 blips | 72.7 mC / 3.2 s |
+| 3.55 V | 21.83 µA | **bistable** | 127.6 mC / 5.5 s |
+| 3.54 V | 22764 µA | DEGRADED | no liveness |
+| 3.50 → 3.00 V | 4.8–27 mA | DEGRADED | no liveness |
+
+**3550 mV is genuinely marginal, and `--confirm-edge 2` is what caught it.** It
+came back HEALTHY once during the bisect and DEGRADED on *both* re-runs; one of
+those re-runs read a 21.9 µA floor with 5/18 blips, i.e. partly alive. The tool
+flagged it bistable twice. Quote the edge as **solid at 3600, marginal at 3550,
+dead at 3540** — not as a single number.
+
+**Droop at that operating point = VIN − 3.10 V ≈ 450–500 mV**, against board 1's
+~300 mV (its edge was VIN ≈ 3.57 V against a 3.27 V trip). The two are at nearly
+the same input voltage, so it is a fair comparison: **the T81 pulls the rail
+roughly 150–200 mV deeper than the 200×200 panel.** Both figures inherit the IDF
+brownout levels' per-chip variation, and these are different chips, so that
+difference carries two chips' uncertainty as well as two panels'.
+
+**The important part: this does not move the functional limit, and the shipped
+3550 warn / 3500 shutdown thresholds hold.** The deeper droop only bites when the
+brownout detector is artificially raised. At the *shipped* level (2.51 V) this
+same board with this same panel measured **HEALTHY at 3.50 V** in the evening's
+plain sweep, with the functional cliff at ~3.3 V — the same place board 1 found
+it with the 200×200. So the panel changes the rail's excursion during a refresh
+without changing the voltage at which the board stops working. That corrects the
+concern recorded earlier today under the budget: the board 1 derivation does
+transfer, and the day-count does not need revising on this account.
+
+**One finding worth carrying beyond the threshold question.** At 3.60 V a refresh
+costs 72.7 mC over 3.2 s; at 3.55 V it costs **127.6 mC over 5.5 s** — 75% more
+charge and 72% more time for a 50 mV drop, while the step still classified
+HEALTHY. The panel starts labouring *above* the edge the classifier reports. For
+a battery budget that means refresh cost is not flat across the discharge curve
+and rises steeply in the last stretch, which is the opposite of the assumption a
+single mC-per-refresh figure encodes. Not yet characterised across the range —
+two points do not make a curve, and the 3.55 V point is the bistable one.
+
+**Method note, since it cost a run.** The two sweeps together also show why the
+100 mV descent earns its time: the sparse `--mv 4200,3600,3000` list let one
+non-reproducing storm anchor a bisect into a range that was healthy six times
+over, while this run's six consecutive failing steps below the edge are what make
+the result trustworthy. Near a suspected edge, the redundancy is the measurement.
 
 ## The host-supplied LUT temperature reaches the panel (2026-08-11)
 
