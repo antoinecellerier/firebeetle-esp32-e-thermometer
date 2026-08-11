@@ -84,7 +84,16 @@ board 5. Board 1 is the first-article board for Phases 0–2.
       which is R14 (0.47Ω) through bridged JP2 straight to GND — board
       1's 0.60Ω there is the sense resistor plus jumper/probe resistance,
       by design. Board 5 reads open at RESE only because the bare board
-      has no R14. Boards 2–4 get this pass in the remaining-boards sweep.
+      has no R14. **Boards 2–4 never got this pass, and as of 2026-08-12 they
+      never will — skipped deliberately, not forgotten.** All three went
+      straight to flash on the strength of board 1's pass: same reflow, all
+      four X-rayed, boards 1 and 5 clear on all seven rails. What that trades
+      is a dead-short check on the four gated booster rails (EPD_VCC, PREVGH,
+      PREVGL, VCOM), which no boot log can cover because they are off until a
+      render — but a short there fails the first refresh visibly and now raises
+      the LED fault blink, so it cannot pass silently. All three have since
+      rendered. Reinstate the pass for any board that is reworked or that
+      arrives from a different fab run.
 - [x] Diode-mode sanity (red probe = +):
       - D2 conducts **VBUS→VSYS** — anode is the east pad, cathode band
         west on VSYS (an earlier revision of this line said "VSYS→VBUS";
