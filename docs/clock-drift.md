@@ -88,20 +88,68 @@ the runs that put a number on it.
 |---|---|---|---|---|
 | 4 | `10:bd:a3:a8:d3:64` | `thermometer_c6_release`, rig `revA-bigscreen`, git `753afbc`, no flags | 2026-08-12, 3996mV | **paired, ~10cm** |
 | 2 | `98:88:e0:75:48:10` | same env/rig/flags, git `11cd8dd` | 2026-08-11 22:49Z, 3998mV | **paired, ~10cm** |
-| 3 | `98:88:e0:75:47:94` | identical to board 4, same hash byte-for-byte | **not yet — evening of 2026-08-12** | apart |
+| 3 | `98:88:e0:75:47:94` | same env/rig/flags, git `52cf257`; **different WiFi network list** | 2026-08-12 18:27, 4188mV | apart, **different AP** |
 
-**Board 3 is flashed and verified but has not started.** It is the only board
-still reachable on USB; once it starts, the fleet is sealed.
+**The fleet is sealed.** Board 3 was the last board reachable on USB; from here
+every number comes off a panel or out of an archive at harvest.
 
 All three: GDEH0576T81, 400mAh pack, `esptool erase_flash` immediately before
 flashing so the archive starts empty and the first base snapshot is unambiguous.
-All have a static DHCP lease, so resyncs take the fast path and the NTP term is
-consistent between them. Boards 2 and 4 each confirmed a complete cycle on
-battery before being left alone — board 4 `#2 r2 lp1 w:ULP` at 3996mV, board 2 a
-ULP-woken refresh at **3998mV on its second render (4004mV on the first)**. Take
-the second reading as t=0: the first is taken seconds off the charger and carries
-surface charge, and the 6mV step between two renders is that decaying, not the
-pack discharging.
+Boards 2 and 4 hold a static DHCP lease, so their resyncs take the fast path and
+the NTP term is consistent between them; **board 3 is on a different AP and is
+expected to hold a dynamic lease for the run**, so its resync path carries a DHCP
+exchange the pair does not. That term was deliberately not measured before the
+run: it is a property of that AP and its RF path rather than of the board, a
+bench figure would describe the wrong network, and nothing in
+`HistoryDriftSample` persists connect duration, so capturing it in situ would
+have meant an on-flash layout change to a fleet already sharing one. What the
+archive does record per arm is `resync_fail_count` plus the absolute
+`boot_count`/`refresh_count`, which is the term that actually costs charge — a
+failed resync burns a full association where a slow DHCP round does not.
+
+Boards 2 and 4 each confirmed a complete cycle on battery before being left
+alone — board 4 `#2 r2 lp1 w:ULP` at 3996mV, board 2 a ULP-woken refresh at
+**3998mV on its second render (4004mV on the first)**. Take the second reading
+as t=0.
+
+**That rule outlived its stated reason.** The 6mV step between board 2's two
+renders was put down to surface charge decaying off a freshly-charged pack —
+which cannot be right, because **boards 2 and 4 were never charged at all**.
+What the step actually is remains open; first-render load relaxation is the
+obvious candidate and nothing here tests it. Prefer the second reading anyway,
+now on the evidence that the first one moves rather than on a mechanism.
+
+**Board 3 starts ~190mV above the pair because it is the only one that was
+charged.** Boards 2 and 4 run their packs **as ordered, never charged at all**;
+board 3's went on the charger until the light went out. Two candidates died on
+the way to that:
+
+- **Not surface charge.** The board ruled it out itself — **the fourth render
+  read 4186mV, a 2mV step** off the 4188mV t=0, where board 2's own
+  first-to-second step was 6mV. Board 3 is flatter than the decay the pair
+  showed, not steeper; the pack really is sitting at ~4.19V.
+- **Not divider spread.** Every pack read **~4000mV on its own board when
+  plugged in before charging** — same nominal state, same reading, across
+  different boards. That agreement bounds per-board divider spread at the
+  resolution of the observation (tens of mV), which is nowhere near 190mV. It is
+  not a characterisation, but it is enough to retire the question, and it is the
+  only cross-board divider check the fleet will offer until a board comes off.
+
+**The consequence is run length, and it favours board 3.** Both thresholds are
+`low_battery_mv = 3550` / `no_battery_mv = 3500` on this board, so board 3 has
+688mV of span against the pair's ~497mV, and an as-shipped cell near 4.00V is
+roughly three-quarters charged — an estimate from the LiPo curve, not measured
+here. **Expect boards 2 and 4 to reach cutoff appreciably before board 3**, which
+bounds the control pair's drift run, not merely its battery figure: a board that
+shuts down stops producing drift samples. Plan the harvest around the pair
+ending first. Discharge comparisons across arms stay rate-based over a common
+window — with different starting states of charge, "days to reach X mV" is now
+meaningless rather than merely unsafe.
+
+**Board 3's clock was NTP-synced at first boot**, so its drift window is anchored
+at 2026-08-12 18:27 and the panel timestamp above is a real time rather than a
+free-running one. The new AP was therefore reachable from where it booted. The
+first drift *sample* lands one resync interval after that anchor, not at t=0.
 
 **The arms do not share a t=0**, so compare rates and not elapsed drift: board 3
 starts roughly a day behind the pair, and the adaptive resync interval means its
@@ -111,7 +159,16 @@ sample count will lag by more than that day alone implies.
 BOD probe released the rig, by which time three documentation-only commits had
 landed; `git diff 753afbc..11cd8dd -- src include ulp components platformio.ini
 sdkconfig.defaults*` is empty, so the only difference on the wire is the string
-the panel prints. Read the three arms as one build.
+the panel prints.
+
+**Board 3 is the inverse, and it is the one that needs saying.** It was flashed
+at `52cf257` on a clean tree — `git diff 753afbc..52cf257` over the firmware
+paths is likewise empty — so by the tracked tree it too is board 4's build. But
+its `include/local-secrets.h` carries a different `MY_WIFI_NETWORKS` list, and
+that file is gitignored: **same hash, different binary, and git cannot show the
+difference.** The divergence is confined to which SSID the board associates with.
+Read the three arms as one build everywhere except the WiFi path, where board 3
+is deliberately its own thing.
 
 **The placement column is the experimental design, not an incidental detail.**
 Boards 2 and 4 sit ~10cm apart and board 3 goes elsewhere, which makes this a
