@@ -272,3 +272,5 @@ Not covered here — this file is the dev-board prototype wiring. The rev A pin
 map, jumper tables and bench procedures live in
 [`hardware/thermometer-c6/README.md`](../hardware/thermometer-c6/README.md).
 
+![Thermometer C6 rev A board & GDEM0154I61 (2026)](revA-GDEM0154I61.jpg)
+
