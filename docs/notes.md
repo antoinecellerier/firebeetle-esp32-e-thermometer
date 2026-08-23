@@ -376,7 +376,7 @@ time (scripts/check_ulp_size.py, exact — validated 127/128 == on-device count,
 and proven to fail the build on the old 129-word regression) with a graceful
 runtime fallback (log + safety-net wakes) instead of an abort loop.
 
-Open: the C6 LP-core program (ulp/lp_core_bmp58x.h) has the same unconditional
+Open: the C6 LP-core program (the BMP58x branch of ulp/lp_core_main.c) has the same unconditional
 ulp_lp_core_wakeup_main_processor() calls, but the 5.76" rig is only awake
 ~3.8 s per cycle (~6% collision chance at 60 s polls). Gating needs a PMU
 HP-sleep-state check from LP-core C code — do if trains are ever observed on

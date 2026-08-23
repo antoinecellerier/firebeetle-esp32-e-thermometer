@@ -124,9 +124,10 @@ src/
   sensors/BMP390LSensor.cpp   # Three compile paths: ULP FSM, LP core, no-ULP
 ```
 
-`ulp/` has since grown a dispatcher plus one header per sensor
-(`lp_core_bmp390l.h`, `lp_core_bmp58x.h`, `lp_core_idle.h`), selected by the
-`USE_*` macros. The three-compile-path shape below is unchanged and applies to
+`ulp/` has since grown a dispatcher selecting one of three inline sensor
+programs from the `USE_*` macros. They were one header per sensor until
+2026-08-23, when they were inlined into `lp_core_main.c` — as headers the build
+never rebuilt them (`.claude/rules/ulp.md`). The three-compile-path shape below is unchanged and applies to
 `BMP58xSensor.cpp` too.
 
 ### Conditional Compilation
