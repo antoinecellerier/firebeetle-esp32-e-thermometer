@@ -490,3 +490,28 @@ Thresholds and floor/refresh numbers are done (`1e1048e`, 2026-07-31; notes.md).
 Still owed afterwards: file any part swaps (D2, crystal variant) as rev B
 candidates, and run the cold + real-cell BOD probes that decide whether shutdown
 may drop from 3500 to 3450 mV.
+
+## Rev B candidate: the 32k load caps are the fleet's shared slow offset (2026-08-23)
+
+The first FC-135 rates are measured (`docs/clock-drift.md`): boards 1, 2 and 4
+read **−8.5, −19.7 and −6.6 ppm** over 15.0, 7.1 and 7.1 days of observed window.
+All three are inside the part's ~20 ppm tolerance in magnitude, and the 13 ppm
+spread between them is ordinary part-to-part scatter — but **all three are
+negative**, which a symmetric initial tolerance would not produce.
+
+Rev A fits **2×20 pF against a CL=12.5 pF FC-135** (`SCHEMATIC-VERIFICATION.md`),
+i.e. two 20 pF caps present 10 pF and the design reaches 12.5 pF only if stray is
+really ~2.5 pF. At ~5 pF of stray the crystal sees CL≈15 pF and is pulled slow by
+roughly 14 ppm, using typical tuning-fork motional values (C1≈2.5 fF, C0≈1.2 pF)
+rather than the FC-135 datasheet's — **an order-of-magnitude argument for the
+shared sign, not a measurement of these boards**.
+
+- [ ] **Bench test before any respin, now cheap**: boards 1, 2 and 4 are off soak.
+      Add a few pF across one crystal leg on a retired board and re-measure the
+      rate. Load-capacitance pulling predicts the rate moves further negative on
+      a slope the formula gives; nothing else on the board answers that stimulus
+      that way. A drift measurement needs days per point, so plan it as a soak
+      rather than a bench afternoon, or drive it from a counter on the 32k pin.
+- [ ] If confirmed, **trim the load caps** in rev B to re-centre the fleet.
+      Files alongside the existing D2 and 7 pF-crystal-variant candidates.
+
