@@ -213,6 +213,7 @@ wipes the RTC drift window.
 | 2026-08-01 .. 2026-08-15 | **thermometer-c6 rev A board 1** + BMP581 + GDEM0154I61 (200x200), `711c3a4` (2026-07-31), `thermometer_c6_release`, rig `revA-smallscreen`, 400mAh pack, FC-135 | 1.00d, 2.01d, 4.03d, **8.01d** (15.04d observed) | −3s, −1s, −2s, −5s (−11s total) | **−8.5ppm** window-weighted, ±1.5 | 16d | **The longest and tightest FC-135 run** — four samples over 23 days of soak, and the 8d window alone carries only ±1.4ppm of quantization, the tightest single drift sample this project has taken. Agrees with board 4 to **0.6σ** while board 2 sits 3.5σ away, so the fleet reads as two boards at ~−7ppm and one at ~−19.7ppm. Different panel, different room, never through the BOD campaign. [Below](#fc-135-first-harvest-2026-08-23--three-boards-and-the-first-crystal-numbers). |
 | 2026-08-05 .. 2026-08-23 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `f5e1749`, `seeed_xiao_esp32c6_release`, **phase-2 arm 5** (vanilla control, resync pinned to 12h), 400mAh pack | 12h × 32 resyncs (17.85d observed; 3 windows carry a failed attempt) | +14s .. +112s (+1354s total) | **+878ppm** window-weighted (+324…+1721, **±96%**) | 12h (pinned) | **The control arm answers phase 2's primary question on its own.** Over a **12× range of wakes/day (31–364)** and 9.4°C of ambient, the per-sample rate correlates with **nothing**: wakes r=+0.026, refreshes r=+0.013, ambient r=−0.058, intra-hour spread r=+0.044. Phase 1's `r=−0.900` duty-cycle relation does not reproduce at n=32 over a wider range. The one covariate that does correlate is **elapsed time** (r=+0.487, Spearman +0.401), i.e. the rate wanders on a timescale no per-window average captures. [Below](#arm-5-harvested-2026-08-23--the-vanilla-control-kills-the-duty-cycle-reading). |
 | 2026-08-05 .. 2026-08-23 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `1ea3cd7`, `dfrobot_firebeetle2_esp32e_release`, **phase-2 arm 1** (pinned: 1440 wakes/day, repaint every 60th, resync 12h), on battery | 12h × 35 resyncs (18.01d observed) | +445s .. +219s (+7975s total) | **+5124.6ppm** window-weighted (+5041…+5229, **±2.0%**) | 12h (pinned) | **The duty-cycle model's headstone.** Phase 1 fitted `ppm ≈ 5339 − 1.342 × wakes/day` and predicted **+3385ppm** at this arm's 1453 wakes/day. Measured +5124.6, a **1740ppm miss**, while the rate moved only **+1.1%** from phase 1's +5066ppm across a 7× increase in wake rate. Dispersion did tighten, ±4.5% → ±2.0%. The same image still holds phase 1's ten `arm`=0 records and they re-decode to **+5066.3ppm, ±4.5%** — the published figure to the digit, 18 days and one reflash later. [Below](#arm-1-harvested-2026-08-23--the-pre-registered-test-and-what-it-actually-found). |
+| 2026-08-08 .. 2026-08-23 | XIAO ESP32-C6 + BMP581 + Seeed ePaper hat (GDEW029I6FD), `2fa3750`, `seeed_xiao_esp32c6_epaper_release`, **phase-2 arm 3** (vanilla, resync pinned to 12h), 400mAh pack | 12h × 16 resyncs (14.41d observed, **12 failed attempts** stretching windows to 24–49h) | +1s .. +158s | **+607ppm** window-weighted (+23…+1184, **±96%**) | 12h (pinned) | Doubled from phase 1's **+305ppm** (n=3, ±63%) on the same board, though neither figure is tight enough to call that a change. Its three pre-experiment `arm`=0 records re-decode to **+304.5ppm** against a published +305 — the second published figure this session round-trips out of an archive. Covariate structure matches arm 1's (ambient +0.577, spread −0.558, wakes −0.550) and **collapses the same way under partial correlation**. **43% of resync attempts failed**, against `resync_fail_count == 0` at the day-4 gate check. [Below](#arm-3-harvested-2026-08-23--the-covariate-signature-repeats-and-still-collapses). |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
 device clock behind real time.
@@ -580,6 +581,89 @@ while holding the sleep path fixed. If the awake path carries the opposite tempc
 arm 2's `ppm`-vs-ambient slope should move measurably against arm 1's while its
 `d_boot`-vs-ambient stays at −0.999. That is a question the crossover was not
 designed to ask and can now answer for free.
+
+### Arm 3, harvested 2026-08-23 — the covariate signature repeats, and still collapses
+
+Panel before the park: `! EXP 3 60s`, footer
+`#1808 r1621 lp26405 18d3h w:ULP mx4.3V 2fa3750`. The 296x128 panel drops the `s`
+token off its edge, so resync health is not readable here — which matters more
+than it did at day 4, see below.
+
+| | day 4 | day 18 (lifetime) | days 4–18 alone |
+|---|---|---|---|
+| wakes/day | 135.1 | 99.8 | **89.2** |
+| refreshes/day | 132.0 | 89.4 | **76.7** |
+| `#÷r` | 1.024 | 1.115 | |
+| lp/day | 1462.1 | 1456.8 | |
+
+**The room quietened by a third**, independently confirmed by arm 5 over the same
+calendar days (135 → 89 here, 174 → 75 there). Two vanilla rigs agreeing on the
+environment is the covariate the pinned arms exist to remove, and it is large.
+
+Image `local/archives/hist-arm3-xiao-hat-20260823.bin`: **667 hourly, 320
+sparkline, 20 drift**, span 2026-07-26 19:00Z .. 2026-08-23 13:00Z. Header reads
+`formatted by 8712f72 (!! unknown to this repo)` — the orphaned pre-squash commit
+this file already documents, with `last snapshot written by 2fa3750` alongside it,
+which is exactly the pair of stamps that fossil motivated.
+
+#### A second published figure round-trips
+
+The 20 records split **3 at `arm`=0 and 17 at `arm`=3**, and the pre-experiment
+subset re-decodes to **+304.5ppm over 6.76d, ±63%** against the
+[2026-08-05 harvest](#c6-epaper-hat-harvested-2026-08-05)'s +305ppm (+113…+400,
+±63%). With arm 1's +5066.3 against +5066, that is two independently published
+results reproduced out of re-read archives, on two different rigs.
+
+**The straddled first record is textbook here**, and unlike the rev A boards the
+documented mechanism is the one that fired: this archive was deliberately *not*
+erased at the arm-3 flash, so `drift_state_load()` restored the pre-flash
+`resync_interval_s` of 3.47d and the first attempt scheduled off the old cadence —
+a **3.49d window against a 12h setting**, carrying `d_boot = −893` from the RTC
+wipe. Dropped from everything below.
+
+#### The rate, and the failures
+
+**+607.2ppm window-weighted over 14.41d, n=16, ±96%.** Phase 1 put this board at
++305ppm from three samples at ±63%; the level has doubled, but neither figure is
+tight enough to call that a change rather than a resampling.
+
+**12 failed attempts across 16 successes.** Every failure stretches the next
+window by a whole interval, which is why windows run 24h, 36h, 37h and 49h against
+a 12h setting — the failures are readable straight out of the window lengths
+without any separate counter. At day 4 this arm was recorded as
+`resync_fail_count == 0` and "its resync is healthy". Over the full run it is a
+**43% failure rate**, which is the single worst WiFi record in the fleet and was
+invisible on a panel too small to show the `s` token.
+
+#### The signature repeats on a different oscillator, and dies the same way
+
+| | arm 3 (C6 hat, vanilla, n=16) | arm 1 (E, pinned, n=34) |
+|---|---|---|
+| raw r(ppm, ambient) | **+0.577** | **+0.476** |
+| raw r(ppm, intra-hour spread) | **−0.558** | **−0.443** |
+| raw r(ppm, wakes/day) | −0.550 | −0.476 |
+| partial r(ppm, spread \| ambient) | **−0.229** | **−0.045** |
+| partial r(ppm, ambient \| spread) | +0.287 | +0.200 |
+| partial r(ppm, wakes \| ambient) | −0.290 | −0.005 |
+
+Two rigs 8× apart in rate — an ESP32-E at +5100ppm and a C6 at +600ppm — produce
+the **same raw covariate signature and the same collapse**: hold ambient, and the
+volatility term loses most or all of its signal, while ambient's own partial stays
+weak and positive and never reaches significance at either n (5% critical |r| is
+~0.51 at n=16 and ~0.34 at n=34).
+
+**And arm 5 shows neither**: ambient −0.058, spread +0.044 across 32 samples and a
+12× range of wakes/day, with elapsed time (+0.487) the only thing that correlates
+at all. So of the three arms, two hint weakly at ambient with matching signs and
+the third rules it out while pointing somewhere else entirely.
+
+**The conclusion phase 2 was built to reach, reached:** no mechanism survives on
+any arm. Duty cycle is dead three ways over. Volatility is an artefact of its
+correlation with ambient. Ambient itself never clears significance and one arm
+contradicts it outright. What is left is an oscillator whose rate wanders on a
+timescale none of the per-window covariates capture — which is what arm 5's time
+correlation is measuring, and what no compensation model in
+[Compensation](#compensation-analysis-and-decision-2026-07-25) can correct for.
 
 ### Photo-transcribed run: C6 + DESPI-C02, 2026-07-29 .. 2026-08-04
 
