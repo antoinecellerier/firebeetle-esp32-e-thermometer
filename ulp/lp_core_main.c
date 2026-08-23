@@ -49,16 +49,6 @@ volatile int32_t  last_lp_error = 0;   // most recent esp_err_t from a failed LP
 //   1 = trigger / command write   2 = data read
 volatile uint32_t last_lp_op    = 0;
 
-// Phase-2 arm 4: pin the wake cadence to the LP poll rate — 0 makes the delta
-// test always true, so the LP core wakes HP on every poll. The counterpart of
-// ULP_ALWAYS_WAKE on the FSM boards, which is what arm 1 ran for its first half.
-//
-// Defined HERE and not in lp_core_bmp58x.h, which is where it belongs: the LP
-// sub-build's object is keyed on this file's content, so a header-only edit is
-// served from the build cache and never reaches the binary. See
-// .claude/rules/ulp.md — that trap cost this session a flash of an unpinned arm.
-#define TEMP_DELTA_THRESHOLD_C 0.0f
-
 #if defined(LP_CORE_IDLE)
 #include "lp_core_idle.h"
 #elif defined(LP_CORE_BMP390L)
