@@ -15,7 +15,7 @@
 // wakes on every poll (the LP-core counterpart of ULP_ALWAYS_WAKE), a large
 // value never wakes on delta and leaves the safety net as the only wake source.
 #ifndef TEMP_DELTA_THRESHOLD_C
-#define TEMP_DELTA_THRESHOLD_C 0.0f
+#define TEMP_DELTA_THRESHOLD_C 0.1f
 #endif
 
 int main(void)
