@@ -33,6 +33,46 @@ instead. A new file in `ulp/` needs the same guard or it breaks the other board 
 explicitly. PlatformIO globs the directory, `idf.py` does not, so a file added
 without that entry builds under one and silently vanishes under the other.
 
+## There are no headers under `ulp/`, and that is load-bearing
+
+The three sensor programs live inline in `lp_core_main.c`. They used to be
+`lp_core_{idle,bmp390l,bmp58x}.h`, and as headers they were **invisible to the
+build**: PlatformIO signs the LP object on `lp_core_main.c`'s own content, so
+editing a header rebuilt nothing and the previously built `ulp_main.bin` was
+embedded again — silently, with a successful build.
+
+Measured 2026-08-23. An `#error` in `lp_core_bmp58x.h` does not fail the build;
+the same `#error` in `lp_core_main.c` does. Neither touching the source (the
+decider is content, not mtime) nor deleting `esp-idf/src/ulp_main/` helps —
+nothing left in the graph needs the artifact. Adding a generated stamp file to
+`ulp_sources` does not help either: the stamp recompiles, the stale object is
+`lp_core_main.c`'s. **Only a build with `.pio/build_cache` cleared produces a
+correct binary.**
+
+This is upstream and long-standing: [platform-espressif32
+#517](https://github.com/platformio/platform-espressif32/issues/517), open since
+March 2021, reported there as ULP *sources* going unnoticed.
+
+What it cost: an experiment arm was flashed with the wrong wake cadence while the
+`! EXP` badge, the ULP word-count check and the baked git hash all reported
+success. **None of the existing gates look at the LP binary.**
+
+So:
+
+- **Do not add a header under `ulp/`.** Splitting the sensor programs back out
+  would need a header of `extern`s for the eleven shared LP globals, which would
+  be stale-able in exactly the same way.
+- **When anything the LP program depends on changes, verify the binary rather
+  than the build log.** `rm -rf .pio/build_cache`, rebuild, and compare
+  `md5sum .pio/build/<env>/esp-idf/src/ulp_main/ulp_main.bin` against a build you
+  know is vanilla. A changed LP program that produces an unchanged md5 did not
+  reach the flash.
+- **One latent case remains**: `lp_core_main.c` includes the generated
+  `rig_config.h`, and a rig switch changes which sensor branch compiles without
+  changing this file's content. It cannot bite today — every C6 rig selects
+  `USE_BMP58x` — but a C6 rig with a different sensor would reintroduce it, and
+  the fix then is the cache clear above, not another generated file.
+
 The LP core dispatcher derives its sensor from the `USE_*` macros via a relative
 `#include "../include/generated/rig_config.h"` — the LP sub-build inherits
 neither `build_flags` nor `build_src_flags`, so config it must see cannot be a
