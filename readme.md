@@ -123,6 +123,7 @@ Custom rev A board (with BMP581), GDEM0154I61 & 400mAh battery
 ![Thermometer C6 rev A board & GDEM0154I61 (2026)](docs/revA-GDEM0154I61.jpg)
 
 ### 2026 - ultra low power prototypes
+
 Seed Xiao C6, BMP581, GDEH0576T81 & 400mAh battery
 
 ![Seeed Xiao C6, BMP581 & GDEH0576T81 (2026)](docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg)
@@ -130,6 +131,10 @@ Seed Xiao C6, BMP581, GDEH0576T81 & 400mAh battery
 Seeed Xiao C6, e-Paper Driver Board, BMP581, GDEW029I6FD & 400mAh battery
 
 ![Seeed Xiao C6, e-Paper Driver Board, BMP581 & GDEW029I6FD (2026)](docs/seeed-xiao-c6-bmp581-epaperhat-GDEW029I6FD-prototype.jpg)
+
+Firebeetle ESP32-E, BMP390L, GDEH0154Z90 & 400mAh battery
+
+![Firebeetle ESP32-E, BMP390L & GDEH0154Z90 (2026)](docs/firebeetle2-esp32e-bmp390l-GDEH0154Z90-prototype.jpg)
 
 ### 2021 - first prototype
 Firebeetle ESP32-E, DS18B20, GDEW0213M21 & 2600mAh battery

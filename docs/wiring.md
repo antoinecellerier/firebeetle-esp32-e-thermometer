@@ -85,6 +85,8 @@ DESPI-C02 GND ────── GND (direct)
 
 GPIO LOW → display powered on. GPIO HIGH / high-Z (deep sleep) → display off.
 
+![Firebeetle ESP32-E, BMP390L & GDEH0154Z90 (2026)](firebeetle2-esp32e-bmp390l-GDEH0154Z90-prototype.jpg)
+
 # Xiao Seed ESP32C6 + BMPxxx
 
 - Xiao Seed ESP32C6
