@@ -266,6 +266,8 @@ and a refresh on a real cell, which together decide the final shutdown
 threshold — [`hardware/thermometer-c6/BRINGUP.md`](../hardware/thermometer-c6/BRINGUP.md)
 Phase 3.
 
+![Seeed Xiao C6, e-Paper Driver Board, BMP581 & GDEW029I6FD (2026)](seeed-xiao-c6-bmp581-epaperhat-GDEW029I6FD-prototype.jpg)
+
 # Custom board (thermometer-c6 rev A)
 
 Not covered here — this file is the dev-board prototype wiring. The rev A pin

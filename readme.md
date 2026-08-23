@@ -127,6 +127,10 @@ Seed Xiao C6, BMP581, GDEH0576T81 & 400mAh battery
 
 ![Seeed Xiao C6, BMP581 & GDEH0576T81 (2026)](docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg)
 
+Seeed Xiao C6, e-Paper Driver Board, BMP581, GDEW029I6FD & 400mAh battery
+
+![Seeed Xiao C6, e-Paper Driver Board, BMP581 & GDEW029I6FD (2026)](docs/seeed-xiao-c6-bmp581-epaperhat-GDEW029I6FD-prototype.jpg)
+
 ### 2021 - first prototype
 Firebeetle ESP32-E, DS18B20, GDEW0213M21 & 2600mAh battery
 
