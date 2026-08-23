@@ -4,7 +4,7 @@ A low power ESP32 based thermometer with an ePaper display
 |-----------|--------------|
 |<img src="docs/seeed-xiao-c6-bmp581-GDEH0576T81-prototype.jpg" width="300" />|<img src="docs/revA-GDEM0154I61.jpg" width="300" />|
 
-See [docs/wiring.md](docs/wiring.md) for prototype wiring information and [hardware/thermometer-c6/](hardware/thermometer-c6/README.md) for the custom board.
+See [docs/wiring.md](docs/wiring.md) for prototype wiring information and [hardware/thermometer-c6/](hardware/thermometer-c6/README.md) for the custom board. More pictures [lower down](#prototypes-in-action).
 
 # Power consumption
 
@@ -121,6 +121,10 @@ The DESPI-C02's boost converter leaks ~534 µA in deep sleep, which an FDN340P P
 Custom rev A board (with BMP581), GDEM0154I61 & 400mAh battery
 
 ![Thermometer C6 rev A board & GDEM0154I61 (2026)](docs/revA-GDEM0154I61.jpg)
+
+Custom rev A boards (with BMP581), GDEH0576T81 & 400mAh battery
+
+![Thermometer C6 rev A boards 2 and 4 & GDEH0576T81 (2026)](docs/revA-GDEH0576T81.jpg)
 
 ### 2026 - ultra low power prototypes
 
