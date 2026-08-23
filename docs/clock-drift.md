@@ -1269,6 +1269,22 @@ Off the panel, no reset.
 | `#N` ÷ `rN` | **≈5.0** (1440 ÷ 289) | **≈58** |
 | `lpN` vs `#N` | `lp0`, structural on the FSM board | **≈1:1** |
 
+**Arm 2 passed, ~1h in (2026-08-23).** Panel:
+`! EXP 2 60s/RESYNC/REFRESH`, `! DRIFT +221s/12h +5085ppm n6 ±0%`, 4136mV,
+footer `#61 r13 lp0 0d w:ULP mx4.2V ef27bd0`. The refresh gate is exact rather
+than approximate: at `REFRESH_EVERY_N_WAKES=5`, 61 wakes give `floor(61/5) = 12`
+cadence repaints plus the forced boot frame = **13**. `#÷r` reads 4.69 and
+converges on 5.0 as the boot frame's weight falls. The drift badge is the
+pre-flash ring restored from the archive across the RTC wipe.
+
+**No `! NOWIFI` and no `! NOSYNC`**, which is the field confirmation that the
+corrected `MY_WIFI_NETWORKS` took — the first flash of this arm carried another
+location's list and would have produced no drift samples at all.
+
+Note the pack reads 4136mV against 4029mV before the flash: the FireBeetle
+charges over USB, so **arm 2's discharge baseline restarts from a topped-up
+cell** and is not continuous with arm 1's.
+
 **Arm 4's `lp ≈ #` is the one that matters.** It is the only field evidence that
 the LP wake pin reached the binary, and the first flash of this arm silently did
 not — see `.claude/rules/ulp.md`. Anything near 11:1 is the vanilla cadence.
