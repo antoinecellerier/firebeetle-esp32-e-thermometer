@@ -208,9 +208,94 @@ wipes the RTC drift window.
 | 2026-07-26 .. 2026-08-04 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `44ba5ba` (2026-07-25), `dfrobot_firebeetle2_esp32e_release`, on battery | **1d** × 10 resyncs, 10.11d total | +421s .. +459s (4424s total) | **+5066ppm** window-weighted (+4839…+5247, ±4.5%) | 1d (clamped) | **The collection run, harvested from the journal** — ten samples, not the badge's six, with per-window ambient and duty-cycle deltas. 10 of 10 attempts succeeded. Rate tracks **wakes/day at r=−0.900** and not mean ambient (r=+0.457, collapsing to +0.275 once wakes are controlled for). But wakes are delta-triggered and correlate with room volatility at +0.93…+0.98, so duty cycle and a movement-sensitive tempco are not separable here — a tempco in temperature *level* is ruled out, the mechanism is not. Full CSV and analysis: [below](#harvest-2026-08-05-the-runs-ten-samples). |
 | 2026-07-27 .. 2026-08-02 | XIAO ESP32-C6 + BMP581 + Seeed ePaper hat (GDEW029I6FD), `431b7b0` (2026-07-26), `seeed_xiao_esp32c6_epaper_release`, 400mAh pack, open space at ~1.4m | 1.011d, **4.017d**, 1.737d (6.76d observed) | +22s, +139s, +17s | **+305ppm** window-weighted (+113…+400, **±63%**) | 3.47d and climbing | **Same board as the 2026-07-26 row, reharvested from its journal** — and ~17× smaller than the FireBeetle but ~14× less stable, so the adaptive interval hunts in a 1.7–3.5d band instead of pinning to the floor. Only three records because the interval is *working*: the run reconstructs the algorithm exactly, including one **failed attempt** on ~2026-07-29 visible only as a 4.017d window against a 2d setting. Not monotone in wakes/day, so the FireBeetle's duty-cycle relation does not reproduce at n=3. [Below](#c6-epaper-hat-harvested-2026-08-05). |
 | 2026-07-29 .. 2026-08-04 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `44e56b6` (2026-07-06), 400mAh pack | **1d** × 5 observed resyncs | +96s .. +116s | **+1259ppm** window-weighted (+1111…+1343, ±12%) | 1d (pinned) | **Five samples, all transcribed off photographs** — this build predates the `history` partition (`8b57f33`, 2026-07-25), so the panel is the only record and there is nothing to harvest. Per-sample table and the reasoning that the displayed `/1d` really is the window: [below](#photo-transcribed-run-c6--despi-c02-2026-07-29--2026-08-04). Clock **fast**, same sign as the other C6 row above and ~2.8× larger. The panel's `4321mV` is not a measurement — `read_battery_level()` returns a literal `4321` on the stock XIAO (`src/Thermometer.cpp`), so this run says nothing about the pack's state at 28d18h. |
+| 2026-08-12 .. 2026-08-19 | **thermometer-c6 rev A board 2** + BMP581 + GDEH0576T81, `11cd8dd` (2026-08-11), `thermometer_c6_release`, rig `revA-bigscreen`, 400mAh pack, **`CONFIG_RTC_CLK_SRC_EXT_CRYS` (FC-135)** | 1.03d, 2.01d, 4.03d (7.07d observed) | −3s, −5s, −4s (−12s total) | **−19.7ppm** window-weighted (−33.6…−11.5, ±71%) | 8d | **The first measured FC-135 rate in this project** — the ~20ppm row in [Clock source per board](#clock-source-per-board) had never been anything but a spec quote. Clock runs **slow**, where all three crystal-less rigs ran fast. The ±71% is almost entirely whole-second quantization on short windows (±11.2ppm on the 1d sample), not instability. All three records are usable: the discard-the-first rule applies to a restored `resync_interval_s`, and this board was `erase_flash`'d immediately before its soak flash. [Below](#fc-135-pair-harvested-2026-08-23--the-first-crystal-numbers). |
+| 2026-08-12 .. 2026-08-19 | **thermometer-c6 rev A board 4**, same panel/sensor/pack/env, `753afbc` (2026-08-12), co-located with board 2 at ~10cm | 1.04d, 2.02d, 4.00d (7.06d observed) | −1s, 0s, −3s (−4s total) | **−6.6ppm** window-weighted (−11.2…0.0) | 8d | **The control half of the pair, and it is 13.1±4.0ppm (3.3σ) away from board 2** — same room, same air, same firmware, same windows, so that gap is part-to-part crystal spread and nothing else. Both boards sit inside the FC-135's ~20ppm spec in magnitude and both run slow. This is the falsifiability the design note argued for: board 4 alone reads "comfortably inside spec", board 2 alone reads "right at it". [Below](#fc-135-pair-harvested-2026-08-23--the-first-crystal-numbers). |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
 device clock behind real time.
+
+### FC-135 pair, harvested 2026-08-23 — the first crystal numbers
+
+Boards 2 and 4 came off soak at day 11.6 and were read out; **board 3 is at
+another location and was not reachable**, so the room arm contributes nothing
+here and everything in its t=0 record above remains unmeasured. Both images are
+full-partition and restorable: `local/archives/hist-revA-board{2,4}-20260823.bin`.
+
+**Panel readings taken before any cable touched either board.** Pack voltage is
+journaled nowhere — `include/HistoryStore.h` has no battery field — and USB runs
+the MCP73831 into the cell, so a photo not taken first is a datapoint destroyed.
+
+| | board 2 | board 4 |
+|---|---|---|
+| footer | `#498 r347 lp16737 11d14h w:ULP mx4.0V 11cd8dd Aug12'26 s4d` | `#504 r341 lp16747 11d15h w:ULP mx4.0V 753afbc Aug12'26 s4d` |
+| pack | 3998 → **3964mV**, −2.93mV/day | 3996 → **3962mV**, −2.92mV/day |
+| ambient at read | 23.0°C | 22.9°C |
+| wakes/day, refreshes/day | 43.0, 30.0 | 43.4, 29.3 |
+| badges | none | none |
+
+No `! DRIFT` on either, as the arithmetic predicted: at ~20ppm the badge's 60s
+threshold needs ~50 days. `s4d` on both is the doubling interval working —
+successes at ~d1, d3, d7, next due ~d15. **`lp/day` is again the clean number**:
+1444.9 and 1440.6 here, 1442.3 on board 1, agreeing to 0.3% across three boards.
+
+**The rates.** Three drift records each, identical window structure.
+
+| window | board 2 | board 4 | ±quantization |
+|---|---|---|---|
+| ~1.03d | −3s → **−33.6ppm** | −1s → **−11.2ppm** | ±11.2ppm |
+| ~2.01d | −5s → **−28.9ppm** | 0s → **0.0ppm** | ±5.8ppm |
+| ~4.02d | −4s → **−11.5ppm** | −3s → **−8.7ppm** | ±2.9ppm |
+| **window-weighted** | **−19.7ppm** | **−6.6ppm** | ±2.8ppm on each mean |
+
+Drift is read off a whole-second clock, so every sample carries ±1s of pure
+rounding — 11.2ppm over a day, 2.9ppm over four. That is what the wide per-sample
+spread is, and it is why the *means* are the numbers to quote: three samples of
+±1s combine to ±2.8ppm on each board's total.
+
+**The part-to-part gap is real.** −13.1 ± 4.0ppm is 3.3σ, and the two boards sat
+~10cm apart running the same binary over the same windows, so room, firmware and
+schedule are all excluded by construction. Both land inside the FC-135's ~20ppm
+spec in magnitude, and **both run slow** — the opposite sign to every crystal-less
+rig measured here (+5066 / +305 / +1259ppm), which is what changing the clock
+source is supposed to do.
+
+**A single arm would have been unfalsifiable, exactly as the design note said.**
+Board 4 on its own reads "6.6ppm, comfortably inside spec"; board 2 on its own
+reads "19.7ppm, right at it". Neither reading is wrong and neither is checkable
+without the other.
+
+**The duty-cycle slope does not survive the control.** Board 2's three samples
+fall in |ppm| as their window's wake rate falls (77 → 30 → 29/day), the same sign
+as phase 1's FireBeetle fit. Board 4's windows carry that same wake-rate
+structure and its rates go −11.2, 0.0, −8.7 — no trend at all. With a co-located
+control on the same windows showing nothing, board 2's apparent slope is noise,
+and the confound is visible in the table above: the short window is both the
+noisiest estimate and the highest-wake one. This is the cheapest kill of a
+duty-cycle reading this project has managed, and it cost no extra hardware.
+
+**BMP581 part-to-part, in situ.** The pairing's free result, from the same two
+journals: 279 overlapping hourly rows over 2026-08-11 22:00Z .. 2026-08-23 12:00Z,
+mean ambient 26.9°C across a 20.3–30.1°C range.
+
+- board 2 − board 4 hourly average: **mean +0.003°C, median 0.000, sd 0.055°C**
+- **278 of 279 hours agree within ±0.1°C**; the histogram is 13.3% at −0.1,
+  70.6% at 0.0, 15.8% at +0.1, and a single hour at +0.2
+- Hourly temperatures are stored as `int16` ×10, so **0.1°C is the storage
+  resolution**: this bounds agreement at ≤0.1°C and cannot resolve finer. What it
+  does establish is that the systematic offset between two calibrated parts in
+  the same air is far below that.
+- Mean intra-hour spread 0.08°C on both, so the volatility covariate is live.
+
+**One correction to the t=0 record.** Board 4's archive was created 2026-08-11
+22:24:26Z and its first drift window opens ~22:29Z, against board 2's ~22:47Z —
+so the pair started **~20 minutes apart, not the day** the "2026-08-12" date in
+the table above suggests. That date is local time. Board 3 does start roughly a
+day later; the pair does not.
+
+**One provenance note.** Both packs were plugged in for a few minutes of the USB
+session before being pulled, so each took ≲5mAh of charge — about 1% of a 400mAh
+cell. The "as ordered, never charged" description of packs 2 and 4 holds for the
+soak it describes, but no longer describes the cells as they sit now.
 
 ### Photo-transcribed run: C6 + DESPI-C02, 2026-07-29 .. 2026-08-04
 
