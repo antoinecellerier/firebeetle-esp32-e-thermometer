@@ -212,6 +212,7 @@ wipes the RTC drift window.
 | 2026-08-12 .. 2026-08-19 | **thermometer-c6 rev A board 4**, same panel/sensor/pack/env, `753afbc` (2026-08-12), co-located with board 2 at ~10cm | 1.04d, 2.02d, 4.00d (7.06d observed) | −1s, 0s, −3s (−4s total) | **−6.6ppm** window-weighted (−11.2…0.0) | 8d | **The control half of the pair, and it is 13.1±4.0ppm (3.3σ) away from board 2** — same room, same air, same firmware, same windows, so that gap is part-to-part crystal spread and nothing else. Both boards sit inside the FC-135's ~20ppm spec in magnitude and both run slow. This is the falsifiability the design note argued for: board 4 alone reads "comfortably inside spec", board 2 alone reads "right at it". [Below](#fc-135-first-harvest-2026-08-23--three-boards-and-the-first-crystal-numbers). |
 | 2026-08-01 .. 2026-08-15 | **thermometer-c6 rev A board 1** + BMP581 + GDEM0154I61 (200x200), `711c3a4` (2026-07-31), `thermometer_c6_release`, rig `revA-smallscreen`, 400mAh pack, FC-135 | 1.00d, 2.01d, 4.03d, **8.01d** (15.04d observed) | −3s, −1s, −2s, −5s (−11s total) | **−8.5ppm** window-weighted, ±1.5 | 16d | **The longest and tightest FC-135 run** — four samples over 23 days of soak, and the 8d window alone carries only ±1.4ppm of quantization, the tightest single drift sample this project has taken. Agrees with board 4 to **0.6σ** while board 2 sits 3.5σ away, so the fleet reads as two boards at ~−7ppm and one at ~−19.7ppm. Different panel, different room, never through the BOD campaign. [Below](#fc-135-first-harvest-2026-08-23--three-boards-and-the-first-crystal-numbers). |
 | 2026-08-05 .. 2026-08-23 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `f5e1749`, `seeed_xiao_esp32c6_release`, **phase-2 arm 5** (vanilla control, resync pinned to 12h), 400mAh pack | 12h × 32 resyncs (17.85d observed; 3 windows carry a failed attempt) | +14s .. +112s (+1354s total) | **+878ppm** window-weighted (+324…+1721, **±96%**) | 12h (pinned) | **The control arm answers phase 2's primary question on its own.** Over a **12× range of wakes/day (31–364)** and 9.4°C of ambient, the per-sample rate correlates with **nothing**: wakes r=+0.026, refreshes r=+0.013, ambient r=−0.058, intra-hour spread r=+0.044. Phase 1's `r=−0.900` duty-cycle relation does not reproduce at n=32 over a wider range. The one covariate that does correlate is **elapsed time** (r=+0.487, Spearman +0.401), i.e. the rate wanders on a timescale no per-window average captures. [Below](#arm-5-harvested-2026-08-23--the-vanilla-control-kills-the-duty-cycle-reading). |
+| 2026-08-05 .. 2026-08-23 | FireBeetle 2 ESP32-E + BMP390L + GDEH0154Z90, `1ea3cd7`, `dfrobot_firebeetle2_esp32e_release`, **phase-2 arm 1** (pinned: 1440 wakes/day, repaint every 60th, resync 12h), on battery | 12h × 35 resyncs (18.01d observed) | +445s .. +219s (+7975s total) | **+5124.6ppm** window-weighted (+5041…+5229, **±2.0%**) | 12h (pinned) | **The duty-cycle model's headstone.** Phase 1 fitted `ppm ≈ 5339 − 1.342 × wakes/day` and predicted **+3385ppm** at this arm's 1453 wakes/day. Measured +5124.6, a **1740ppm miss**, while the rate moved only **+1.1%** from phase 1's +5066ppm across a 7× increase in wake rate. Dispersion did tighten, ±4.5% → ±2.0%. The same image still holds phase 1's ten `arm`=0 records and they re-decode to **+5066.3ppm, ±4.5%** — the published figure to the digit, 18 days and one reflash later. [Below](#arm-1-harvested-2026-08-23--the-pre-registered-test-and-what-it-actually-found). |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
 device clock behind real time.
@@ -479,6 +480,106 @@ once ~6 samples exist](#decision-rules-once-6-samples-exist) put ±M% > ~10% at
 instead". Arm 5 reads **±96%** with no correlate to model against and a rate that
 moves +28.7ppm/day. A constant-ppm correction fitted on this run's first half
 would be ~260ppm wrong by its second.
+
+### Arm 1, harvested 2026-08-23 — the pre-registered test, and what it actually found
+
+Panel before the cable: `! EXP 1 60s`, `! DRIFT +221s/12h +5085ppm n6 ±0%`,
+`1ea3cd7`, 4029mV, footer `#26274 r453 lp0 18d2h w:ULP mx4.2V`. **Both gates still
+pass at day 18** — 1452.9 wakes/day against a 1440 target, 25.05 refreshes/day
+against 25, and `#÷r = 58.00` against the 57.6 the two overrides imply.
+
+Image `local/archives/hist-arm1-firebeetle-20260823.bin`: **691 hourly, 320
+sparkline, 45 drift**, spanning 2026-07-25 19:00Z .. 2026-08-23 13:00Z — nearly a
+month, and **one reflash**. `formatted by 44ba5ba` with `last snapshot written by
+1ea3cd7`, which is the pair of stamps doing exactly what they were added for.
+
+#### The archive round-trips a published result
+
+The 45 records split **10 at `arm`=0 and 35 at `arm`=1**, and the phase-1 subset
+re-decodes to **+5066.3ppm over 10.11d, range +4840…+5248, ±4.5%**. The
+[2026-08-05 harvest](#harvest-2026-08-05-the-runs-ten-samples) published +5066ppm
+(+4839…+5247, ±4.5%) from a different image taken 18 days and one reflash earlier.
+**The per-record arm byte, the no-erase reflash and the decoder all round-trip a
+published figure to the digit** — the strongest evidence to date that the archive
+is a durable record rather than a convenience.
+
+The first `arm`=1 record is the contaminated one the design predicted: a **24.0h
+window against a 12h setting**, and `d_boot = −658` — the boot counter running
+backwards across the RTC wipe, which is the reflash's fingerprint. Dropping it
+moves the mean by 1.4ppm (+5124.6 → +5123.2), so the contamination is real in
+mechanism and immaterial in size here. Everything below drops it anyway.
+
+#### The prediction, and the answer
+
+Recorded before the data existed: *"arm 1's residual ±1% (~±51ppm) should
+correlate with the window's volatility covariate now that wakes/day is flat...
+If the residual correlates with nothing, neither mechanism survives and it is
+oscillator noise."*
+
+The residual sd is **46.5ppm** — the ±51ppm guess was good. The raw correlations
+look like a hit:
+
+| covariate | range over 34 windows | raw r | **partial r** |
+|---|---|---|---|
+| intra-hour spread | 0.03 … 0.81°C | −0.443 | **−0.045** (controlling ambient) |
+| mean ambient | 21.4 … 29.7°C | +0.476 | **+0.200** (controlling spread) |
+| wakes/day | 1433.3 … 1456.2 (±0.8%) | −0.476 | **−0.005** (controlling ambient) |
+| refreshes/day | 23.97 … 26.00 | +0.081 | — |
+| elapsed days | 0 … 16.4 | −0.079 | — |
+
+**The volatility reading is refuted.** Its raw −0.443 collapses to −0.045 once
+ambient is held: the covariates are near-perfectly collinear, and ambient is the
+one carrying whatever signal exists. Ambient's own partial is +0.200, which at
+n=34 (5% critical |r| ≈ 0.34) is **not significant**. So the pre-registered fork
+lands closer to "correlates with nothing" than to the volatility hypothesis, on a
+residual that is only 0.9% of the rate.
+
+#### Pinning the cadence turned `d_boot` into a thermometer
+
+The finding nobody asked for, out of the cross-correlation matrix:
+
+| | ppm | spread | ambient | wakes/day |
+|---|---|---|---|---|
+| **ppm** | +1.000 | −0.443 | +0.476 | −0.476 |
+| **spread** | −0.443 | +1.000 | −0.893 | +0.887 |
+| **ambient** | +0.476 | −0.893 | +1.000 | **−0.999** |
+| **wakes/day** | −0.476 | +0.887 | −0.999 | +1.000 |
+
+**Ambient and wakes/day correlate at −0.999.** On a vanilla rig `d_boot` measures
+room volatility, which is why the phase-1 analysis could never separate duty cycle
+from temperature. `ULP_ALWAYS_WAKE` makes the cadence timer-driven, and the timer
+is the RTC slow clock — so on a *pinned* rig the same counter becomes **a direct
+readout of that oscillator's temperature dependence**, free, in every archive.
+That is a new instrument the pinning created as a side effect, and it is far more
+sensitive than the drift measurement: it resolves 21.4–29.7°C at r=0.999 from a
+counter that costs nothing.
+
+#### The two readouts disagree about the sign, and that is the sharpest open question here
+
+The wake counter and the NTP drift are two independent measurements of one
+oscillator, and over the same 34 windows they say opposite things:
+
+- **wakes/day falls as the room warms** (r=−0.999). Fewer 60s sleeps completed per
+  window means each sleep took longer in real time, i.e. **the RC slow clock slows
+  down when warm** — textbook for this oscillator.
+- **measured drift rises as the room warms** (r=+0.476). A clock that ran slower
+  should fall further *behind*, not further ahead.
+
+Both cannot describe the same path. The obvious suspect is the **awake-vs-asleep
+asymmetry** this file already flags under [Why the clock is
+slow](#why-the-clock-is-slow-mechanism): the wake counter samples only the sleep
+path, while the resync measures the whole duty cycle including awake time, and if
+the awake-path error carries the opposite tempco and is large enough, the two
+diverge exactly like this. **Not established** — ambient explains only 23% of the
+drift residual's variance, so the +0.476 leg is the weak one, and n=34 over 8°C
+cannot carry much more than the direction.
+
+The cheap discriminator, recorded before anyone tries it: arm 2 runs the same
+pinned wake cadence with **12× the refresh count**, so it multiplies awake time
+while holding the sleep path fixed. If the awake path carries the opposite tempco,
+arm 2's `ppm`-vs-ambient slope should move measurably against arm 1's while its
+`d_boot`-vs-ambient stays at −0.999. That is a question the crossover was not
+designed to ask and can now answer for free.
 
 ### Photo-transcribed run: C6 + DESPI-C02, 2026-07-29 .. 2026-08-04
 
