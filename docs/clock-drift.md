@@ -1246,6 +1246,34 @@ of a boot loop.
 | XIAO C6 + Seeed hat (GDEW029I6FD) | **3** | `2fa3750` | vanilla, establishing a baseline correlation it never had | harvest → arm 4, pinned |
 | XIAO C6 + DESPI-C02 + GDEH0576T81 | **5** | `f5e1749` | vanilla control, unchanged throughout | — |
 
+**Crossed over 2026-08-23**, day 18 rather than the scheduled day 15. Now running:
+
+| Rig | Arm | Hash | Cadence |
+|---|---|---|---|
+| FireBeetle 2 E | **2** | `ef27bd0` | pinned 1440 wakes/day, repaint every 5th (288/day) |
+| XIAO C6 + Seeed hat | **4** | `cfcc35f` | pinned 1440 wakes/day, repaint every 60th (24/day) |
+| XIAO C6 + DESPI-C02 + T81 | **5** | `f5e1749` | unchanged — harvested and RST'd, not reflashed |
+
+Both crossover builds are on HEAD rather than their arms' original trees, so ~18
+days of firmware change rides along with the cadence change. Named as a confound
+in each arm's harvest section above.
+
+#### Day-1 gates for arms 2 and 4
+
+Off the panel, no reset.
+
+| | arm 2 | arm 4 |
+|---|---|---|
+| status line | `! EXP 2 60s/RESYNC/REFRESH` | `! EXP 4 60s/RESYNC/REFRESH` |
+| `#N` ÷ uptime-days | ≈1440 (expect 1449–1464: the E's own fast clock) | ≈1440 |
+| `#N` ÷ `rN` | **≈5.0** (1440 ÷ 289) | **≈58** |
+| `lpN` vs `#N` | `lp0`, structural on the FSM board | **≈1:1** |
+
+**Arm 4's `lp ≈ #` is the one that matters.** It is the only field evidence that
+the LP wake pin reached the binary, and the first flash of this arm silently did
+not — see `.claude/rules/ulp.md`. Anything near 11:1 is the vanilla cadence.
+Not readable until the first cadence repaint, ~1h after boot.
+
 **The harvest and crossover are one session, scheduled 2026-08-20** — day 15 from
 the flash, not the day 14 this section was drafted around. Harvesting costs a
 reset and the in-progress window either way, so the two arms that change cadence
