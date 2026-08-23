@@ -211,6 +211,7 @@ wipes the RTC drift window.
 | 2026-08-12 .. 2026-08-19 | **thermometer-c6 rev A board 2** + BMP581 + GDEH0576T81, `11cd8dd` (2026-08-11), `thermometer_c6_release`, rig `revA-bigscreen`, 400mAh pack, **`CONFIG_RTC_CLK_SRC_EXT_CRYS` (FC-135)** | 1.03d, 2.01d, 4.03d (7.07d observed) | −3s, −5s, −4s (−12s total) | **−19.7ppm** window-weighted (−33.6…−11.5, ±71%) | 8d | **The first measured FC-135 rate in this project** — the ~20ppm row in [Clock source per board](#clock-source-per-board) had never been anything but a spec quote. Clock runs **slow**, where all three crystal-less rigs ran fast. The ±71% is almost entirely whole-second quantization on short windows (±11.2ppm on the 1d sample), not instability. All three records are usable: the discard-the-first rule applies to a restored `resync_interval_s`, and this board was `erase_flash`'d immediately before its soak flash. [Below](#fc-135-first-harvest-2026-08-23--three-boards-and-the-first-crystal-numbers). |
 | 2026-08-12 .. 2026-08-19 | **thermometer-c6 rev A board 4**, same panel/sensor/pack/env, `753afbc` (2026-08-12), co-located with board 2 at ~10cm | 1.04d, 2.02d, 4.00d (7.06d observed) | −1s, 0s, −3s (−4s total) | **−6.6ppm** window-weighted (−11.2…0.0) | 8d | **The control half of the pair, and it is 13.1±4.0ppm (3.3σ) away from board 2** — same room, same air, same firmware, same windows, so that gap is part-to-part crystal spread and nothing else. Both boards sit inside the FC-135's ~20ppm spec in magnitude and both run slow. This is the falsifiability the design note argued for: board 4 alone reads "comfortably inside spec", board 2 alone reads "right at it". [Below](#fc-135-first-harvest-2026-08-23--three-boards-and-the-first-crystal-numbers). |
 | 2026-08-01 .. 2026-08-15 | **thermometer-c6 rev A board 1** + BMP581 + GDEM0154I61 (200x200), `711c3a4` (2026-07-31), `thermometer_c6_release`, rig `revA-smallscreen`, 400mAh pack, FC-135 | 1.00d, 2.01d, 4.03d, **8.01d** (15.04d observed) | −3s, −1s, −2s, −5s (−11s total) | **−8.5ppm** window-weighted, ±1.5 | 16d | **The longest and tightest FC-135 run** — four samples over 23 days of soak, and the 8d window alone carries only ±1.4ppm of quantization, the tightest single drift sample this project has taken. Agrees with board 4 to **0.6σ** while board 2 sits 3.5σ away, so the fleet reads as two boards at ~−7ppm and one at ~−19.7ppm. Different panel, different room, never through the BOD campaign. [Below](#fc-135-first-harvest-2026-08-23--three-boards-and-the-first-crystal-numbers). |
+| 2026-08-05 .. 2026-08-23 | XIAO ESP32-C6 + BMP581 + DESPI-C02 + GDEH0576T81, `f5e1749`, `seeed_xiao_esp32c6_release`, **phase-2 arm 5** (vanilla control, resync pinned to 12h), 400mAh pack | 12h × 32 resyncs (17.85d observed; 3 windows carry a failed attempt) | +14s .. +112s (+1354s total) | **+878ppm** window-weighted (+324…+1721, **±96%**) | 12h (pinned) | **The control arm answers phase 2's primary question on its own.** Over a **12× range of wakes/day (31–364)** and 9.4°C of ambient, the per-sample rate correlates with **nothing**: wakes r=+0.026, refreshes r=+0.013, ambient r=−0.058, intra-hour spread r=+0.044. Phase 1's `r=−0.900` duty-cycle relation does not reproduce at n=32 over a wider range. The one covariate that does correlate is **elapsed time** (r=+0.487, Spearman +0.401), i.e. the rate wanders on a timescale no per-window average captures. [Below](#arm-5-harvested-2026-08-23--the-vanilla-control-kills-the-duty-cycle-reading). |
 
 Rate = drift / window, in ppm. Sign convention matches the badge: negative =
 device clock behind real time.
@@ -410,6 +411,74 @@ different part of the LiPo curve from the pair's −2.9mV/day: board 1 began at 
 steep top, boards 2 and 4 at ~4.00V on the plateau. Its panel drives 200x200
 pixels against the pair's 920x680, and it wakes 60.6 times a day against their
 43. Four differences at once — quote the rates, never the comparison.
+
+### Arm 5, harvested 2026-08-23 — the vanilla control kills the duty-cycle reading
+
+Arm 5 ran untouched from 2026-08-05 to 2026-08-23 with only the resync interval
+pinned at 12h, and it is the arm nobody expected to carry the headline. **32 drift
+records, 17.85d of observed window, 435 hourly rows.** Image
+`local/archives/hist-arm5-xiao-t81-20260823.bin`; `arm` = 5 on every record.
+
+Panel before the park: `! EXP 5 60s`, footer
+`#1763 r1596 lp26499 18d2h w:ULP mx4.3V f5e1749 Aug5'26 s6h`, 23.5°C. Against the
+day-4 gate check that is 97.5 wakes/day lifetime versus 174 then — **74.9/day
+across days 4–18**, with the refresh/wake ratio falling 0.986 → 0.905. The room
+quietened by more than half, which is exactly the volatility swing the pinned arms
+were built to remove and this one was built to keep.
+
+**Rate: +877.9ppm window-weighted, ±3.7ppm of quantization.** Per-sample spread
++324…+1721ppm — 96% widest deviation, against a per-sample quantization of only
+±11…23ppm at these window lengths. **The scatter is real, 15–70× the rounding.**
+
+**Every mechanistic covariate reads zero.**
+
+| covariate | range across the 32 windows | r vs ppm |
+|---|---|---|
+| wakes/day | **31 … 364** (a 12× range) | **+0.026** |
+| refreshes/day | 4 … 364 | +0.013 |
+| mean ambient | 20.7 … 30.1°C | −0.058 |
+| intra-hour spread | 0.00 … 0.95°C | +0.044 |
+| window length | 0.50 … 1.04d | +0.110 |
+
+Phase 1 fitted `ppm ≈ 5339 − 1.342 × wakes/day` on the FireBeetle at r=−0.900 from
+**ten** samples over 84–332 wakes/day. This is thirty-two samples over a wider
+range on a C6, and the relation is not merely weaker — it is absent. Together with
+arm 1's level miss at day 4 and board 4's refusal to reproduce board 2's apparent
+slope, **the duty-cycle reading is dead three independent ways**, and the arm that
+killed it needed no manipulation at all.
+
+**What does correlate is elapsed time**, and it is the only thing that does:
+
+| | Pearson | Spearman |
+|---|---|---|
+| all 32 samples | **+0.487** | +0.401 |
+| dropping the 3 windows containing a failed attempt | +0.498 | +0.400 |
+
+The 5% critical |r| at n=32 is ~0.349 and the 1% ~0.449, so this survives at 1%
+on Pearson and 5% on Spearman, and it does not depend on the failed-attempt
+windows. Least-squares slope **+28.7ppm/day**; the first half of the run averages
+**+742ppm** and the second **+1005ppm**.
+
+**The mechanism is not identifiable from this archive, and the reason is worth
+recording**: the obvious monotone candidate over 18 days is the pack draining, and
+**supply voltage is journaled nowhere**. This rig cannot even see its own battery
+— `read_battery_level()` returns a literal 4321 on a stock XIAO — but no board can
+settle it either, because `HistoryDriftSample` carries ambient and counters and no
+mV. Ambient is not the driver (r=−0.058, and it was not monotone over the run:
+25.6 → 30 → 23°C). Die temperature during sleep, which is not ambient over the
+window, is the other candidate and is equally unjournaled.
+
+Adding mV per drift record would settle it and is **not** free: the record's one
+spare byte now carries `EXPERIMENT_ARM`, so it needs an `HS_FORMAT` bump, which
+leaves every deployed archive inert until it is backed up and erased. Filed as an
+open question rather than a proposal.
+
+**For the compensation decision this is decisive.** The rules in [Decision rules
+once ~6 samples exist](#decision-rules-once-6-samples-exist) put ±M% > ~10% at
+"compensation is futile — drop it and spend the effort on the resync failure path
+instead". Arm 5 reads **±96%** with no correlate to model against and a rate that
+moves +28.7ppm/day. A constant-ppm correction fitted on this run's first half
+would be ~260ppm wrong by its second.
 
 ### Photo-transcribed run: C6 + DESPI-C02, 2026-07-29 .. 2026-08-04
 
