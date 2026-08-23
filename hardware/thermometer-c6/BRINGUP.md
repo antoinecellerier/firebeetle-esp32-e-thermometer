@@ -515,3 +515,26 @@ shared sign, not a measurement of these boards**.
 - [ ] If confirmed, **trim the load caps** in rev B to re-centre the fleet.
       Files alongside the existing D2 and 7 pF-crystal-variant candidates.
 
+## Boards 1, 2 and 4 are off soak (2026-08-23)
+
+Harvested and retired, packs out, archives kept. Board 3 stays out on soak at
+another location and is not reachable. The fleet has been unavailable for bench
+work since 2026-08-12; these three unblock it:
+
+- the **FPC-in/out floor pair** — the unexplained 4% gap, 19.05µA board 2 against
+  18.3µA board 1, deferred 2026-08-12 for want of a board
+- the **load-cap bench test** for the shared −11.6ppm crystal offset (above)
+- **VBAT_ADC across 3.5–4.2V**, the open half of that item — the protocol wants a
+  PPK2 source at J1 with USB OUT, so it needs a board off battery
+- **crystal cold start** and the **warm sleep floor**, both needing a board that
+  can go in the fridge or a warm box
+- the three deferred **WiFi PPK2 captures** (`docs/notes.md`)
+
+Board 2 keeps its bench-scratch status: erase it freely now that its soak archive
+is backed up. Boards 1 and 4 hold the only copy of their soak data outside
+`local/archives/`.
+
+Two results from the soak worth carrying into rev B thinking: the two BMP581s on
+boards 2 and 4 agreed to **+0.003°C mean over 279 hours** in the same air, and
+their packs discharged within 0.4% of each other — part-to-part spread on this
+board is small everywhere it has been measured except the crystal.

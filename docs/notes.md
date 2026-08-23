@@ -2093,3 +2093,31 @@ Three caveats, because the headline rests on a rate:
 n=10). That supersedes the 117 mC/1.8 s XIAO ePaper figure for anything behind
 this router, and resolves the 1.8 s vs 2.4 s contradiction in the obvious
 direction: that rig never paid this server's stall.
+
+## Rev A discharge on battery, read at harvest (2026-08-23)
+
+Three boards came off soak. **Pack voltage is journaled nowhere** — no field in
+`HistoryStore.h` — so these are two-point rates off the panel, not curves, and
+the end reading had to be taken before USB went in (the charger runs at ~100mA).
+
+| board | panel | start | end | elapsed | rate |
+|---|---|---|---|---|---|
+| 2 | T81 920x680 | 3998mV | 3964mV | 11.62d | **−2.93 mV/day** |
+| 4 | T81 920x680 | 3996mV | 3962mV | 11.65d | **−2.92 mV/day** |
+| 1 | GDEM0154I61 200x200 | ~4200mV *assumed* | 4086mV | 23.0d | ~−4.9 mV/day |
+
+**Boards 2 and 4 agree to 0.4%**, running 43 wakes/day and ~30 refreshes/day each,
+~10cm apart. That is the first same-room discharge pair this project has had.
+
+**Board 1's figure is bounded, not measured**: its 2026-07-31 soak row records
+only "fully charged", and no first-render mV was ever logged. It is also not
+comparable to the pair — it started at the steep top of the LiPo curve where they
+started at ~4.00V on the plateau, drives 1/21 the pixels, and wakes 60.6 times a
+day against their 43. Four differences at once.
+
+At the pair's rate, 3964 → 3550mV (`low_battery_mv`) is **~140 days**. That
+extrapolates across most of the plateau from an 11-day window, so treat it as an
+order of magnitude, not a run-length prediction.
+
+Drift rates and the BMP581 pair comparison from the same harvest are in
+[clock-drift.md](clock-drift.md).
